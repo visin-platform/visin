@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ScrollableTabs from '../components/common/ScrollableTabs';
 import { PageHeader } from '@visin/frontend-core';
 import {
   Container,
@@ -6,7 +7,6 @@ import {
   Box,
   Alert,
   CircularProgress,
-  Tabs,
   Tab
 } from '@mui/material';
 import {
@@ -132,37 +132,14 @@ const TrainingComparisonPage: React.FC = () => {
       />
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs 
+        <ScrollableTabs 
           value={activeTab} 
           onChange={(_, newValue) => setActiveTab(newValue)}
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
-          sx={{
-            '& .MuiTab-root': { 
-              textTransform: 'none',
-              fontWeight: 500,
-              minHeight: 48,
-              px: { xs: 2, sm: 3 },
-              minWidth: { xs: 'auto', sm: 90 },
-              flexShrink: 0
-            },
-            '& .MuiTabs-scrollButtons': {
-              display: { xs: 'flex', sm: 'auto' }
-            },
-            '& .MuiTabs-scroller': {
-              overflow: 'auto !important',
-              scrollbarWidth: 'none',
-              '&::-webkit-scrollbar': {
-                display: 'none'
-              }
-            }
-          }}
         >
           <Tab label={`Training Runs (${comparisonData.length})`} />
           <Tab label={`Evaluations (${evaluationsData.length})`} />
           <Tab label={`Benchmarks (${benchmarksData.length})`} />
-        </Tabs>
+        </ScrollableTabs>
       </Box>
       {/* Tab Content */}
       {activeTab === 0 && (

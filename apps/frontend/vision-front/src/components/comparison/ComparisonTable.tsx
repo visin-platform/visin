@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import SortableTableCell from './SortableTableCell';
+import { useColumnSort } from './useColumnSort';
 import {
   Paper,
   Box,
@@ -11,14 +13,10 @@ import {
   TableBody,
   Button
 } from '@mui/material';
-import {
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
-} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { TrainingComparison } from '@/types';
-import { formatTime, formatNumber } from '@/utils/comparisonLatexGenerator';
+import { formatTime, formatNumber } from '@/utils/formatComparison';
 import { getBestEpoch, getBestValMeanIoU, getTop10ValMeanIoU, getTop10ValMeanIoUStats } from '@/utils/epochMetrics';
 import LatexModal from '../common/LatexModal';
 
@@ -36,51 +34,9 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
-  const [sortColumn, setSortColumn] = useState<string>('top10Avg');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const sort = useColumnSort('top10Avg', 'desc');
+  const { sortColumn, sortDirection } = sort;
 
-  // Handle column sorting
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('desc');
-    }
-  };
-
-  // Helper component for sortable table headers
-  const SortableTableCell = ({ 
-    column, 
-    children, 
-    align = 'center' 
-  }: { 
-    column: string; 
-    children: React.ReactNode; 
-    align?: 'left' | 'center' | 'right' 
-  }) => (
-    <TableCell align={align}>
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
-          cursor: 'pointer',
-          '&:hover': { bgcolor: 'action.hover' }
-        }}
-        onClick={() => handleSort(column)}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
-          {children}
-        </Typography>
-        {sortColumn === column && (
-          sortDirection === 'asc' ? 
-            <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
-            <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-        )}
-      </Box>
-    </TableCell>
-  );
   // Sort trainings based on selected column and direction
   const sortedComparisonData = React.useMemo(() => {
     return [...comparisonData].sort((a, b) => {
@@ -208,12 +164,12 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
         <Table>
           <TableHead>
             <TableRow>
-              <SortableTableCell column="training" align="left">Training</SortableTableCell>
-              <SortableTableCell column="totalTime">Total Time</SortableTableCell>
-              <SortableTableCell column="avgEpochTime">Avg Epoch Time</SortableTableCell>
-              <SortableTableCell column="bestEpoch">Best Epoch</SortableTableCell>
-              <SortableTableCell column="bestVmIoU">Best Val mIoU</SortableTableCell>
-              <SortableTableCell column="top10Avg">Top 10 Val mIoU Avg</SortableTableCell>
+              <SortableTableCell {...sort} column="training" align="left">Training</SortableTableCell>
+              <SortableTableCell {...sort} column="totalTime" align="center">Total Time</SortableTableCell>
+              <SortableTableCell {...sort} column="avgEpochTime" align="center">Avg Epoch Time</SortableTableCell>
+              <SortableTableCell {...sort} column="bestEpoch" align="center">Best Epoch</SortableTableCell>
+              <SortableTableCell {...sort} column="bestVmIoU" align="center">Best Val mIoU</SortableTableCell>
+              <SortableTableCell {...sort} column="top10Avg" align="center">Top 10 Val mIoU Avg</SortableTableCell>
             </TableRow>
           </TableHead>
           <TableBody>

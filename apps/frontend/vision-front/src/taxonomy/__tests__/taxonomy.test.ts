@@ -6,10 +6,11 @@ import {
   discoverClasses,
   discoverConditions,
   discoverEpochClasses,
+  discoverEpochMetrics,
   discoverOverallMetrics,
   readMetric
 } from '../discover';
-import { orderKeysByTaxonomy, resolveTaxonomy } from '../resolveTaxonomy';
+import { resolveTaxonomy } from '../resolveTaxonomy';
 import { humanize } from '../humanize';
 
 /**
@@ -93,6 +94,45 @@ describe('discovery', () => {
     ] as unknown as Epoch[];
     expect(discoverEpochClasses(epochs, 'iou').sort()).toEqual(['blade', 'turbine']);
     expect(discoverEpochClasses(epochs, 'ap')).toEqual([]);
+  });
+
+  it('finds the metrics a run reports for training and validation, in the order they arrived', () => {
+    const epochs = [
+      { epoch: 1, results: { train: { loss: 0.9, accuracy: 0.4 }, val: { loss: 0.95 } } },
+      { epoch: 2, results: { train: { loss: 0.5 }, val: { loss: 0.6, top5: 0.8 } } }
+    ] as unknown as Epoch[];
+    expect(discoverEpochMetrics(epochs)).toEqual(['loss', 'accuracy', 'top5']);
+  });
+
+  it('leaves out classes, bookkeeping numbers and metrics that were only ever zero', () => {
+    const epochs = [
+      {
+        epoch: 1,
+        results: {
+          train: { loss: 0.9, dice_score: 0, learning_rate: 0.01, epoch_time: 12, turbine: { iou: 0.7 }, per_class: {} },
+          val: { loss: 0.8, note: 'ok', ap: null }
+        }
+      }
+    ] as unknown as Epoch[];
+    expect(discoverEpochMetrics(epochs)).toEqual(['loss']);
+  });
+
+  it('leaves out the step counters and rates a pipeline logs beside its metrics, in any case', () => {
+    const epochs = [
+      {
+        epoch: 1,
+        results: {
+          train: { loss: 0.9, lr: 0.001, LR: 0.001, step: 1200, global_step: 1200, batch_size: 16, epoch: 1 },
+          val: { loss: 0.8, iteration: 40, num_samples: 500 }
+        }
+      }
+    ] as unknown as Epoch[];
+    expect(discoverEpochMetrics(epochs)).toEqual(['loss']);
+  });
+
+  it('finds no metrics in a run with no epochs or no results', () => {
+    expect(discoverEpochMetrics([])).toEqual([]);
+    expect(discoverEpochMetrics([{ epoch: 1, results: {} }] as unknown as Epoch[])).toEqual([]);
   });
 
   it('unwraps an object-shaped ap and the f1 aliases', () => {
@@ -179,30 +219,5 @@ describe('humanize', () => {
     ['line_a', 'Line A']
   ])('%s -> %s', (input, expected) => {
     expect(humanize(input)).toBe(expected);
-  });
-});
-
-describe('orderKeysByTaxonomy', () => {
-  const terms = resolveTaxonomy(
-    { conditions: [{ key: 'day_fair', order: 0 }, { key: 'night_fair', order: 1 }] },
-    {}
-  ).conditions;
-
-  it('keeps every key present, configured first then the rest sorted', () => {
-    const breakdown = { snow: {}, night_fair: {}, day_fair: {}, fog: {} };
-    expect(orderKeysByTaxonomy(terms, breakdown)).toEqual([
-      'day_fair',
-      'night_fair',
-      'fog',
-      'snow'
-    ]);
-  });
-
-  it('does not invent a configured key the record lacks', () => {
-    expect(orderKeysByTaxonomy(terms, { day_fair: {} })).toEqual(['day_fair']);
-  });
-
-  it('returns nothing for an absent record', () => {
-    expect(orderKeysByTaxonomy(terms, undefined)).toEqual([]);
   });
 });

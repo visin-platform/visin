@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import SortableTableCell from '../comparison/SortableTableCell';
+import { useKeyedColumnSort, type SortState } from '../comparison/useColumnSort';
 import {
   Paper,
   Box,
@@ -12,10 +14,6 @@ import {
   TableBody,
   useTheme
 } from '@mui/material';
-import {
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
-} from '@mui/icons-material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { livePalette, tint, surface } from '@visin/frontend-core';
 import { Link } from 'react-router-dom';
@@ -47,11 +45,6 @@ interface SingleMetricComparisonTableProps {
   classFilter?: string[];
 }
 
-interface SortState {
-  column: string;
-  direction: 'asc' | 'desc';
-}
-
 const DEFAULT_SORT: SortState = { column: 'training', direction: 'asc' };
 
 const escapeLatex = (value: string) => value.replace(/[&%$#_{}~^\\]/g, '\\$&');
@@ -71,7 +64,7 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
-  const [sortStates, setSortStates] = useState<{ [condition: string]: SortState }>({});
+  const { sortFor, sortProps } = useKeyedColumnSort(DEFAULT_SORT);
 
   const projectTaxonomy = useTaxonomy();
   const { taxonomy, conditions, classes } = useMemo(
@@ -84,21 +77,6 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
     : classes;
 
   const formatNumber = (value: number): string => (value * multiplier).toFixed(decimals);
-
-  const sortFor = (condition: string) => sortStates[condition] ?? DEFAULT_SORT;
-
-  const handleSort = (condition: string, column: string) => {
-    setSortStates(prev => {
-      const current = prev[condition] ?? DEFAULT_SORT;
-      return {
-        ...prev,
-        [condition]:
-          current.column === column
-            ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
-            : { column, direction: 'desc' }
-      };
-    });
-  };
 
   const valueOf = (comp: ComparisonData, condition: string, className: string) => {
     const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
@@ -127,43 +105,6 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
         .map(comp => valueOf(comp, condition, className))
         .filter((value): value is number => value !== undefined)
     );
-
-  const SortableTableCell = ({
-    condition,
-    column,
-    children,
-    align = 'center'
-  }: {
-    condition: string;
-    column: string;
-    children: React.ReactNode;
-    align?: 'left' | 'center' | 'right';
-  }) => {
-    const { column: sortColumn, direction: sortDirection } = sortFor(condition);
-    return (
-      <TableCell align={align}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
-            cursor: 'pointer',
-            '&:hover': { bgcolor: 'action.hover' }
-          }}
-          onClick={() => handleSort(condition, column)}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
-            {children}
-          </Typography>
-          {sortColumn === column && (
-            sortDirection === 'asc' ?
-              <ArrowUpwardIcon sx={{ fontSize: 16 }} /> :
-              <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-          )}
-        </Box>
-      </TableCell>
-    );
-  };
 
   const metricLabel = taxonomy.metric(metric).label;
 
@@ -241,14 +182,15 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'background.default' }}>
-                    <SortableTableCell condition={condition.key} column="training" align="left">
+                    <SortableTableCell {...sortProps(condition.key)} column="training" align="left">
                       Evaluation
                     </SortableTableCell>
                     {shownClasses.map(className => (
                       <SortableTableCell
+                        {...sortProps(condition.key)}
                         key={className.key}
-                        condition={condition.key}
                         column={className.key}
+                        align="center"
                       >
                         {className.label} {metricLabel}
                       </SortableTableCell>

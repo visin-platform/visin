@@ -33,9 +33,18 @@ Copy `.env.example` to `.env` for local URLs. `npm run dev:front` at the root st
 
 ## Installable app (PWA)
 
-The shell is what installs as an app on a phone or desktop: `public/manifest.webmanifest`, icons in `public/`
-(`icon-192.png`/`icon-512.png` double as maskable — the logo sits inside the safe zone — plus
-`apple-touch-icon.png`), and `public/sw.js`, registered from `src/pwa.ts` in production builds only.
+The shell is what installs as an app on a phone or desktop: `public/manifest.webmanifest`, icons in `public/`, and
+`public/sw.js`, registered from `src/pwa.ts` in production builds only.
+
+The app icon is the white mark on the brand gradient, never on a blank square: a launcher shows the icon as a tile, so
+a transparent or white background reads as a white plate. Each purpose has its own file, drawn from the same design:
+
+- `icon.svg`, `icon-192.png`, `icon-512.png` (`any`): a rounded tile with transparent corners, shown as it is.
+- `icon-maskable-192.png`, `icon-maskable-512.png` (`maskable`): the full square, with the mark inside the central
+  safe circle, so Android can cut it to any shape.
+- `apple-touch-icon.png`: the full square, since iOS rounds it and shows any transparency as black.
+
+`favicon.svg` stays the bare mark: a browser tab draws it small on its own background.
 
 The service worker caches no app code on purpose: vision, label and account are loaded from their own deployments
 at runtime, so a cached shell would pair stale host code with fresh remotes. It only serves `offline.html` when a

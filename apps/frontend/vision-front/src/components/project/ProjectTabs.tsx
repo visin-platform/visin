@@ -3,7 +3,8 @@ import PipelineKeys from './PipelineKeys';
 import FirstRunPanel from './FirstRunPanel';
 import ProjectReadme from './ProjectReadme';
 import React from 'react';
-import { Box, Paper, Tabs, Tab } from '@mui/material';
+import ScrollableTabs from '../common/ScrollableTabs';
+import { Box, Paper, Tab } from '@mui/material';
 import type { AuthUser } from '@visin/frontend-core';
 
 // New Tab Components
@@ -127,33 +128,10 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: { xs: 0.5, sm: 2 } }}>
-        <Tabs
+        <ScrollableTabs
           value={tab}
           onChange={(_event, next: ProjectTabKey) => onTabChange(next)}
           aria-label="project tabs"
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
-          sx={{
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 500,
-              minHeight: 48,
-              px: { xs: 2, sm: 3 },
-              minWidth: { xs: 'auto', sm: 90 },
-              flexShrink: 0
-            },
-            '& .MuiTabs-scrollButtons': {
-              display: { xs: 'flex', sm: 'auto' }
-            },
-            '& .MuiTabs-scroller': {
-              overflow: 'auto !important',
-              scrollbarWidth: 'none',
-              '&::-webkit-scrollbar': {
-                display: 'none'
-              }
-            }
-          }}
         >
           <Tab value="overview" id="project-tab-overview" label="Overview" />
           <Tab value="trainings" id="project-tab-trainings" label="Trainings" />
@@ -176,7 +154,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           <Tab value="analysis" id="project-tab-analysis" label="Analysis" />
           <Tab value="models" id="project-tab-models" label="Models" />
           {canManage && <Tab value="settings" id="project-tab-settings" label="Settings" />}
-        </Tabs>
+        </ScrollableTabs>
       </Box>
 
       {/* Overview Tab */}

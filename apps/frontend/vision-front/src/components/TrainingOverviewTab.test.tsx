@@ -7,11 +7,7 @@ vi.mock('@mui/x-charts', () => ({
   LineChart: () => <div data-testid="line-chart" />
 }));
 vi.mock('../components/ClassIoUOverEpochsChart', () => ({ default: () => <div data-testid="class-iou-chart" /> }));
-vi.mock('../components/LossChart', () => ({ default: () => <div data-testid="loss-chart" /> }));
-vi.mock('../components/MIoUChart', () => ({ default: () => <div data-testid="miou-chart" /> }));
-vi.mock('../components/PixelAccuracyChart', () => ({ default: () => <div data-testid="pixel-accuracy-chart" /> }));
-vi.mock('../components/MeanAccuracyChart', () => ({ default: () => <div data-testid="mean-accuracy-chart" /> }));
-vi.mock('../components/DiceScoreChart', () => ({ default: () => <div data-testid="dice-score-chart" /> }));
+vi.mock('../components/TrainValChart', () => ({ default: ({ metric }: { metric: string }) => <div data-testid={`train-val-chart-${metric}`} /> }));
 vi.mock('../components/TrainingTimeMetrics', () => ({ default: () => <div data-testid="training-time-metrics" /> }));
 vi.mock('../components/TrainingOverviewCard', () => ({ default: () => <div data-testid="training-overview-card" /> }));
 vi.mock('../components/ClassPrecisionChart', () => ({ default: () => <div data-testid="class-precision-chart" /> }));
@@ -65,19 +61,44 @@ describe('TrainingOverviewTab', () => {
     expect(screen.getByText('Reproducibility')).toBeInTheDocument();
   });
 
-  it('renders the core metric charts and overview card', () => {
-    render(<TrainingOverviewTab training={training} epochs={[makeEpoch(1)]} />);
+  const segmentationEpoch = makeEpoch(1, {
+    results: {
+      train: { loss: 0.9, mean_iou: 0.4, pixel_accuracy: 0.7, mean_accuracy: 0.6, dice_score: 0.5 },
+      val: { loss: 0.95, mean_iou: 0.35, pixel_accuracy: 0.65, mean_accuracy: 0.55, dice_score: 0.45 }
+    }
+  });
+
+  it('renders the overview card, the class charts and a chart for each reported metric', () => {
+    render(<TrainingOverviewTab training={training} epochs={[segmentationEpoch]} />);
     expect(screen.getByTestId('training-overview-card')).toBeInTheDocument();
-    expect(screen.getByText('Loss Metrics')).toBeInTheDocument();
+    expect(screen.getByText('Loss')).toBeInTheDocument();
     expect(screen.getByText('Mean IoU')).toBeInTheDocument();
+    expect(screen.getByText('Pixel Accuracy')).toBeInTheDocument();
+    expect(screen.getByText('Mean Accuracy')).toBeInTheDocument();
+    expect(screen.getByText('Dice Score')).toBeInTheDocument();
+    ['loss', 'mean_iou', 'pixel_accuracy', 'mean_accuracy', 'dice_score'].forEach(metric =>
+      expect(screen.getByTestId(`train-val-chart-${metric}`)).toBeInTheDocument()
+    );
     expect(screen.getByText('Class IoU Over Epochs')).toBeInTheDocument();
     expect(screen.getByText('Class Precision Scores')).toBeInTheDocument();
     expect(screen.getByText('Class Recall Scores')).toBeInTheDocument();
     expect(screen.getByText('Class F1 Scores')).toBeInTheDocument();
-    expect(screen.getByText('Pixel Accuracy')).toBeInTheDocument();
-    expect(screen.getByText('Mean Accuracy')).toBeInTheDocument();
-    expect(screen.getByText('Dice Score')).toBeInTheDocument();
     expect(screen.getByTestId('training-time-metrics')).toBeInTheDocument();
+  });
+
+  it('charts the metrics a classification run reports, and none it does not', () => {
+    const epochs = [makeEpoch(1, { results: { train: { loss: 0.9, top1: 0.5 }, val: { loss: 0.95, top1: 0.45, top5: 0.8 } } })];
+    render(<TrainingOverviewTab training={training} epochs={epochs} />);
+    expect(screen.getByTestId('train-val-chart-top1')).toBeInTheDocument();
+    expect(screen.getByTestId('train-val-chart-top5')).toBeInTheDocument();
+    expect(screen.queryByTestId('train-val-chart-mean_iou')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dice Score')).not.toBeInTheDocument();
+  });
+
+  it('points the sample tour at the metric cards by key', () => {
+    const { container } = render(<TrainingOverviewTab training={training} epochs={[segmentationEpoch]} />);
+    expect(container.querySelector('[data-guide="metric-loss"]')).toBeTruthy();
+    expect(container.querySelector('[data-guide="metric-mean_iou"]')).toBeTruthy();
   });
 
   it('does not render the standard training IoU chart when data is absent', () => {
@@ -117,8 +138,9 @@ describe('TrainingOverviewTab', () => {
     expect(screen.getByText('0.8000')).toBeInTheDocument();
   });
 
-  it('handles an empty epochs array without crashing', () => {
+  it('handles an empty epochs array without crashing, and says what is missing', () => {
     render(<TrainingOverviewTab training={training} epochs={[]} />);
-    expect(screen.getByText('Loss Metrics')).toBeInTheDocument();
+    expect(screen.getByText(/No training or validation metrics yet/)).toBeInTheDocument();
+    expect(screen.getByText('Class IoU Over Epochs')).toBeInTheDocument();
   });
 });

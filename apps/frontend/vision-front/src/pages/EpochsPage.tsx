@@ -39,7 +39,53 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { Epoch, Training } from '../types';
 import type { UploadEpochData } from '../services/epochService';
 
-export const EpochsPage: React.FC = () => {
+const formatNumber = (value: number | undefined, decimals: number = 4): string => {
+  if (typeof value === 'number' && !isNaN(value)) {
+    return value.toFixed(decimals);
+  }
+  return '-';
+};
+
+type EpochSplit = NonNullable<Epoch['results']['train']>;
+
+/** One split's figures from an epoch's results: the headline metrics, then each nested group of metrics. */
+const SplitResults: React.FC<{ title: string; results: EpochSplit }> = ({ title, results }) => (
+  <Box>
+    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+      {title}
+    </Typography>
+    <Box sx={{ pl: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+      <Typography variant="body2">
+        <strong>Loss:</strong> {formatNumber(results.loss)}
+      </Typography>
+      <Typography variant="body2">
+        <strong>mIoU:</strong> {formatNumber(results.mean_iou)}
+      </Typography>
+      {Object.entries(results).map(([key, value]) => {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const metrics = value as Record<string, unknown>;
+          return (
+            <Box key={key} sx={{ gridColumn: '1 / -1' }}>
+              <Typography variant="body2" sx={{ ml: 1 }}>
+                <strong>{key}:</strong>
+              </Typography>
+              <Box sx={{ ml: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                {Object.entries(metrics).map(([m, v]) => (
+                  <Typography key={m} variant="caption">
+                    {m}: {typeof v === 'number' ? (v as number).toFixed(4) : String(v)}
+                  </Typography>
+                ))}
+              </Box>
+            </Box>
+          );
+        }
+        return null;
+      })}
+    </Box>
+  </Box>
+);
+
+const EpochsPage: React.FC = () => {
   const location = useLocation();
 
   // Set page title
@@ -153,13 +199,6 @@ export const EpochsPage: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
-  };
-
-  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return value.toFixed(decimals);
-    }
-    return '-';
   };
 
   return (
@@ -338,79 +377,9 @@ export const EpochsPage: React.FC = () => {
                 </Box>
               </Box>
 
-              {/* Training Results */}
-              {selectedEpoch.results?.train && (
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Training Results
-                  </Typography>
-                  <Box sx={{ pl: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Loss:</strong> {formatNumber(selectedEpoch.results.train.loss)}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>mIoU:</strong> {formatNumber(selectedEpoch.results.train.mean_iou)}
-                    </Typography>
-                    {Object.entries(selectedEpoch.results.train).map(([key, value]) => {
-                      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        const metrics = value as Record<string, unknown>;
-                        return (
-                          <Box key={key} sx={{ gridColumn: '1 / -1' }}>
-                            <Typography variant="body2" sx={{ ml: 1 }}>
-                              <strong>{key}:</strong>
-                            </Typography>
-                            <Box sx={{ ml: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                              {Object.entries(metrics).map(([m, v]) => (
-                                <Typography key={m} variant="caption">
-                                  {m}: {typeof v === 'number' ? (v as number).toFixed(4) : String(v)}
-                                </Typography>
-                              ))}
-                            </Box>
-                          </Box>
-                        );
-                      }
-                      return null;
-                    })}
-                  </Box>
-                </Box>
-              )}
+              {selectedEpoch.results?.train && <SplitResults title="Training Results" results={selectedEpoch.results.train} />}
 
-              {/* Validation Results */}
-              {selectedEpoch.results?.val && (
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Validation Results
-                  </Typography>
-                  <Box sx={{ pl: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Loss:</strong> {formatNumber(selectedEpoch.results.val.loss)}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>mIoU:</strong> {formatNumber(selectedEpoch.results.val.mean_iou)}
-                    </Typography>
-                    {Object.entries(selectedEpoch.results.val).map(([key, value]) => {
-                      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        const metrics = value as Record<string, unknown>;
-                        return (
-                          <Box key={key} sx={{ gridColumn: '1 / -1' }}>
-                            <Typography variant="body2" sx={{ ml: 1 }}>
-                              <strong>{key}:</strong>
-                            </Typography>
-                            <Box sx={{ ml: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                              {Object.entries(metrics).map(([m, v]) => (
-                                <Typography key={m} variant="caption">
-                                  {m}: {typeof v === 'number' ? (v as number).toFixed(4) : String(v)}
-                                </Typography>
-                              ))}
-                            </Box>
-                          </Box>
-                        );
-                      }
-                      return null;
-                    })}
-                  </Box>
-                </Box>
-              )}
+              {selectedEpoch.results?.val && <SplitResults title="Validation Results" results={selectedEpoch.results.val} />}
             </Box>
           )}
         </DialogContent>

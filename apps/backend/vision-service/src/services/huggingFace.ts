@@ -1,4 +1,4 @@
-import { z } from '@visin/backend-core';
+import { z, HF_COMMIT_PATTERN, HF_REPO_PATTERN, HF_NAMESPACE_PATTERN } from '@visin/backend-core';
 
 /**
  * Everything specific to Hugging Face lives here: its id, its name, how it spells a repo and a commit, the schema of
@@ -11,13 +11,6 @@ import { z } from '@visin/backend-core';
 export const HUB = 'hf' as const;
 /** How the provider is named to a person. */
 export const HUB_NAME = 'Hugging Face';
-
-/** A Hub commit is a full SHA-1: a branch name moves, so it is never accepted as a revision. */
-export const HF_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
-/** `namespace/name`, as the Hub spells a repo id. */
-export const HF_REPO_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/;
-/** The user or organisation part of a repo id, on its own. */
-export const HF_NAMESPACE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/;
 
 export const hubRepoSchema = z.string().regex(HF_REPO_PATTERN, 'Expected a repo id like "org/name"');
 

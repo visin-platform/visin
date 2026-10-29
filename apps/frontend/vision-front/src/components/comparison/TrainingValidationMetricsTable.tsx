@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import SortableTableCell from './SortableTableCell';
+import { useColumnSort } from './useColumnSort';
 import {
   Paper,
   Box,
@@ -12,10 +14,6 @@ import {
   useTheme,
   Button
 } from '@mui/material';
-import {
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
-} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { livePalette, tint, surface } from '@visin/frontend-core';
@@ -45,51 +43,8 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
-  const [sortColumn, setSortColumn] = useState<string>('meanIoU');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-
-  // Handle column sorting
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('desc');
-    }
-  };
-
-  // Helper component for sortable table headers
-  const SortableTableCell = ({ 
-    column, 
-    children, 
-    align = 'center' 
-  }: { 
-    column: string; 
-    children: React.ReactNode; 
-    align?: 'left' | 'center' | 'right' 
-  }) => (
-    <TableCell align={align}>
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
-          cursor: 'pointer',
-          '&:hover': { bgcolor: 'action.hover' }
-        }}
-        onClick={() => handleSort(column)}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
-          {children}
-        </Typography>
-        {sortColumn === column && (
-          sortDirection === 'asc' ? 
-            <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
-            <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-        )}
-      </Box>
-    </TableCell>
-  );
+  const sort = useColumnSort('meanIoU', 'desc');
+  const { sortColumn, sortDirection } = sort;
 
   // Calculate validation metrics for each training
   const trainingMetrics: TrainingMetricsData[] = React.useMemo(
@@ -197,11 +152,11 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: 'background.default' }}>
-              <SortableTableCell column="training" align="left">Training</SortableTableCell>
-              <SortableTableCell column="meanIoU">Val mIoU</SortableTableCell>
-              <SortableTableCell column="meanPrecision">Precision</SortableTableCell>
-              <SortableTableCell column="meanRecall">Recall</SortableTableCell>
-              <SortableTableCell column="meanF1">F1</SortableTableCell>
+              <SortableTableCell {...sort} column="training" align="left">Training</SortableTableCell>
+              <SortableTableCell {...sort} column="meanIoU" align="center">Val mIoU</SortableTableCell>
+              <SortableTableCell {...sort} column="meanPrecision" align="center">Precision</SortableTableCell>
+              <SortableTableCell {...sort} column="meanRecall" align="center">Recall</SortableTableCell>
+              <SortableTableCell {...sort} column="meanF1" align="center">F1</SortableTableCell>
             </TableRow>
           </TableHead>
           <TableBody>

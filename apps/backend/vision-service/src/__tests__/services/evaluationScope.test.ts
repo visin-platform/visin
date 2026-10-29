@@ -1,4 +1,4 @@
-import { evaluationScope, scopeProjectIds, visibleToReader } from '../../services/evaluationScope';
+import { evaluationScope, visibleToReader } from '../../services/evaluationScope';
 import { getEditableProjectIds, getVisibleProjectIds } from '../../services/projectAccessService';
 
 jest.mock('../../services/projectAccessService', () => ({ getEditableProjectIds: jest.fn(), getVisibleProjectIds: jest.fn() }));
@@ -8,7 +8,6 @@ it('gives full evaluation access only to readable projects the caller can edit',
   jest.mocked(getEditableProjectIds).mockResolvedValue(['mine', 'unreadable']);
   const scope = await evaluationScope('actor');
   expect(scope).toEqual({ full: ['mine'], published: ['public'] });
-  expect(scopeProjectIds(scope)).toEqual(['mine', 'public']);
   expect(getVisibleProjectIds).toHaveBeenCalledWith('actor');
   expect(getEditableProjectIds).toHaveBeenCalledWith('actor');
 });

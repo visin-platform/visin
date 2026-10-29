@@ -22,3 +22,21 @@ export const RESERVED_EPOCH_KEYS = new Set([
   'timestamp',
   'per_class'
 ]);
+
+/**
+ * Numbers an epoch carries beside its metrics. They sit in the same payload but are not
+ * something a run was trying to optimise, so they get no train-versus-validation chart.
+ * Compared in lower case, since pipelines spell them `LR` as often as `lr`.
+ */
+export const NON_METRIC_EPOCH_KEYS = new Set([
+  'learning_rate',
+  'lr',
+  'epoch',
+  'epoch_time',
+  'timestamp',
+  'step',
+  'global_step',
+  'iteration',
+  'batch_size',
+  'num_samples'
+]);

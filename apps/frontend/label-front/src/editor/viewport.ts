@@ -52,23 +52,3 @@ export const toImagePoint = (viewport: Viewport, px: number, py: number): { x: n
   x: (px - viewport.offsetX) / viewport.scale,
   y: (py - viewport.offsetY) / viewport.scale
 });
-
-/** Center the viewport on a bbox ([x1,y1,x2,y2] in image space), zoomed to show it with padding. */
-export const focusBbox = (
-  bbox: number[],
-  containerWidth: number,
-  containerHeight: number,
-  padding = 3
-): Viewport => {
-  const [x1, y1, x2, y2] = bbox;
-  const width = Math.max(x2 - x1, 8) * padding;
-  const height = Math.max(y2 - y1, 8) * padding;
-  const scale = clampScale(Math.min(containerWidth / width, containerHeight / height));
-  const centerX = (x1 + x2) / 2;
-  const centerY = (y1 + y2) / 2;
-  return {
-    scale,
-    offsetX: containerWidth / 2 - centerX * scale,
-    offsetY: containerHeight / 2 - centerY * scale
-  };
-};

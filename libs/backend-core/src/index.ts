@@ -37,7 +37,11 @@ export type { SharePage } from './http/sharePage';
 // Clients for other Visin services
 export { createGroupServiceClient, groupServiceUrl } from './clients/groupService';
 export type { GroupRole, GroupMembership, MyGroup, GroupServiceClient } from './clients/groupService';
-export { fileServiceUrl, fileServiceAuthHeaders } from './clients/fileService';
+export { fileServiceUrl, fileServiceAuthHeaders, createFileServiceClient } from './clients/fileService';
+export type { FileServiceClient } from './clients/fileService';
+export { HF_COMMIT_PATTERN, HF_REPO_PATTERN, HF_NAMESPACE_PATTERN } from './huggingFace/ids';
+export { createOwnerIdentityLookup } from './clients/ownerIdentity';
+export type { OwnerIdentity, OwnerIdentityLookup } from './clients/ownerIdentity';
 
 // Profile pages: the links a person or a group lists, and the picture they upload
 export { expandLink, profileLinksSchema, MAX_PROFILE_LINKS, SHORTHAND_NAMES } from './profile/socialLinks';

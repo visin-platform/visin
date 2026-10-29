@@ -3,9 +3,13 @@ import {
   fetchWithTimeout,
   BadGatewayError,
   TRANSFER_FETCH_TIMEOUT_MS,
+  createFileServiceClient,
   fileServiceUrl,
   fileServiceAuthHeaders
 } from '@visin/backend-core';
+
+/** Storing, signing and deleting go through the shared client; reads and sizes below are this service's own. */
+export const { getDownloadUrls, putFile, deleteFile, deleteFiles, deleteFolder } = createFileServiceClient();
 
 const jsonHeaders = (): Record<string, string> => ({ ...fileServiceAuthHeaders(), 'Content-Type': 'application/json' });
 
@@ -31,46 +35,6 @@ export const getUploadUrl = async (
   }
   const body = (await response.json()) as { data: { uploadUrl: string; expiresMs: number } };
   return { url: body.data.uploadUrl, expiresMs: body.data.expiresMs };
-};
-
-/**
- * Signed download URLs for many files in one call — a page of thumbnails is
- * dozens of files, and one request per file was most of the page's latency.
- */
-export const getDownloadUrls = async (
-  fileIds: string[],
-  expiresInMinutes = 60
-): Promise<{ urls: Record<string, string>; expiresMs: number }> => {
-  const unique = [...new Set(fileIds)];
-  if (unique.length === 0) {
-    return { urls: {}, expiresMs: Date.now() + expiresInMinutes * 60 * 1000 };
-  }
-  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/download-urls`, {
-    method: 'POST',
-    headers: jsonHeaders(),
-    body: JSON.stringify({ fileIds: unique, expiresInMinutes }),
-    serviceName: 'file-service'
-  });
-  if (!response.ok) {
-    throw new BadGatewayError(`file-service download-urls failed (${response.status})`);
-  }
-  const body = (await response.json()) as { data: { urls: Record<string, string>; expiresMs: number } };
-  return body.data;
-};
-
-/** Server-to-server store of one file (import). */
-export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
-  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
-    method: 'PUT',
-    headers: { ...fileServiceAuthHeaders(), 'Content-Type': 'application/octet-stream' },
-    body: new Uint8Array(data),
-    // Moves file bytes — sized for the payload, not the control-plane default.
-    timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
-    serviceName: 'file-service'
-  });
-  if (!response.ok) {
-    throw new Error(`file-service put failed for ${fileId} (${response.status})`);
-  }
 };
 
 /** Server-to-server streaming read (import reads the uploaded zip). */
@@ -131,44 +95,4 @@ export const getFileRange = async (fileId: string, start: number, end: number): 
     throw new BadGatewayError(`file-service ignored a Range request for ${fileId} (${response.status})`);
   }
   return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
-};
-
-export const deleteFile = async (fileId: string): Promise<void> => {
-  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
-    method: 'DELETE',
-    headers: fileServiceAuthHeaders(),
-    serviceName: 'file-service'
-  });
-  if (!response.ok && response.status !== 404) {
-    throw new Error(`file-service delete failed for ${fileId} (${response.status})`);
-  }
-};
-
-/** Delete named files, in batches of file-service's limit — one image group, not a whole folder. */
-export const deleteFiles = async (fileIds: string[]): Promise<void> => {
-  for (let start = 0; start < fileIds.length; start += 1000) {
-    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/delete-files`, {
-      method: 'POST',
-      headers: jsonHeaders(),
-      body: JSON.stringify({ fileIds: fileIds.slice(start, start + 1000) }),
-      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
-      serviceName: 'file-service'
-    });
-    if (!response.ok) throw new Error(`file-service delete-files failed (${response.status})`);
-  }
-};
-
-/** Delete every stored file under a prefix. */
-export const deleteFolder = async (prefix: string): Promise<void> => {
-  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/folder`, {
-    method: 'DELETE',
-    headers: jsonHeaders(),
-    body: JSON.stringify({ prefix }),
-    // A dataset folder can hold tens of thousands of files.
-    timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
-    serviceName: 'file-service'
-  });
-  if (!response.ok) {
-    throw new Error(`file-service folder delete failed for ${prefix} (${response.status})`);
-  }
 };

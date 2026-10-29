@@ -1,4 +1,4 @@
-import { epochService } from '../services/epochService';
+import { epochService, type UploadEpochData } from '../services/epochService';
 import { runEvaluationService } from '../services/runEvaluationService';
 
 export interface UploadResult {
@@ -6,55 +6,27 @@ export interface UploadResult {
   failed: Array<{ name: string; error: string }>;
 }
 
-export const processEpochFiles = async (
+/**
+ * Reads each file as JSON and hands it to `handle`, which uploads it and returns what it did.
+ * One bad file is reported in `failed` and does not stop the rest.
+ */
+const processJsonFiles = async <T>(
   files: FileList,
-  trainingId: string
+  handle: (data: T) => Promise<string>
 ): Promise<UploadResult> => {
-  const successfulFiles: Array<{ name: string; operation: string }> = [];
-  const failedFiles: Array<{ name: string; error: string }> = [];
+  const successfulFiles: UploadResult['successful'] = [];
+  const failedFiles: UploadResult['failed'] = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
 
     if (!file.name.endsWith('.json')) {
-      const error = 'Invalid file type (must be .json)';
-      failedFiles.push({ name: file.name, error });
+      failedFiles.push({ name: file.name, error: 'Invalid file type (must be .json)' });
       continue;
     }
 
     try {
-      const content = await file.text();
-      const epochData = JSON.parse(content);
-
-      // Check if epoch has an ID (_id or epoch_uuid)
-      const epochId = epochData._id || epochData.epoch_uuid;
-      let operation = 'created';
-
-      if (epochId) {
-        // Try to update existing epoch
-        try {
-          await epochService.updateEpoch(epochId, {
-            ...epochData,
-            trainingId
-          });
-          operation = 'updated';
-        } catch {
-          // If update fails, try to create new epoch
-          await epochService.uploadEpoch(
-            { ...epochData, trainingId },
-            trainingId
-          );
-          operation = 'created';
-        }
-      } else {
-        // No ID provided, create new epoch
-        await epochService.uploadEpoch(
-          { ...epochData, trainingId },
-          trainingId
-        );
-        operation = 'created';
-      }
-
+      const operation = await handle(JSON.parse(await file.text()));
       successfulFiles.push({ name: file.name, operation });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -65,34 +37,25 @@ export const processEpochFiles = async (
   return { successful: successfulFiles, failed: failedFiles };
 };
 
-export const processEvaluationFiles = async (
-  files: FileList
-): Promise<UploadResult> => {
-  const successfulFiles: Array<{ name: string; operation: string }> = [];
-  const failedFiles: Array<{ name: string; error: string }> = [];
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-
-    if (!file.name.endsWith('.json')) {
-      const error = 'Invalid file type (must be .json)';
-      failedFiles.push({ name: file.name, error });
-      continue;
+export const processEpochFiles = (files: FileList, trainingId: string): Promise<UploadResult> =>
+  processJsonFiles(files, async (epochData: UploadEpochData) => {
+    const epoch = { ...epochData, trainingId };
+    // An epoch that carries an id updates that epoch; if there is none to update, it is created.
+    const epochId = epochData._id || epochData.epoch_uuid;
+    if (epochId) {
+      try {
+        await epochService.updateEpoch(epochId, epoch);
+        return 'updated';
+      } catch {
+        // fall through to create
+      }
     }
+    await epochService.uploadEpoch(epoch, trainingId);
+    return 'created';
+  });
 
-    try {
-      const content = await file.text();
-      const evaluationData = JSON.parse(content);
-
-      // Upload test result
-      await runEvaluationService.upload(evaluationData);
-
-      successfulFiles.push({ name: file.name, operation: 'uploaded' });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      failedFiles.push({ name: file.name, error: message });
-    }
-  }
-
-  return { successful: successfulFiles, failed: failedFiles };
-};
+export const processEvaluationFiles = (files: FileList): Promise<UploadResult> =>
+  processJsonFiles(files, async (evaluationData: Parameters<typeof runEvaluationService.upload>[0]) => {
+    await runEvaluationService.upload(evaluationData);
+    return 'uploaded';
+  });

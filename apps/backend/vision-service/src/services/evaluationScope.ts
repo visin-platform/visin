@@ -28,6 +28,3 @@ export const readerVisible = { $or: [{ publishedAt: { $ne: null } }, { suite: { 
 /** Whether someone who can only read a project is shown this evaluation of it. */
 export const visibleToReader = (evaluation: { publishedAt?: Date | null; suite?: unknown }): boolean =>
   Boolean(evaluation.publishedAt) || !evaluation.suite;
-
-/** The projects named in a scope, whichever way they may be seen. */
-export const scopeProjectIds = (scope: EvaluationScope): string[] => [...scope.full, ...scope.published];

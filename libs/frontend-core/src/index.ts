@@ -113,3 +113,4 @@ export { createConfigProvider } from './config/createConfigProvider';
 export type { CreateConfigProviderOptions } from './config/createConfigProvider';
 
 export { ShareButton } from './components/ShareButton';
+export { VerificationMark } from './components/VerificationMark';

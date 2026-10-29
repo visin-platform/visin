@@ -1,4 +1,4 @@
-import { arxivLink, doiLink, parseArxivId, parseDoi, parseHttpUrl } from '../../services/paperIdentifiers';
+import { parseArxivId, parseDoi, parseHttpUrl } from '../../services/paperIdentifiers';
 
 describe('paper identifiers', () => {
   it.each([
@@ -40,10 +40,5 @@ describe('paper identifiers', () => {
     for (const bad of ['', 'example.test', 'javascript:alert(1)', 'ftp://example.test/p.pdf', 'https://user:pw@example.test/', 'data:text/html,hi']) {
       expect(parseHttpUrl(bad)).toBeUndefined();
     }
-  });
-
-  it('builds the addresses an identifier stands for', () => {
-    expect(arxivLink('2401.01234')).toBe('https://arxiv.org/abs/2401.01234');
-    expect(doiLink('10.1000/xyz')).toBe('https://doi.org/10.1000/xyz');
   });
 });

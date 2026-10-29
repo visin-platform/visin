@@ -1,30 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  LinearProgress,
-  Stack,
-  Tooltip,
-  Typography
-} from '@mui/material';
-import {
-  ArrowBack,
-  CheckCircleOutlined,
-  KeyboardOutlined,
-  LinkOutlined,
-  NavigateBefore,
-  NavigateNext,
-  PlaylistPlay,
-  Login
-} from '@mui/icons-material';
+import { Alert, Box, Button, Stack } from '@mui/material';
+import { NavigateBefore, Login } from '@mui/icons-material';
 import { Loader, useChartColors } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getJob } from '../services/jobService';
@@ -34,40 +12,23 @@ import { useFrameDocument } from '../editor/useFrameDocument';
 import { useEditorPrefs } from '../editor/useEditorPrefs';
 import { useTabPresence } from '../editor/useTabPresence';
 import ObjectList from '../editor/ObjectList';
-import EditorCanvas, { EditorTool, SamPoint } from '../editor/EditorCanvas';
-import { decodeMaskRle } from '../editor/maskCodec';
-import type { Bbox } from '../editor/boxes';
+import EditorCanvas, { EditorTool } from '../editor/EditorCanvas';
 import ModelDialog from '../components/ModelDialog';
 import ModelClassMappingDialog from '../components/ModelClassMappingDialog';
-import { ImageNeededError } from '../localModel/client';
-import { toSuggestions } from '../localModel/matchClasses';
 import { useLocalModel } from '../localModel/useLocalModel';
 import EditorToolbar from '../editor/EditorToolbar';
-import { classHotkey } from '../editor/classHotkey';
 import { Viewport } from '../editor/viewport';
 import { usePageTitle } from '../hooks/usePageTitle';
+import ShortcutsDialog from './workbench/ShortcutsDialog';
+import WorkbenchDone from './workbench/WorkbenchDone';
+import WorkbenchHeader from './workbench/WorkbenchHeader';
+import { useWorkbenchKeys } from './workbench/useWorkbenchKeys';
+import { useFrameBlob } from './workbench/useFrameBlob';
+import { useSegmentTool } from './workbench/useSegmentTool';
+import { useModelDetect } from './workbench/useModelDetect';
 
 /** Gap left under the editor so the page itself never scrolls. */
 const BOTTOM_GUTTER_PX = 8;
-
-const SHORTCUTS: [string, string][] = [
-  ['1–9', 'Pick a class'],
-  ['B / P / E', 'Box, brush, eraser'],
-  ['[ / ]', 'Smaller / larger brush'],
-  ['Shift + paint', 'Paint over other classes'],
-  ['Del', 'Delete the selected box'],
-  ['Ctrl+Z / Ctrl+Shift+Z', 'Undo / redo'],
-  ['Enter', 'Done — save and open the next frame'],
-  ['K', 'Skip this frame'],
-  ['← / →', 'Previous / next frame'],
-  ['V', 'Cycle LiDAR / radar view'],
-  ['A / X', 'Accept / dismiss suggestions'],
-  ['D', 'Suggest boxes with your model'],
-  ['S', 'Segment: click the object (right-click: not this); Enter keeps it'],
-  ['Space + drag, scroll', 'Pan, zoom'],
-  ['O', 'Show or hide the list of boxes'],
-  ['F', 'Fit the frame']
-];
 
 const WorkbenchPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
@@ -95,17 +56,6 @@ const WorkbenchPage: React.FC = () => {
   const model = useLocalModel();
   const [modelOpen, setModelOpen] = useState(false);
   const [modelMappingOpen, setModelMappingOpen] = useState(false);
-  const [detectMessage, setDetectMessage] = useState<string | null>(null);
-  const [detecting, setDetecting] = useState(false);
-  const detectRequest = useRef(0);
-  const [samPoints, setSamPoints] = useState<SamPoint[]>([]);
-  const [samBox, setSamBox] = useState<Bbox | null>(null);
-  const [samPreview, setSamPreview] = useState<{ width: number; height: number; data: Uint8Array } | null>(null);
-  const [samBusy, setSamBusy] = useState(false);
-  const samRequest = useRef(0);
-  const frameBlobRef = useRef<{ taskId: string; blob: Blob } | null>(null);
-  const imageSentRef = useRef<string | null>(null);
-  const detectedForRef = useRef<string | null>(null);
   const [prefs, setPrefs] = useEditorPrefs(jobId);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -166,146 +116,30 @@ const WorkbenchPage: React.FC = () => {
   useEffect(() => {
     setViewport(null);
     setActionError(null);
-    setDetectMessage(null);
-    detectRequest.current += 1;
-    setDetecting(false);
-    samRequest.current += 1;
-    setSamPoints([]);
-    setSamBox(null);
-    setSamPreview(null);
-    setSamBusy(false);
   }, [taskId]);
 
-  // Leaving the segment tool drops what it was working on.
-  useEffect(() => {
-    if (tool !== 'sam') {
-      samRequest.current += 1;
-      setSamPoints([]);
-      setSamBox(null);
-      setSamPreview(null);
-      setSamBusy(false);
-    }
-  }, [tool]);
-
-  /** The frame's bytes for the model: the image the editor already shows, fetched once per frame. */
-  const frameBlob = useCallback(async (): Promise<Blob> => {
-    if (!item) throw new Error('No frame');
-    if (frameBlobRef.current?.taskId === item.task._id) return frameBlobRef.current.blob;
-    const response = await fetch(item.images.frame.url);
-    if (!response.ok) throw new Error(`Could not read the frame (${response.status})`);
-    const blob = await response.blob();
-    frameBlobRef.current = { taskId: item.task._id, blob };
-    return blob;
-  }, [item]);
-
-  // The frame on screen now, for answers that arrive after the annotator moved on.
-  const currentTaskRef = useRef<string | null>(null);
-  currentTaskRef.current = item?.task._id ?? null;
-
-  const runDetect = useCallback(
-    async (manual: boolean) => {
-      if (!doc || !item || !model.canDetect) return;
-      const forTask = item.task._id;
-      const request = ++detectRequest.current;
-      setDetecting(true);
-      setDetectMessage(null);
-      if (manual) setActionError(null);
-      try {
-        const found = await model.detect(await frameBlob());
-        // Boxes for a frame that is no longer on screen belong to no frame.
-        if (currentTaskRef.current !== forTask || request !== detectRequest.current) return;
-        const suggestions = toSuggestions(found, classes, doc.width, doc.height);
-        frame.setModelSuggestions(suggestions);
-        if (found.length > 0 && suggestions.length === 0) {
-          const names = [...new Set(found.map((entry) => entry.class))].join(', ');
-          setDetectMessage(`The model detected ${found.length} objects (${names}), but none match this job’s box classes. Check the model class mappings and frame size.`);
-        } else if (manual && found.length === 0) {
-          setDetectMessage('The model found no objects above the score threshold. Try lowering the threshold in Model settings.');
-        }
-      } catch (err) {
-        // Suggesting is a favour: a failure on its own is only worth a message when asked for.
-        if (manual && request === detectRequest.current) setActionError((err as Error).message);
-      } finally {
-        if (request === detectRequest.current) setDetecting(false);
-      }
-    },
-    [doc, item, model, frameBlob, frame, classes]
-  );
-
-  // Suggest boxes as an unlabeled frame opens, when a model is there and nothing
-  // else (an import, the annotator's own work) has claimed the frame.
-  const { canDetect } = model;
-  const autoDetect = model.settings.autoDetect;
-  const runDetectRef = useRef(runDetect);
-  runDetectRef.current = runDetect;
-  useEffect(() => {
-    detectedForRef.current = null;
-    detectRequest.current += 1;
-    setDetecting(false);
-    setDetectMessage(null);
-  }, [classes]);
-  useEffect(() => {
-    if (!canLabel || !canDetect || !autoDetect || !doc || !item || !taskId) return;
-    if (detectedForRef.current === taskId) return;
-    if (item.annotation.mine || item.suggestions || doc.boxes.length > 0 || doc.hasMask) return;
-    detectedForRef.current = taskId;
-    void runDetectRef.current(false);
-  }, [canLabel, canDetect, autoDetect, doc, item, taskId, classes]);
-
-  /** One more click, or a dragged box, for the segment tool: ask the model for the mask. */
-  const samPrompt = useCallback(
-    async (points: SamPoint[], box: Bbox | null) => {
-      if (!item) return;
-      setSamPoints(points);
-      setSamBox(box);
-      const request = ++samRequest.current;
-      if (points.length === 0 && !box) {
-        setSamPreview(null);
-        setSamBusy(false);
-        return;
-      }
-      setSamBusy(true);
-      try {
-        const id = item.task._id;
-        const send = async (withImage: boolean) =>
-          model.segment({ imageId: id, ...(withImage ? { image: await frameBlob() } : {}), points, ...(box ? { box } : {}) });
-        let result;
-        try {
-          result = await send(imageSentRef.current !== id);
-        } catch (err) {
-          if (!(err instanceof ImageNeededError)) throw err;
-          result = await send(true);
-        }
-        imageSentRef.current = id;
-        if (request !== samRequest.current) return;
-        const decoded = decodeMaskRle(result.rle);
-        setSamPreview(decoded);
-      } catch (err) {
-        if (request === samRequest.current) setActionError((err as Error).message);
-      } finally {
-        if (request === samRequest.current) setSamBusy(false);
-      }
-    },
-    [item, model, frameBlob]
-  );
-
-  const clearSam = useCallback(() => {
-    samRequest.current += 1;
-    setSamPoints([]);
-    setSamBox(null);
-    setSamPreview(null);
-    setSamBusy(false);
-  }, []);
-
-  /** Keep the model's mask: painted as the active class, around what is already drawn. */
-  const commitSam = useCallback(
-    (overwrite: boolean) => {
-      if (!doc || !samPreview || !activeClass) return;
-      doc.paintMask(samPreview.data, activeClass.maskIndex, overwrite);
-      clearSam();
-    },
-    [doc, samPreview, activeClass, clearSam]
-  );
+  const frameBlob = useFrameBlob(item);
+  const { samPoints, samBox, samPreview, samBusy, samPrompt, clearSam, commitSam } = useSegmentTool({
+    item,
+    taskId,
+    tool,
+    model,
+    doc,
+    activeClass,
+    frameBlob,
+    onError: setActionError
+  });
+  const { detecting, detectMessage, setDetectMessage, runDetect } = useModelDetect({
+    item,
+    taskId,
+    canLabel,
+    classes,
+    doc,
+    model,
+    frameBlob,
+    setModelSuggestions: frame.setModelSuggestions,
+    onError: setActionError
+  });
 
   const chooseTool = useCallback(
     (tool: EditorTool) => {
@@ -398,124 +232,35 @@ const WorkbenchPage: React.FC = () => {
     [canLabel, item, queue, saveFirst, elapsedMs, frame]
   );
 
-  // Keyboard. Handled on `window` and with `preventDefault`, so Enter finishes
-  // the frame even when a toolbar button still holds focus from a click.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      // A dialog on top owns the keyboard: Enter there is its button, not Done.
-      if (!item || helpOpen || modelOpen || modelMappingOpen) return;
-      const key = event.key;
-      const mod = event.ctrlKey || event.metaKey;
-
-      if (mod && (key === 'z' || key === 'Z')) {
-        event.preventDefault();
-        if (event.shiftKey) doc?.redo();
-        else doc?.undo();
-        return;
-      }
-      if (mod && (key === 'y' || key === 'Y')) {
-        event.preventDefault();
-        doc?.redo();
-        return;
-      }
-      if (mod || event.altKey) return;
-
-      if (key === 'ArrowLeft' || key === 'ArrowRight') {
-        event.preventDefault();
-        void step(key === 'ArrowLeft' ? -1 : 1);
-        return;
-      }
-      if (key === 'f' || key === 'F') {
-        event.preventDefault();
-        setViewport(null);
-        return;
-      }
-      if (key === '?') {
-        setHelpOpen(true);
-        return;
-      }
-      if (key === 'o' || key === 'O') {
-        setObjectsOpen((open) => !open);
-        return;
-      }
-      if (!canLabel) return;
-
-      if (key === 'Escape' && samPreview) {
-        clearSam();
-      } else if (key === 'Enter' && samBusy) {
-        event.preventDefault();
-      } else if (key === 'Enter' && samPreview && tool === 'sam') {
-        // A segment waiting to be kept comes first; the next Enter finishes the frame.
-        event.preventDefault();
-        commitSam(event.shiftKey);
-      } else if (key === 'Enter') {
-        event.preventDefault();
-        void finish('done');
-      } else if (key === 'd' || key === 'D') {
-        void runDetect(true);
-      } else if (key === 's' || key === 'S') {
-        chooseTool('sam');
-      } else if (key === 'k' || key === 'K') {
-        event.preventDefault();
-        void finish('skip');
-      } else if (key === 'b' || key === 'B') {
-        chooseTool('box');
-      } else if (key === 'p' || key === 'P') {
-        chooseTool('brush');
-      } else if (key === 'e' || key === 'E') {
-        chooseTool('eraser');
-      } else if (key === '[' || key === ']') {
-        setPrefs({ brushDiameter: Math.min(200, Math.max(2, prefs.brushDiameter + (key === ']' ? 4 : -4))) });
-      } else if (key === 'v' || key === 'V') {
-        const order: { lidar: boolean; radar: boolean }[] = [{ lidar: false, radar: false }];
-        if (availableOverlays.lidar) order.push({ lidar: true, radar: false });
-        if (availableOverlays.radar) order.push({ lidar: false, radar: true });
-        if (availableOverlays.lidar && availableOverlays.radar) order.push({ lidar: true, radar: true });
-        const at = order.findIndex((entry) => entry.lidar === overlays.lidar && entry.radar === overlays.radar);
-        setPrefs({ overlays: order[(at + 1) % order.length] });
-      } else if (key === 'Delete' || key === 'Backspace') {
-        if (doc?.selectedId) {
-          event.preventDefault();
-          doc.deleteBox(doc.selectedId);
-        }
-      } else if (key === 'a' || key === 'A') {
-        frame.acceptAllSuggestions();
-      } else if (key === 'x' || key === 'X') {
-        frame.dismissSuggestions();
-      } else {
-        const index = classes.findIndex((entry, i) => classHotkey(entry, i) === key);
-        if (index >= 0) chooseClass(classes[index].key);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    item,
-    doc,
+  const fit = useCallback(() => setViewport(null), []);
+  const openHelp = useCallback(() => setHelpOpen(true), []);
+  const toggleObjects = useCallback(() => setObjectsOpen((open) => !open), []);
+  useWorkbenchKeys({
+    hasFrame: Boolean(item),
+    dialogOpen: helpOpen || modelOpen || modelMappingOpen,
     canLabel,
+    doc,
     classes,
+    tool,
+    brushDiameter: prefs.brushDiameter,
+    availableOverlays,
+    overlays,
+    samPreview,
+    samBusy,
     step,
     finish,
     chooseTool,
     chooseClass,
     setPrefs,
-    prefs.brushDiameter,
-    availableOverlays,
-    overlays.lidar,
-    overlays.radar,
-    frame,
-    samPreview,
-    samBusy,
-    tool,
     clearSam,
     commitSam,
     runDetect,
-    helpOpen,
-    modelOpen,
-    modelMappingOpen
-  ]);
+    acceptAllSuggestions: frame.acceptAllSuggestions,
+    dismissSuggestions: frame.dismissSuggestions,
+    onFit: fit,
+    onHelp: openHelp,
+    onToggleObjects: toggleObjects
+  });
 
   if (jobError) return <Alert severity="error">{jobError.message}</Alert>;
   if (!job || queue.status === 'loading') {
@@ -526,47 +271,19 @@ const WorkbenchPage: React.FC = () => {
   }
 
   if (queue.status === 'done' || !item) {
-    const hasFrames = (job.tasksCount || 0) > 0;
     return (
-      <Box sx={{ textAlign: 'center', py: 8 }}>
-        <CheckCircleOutlined sx={{ fontSize: 56, color: 'success.main' }} />
-        <Typography variant="h5" sx={{ fontWeight: 700, mt: 1 }}>
-          {hasFrames ? 'All done' : 'No frames yet'}
-        </Typography>
-        <Typography sx={{ color: 'text.secondary', mb: 3 }}>
-          {hasFrames
-            ? `No frames left for you in this job. You finished ${queue.sessionDone} this session.`
-            : 'This job has no frames materialized yet.'}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
-          {hasFrames && (
-            <Button
-              variant="outlined"
-              startIcon={<NavigateBefore />}
-              onClick={() => queue.goTo(0).catch((err) => setActionError((err as Error).message))}
-            >
-              Review labeled frames
-            </Button>
-          )}
-          <Button component={Link} to={`/jobs/${jobId}`} variant="contained">
-            Back to job
-          </Button>
-        </Stack>
-      </Box>
+      <WorkbenchDone
+        jobId={jobId}
+        hasFrames={(job.tasksCount || 0) > 0}
+        sessionDone={queue.sessionDone}
+        onReview={() => queue.goTo(0).catch((err) => setActionError((err as Error).message))}
+      />
     );
   }
 
   const total = job.tasksCount || 0;
   const myDone = (job.progress?.myDone ?? 0) + queue.sessionDone;
   const finishedByMe = item.annotation.mine?.status === 'done';
-  const savedLabel =
-    frame.saveStatus === 'saving'
-      ? 'Saving…'
-      : frame.saveStatus === 'offline'
-        ? 'Offline — kept on this device'
-        : frame.saveStatus === 'error'
-          ? 'Could not save'
-          : 'Saved';
   const suggestionCount = frame.suggestions?.boxes.length ?? 0;
   const hasSuggestedMask = Boolean(frame.suggestions?.mask);
 
@@ -575,91 +292,29 @@ const WorkbenchPage: React.FC = () => {
       ref={rootRef}
       sx={{ display: 'flex', flexDirection: 'column', height: availableHeight ?? 'calc(100vh - 120px)', minHeight: 480 }}
     >
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 0.5 }}>
-        <IconButton component={Link} to={`/jobs/${jobId}`} aria-label="back to job" size="small">
-          <ArrowBack />
-        </IconButton>
-        <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }} noWrap>
-          {job.name}
-        </Typography>
-        {item.task.stratum && <Chip size="small" label={item.task.stratum} />}
-        {item.images.frame.stem && (
-          <Tooltip title={linkCopied ? 'Link copied' : 'Copy a link to this frame'}>
-            <Chip
-              size="small"
-              variant="outlined"
-              icon={<LinkOutlined />}
-              label={item.images.frame.stem}
-              onClick={copyFrameLink}
-              color={linkCopied ? 'success' : 'default'}
-            />
-          </Tooltip>
-        )}
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Tooltip title="Previous frame (←)">
-            <span>
-              <IconButton
-                aria-label="previous frame"
-                size="small"
-                disabled={queue.navigating || position === null || position.index === 0}
-                onClick={() => void step(-1)}
-              >
-                <NavigateBefore />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 84, textAlign: 'center' }}>
-            {position ? `${position.index + 1} / ${position.total}` : '—'}
-          </Typography>
-          <Tooltip title="Next frame (→)">
-            <span>
-              <IconButton
-                aria-label="next frame"
-                size="small"
-                disabled={queue.navigating || position === null || position.index + 1 >= position.total}
-                onClick={() => void step(1)}
-              >
-                <NavigateNext />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Stack>
-        {queue.browsing && canPull && (
-          <Tooltip title="Stop browsing and take the next unlabeled frame">
-            <span>
-              <IconButton
-                aria-label="resume queue"
-                size="small"
-                disabled={queue.navigating}
-                onClick={async () => {
-                  if (canLabel && !(await saveFirst())) return;
-                  queue.resumeQueue().catch((err) => setActionError((err as Error).message));
-                }}
-              >
-                <PlaylistPlay />
-              </IconButton>
-            </span>
-          </Tooltip>
-        )}
-        {canLabel && (
-          <Chip
-            size="small"
-            data-testid="save-status"
-            color={frame.saveStatus === 'offline' || frame.saveStatus === 'error' ? 'warning' : 'default'}
-            variant="outlined"
-            label={savedLabel}
-          />
-        )}
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {myDone}/{total}
-        </Typography>
-        <Tooltip title="Keyboard shortcuts (?)">
-          <IconButton size="small" aria-label="keyboard shortcuts" onClick={() => setHelpOpen(true)}>
-            <KeyboardOutlined />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-      <LinearProgress variant="determinate" value={total ? Math.min(100, (myDone / total) * 100) : 0} sx={{ mb: 1 }} />
+      <WorkbenchHeader
+        jobId={jobId}
+        jobName={job.name}
+        stratum={item.task.stratum}
+        stem={item.images.frame.stem}
+        linkCopied={linkCopied}
+        onCopyLink={copyFrameLink}
+        position={position}
+        navigating={queue.navigating}
+        onStep={(delta) => void step(delta)}
+        onResumeQueue={
+          queue.browsing && canPull
+            ? async () => {
+                if (canLabel && !(await saveFirst())) return;
+                queue.resumeQueue().catch((err) => setActionError((err as Error).message));
+              }
+            : undefined
+        }
+        saveStatus={canLabel ? frame.saveStatus : undefined}
+        done={myDone}
+        total={total}
+        onHelp={openHelp}
+      />
 
       {actionError && (
         <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 1 }}>
@@ -840,21 +495,7 @@ const WorkbenchPage: React.FC = () => {
       {job.canManage && modelMappingOpen && <ModelClassMappingDialog jobId={jobId} classes={classes} modelClasses={model.info?.classes ?? []}
         onClose={() => setModelMappingOpen(false)} />}
 
-      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)}>
-        <DialogTitle>Keyboard shortcuts</DialogTitle>
-        <DialogContent>
-          <Stack spacing={0.75}>
-            {SHORTCUTS.map(([keys, what]) => (
-              <Stack key={keys} direction="row" spacing={2} sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="body2">{what}</Typography>
-                <Typography variant="body2" component="kbd" sx={{ fontWeight: 600 }}>
-                  {keys}
-                </Typography>
-              </Stack>
-            ))}
-          </Stack>
-        </DialogContent>
-      </Dialog>
+      <ShortcutsDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </Box>
   );
 };

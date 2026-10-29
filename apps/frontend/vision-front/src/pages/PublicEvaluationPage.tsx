@@ -1,10 +1,9 @@
 import React from 'react';
 import { Alert, Box, CircularProgress, Container, Link, Paper, Typography } from '@mui/material';
-import { PageHeader } from '@visin/frontend-core';
+import { PageHeader, VerificationMark } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, Navigate, useParams } from 'react-router-dom';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
-import VerificationMark from '../components/evaluations/VerificationMark';
 import ScoresTable from '../components/evaluations/ScoresTable';
 import { checkpointLabel, EVIDENCE_META, publicDataText } from '../components/evaluations/verdict';
 import { checkpointSource } from '../components/evaluations/sources';

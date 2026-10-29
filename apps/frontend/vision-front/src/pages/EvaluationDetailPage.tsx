@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { Chip } from '@mui/material';
-import { PageHeader, ResponsiveActions, type ResponsiveAction } from '@visin/frontend-core';
+import { PageHeader, ResponsiveActions, type ResponsiveAction, VerificationMark } from '@visin/frontend-core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
@@ -28,7 +28,6 @@ import ScoresTable from '../components/evaluations/ScoresTable';
 import EvidenceChip from '../components/evaluations/EvidenceChip';
 import EvidencePanel from '../components/evaluations/EvidencePanel';
 import ResultBreakdown from '../components/training/ResultBreakdown';
-import VerificationMark from '../components/evaluations/VerificationMark';
 import { checkpointLabel } from '../components/evaluations/verdict';
 import { checkpointSource } from '../components/evaluations/sources';
 import { useAuth } from '../contexts/AuthContext';

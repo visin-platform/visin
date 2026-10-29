@@ -6,11 +6,9 @@ import { uploadFile } from '../../services/uploadService';
 
 jest.mock('../../utils/storage', () => ({
   createWriteStream: jest.fn(),
-  createWriteStreamAt: jest.fn(),
   openRead: jest.fn(),
   fileExists: jest.fn(),
   getMetadata: jest.fn(),
-  truncateFile: jest.fn(),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),

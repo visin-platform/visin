@@ -1,33 +1,22 @@
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Grid,
-  Card,
-  CardContent,
-  Stack
-} from '@mui/material';
+import { Box, Card, CardContent, Grid, Stack, Typography } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { useChartColors } from '@visin/frontend-core';
 import { Training, Epoch, EpochConditionResults } from '../types';
+import TrainValChart from '../components/TrainValChart';
+import { discoverEpochMetrics } from '../taxonomy/discover';
+import { useTaxonomy } from '../taxonomy/useTaxonomy';
 import ClassIoUOverEpochsChart from '../components/ClassIoUOverEpochsChart';
-import LossChart from '../components/LossChart';
-import MIoUChart from '../components/MIoUChart';
-import PixelAccuracyChart from '../components/PixelAccuracyChart';
-import MeanAccuracyChart from '../components/MeanAccuracyChart';
-import DiceScoreChart from '../components/DiceScoreChart';
 import TrainingTimeMetrics from '../components/TrainingTimeMetrics';
 import TrainingOverviewCard from '../components/TrainingOverviewCard';
 import ProvenanceCard from '../components/training/ProvenanceCard';
 import RunNotes from '../components/training/RunNotes';
+import ChartCard from '../components/training/ChartCard';
 import ClassPrecisionChart from '../components/ClassPrecisionChart';
 import ClassRecallChart from '../components/ClassRecallChart';
 import ClassF1Chart from '../components/ClassF1Chart';
 import PerClassMetricsTable from '../components/PerClassMetricsTable';
-import { 
-  Timeline as TimelineIcon,
-  TableChart as TableChartIcon
-} from '@mui/icons-material';
+import { TableChart as TableChartIcon } from '@mui/icons-material';
 
 interface TrainingOverviewTabProps {
   training: Training;
@@ -37,6 +26,9 @@ interface TrainingOverviewTabProps {
   onSaveNotes?: (notes: string) => Promise<unknown>;
 }
 
+// The icon colour of each metric card, in turn.
+const CARD_COLORS = ['primary', 'secondary', 'warning', 'info', 'error', 'success'] as const;
+
 const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   training,
   epochs,
@@ -44,6 +36,9 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   onSaveNotes
 }) => {
   const colors = useChartColors();
+  const taxonomy = useTaxonomy();
+  // Whatever the run reports for training and validation gets its chart; the project's taxonomy only names it.
+  const metrics = React.useMemo(() => discoverEpochMetrics(epochs), [epochs]);
   // Calculate chart data
   const lastEpoch = epochs[epochs.length - 1];
   const classMetrics = lastEpoch?.results?.metrics?.per_class || {};
@@ -60,358 +55,85 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
         {training.provenance && <ProvenanceCard provenance={training.provenance} />}
 
         <Grid container spacing={3}>
-          {/* Training Metrics Charts */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }} data-guide="loss-chart">
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Loss Metrics
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Measures the training loss (typically cross-entropy loss for segmentation). Lower values indicate better model performance during training.
-                </Typography>
-                <LossChart epochs={epochs} />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }} data-guide="miou-chart">
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="secondary" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Mean IoU
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Intersection over Union averaged across all classes. Measures the overlap between predicted and ground truth regions, ranging from 0 to 1.
-                </Typography>
-                <MIoUChart epochs={epochs} />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="secondary" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Class IoU Over Epochs
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  IoU scores for each class tracked over training epochs. Shows how individual class performance evolves during training.
-                </Typography>
-                <ClassIoUOverEpochsChart
-                  epochs={epochs}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="warning" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Class Precision Scores
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Precision scores for each class, measuring the accuracy of positive predictions. Higher values indicate fewer false positives for that class.
-                </Typography>
-                <ClassPrecisionChart
-                  epochs={epochs}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="info" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Class Recall Scores
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Recall scores for each class, measuring the completeness of positive predictions. Higher values indicate fewer false negatives for that class.
-                </Typography>
-                <ClassRecallChart
-                  epochs={epochs}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="error" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Class F1 Scores
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  F1 scores for each class, measuring the balance between precision and recall. Higher values indicate better performance for individual classes.
-                </Typography>
-                <ClassF1Chart
-                  epochs={epochs}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Grid container spacing={3}>
-          {/* Additional Metrics Charts */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="warning" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Pixel Accuracy
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Measures the percentage of correctly classified pixels across the entire image. Higher values indicate better overall pixel-level accuracy, but can be misleading for imbalanced classes.
-                </Typography>
-                <PixelAccuracyChart epochs={epochs} />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="secondary" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Mean Accuracy
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Calculates the average accuracy across all classes, giving equal weight to each class regardless of size. Useful for balanced class evaluation.
-                </Typography>
-                <MeanAccuracyChart epochs={epochs} />
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Standard Training IoU Over Epochs */}
-          {epochs.length > 0 && (trainStandardIoU.some(v => v !== null) || valStandardIoU.some(v => v !== null)) && (
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-                <CardContent>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      mb: 1
-                    }}>
-                    <TimelineIcon color="info" sx={{ mr: 1 }} />
-                    <Typography
-                      variant="h6"
-                      sx={{
-                        fontSize: "1rem",
-                        fontWeight: 600
-                      }}>
-                      Standard Training IoU Over Epochs
-                    </Typography>
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "text.secondary",
-                      mb: 3
-                    }}>
-                    Standard IoU metrics using the official evaluation protocol over training epochs.
-                  </Typography>
-                  
-                  <Box sx={{ width: '100%', height: 300 }}>
-                    <LineChart
-                      xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
-                      series={[
-                        { data: trainStandardIoU, label: 'Training IoU', color: colors.slot(0), showMark: false },
-                        { data: valStandardIoU, label: 'Validation IoU', color: colors.slot(1), showMark: false }
-                      ]}
-                      margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
-                      slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
-                    />
-                  </Box>
-                </CardContent>
-              </Card>
+          {/* One train-versus-validation chart per metric the run reports */}
+          {metrics.map((key, index) => {
+            const metric = taxonomy.metric(key);
+            return (
+              <ChartCard
+                key={key}
+                title={metric.label}
+                description={metric.description}
+                color={CARD_COLORS[index % CARD_COLORS.length]}
+                dataGuide={`metric-${key}`}
+              >
+                <TrainValChart epochs={epochs} metric={key} label={metric.label} />
+              </ChartCard>
+            );
+          })}
+          {metrics.length === 0 && (
+            <Grid size={{ xs: 12 }}>
+              <Typography sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
+                No training or validation metrics yet. Each epoch your script sends adds a point.
+              </Typography>
             </Grid>
           )}
 
-          {/* Class Metrics Charts */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
-              <CardContent>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1
-                  }}>
-                  <TimelineIcon color="success" sx={{ mr: 1 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight: 600
-                    }}>
-                    Dice Score
-                  </Typography>
-                </Box>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 2
-                  }}>
-                  Measures the overlap between predicted and ground truth segmentation masks. Also known as F1-score for segmentation, ranges from 0 to 1. Often used in medical imaging.
-                </Typography>
-                <DiceScoreChart epochs={epochs} />
-              </CardContent>
-            </Card>
-          </Grid>
+          <ChartCard
+            title="Class IoU Over Epochs"
+            color="secondary"
+            description="IoU scores for each class tracked over training epochs. Shows how individual class performance evolves during training."
+          >
+            <ClassIoUOverEpochsChart epochs={epochs} />
+          </ChartCard>
+
+          <ChartCard
+            title="Class Precision Scores"
+            color="warning"
+            description="Precision scores for each class, measuring the accuracy of positive predictions. Higher values indicate fewer false positives for that class."
+          >
+            <ClassPrecisionChart epochs={epochs} />
+          </ChartCard>
+
+          <ChartCard
+            title="Class Recall Scores"
+            color="info"
+            description="Recall scores for each class, measuring the completeness of positive predictions. Higher values indicate fewer false negatives for that class."
+          >
+            <ClassRecallChart epochs={epochs} />
+          </ChartCard>
+
+          <ChartCard
+            title="Class F1 Scores"
+            color="error"
+            description="F1 scores for each class, measuring the balance between precision and recall. Higher values indicate better performance for individual classes."
+          >
+            <ClassF1Chart epochs={epochs} />
+          </ChartCard>
+          {/* Standard Training IoU Over Epochs */}
+          {epochs.length > 0 && (trainStandardIoU.some(v => v !== null) || valStandardIoU.some(v => v !== null)) && (
+            <ChartCard
+              title="Standard Training IoU Over Epochs"
+              color="info"
+              descriptionGap={3}
+              description="Standard IoU metrics using the official evaluation protocol over training epochs."
+            >
+              <Box sx={{ width: '100%', height: 300 }}>
+                <LineChart
+                  xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
+                  series={[
+                    { data: trainStandardIoU, label: 'Training IoU', color: colors.slot(0), showMark: false },
+                    { data: valStandardIoU, label: 'Validation IoU', color: colors.slot(1), showMark: false }
+                  ]}
+                  margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
+                  slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
+                />
+              </Box>
+            </ChartCard>
+          )}
 
           {/* Training Time Metrics */}
           <Grid size={{ xs: 12, md: 12 }}>
-            <TrainingTimeMetrics 
-              epochs={epochs}
-            />
+            <TrainingTimeMetrics epochs={epochs} />
           </Grid>
 
           {/* Per-Class Metrics Table */}

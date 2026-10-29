@@ -1,6 +1,6 @@
 import { Epoch } from '../types/epoch';
 import { RunEvaluation } from '../types/runEvaluation';
-import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS, RESERVED_EPOCH_KEYS } from './reserved';
+import { NON_METRIC_EPOCH_KEYS, RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS, RESERVED_EPOCH_KEYS } from './reserved';
 
 /**
  * Reads the vocabulary out of the payloads themselves.
@@ -103,6 +103,40 @@ export const discoverOverallMetrics = (evaluations: RunEvaluation[]): string[] =
       }
     });
   });
+  return Array.from(found);
+};
+
+/**
+ * A pipeline that does not compute a metric often writes 0 for it, so a number counts as
+ * reported only when it is a finite, non-zero one: a line of nothing but zeros is "not
+ * reported", not a result.
+ */
+export const isReported = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value !== 0;
+
+/**
+ * The metrics a run reports for training and validation: every numeric key directly under
+ * an epoch's `train` or `val` that some epoch gave a reported value. Nested objects (a
+ * class, a condition) are not metrics. Returned in the order the data first showed them,
+ * which is the pipeline's own order.
+ */
+export const discoverEpochMetrics = (epochs: Epoch[]): string[] => {
+  const found = new Set<string>();
+
+  epochs.forEach(epoch => {
+    (['train', 'val'] as const).forEach(split => {
+      const block = epoch.results?.[split];
+      if (!isRecord(block)) {
+        return;
+      }
+      Object.entries(block).forEach(([key, value]) => {
+        if (!NON_METRIC_EPOCH_KEYS.has(key.toLowerCase()) && isReported(value)) {
+          found.add(key);
+        }
+      });
+    });
+  });
+
   return Array.from(found);
 };
 

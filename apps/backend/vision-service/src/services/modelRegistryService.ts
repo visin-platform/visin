@@ -39,19 +39,6 @@ export async function latestEpochs(trainingIds: string[]): Promise<{ results: Re
 }
 
 /**
- * The keys a result path stands for. A key can hold a dot (`val.map_0.5`), so the path
- * alone is ambiguous; the runs' own results settle it, and a path none of them reports
- * is read as plain dotted keys.
- */
-export async function resolveSegments(trainingIds: string[], metric: string): Promise<string[]> {
-  for (const { results } of await latestEpochs(trainingIds)) {
-    const leaf = metricLeaves(results).find((candidate) => candidate.path === metric);
-    if (leaf) return leaf.segments;
-  }
-  return metric.split('.');
-}
-
-/**
  * The best value each run reached for a result, and the epoch it reached it at.
  * Results are open blobs, so this reads whatever number sits at the path; a run
  * that never reported it has no entry. Whether larger is better is the caller's

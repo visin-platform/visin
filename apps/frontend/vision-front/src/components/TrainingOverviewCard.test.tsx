@@ -56,6 +56,23 @@ describe('TrainingOverviewCard', () => {
     expect(screen.getByText(/Est\. Cost/)).toBeInTheDocument();
   });
 
+  it('headlines a loss and a score for a segmentation run', () => {
+    render(<TrainingOverviewCard training={baseTraining} epochs={[makeEpoch(1)]} />);
+    ['Train Loss', 'Val Loss', 'Train Mean IoU', 'Val Mean IoU'].forEach(title =>
+      expect(screen.getByText(title)).toBeInTheDocument()
+    );
+    expect(screen.getByText('0.700')).toBeInTheDocument(); // train mean_iou
+  });
+
+  it('headlines what a classification run reports instead', () => {
+    const epochs = [makeEpoch(1, { results: { train: { top1: 0.81 }, val: { top1: 0.77, top5: 0.95 } } })];
+    render(<TrainingOverviewCard training={baseTraining} epochs={epochs} />);
+    expect(screen.getByText('Train Top1')).toBeInTheDocument();
+    expect(screen.getByText('Val Top5')).toBeInTheDocument();
+    expect(screen.getByText('0.810')).toBeInTheDocument();
+    expect(screen.queryByText('Train Loss')).not.toBeInTheDocument();
+  });
+
   it('shows fallback for missing training uuid and dataset id', () => {
     const training = { ...baseTraining, training_uuid: undefined, uuid: undefined, datasetId: undefined };
     render(<TrainingOverviewCard training={training as unknown as Training} epochs={[]} />);

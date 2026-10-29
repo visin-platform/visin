@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import SortableTableCell from './SortableTableCell';
+import { useColumnSort } from './useColumnSort';
 import {
   Paper,
   Box,
@@ -12,15 +14,12 @@ import {
   useTheme,
   Button
 } from '@mui/material';
-import {
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
-} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { livePalette, tint, surface } from '@visin/frontend-core';
 import { TrainingComparison } from '../../types';
 import LatexModal from '../common/LatexModal';
+import { formatNumber } from '../../utils/formatComparison';
 
 interface TrainingClassIoUTableProps {
   comparisonData: TrainingComparison[];
@@ -42,63 +41,14 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
-  const [sortColumn, setSortColumn] = useState<string>('training');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const sort = useColumnSort('training', 'asc');
+  const { sortColumn, sortDirection } = sort;
 
-  const formatNumber = (value: number | undefined, decimals: number = 2, multiplier: number = 100): string => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return (value * multiplier).toFixed(decimals);
-    }
-    return 'N/A';
-  };
 
   // Helper function to extract mean value from metric object
   const extractMeanValue = (metric: { mean: number; std: number } | null): number => {
     return metric ? metric.mean : -Infinity;
   };
-
-  // Handle column sorting
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('desc');
-    }
-  };
-
-  // Helper component for sortable table headers
-  const SortableTableCell = ({ 
-    column, 
-    children, 
-    align = 'center' 
-  }: { 
-    column: string; 
-    children: React.ReactNode; 
-    align?: 'left' | 'center' | 'right' 
-  }) => (
-    <TableCell align={align}>
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
-          cursor: 'pointer',
-          '&:hover': { bgcolor: 'action.hover' }
-        }}
-        onClick={() => handleSort(column)}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
-          {children}
-        </Typography>
-        {sortColumn === column && (
-          sortDirection === 'asc' ? 
-            <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
-            <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-        )}
-      </Box>
-    </TableCell>
-  );
 
   // Process class IoU data from validation results
   const classIoUData: ClassIoUData[] = React.useMemo(() => {
@@ -351,9 +301,9 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: 'background.default' }}>
-              <SortableTableCell column="training" align="left">Training</SortableTableCell>
+              <SortableTableCell {...sort} column="training" align="left">Training</SortableTableCell>
               {classIoUData.map(classData => (
-                <SortableTableCell key={classData.className} column={classData.className}>
+                <SortableTableCell {...sort} key={classData.className} column={classData.className} align="center">
                   {classData.className}
                 </SortableTableCell>
               ))}

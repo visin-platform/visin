@@ -18,13 +18,3 @@ export const paginationSchema = {
 export const sortOrderSchema = (fallback: 'asc' | 'desc' = 'desc') =>
   z.enum(['asc', 'desc']).default(fallback).transform((v): 1 | -1 => (v === 'desc' ? -1 : 1));
 
-/**
- * A single-value query param that tolerates being repeated (`?x=a&x=b`
- * arrives as `string[]`) by taking the first value, instead of rejecting it —
- * matches how these params were read with a manual `typeof x === 'string' ? x
- * : Array.isArray(x) ? x[0] : undefined` helper before validation existed.
- */
-export const looseStringParam = z
-  .union([z.string(), z.array(z.string())])
-  .optional()
-  .transform(v => (Array.isArray(v) ? v[0] : v));

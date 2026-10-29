@@ -1,5 +1,6 @@
 import React from 'react';
-import { Paper, Tab, Tabs } from '@mui/material';
+import ScrollableTabs from '../common/ScrollableTabs';
+import { Paper, Tab } from '@mui/material';
 import { TRAINING_TABS, type TrainingTab } from './trainingTabs';
 
 interface TrainingDetailTabsProps {
@@ -20,39 +21,16 @@ const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange
       bgcolor: 'background.paper'
     }}
   >
-    <Tabs
+    <ScrollableTabs
       value={value}
       onChange={onChange}
-      variant="scrollable"
-      scrollButtons="auto"
-      allowScrollButtonsMobile
-      sx={{
-        borderBottom: 1,
-        borderColor: 'divider',
-        '& .MuiTab-root': {
-          textTransform: 'none',
-          fontWeight: 600,
-          minHeight: 48,
-          px: { xs: 2, sm: 3 },
-          minWidth: { xs: 'auto', sm: 90 },
-          flexShrink: 0
-        },
-        '& .MuiTabs-scrollButtons': {
-          display: { xs: 'flex', sm: 'auto' }
-        },
-        '& .MuiTabs-scroller': {
-          overflow: 'auto !important',
-          scrollbarWidth: 'none',
-          '&::-webkit-scrollbar': {
-            display: 'none'
-          }
-        }
-      }}
+      fontWeight={600}
+      sx={{ borderBottom: 1, borderColor: 'divider' }}
     >
       {TRAINING_TABS.filter(([name]) => showModels || name !== 'models').map(([name, label]) => (
         <Tab key={name} value={name} label={label} />
       ))}
-    </Tabs>
+    </ScrollableTabs>
   </Paper>
 );
 

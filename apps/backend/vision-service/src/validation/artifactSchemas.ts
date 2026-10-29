@@ -1,5 +1,5 @@
-import { z } from '@visin/backend-core';
-import { HF_REPO_PATTERN, hubModelLinkSchema, hubRepoSchema, hubStorageSchema } from '../services/huggingFace';
+import { z, HF_REPO_PATTERN } from '@visin/backend-core';
+import { hubModelLinkSchema, hubRepoSchema, hubStorageSchema } from '../services/huggingFace';
 import { MODEL_FORMATS, visinModelLinkSchema } from '../services/visinModels';
 
 /**

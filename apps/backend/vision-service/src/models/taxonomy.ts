@@ -133,17 +133,3 @@ export const TASK_TYPE_OVERALL_PRESETS: Record<TaskType, string[]> = {
   classification: ['accuracy', 'top1', 'top5'],
   other: []
 };
-
-/**
- * Metrics every project understands regardless of task type, so timing columns and
- * losses read the right way round even for a project that configured nothing.
- */
-export const UNIVERSAL_METRIC_DEFAULTS: TaxonomyMetric[] = [
-  { key: 'loss', label: 'Loss', direction: 'lower', decimals: 4 },
-  { key: 'avg_per_sample_ms', label: 'Avg / sample (ms)', direction: 'lower', decimals: 2, format: 'ms' },
-  { key: 'avg_per_batch_ms', label: 'Avg / batch (ms)', direction: 'lower', decimals: 2, format: 'ms' },
-  { key: 'mean_time_ms', label: 'Mean time (ms)', direction: 'lower', decimals: 2, format: 'ms' },
-  { key: 'total_seconds', label: 'Total (s)', direction: 'lower', decimals: 1 },
-  { key: 'throughput_fps', label: 'FPS', direction: 'higher', decimals: 1, format: 'fps' },
-  { key: 'fps', label: 'FPS', direction: 'higher', decimals: 1, format: 'fps' }
-];

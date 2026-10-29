@@ -50,10 +50,6 @@ export const overallMean = (results: EvaluationResults, metric: string): number 
   return mean(sources.map(block => readMetric(block, metric)).filter((value): value is number => value !== undefined));
 };
 
-/** Mean of each named summary metric. */
-export const overallMeans = (results: EvaluationResults, metrics: string[]): Record<string, number | undefined> =>
-  Object.fromEntries(metrics.map(metric => [metric, overallMean(results, metric)]));
-
 /** Where a result's figure for a metric comes from: the mean over classes, or the run's own summary. */
 export type MetricSource = 'classes' | 'overall';
 

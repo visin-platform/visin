@@ -1,161 +1,28 @@
-import { ReactNode, useEffect, useState, FormEvent } from 'react';
-import {
-  Avatar,
-  Box,
-  Button,
-  ButtonBase,
-  CssBaseline,
-  Dialog,
-  Divider,
-  Drawer,
-  IconButton,
-  InputAdornment,
-  Link as MuiLink,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  MenuList,
-  TextField,
-  Typography,
-  useColorScheme,
-  useMediaQuery,
-  useTheme
-} from '@mui/material';
-import { Add, DarkModeOutlined, ExpandMore, LightModeOutlined, Logout, Person, Search } from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { Avatar, Box, Button, ButtonBase, CssBaseline, IconButton, Link as MuiLink, ListItemIcon, ListItemText, Menu, MenuItem, Typography, useColorScheme, useMediaQuery, useTheme } from '@mui/material';
+import { Add, DarkModeOutlined, ExpandMore, LightModeOutlined, Search } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
-
-import { chrome, glass, livePalette, pageBackground, surface } from '../../theme';
+import { chrome, livePalette, pageBackground, surface } from '../../theme';
 import { TAB_BAR_HEIGHT, useCompactLayout } from '../Page/layout';
+import { AppLayoutNavItem, AppLayoutNavGroup, AppLayoutProps } from './types';
+import { ownsPath, linkProps } from './navLinks';
+import AccountMenu, { userInitial } from './AccountMenu';
+import { SHORTCUT, SearchDialog } from './SearchDialog';
+import { NavButton } from './NavButton';
+
+export type {
+  AppLayoutProps,
+  AppLayoutNavGroup,
+  AppLayoutNavItem,
+  AppLayoutInternalNavItem,
+  AppLayoutExternalNavItem,
+  AppLayoutRecent,
+  AppLayoutSiteLink,
+  AppLayoutUser
+} from './types';
 
 const RAIL_WIDTH = 88;
 const APP_BAR_HEIGHT = 56;
-
-
-interface NavItemBase {
-  text: string;
-  icon: ReactNode;
-}
-
-/** A section of the current app, navigated to client-side. */
-export interface AppLayoutInternalNavItem extends NavItemBase {
-  path: string;
-  href?: undefined;
-}
-
-/** A section owned by a sibling app, reached by a full page load. */
-export interface AppLayoutExternalNavItem extends NavItemBase {
-  href: string;
-  path?: undefined;
-}
-
-export type AppLayoutNavItem = AppLayoutInternalNavItem | AppLayoutExternalNavItem;
-
-/**
- * A top-level entry of the menu. The rail (a tab bar on phones) lists groups;
- * the group being shown lists its sections in a bar above the content.
- */
-export interface AppLayoutNavGroup {
-  label: string;
-  icon: ReactNode;
-  /** In menu order. Choosing the group opens the first. */
-  items: AppLayoutNavItem[];
-  /**
-   * Further path prefixes that belong to the group without being one of its
-   * sections — a training's epochs, a benchmark — so it stays highlighted there.
-   */
-  match?: string[];
-}
-
-/** One place offered by the search box before anything is typed. */
-export interface AppLayoutRecent {
-  key: string;
-  text: string;
-  secondary?: string;
-  icon?: ReactNode;
-  /** A path within the app: it is followed client-side. */
-  path: string;
-}
-
-/** A link out of the app: the docs, the project's source. Always absolute. */
-export interface AppLayoutSiteLink {
-  text: string;
-  href: string;
-  /** What the bar shows in place of the name, which stays as the button's label. Left out, the name is shown. */
-  icon?: ReactNode;
-  /** Opens beside the app instead of replacing it, for a site that is not Visin's own. */
-  newTab?: boolean;
-}
-
-export interface AppLayoutUser {
-  name?: string;
-  email?: string;
-  picture?: string;
-}
-
-export interface AppLayoutProps {
-  children: ReactNode;
-  /** The page title where no section names the page. */
-  appName: string;
-  navGroups: AppLayoutNavGroup[];
-  /**
-   * Account's sections: listed in the account menu, and in the section bar
-   * while one of them is shown. Empty where Account is unreachable, leaving the
-   * menu only Logout.
-   */
-  accountItems?: AppLayoutNavItem[];
-  user: AppLayoutUser | null;
-  onLogout: () => void;
-  /** Max width of the centered content column. Defaults to 800. */
-  maxContentWidth?: number;
-  /**
-   * False shows Sign in (and Sign up) in the top bar in place of the account
-   * menu. Defaults to true — account-front serves no anonymous visitors.
-   */
-  isAuthenticated?: boolean;
-  /** Required when `isAuthenticated` can be false. */
-  onLogin?: () => void;
-  /**
-   * True while the session is still being checked: the bar then shows neither
-   * Sign in nor the account menu, rather than flashing the wrong one at someone
-   * who is signed in.
-   */
-  authPending?: boolean;
-  /**
-   * False drops the page title, for apps whose pages render
-   * their own headings. Defaults to true.
-   */
-  showPageHeader?: boolean;
-  /** Where the rail's logo leads, for an app with a home page (shell-front). Otherwise it is only a logo. */
-  homePath?: string;
-  /**
-   * Turns on the search box in the top bar (and Ctrl/Cmd+K) and receives what
-   * was typed. Left out, the bar has no search.
-   */
-  onSearch?: (query: string) => void;
-  searchPlaceholder?: string;
-  /**
-   * What the search box offers before anything is typed: where the person was lately. The app decides what these are
-   * and where they lead, as it does for the menu. Empty, nothing is offered.
-   */
-  recent?: AppLayoutRecent[];
-  /** Opens sign-up for a visitor. Left out, only "Sign in" is offered. */
-  onSignup?: () => void;
-  /** The "New" menu of a signed-in user: the things they can create. Empty, no menu. */
-  createItems?: AppLayoutNavItem[];
-  /** Links out of the app (Docs, About, GitHub), in the top bar of a desktop for visitors and members alike. */
-  siteLinks?: AppLayoutSiteLink[];
-}
-
-const ownsPath = (prefix: string, pathname: string): boolean =>
-  pathname === prefix || pathname.startsWith(`${prefix}/`);
-
-// A router link for a local section, a plain anchor — a full page load — for a
-// sibling app's.
-const linkProps = (item: AppLayoutNavItem) =>
-  item.path !== undefined ? { component: Link, to: item.path } : { component: 'a' as const, href: item.href };
 
 /**
  * The navigation behind every Visin front. Groups sit in a rail beside the
@@ -245,7 +112,7 @@ export function AppLayout({
   // A group of one has nothing to choose between.
   const sectionGroup = activeGroup && activeGroup.items.length > 1 ? activeGroup : null;
 
-  const initial = user?.name?.charAt(0) || <Person fontSize="small" />;
+  const initial = userInitial(user);
 
   const menuItem = (item: AppLayoutNavItem, onClose: () => void) => (
     <MenuItem key={item.text} {...linkProps(item)} selected={isActive(item)} onClick={onClose}>
@@ -270,78 +137,16 @@ export function AppLayout({
     </>
   );
 
-  // An array rather than a fragment: Menu and MenuList walk their direct
-  // children to manage focus.
-  const accountMenuItems = [
-    <MenuItem key="who" disabled sx={{ gap: 1.5, py: 1.25, '&.Mui-disabled': { opacity: 1 } }}>
-      <Avatar src={user?.picture} alt="" sx={{ width: 36, height: 36, bgcolor: 'secondary.main' }}>
-        {initial}
-      </Avatar>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography noWrap sx={{ fontWeight: 700 }}>
-          {user?.name || 'User'}
-        </Typography>
-        {user?.email && (
-          <Typography noWrap variant="body2" sx={{ color: 'text.secondary' }}>
-            {user.email}
-          </Typography>
-        )}
-      </Box>
-    </MenuItem>,
-    <Divider key="who-divider" />,
-    ...accountItems.map((item) => menuItem(item, closeAccount)),
-    ...(accountItems.length > 0 ? [<Divider key="logout-divider" />] : []),
-    <MenuItem
-      key="logout"
-      onClick={() => {
-        closeAccount();
-        onLogout();
-      }}
-    >
-      <ListItemIcon>
-        <Logout fontSize="small" />
-      </ListItemIcon>
-      <ListItemText>Logout</ListItemText>
-    </MenuItem>
-  ];
-
-  const accountMenu = mobile ? (
-    <Drawer
-      anchor="bottom"
-      open={Boolean(accountAnchor)}
+  const accountMenu = (
+    <AccountMenu
+      mobile={mobile}
+      anchor={accountAnchor}
       onClose={closeAccount}
-      slotProps={{
-        paper: {
-          sx: {
-            ...glass,
-            borderBottom: 'none',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxHeight: '85dvh',
-            pb: 'calc(8px + env(safe-area-inset-bottom))'
-          }
-        }
-      }}
-    >
-      <Box aria-hidden sx={{ width: 36, height: 4, borderRadius: 2, bgcolor: 'divider', mx: 'auto', mt: 1.25 }} />
-      <MenuList aria-label="Account" autoFocusItem={Boolean(accountAnchor)}>
-        {accountMenuItems}
-      </MenuList>
-    </Drawer>
-  ) : (
-    <Menu
-      anchorEl={accountAnchor}
-      open={Boolean(accountAnchor)}
-      onClose={closeAccount}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      slotProps={{
-        paper: { sx: { mt: 0.5, minWidth: 240, maxWidth: 320, borderRadius: 3 } },
-        list: { 'aria-label': 'Account' }
-      }}
-    >
-      {accountMenuItems}
-    </Menu>
+      user={user}
+      accountItems={accountItems}
+      renderItem={menuItem}
+      onLogout={onLogout}
+    />
   );
 
   // What the app bar calls the page: its section, else its group, else the app.
@@ -723,162 +528,5 @@ export function AppLayout({
         />
       )}
     </Box>
-  );
-}
-
-const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K';
-
-interface SearchDialogProps {
-  open: boolean;
-  placeholder: string;
-  recent: AppLayoutRecent[];
-  onClose: () => void;
-  onSubmit: (query: string) => void;
-}
-
-function SearchDialog({ open, placeholder, recent, onClose, onSubmit }: SearchDialogProps) {
-  const [query, setQuery] = useState('');
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const trimmed = query.trim();
-    if (trimmed) {
-      onSubmit(trimmed);
-      setQuery('');
-    }
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullWidth
-      maxWidth="sm"
-      slotProps={{ paper: { sx: { alignSelf: 'flex-start', mt: { xs: 2, sm: 10 }, borderRadius: 3 } } }}
-    >
-      <Box component="form" role="search" onSubmit={submit} sx={{ p: 1.5 }}>
-        <TextField
-          autoFocus
-          fullWidth
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={placeholder}
-          slotProps={{
-            htmlInput: { 'aria-label': 'Search' },
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              )
-            }
-          }}
-        />
-        {!query.trim() && recent.length > 0 && (
-          <Box sx={{ mt: 1.5 }}>
-            <Typography
-              id="search-recent"
-              component="h2"
-              sx={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary', px: 1, mb: 0.5 }}
-            >
-              Recently visited
-            </Typography>
-            <List dense aria-labelledby="search-recent" disablePadding>
-              {recent.map((place) => (
-                <ListItemButton key={place.key} component={Link} to={place.path} onClick={onClose} sx={{ borderRadius: 2 }}>
-                  {place.icon && <ListItemIcon sx={{ minWidth: 36 }}>{place.icon}</ListItemIcon>}
-                  <ListItemText primary={place.text} secondary={place.secondary} slotProps={{ primary: { noWrap: true } }} />
-                </ListItemButton>
-              ))}
-            </List>
-          </Box>
-        )}
-      </Box>
-    </Dialog>
-  );
-}
-
-interface NavButtonProps {
-  label: string;
-  icon: ReactNode;
-  /** Drawn highlighted: the group being shown. */
-  active: boolean;
-  /** The group being shown, announced as such. */
-  current: boolean;
-  mobile: boolean;
-  /** Where the entry leads. */
-  target: AppLayoutNavItem;
-}
-
-function NavButton({ label, icon, active, current, mobile, target }: NavButtonProps) {
-  const theme = useTheme();
-
-  const palette = livePalette(theme);
-
-  // The rail and the phone's tab bar are the same frosted chrome, in either scheme.
-  const tone = {
-    idle: chrome.inkMuted,
-    active: chrome.ink,
-    activeIcon: palette.primary.main,
-    pill: theme.alpha(palette.primary.main, 0.14),
-    pillHover: theme.alpha(palette.primary.main, 0.2),
-    idleHover: surface.hover,
-    focus: palette.primary.main
-  };
-
-  const sx = {
-    flex: mobile ? 1 : 'none',
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 0.5,
-    py: 0.5,
-    borderRadius: 3,
-    color: active ? tone.active : tone.idle,
-    WebkitTapHighlightColor: 'transparent',
-    '& .nav-pill': {
-      width: 56,
-      height: 32,
-      borderRadius: 999,
-      display: 'grid',
-      placeItems: 'center',
-      color: active ? tone.activeIcon : 'inherit',
-      bgcolor: active ? tone.pill : 'transparent',
-      transition: 'background-color .2s ease, color .2s ease, transform .15s ease'
-    },
-    '&:hover': { color: tone.active },
-    '&:hover .nav-pill': { bgcolor: active ? tone.pillHover : tone.idleHover },
-    '&:active .nav-pill': { transform: 'scale(0.94)' },
-    '&.Mui-focusVisible .nav-pill': { outline: `2px solid ${tone.focus}`, outlineOffset: 1 }
-  } as const;
-
-  const body = (
-    <>
-      {/* Hidden from the accessible name, which the label alone gives: an avatar's initial would prefix it. */}
-      <Box className="nav-pill" aria-hidden>
-        {icon}
-      </Box>
-      <Box
-        component="span"
-        sx={{
-          maxWidth: '100%',
-          fontSize: mobile ? 11 : 11.5,
-          fontWeight: active ? 700 : 500,
-          lineHeight: 1.2,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis'
-        }}
-      >
-        {label}
-      </Box>
-    </>
-  );
-
-  return (
-    <ButtonBase {...linkProps(target)} aria-current={current ? ('true' as const) : undefined} disableRipple sx={sx}>
-      {body}
-    </ButtonBase>
   );
 }

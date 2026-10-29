@@ -20,6 +20,33 @@ function withSignedUrl(viz: IEpochVisualization, signedUrlData: SignedUrlData | 
   };
 }
 
+type EpochRef = { epoch_uuid: string; epoch: number; training_uuid?: string };
+
+/** Each visualization with its epoch's number (and its run, if asked), plus a signed URL when `includeUrls`. */
+async function withEpochAndUrl(
+  visualizations: IEpochVisualization[],
+  epochs: EpochRef[],
+  includeUrls: boolean,
+  includeTraining = false
+) {
+  return Promise.all(
+    visualizations.map(async (viz) => {
+      const epoch = epochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
+      const result: Record<string, unknown> = {
+        ...viz.toObject(),
+        epoch: epoch?.epoch,
+        ...(includeTraining ? { training_uuid: epoch?.training_uuid } : {})
+      };
+      if (includeUrls) {
+        const signedUrlData = await getSignedUrl(viz.fileId, 60);
+        result.signedUrl = signedUrlData?.signedUrl;
+        result.urlExpiresAt = signedUrlData?.expiresAt;
+      }
+      return result;
+    })
+  );
+}
+
 interface UploadUrlData {
   visualization_uuid?: string;
   epoch_uuid: string;
@@ -262,18 +289,7 @@ export const getVisualizationsByTraining = async (
     const total = await EpochVisualization.countDocuments(query);
     const visualizations = await EpochVisualization.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(limit);
 
-    const visualizationsWithUrls = await Promise.all(
-      visualizations.map(async (viz) => {
-        const epoch = epochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
-        const result: Record<string, unknown> = { ...viz.toObject(), epoch: epoch?.epoch };
-        if (shouldIncludeUrls) {
-          const signedUrlData = await getSignedUrl(viz.fileId, 60);
-          result.signedUrl = signedUrlData?.signedUrl;
-          result.urlExpiresAt = signedUrlData?.expiresAt;
-        }
-        return result;
-      })
-    );
+    const visualizationsWithUrls = await withEpochAndUrl(visualizations, epochs, shouldIncludeUrls);
 
     return {
       visualizations: visualizationsWithUrls,
@@ -332,18 +348,7 @@ export const getVisualizationsByTraining = async (
         const matching = type ? all.filter((viz) => viz.type === type) : all;
         const visualizations = perTraining ? matching.slice(0, perTraining) : matching;
 
-        const visualizationsWithUrls = await Promise.all(
-          visualizations.map(async (viz) => {
-            const epoch = epochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
-            const result: Record<string, unknown> = { ...viz.toObject(), epoch: epoch?.epoch };
-            if (shouldIncludeUrls) {
-              const signedUrlData = await getSignedUrl(viz.fileId, 60);
-              result.signedUrl = signedUrlData?.signedUrl;
-              result.urlExpiresAt = signedUrlData?.expiresAt;
-            }
-            return result;
-          })
-        );
+        const visualizationsWithUrls = await withEpochAndUrl(visualizations, epochs, shouldIncludeUrls);
 
         return {
           training_id: training._id.toString(),
@@ -387,22 +392,7 @@ export const getVisualizationsByTraining = async (
     'epoch_uuid epoch training_uuid'
   );
 
-  const visualizationsWithUrls = await Promise.all(
-    visualizations.map(async (viz) => {
-      const epoch = allEpochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
-      const result: Record<string, unknown> = {
-        ...viz.toObject(),
-        epoch: epoch?.epoch,
-        training_uuid: epoch?.training_uuid
-      };
-      if (shouldIncludeUrls) {
-        const signedUrlData = await getSignedUrl(viz.fileId, 60);
-        result.signedUrl = signedUrlData?.signedUrl;
-        result.urlExpiresAt = signedUrlData?.expiresAt;
-      }
-      return result;
-    })
-  );
+  const visualizationsWithUrls = await withEpochAndUrl(visualizations, allEpochs, shouldIncludeUrls, true);
 
   return {
     visualizations: visualizationsWithUrls,

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Box, useTheme } from '@mui/material';
-import { livePalette, onImage } from '@visin/frontend-core';
+import { Box } from '@mui/material';
+import { onImage } from '@visin/frontend-core';
 import { BoxObject, JobClass, TaskImages } from '../types';
 import { EditorDocument } from './EditorDocument';
 import {
@@ -9,8 +9,6 @@ import {
   boxAt,
   clampBox,
   handleAt,
-  handlePoint,
-  HANDLES,
   isDrawable,
   moveBox,
   rectFromPoints,
@@ -20,6 +18,7 @@ import { MaskPainter, buildPalette } from './maskPainter';
 import { newBoxId } from './ids';
 import { rampColor, valueRange } from './sensorColors';
 import { Viewport, fitViewport, panBy, toImagePoint, zoomAt } from './viewport';
+import CanvasOverlay from './CanvasOverlay';
 
 export type EditorTool = 'box' | 'brush' | 'eraser' | 'sam';
 
@@ -68,7 +67,6 @@ export interface EditorCanvasProps {
 }
 
 const DRAG_THRESHOLD_PX = 4;
-const HANDLE_SIZE_PX = 9;
 const HANDLE_HIT_PX = 10;
 const ZOOM_STEP = 1.2;
 
@@ -108,8 +106,6 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
   onPickClass,
   sam
 }) => {
-  const theme = useTheme();
-  const palette_ = livePalette(theme);
   const version = useSyncExternalStore(doc.subscribe, doc.getVersion);
   const containerRef = useRef<HTMLDivElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -288,7 +284,6 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
     if (event.button !== 0) return;
 
     if (tool === 'box') {
-      const selected = doc.boxes.find((box) => box.id === doc.selectedId);
       const tolerance = HANDLE_HIT_PX / viewport.scale;
       if (selected) {
         const handle = handleAt(selected.bbox, point.x, point.y, tolerance);
@@ -395,15 +390,10 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
   const scale = viewport?.scale ?? 1;
   const offsetX = viewport?.offsetX ?? 0;
   const offsetY = viewport?.offsetY ?? 0;
-  const toScreen = (bbox: Bbox) => ({ x: bbox[0] * scale + offsetX, y: bbox[1] * scale + offsetY, w: bbox[2] * scale, h: bbox[3] * scale });
 
+  const selected = doc.boxes.find((box) => box.id === doc.selectedId);
   const lidar = images.sensors.find((sensor) => sensor.key === 'lidar' && sensor.kind === 'image');
   const brushActive = !readOnly && (tool === 'eraser' || (tool === 'brush' && classAllows(activeClass, 'mask')));
-  const selected = doc.boxes.find((box) => box.id === doc.selectedId);
-  const colorFor = (classKey: string): string => {
-    const found = classByKey.get(classKey);
-    return found ? colorOf(found) : onImage.ink;
-  };
 
   const cursor = panning
     ? 'grabbing'
@@ -483,119 +473,25 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({
         />
       </Box>
 
-      <svg width="100%" height="100%" style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} aria-hidden="true">
-        {suggestionBoxes.map((box) => {
-          const rect = toScreen(box.bbox);
-          const color = colorFor(box.classKey);
-          return (
-            <rect
-              key={`s-${box.id}`}
-              data-testid="suggestion-box"
-              x={rect.x}
-              y={rect.y}
-              width={rect.w}
-              height={rect.h}
-              fill="none"
-              stroke={color}
-              strokeWidth={2}
-              strokeDasharray="6 4"
-            />
-          );
-        })}
-        {doc.boxes.map((box) => {
-          const rect = toScreen(box.bbox);
-          const color = colorFor(box.classKey);
-          const isSelected = box.id === doc.selectedId;
-          return (
-            <g key={box.id}>
-              <rect
-                data-testid="box"
-                data-selected={isSelected}
-                x={rect.x}
-                y={rect.y}
-                width={rect.w}
-                height={rect.h}
-                fill={color}
-                fillOpacity={isSelected ? 0.18 : 0.1}
-                stroke={color}
-                strokeWidth={isSelected ? 3 : 2}
-              />
-              <text x={rect.x + 3} y={Math.max(11, rect.y - 4)} fill={color} fontSize={12} fontWeight={600}>
-                {classByKey.get(box.classKey)?.name ?? box.classKey}
-              </text>
-            </g>
-          );
-        })}
-        {draft && (
-          <rect
-            data-testid="draft-box"
-            x={toScreen(draft).x}
-            y={toScreen(draft).y}
-            width={toScreen(draft).w}
-            height={toScreen(draft).h}
-            fill="none"
-            stroke={activeClass ? colorOf(activeClass) : onImage.ink}
-            strokeWidth={2}
-            strokeDasharray="4 3"
-          />
-        )}
-        {selected &&
-          !readOnly &&
-          tool === 'box' &&
-          HANDLES.map((handle) => {
-            const point = handlePoint(selected.bbox, handle);
-            return (
-              <rect
-                key={handle}
-                data-testid={`handle-${handle}`}
-                x={point.x * scale + offsetX - HANDLE_SIZE_PX / 2}
-                y={point.y * scale + offsetY - HANDLE_SIZE_PX / 2}
-                width={HANDLE_SIZE_PX}
-                height={HANDLE_SIZE_PX}
-                fill={onImage.ink}
-                stroke={colorFor(selected.classKey)}
-                strokeWidth={1.5}
-              />
-            );
-          })}
-        {sam?.box && (
-          <rect
-            data-testid="sam-box"
-            x={toScreen(sam.box).x}
-            y={toScreen(sam.box).y}
-            width={toScreen(sam.box).w}
-            height={toScreen(sam.box).h}
-            fill="none"
-            stroke={samColor}
-            strokeWidth={2}
-            strokeDasharray="4 3"
-          />
-        )}
-        {sam?.points.map((point, index) => (
-          <circle
-            key={index}
-            data-testid="sam-point"
-            data-label={point.label}
-            cx={point.x * scale + offsetX}
-            cy={point.y * scale + offsetY}
-            r={6}
-            fill={point.label === 1 ? palette_.success.main : palette_.error.main}
-            stroke={onImage.ink}
-            strokeWidth={1.5}
-          />
-        ))}
-        {brushActive && hover && (
-          <circle
-            data-testid="brush-ring"
-            cx={hover.x}
-            cy={hover.y}
-            r={Math.max(2, brushRadius * scale)}
-            fill="none"
-            stroke={onImage.ink}
-            strokeWidth={1.5}
-          />
-        )}
-      </svg>
+      <CanvasOverlay
+        doc={doc}
+        selected={selected}
+        tool={tool}
+        readOnly={readOnly}
+        classByKey={classByKey}
+        colorOf={colorOf}
+        activeClass={activeClass}
+        suggestionBoxes={suggestionBoxes}
+        draft={draft}
+        sam={sam}
+        samColor={samColor}
+        scale={scale}
+        offsetX={offsetX}
+        offsetY={offsetY}
+        brushActive={brushActive}
+        hover={hover}
+        brushRadius={brushRadius}
+      />
     </Box>
   );
 };

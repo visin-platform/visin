@@ -163,24 +163,5 @@ export const resolveTaxonomy = (
   };
 };
 
-/**
- * Orders the keys of a record by the taxonomy: configured terms first in their
- * stated order, then anything else sorted by name. Nothing is dropped — the point
- * is that a key the project never declared still gets shown.
- */
-export const orderKeysByTaxonomy = (
-  terms: ResolvedTerm[],
-  record: Record<string, unknown> | undefined
-): string[] => {
-  if (!record) {
-    return [];
-  }
-  const known = terms.map(term => term.key).filter(key => key in record);
-  const rest = Object.keys(record)
-    .filter(key => !terms.some(term => term.key === key))
-    .sort((a, b) => a.localeCompare(b));
-  return [...known, ...rest];
-};
-
 /** A taxonomy for contexts with neither a project nor data — keeps components total. */
 export const EMPTY_TAXONOMY = resolveTaxonomy(undefined, {});

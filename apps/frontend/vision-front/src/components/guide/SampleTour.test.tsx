@@ -8,7 +8,7 @@ function Location() {
   return <div data-testid="location">{location.search}</div>;
 }
 
-const renderTour = ({ anchors = ['loss-chart', 'miou-chart', 'training-actions'], search = '?guide=sample&tab=overview' } = {}) => {
+const renderTour = ({ anchors = ['metric-loss', 'metric-mean_iou', 'training-actions'], search = '?guide=sample&tab=overview' } = {}) => {
   const onDeleteSample = vi.fn();
   render(
     <MemoryRouter initialEntries={[`/trainings/t1${search}`]}>
@@ -42,7 +42,7 @@ describe('SampleTour', () => {
   });
 
   it('skips a callout whose element is not on the page', async () => {
-    renderTour({ anchors: ['loss-chart', 'training-actions'] });
+    renderTour({ anchors: ['metric-loss', 'training-actions'] });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
     expect(await screen.findByRole('dialog', { name: 'That was a sample' }, { timeout: 4000 })).toBeInTheDocument();

@@ -28,6 +28,21 @@ interface TrainingConfigTabProps {
   training: { configId?: string } | null | undefined;
 }
 
+/** A small caption over a value, with an icon beside it. */
+const IconField: React.FC<{ icon: React.ReactNode; label: string; children: React.ReactNode }> = ({ icon, label, children }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+    {icon}
+    <Box>
+      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+        {children}
+      </Typography>
+    </Box>
+  </Box>
+);
+
 const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
   config,
   configLoading,
@@ -172,46 +187,12 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                   }}
                 >
                   <Stack spacing={2}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center"
-                      }}>
-                      <AccessTimeIcon fontSize="small" color="action" sx={{ mr: 1 }} />
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            display: "block",
-                            color: "text.secondary"
-                          }}>Created</Typography>
-                        <Typography variant="body2" sx={{
-                          fontWeight: 500
-                        }}>
-                          {config.createdAt ? formatDate(config.createdAt) : '-'}
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center"
-                      }}>
-                      <InfoIcon fontSize="small" color="action" sx={{ mr: 1 }} />
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            display: "block",
-                            color: "text.secondary"
-                          }}>Last Updated</Typography>
-                        <Typography variant="body2" sx={{
-                          fontWeight: 500
-                        }}>
-                          {config.updatedAt ? formatDate(config.updatedAt) : '-'}
-                        </Typography>
-                      </Box>
-                    </Box>
+                    <IconField icon={<AccessTimeIcon fontSize="small" color="action" sx={{ mr: 1 }} />} label="Created">
+                      {config.createdAt ? formatDate(config.createdAt) : '-'}
+                    </IconField>
+                    <IconField icon={<InfoIcon fontSize="small" color="action" sx={{ mr: 1 }} />} label="Last Updated">
+                      {config.updatedAt ? formatDate(config.updatedAt) : '-'}
+                    </IconField>
                   </Stack>
                 </Box>
               </Grid>

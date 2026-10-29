@@ -1,7 +1,7 @@
+import { VerificationMark } from '@visin/frontend-core';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, Button, Link, MenuItem, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import VerificationMark from './VerificationMark';
 import { ArrowForward } from '@mui/icons-material';
 import { checkpointName, fetchRecordedLeaderboard, formatScore, type Verification } from '../leaderboard';
 

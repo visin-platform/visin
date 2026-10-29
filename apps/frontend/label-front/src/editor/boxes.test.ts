@@ -9,8 +9,7 @@ import {
   MIN_BOX_SIZE,
   moveBox,
   rectFromPoints,
-  resizeBox,
-  sameBox
+  resizeBox
 } from './boxes';
 import type { BoxObject } from '../types';
 
@@ -125,12 +124,5 @@ describe('moveBox', () => {
 
   it('keeps a box larger than the frame at the origin', () => {
     expect(moveBox([0, 0, 200, 200], 10, 10, 100, 100)).toEqual([0, 0, 200, 200]);
-  });
-});
-
-describe('sameBox', () => {
-  it('compares all four numbers', () => {
-    expect(sameBox([1, 2, 3, 4], [1, 2, 3, 4])).toBe(true);
-    expect(sameBox([1, 2, 3, 4], [1, 2, 3, 5])).toBe(false);
   });
 });

@@ -2,7 +2,6 @@ import { logger } from '@visin/backend-core';
 import { Dataset } from '../models/Dataset';
 import { DatasetItem } from '../models/DatasetItem';
 import * as files from '../clients/fileServiceClient';
-import { enqueueDelete, enqueueRemoveGroup } from '../queue/importQueue';
 import { refreshCover, summarizeItems } from './importService';
 
 const REMOVE_BATCH = 1000;
@@ -46,19 +45,4 @@ export const runRemoveGroup = async (datasetId: string, group: string): Promise<
   );
   await refreshCover(dataset._id, dataset.coverPath, summary.coverFileId);
   logger.info('Dataset image group removed', { datasetId, group });
-};
-
-/**
- * Queue every deletion and group removal still marked — one whose job was lost
- * (Redis restarted without persistence) or failed for good would otherwise stay
- * hidden and undone forever. Run at startup.
- */
-export const resumeDeletions = async (): Promise<number> => {
-  const deleting = await Dataset.find({ deletingAt: { $exists: true } }, { _id: 1 }).lean();
-  for (const row of deleting) await enqueueDelete({ datasetId: row._id.toString() });
-  const removing = await Dataset.find({ 'removingGroups.0': { $exists: true } }, { removingGroups: 1 }).lean();
-  for (const row of removing) {
-    for (const group of row.removingGroups ?? []) await enqueueRemoveGroup({ datasetId: row._id.toString(), group });
-  }
-  return deleting.length + removing.length;
 };

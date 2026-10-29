@@ -16,6 +16,56 @@ import { formatDateTime } from '../utils';
 import { Visualization } from '../types';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
+interface VisualizationGridProps {
+  visualizations: Visualization[];
+  caption: (viz: Visualization) => string;
+  /** Less room under the file name and caption, for the long list of every visualization. */
+  tight?: boolean;
+}
+
+/** The frames side by side, two to a row (three on a wide screen when there are three). */
+const VisualizationGrid: React.FC<VisualizationGridProps> = ({ visualizations, caption, tight }) => (
+  <Box
+    sx={{
+      display: 'grid',
+      gridTemplateColumns: {
+        xs: '1fr',
+        md: '1fr 1fr',
+        lg: visualizations.length === 3 ? '1fr 1fr 1fr' : '1fr 1fr'
+      },
+      gap: 3
+    }}
+  >
+    {visualizations.map((viz) => (
+      <Box key={viz.visualization_uuid}>
+        <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+          <Typography variant="subtitle1" sx={{ mb: tight ? 0.5 : 1, fontWeight: 600 }}>
+            {viz.filename}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: tight ? 1 : 2 }}>
+            {caption(viz)}
+          </Typography>
+          <Box
+            component="img"
+            src={viz.signedUrl || ''}
+            alt={viz.filename}
+            sx={{
+              width: '100%',
+              height: 'auto',
+              maxHeight: 500,
+              objectFit: 'contain',
+              bgcolor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1
+            }}
+          />
+        </Paper>
+      </Box>
+    ))}
+  </Box>
+);
+
 const VisualizationsComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
 
@@ -95,50 +145,10 @@ const VisualizationsComparisonPage: React.FC = () => {
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
             {type}
           </Typography>
-          <Box 
-            sx={{ 
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: typeVisualizations.length === 2 ? '1fr 1fr' : '1fr 1fr',
-                lg: typeVisualizations.length === 2 ? '1fr 1fr' : typeVisualizations.length === 3 ? '1fr 1fr 1fr' : '1fr 1fr'
-              },
-              gap: 3
-            }}
-          >
-            {typeVisualizations.map((viz: Visualization) => (
-              <Box key={viz.visualization_uuid}>
-                <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                  <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
-                    {viz.filename}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "text.secondary",
-                      mb: 2
-                    }}>
-                    Epoch {viz.epoch} • {formatDateTime(viz.uploadedAt)}
-                  </Typography>
-                  <Box
-                    component="img"
-                    src={viz.signedUrl || ''}
-                    alt={viz.filename}
-                    sx={{
-                      width: '100%',
-                      height: 'auto',
-                      maxHeight: 500,
-                      objectFit: 'contain',
-                      bgcolor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1
-                    }}
-                  />
-                </Paper>
-              </Box>
-            ))}
-          </Box>
+          <VisualizationGrid
+            visualizations={typeVisualizations}
+            caption={(viz) => `Epoch ${viz.epoch} • ${formatDateTime(viz.uploadedAt)}`}
+          />
         </Paper>
       ))}
       {/* All Visualizations Side by Side */}
@@ -147,50 +157,11 @@ const VisualizationsComparisonPage: React.FC = () => {
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
             All Visualizations
           </Typography>
-          <Box 
-            sx={{ 
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: visualizations.length === 2 ? '1fr 1fr' : '1fr 1fr',
-                lg: visualizations.length === 2 ? '1fr 1fr' : visualizations.length === 3 ? '1fr 1fr 1fr' : '1fr 1fr'
-              },
-              gap: 3
-            }}
-          >
-            {visualizations.map((viz: Visualization) => (
-              <Box key={viz.visualization_uuid}>
-                <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                  <Typography variant="subtitle1" sx={{ mb: 0.5, fontWeight: 600 }}>
-                    {viz.filename}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "text.secondary",
-                      mb: 1
-                    }}>
-                    Type: {viz.type} • Epoch {viz.epoch}
-                  </Typography>
-                  <Box
-                    component="img"
-                    src={viz.signedUrl || ''}
-                    alt={viz.filename}
-                    sx={{
-                      width: '100%',
-                      height: 'auto',
-                      maxHeight: 500,
-                      objectFit: 'contain',
-                      bgcolor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1
-                    }}
-                  />
-                </Paper>
-              </Box>
-            ))}
-          </Box>
+          <VisualizationGrid
+            visualizations={visualizations}
+            caption={(viz) => `Type: ${viz.type} • Epoch ${viz.epoch}`}
+            tight
+          />
         </Paper>
       )}
     </Container>

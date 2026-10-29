@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_SCALE, MIN_SCALE, fitViewport, focusBbox, panBy, toImagePoint, zoomAt } from './viewport';
+import { MAX_SCALE, MIN_SCALE, fitViewport, panBy, toImagePoint, zoomAt } from './viewport';
 
 describe('fitViewport', () => {
   it('fits and centers a wide image in a container', () => {
@@ -35,22 +35,5 @@ describe('panBy / toImagePoint', () => {
 
     expect(panned).toEqual({ scale: 2, offsetX: 15, offsetY: 15 });
     expect(toImagePoint(panned, 35, 35)).toEqual({ x: 10, y: 10 });
-  });
-});
-
-describe('focusBbox', () => {
-  it('centers the bbox in the container', () => {
-    const viewport = focusBbox([100, 100, 200, 200], 600, 600);
-
-    const center = toImagePoint(viewport, 300, 300);
-    expect(center.x).toBeCloseTo(150);
-    expect(center.y).toBeCloseTo(150);
-    expect(viewport.scale).toBe(2); // 600 / (100 * 3 padding)
-  });
-
-  it('handles degenerate bboxes via the minimum size', () => {
-    const viewport = focusBbox([50, 50, 50, 50], 240, 240);
-
-    expect(viewport.scale).toBe(10); // 240 / (8 * 3)
   });
 });

@@ -1,52 +1,25 @@
 import React, { useState } from 'react';
-import {
-  Container,
-  Typography,
-  Box,
-  Alert,
-  CircularProgress,
-  Tabs,
-  Tab,
-  Button,
-  IconButton,
-  Menu,
-  MenuItem,
-  Tooltip
-} from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Code as CodeIcon, TableView as TableIcon } from '@mui/icons-material';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Container, Typography, Box, Alert, CircularProgress, Tabs, Tab } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { useParams } from 'react-router-dom';
 import { comparisonService } from '../services/comparisonService';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
-import { discoverAggregateVocabulary } from '../components/result-tables/aggregateVocabulary';
-import { resolveTaxonomy } from '../taxonomy/resolveTaxonomy';
-import { DEFAULT_CLASS_METRICS } from '../components/result-tables/performanceMetricsUtils';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
-import ComparisonTable from '@/components/comparison/ComparisonTable';
-import PerformanceMetricsTable from '../components/result-tables/PerformanceMetricsTable';
-import IoUMetricsTable from '../components/result-tables/IoUMetricsTable';
-import APMetricsTable from '../components/result-tables/APMetricsTable';
-import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
+import { useComparisonLatex } from '../hooks/useComparisonLatex';
+import { useEditComparison } from '../hooks/useEditComparison';
+import { useDeleteComparison } from '../hooks/useDeleteComparison';
+import ComparisonHeader from '../components/comparison/ComparisonHeader';
+import { BenchmarksPanel, EvaluationsPanel, TrainingMetricsPanel } from '../components/comparison/ComparisonPanels';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DeleteComparisonDialog from '../components/comparisons/DeleteComparisonDialog';
 import EditComparisonDialog from '../components/comparison/EditComparisonDialog';
 import ExportLatexDialog from '../components/comparison/ExportLatexDialog';
-import NumberFormattingControls from '../components/common/NumberFormattingControls';
-import TrainingClassIoUTable from '../components/comparison/TrainingClassIoUTable';
-import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
-import {
-  generateTrainingLatex,
-  generateTestingLatex,
-  generateBenchmarkingLatex
-} from '../utils/latex/comparisonExportLatex';
 
 const ComparisonDetailPage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
 
   // Set page title
@@ -59,23 +32,8 @@ const ComparisonDetailPage: React.FC = () => {
   const [decimals, setDecimals] = useState(4);
   const [multiplier, setMultiplier] = useState(1);
 
-  // State for edit dialog
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editSelectedIds, setEditSelectedIds] = useState<string[]>([]);
-  const [updating, setUpdating] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
-
-  // State for delete dialog
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
   // State for export all LaTeX dialog
   const [exportLatexOpen, setExportLatexOpen] = useState(false);
-  const [exportMenu, setExportMenu] = useState<HTMLElement | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
   const [exportLatexTab, setExportLatexTab] = useState(0);
   const [copiedSection, setCopiedSection] = useState<number | null>(null);
 
@@ -92,15 +50,6 @@ const ComparisonDetailPage: React.FC = () => {
 
   const comparison = comparisonResponse?.data;
 
-  // Fetch trainings for the edit modal
-  const { data: trainingsResponse, isLoading: isTrainingsLoading } = useQuery({
-    queryKey: ['trainings-for-edit', comparison?.projectId],
-    queryFn: () => trainingService.getTrainings({ projectId: comparison!.projectId!, limit: 1000 }),
-    enabled: !!comparison?.projectId && editDialogOpen
-  });
-
-  const trainings = trainingsResponse?.data?.trainings || [];
-
   // Fetch project data if we have comparison
   const {
     data: projectResponse,
@@ -114,6 +63,18 @@ const ComparisonDetailPage: React.FC = () => {
   const project = projectResponse?.data;
   const canEdit = Boolean(isAuthenticated && user && (project?.permissions?.manage ||
     (comparison?.ownerId === user?.id && (!comparison?.projectId || project?.permissions?.contribute))));
+
+  const edit = useEditComparison(comparison, canEdit, uuid);
+  const del = useDeleteComparison(comparison, canEdit, project);
+
+  // Fetch trainings for the edit modal
+  const { data: trainingsResponse, isLoading: isTrainingsLoading } = useQuery({
+    queryKey: ['trainings-for-edit', comparison?.projectId],
+    queryFn: () => trainingService.getTrainings({ projectId: comparison!.projectId!, limit: 1000 }),
+    enabled: !!comparison?.projectId && edit.open
+  });
+
+  const trainings = trainingsResponse?.data?.trainings || [];
 
   // Fetch training comparison data
   const {
@@ -130,97 +91,6 @@ const ComparisonDetailPage: React.FC = () => {
     () => trainingComparisonResponse?.data?.comparison || [],
     [trainingComparisonResponse?.data?.comparison]
   );
-
-  // Handler functions
-  const handleEditComparison = async () => {
-    if (!comparison || !canEdit) return;
-
-    setEditName(comparison.name);
-    setEditDescription(comparison.description || '');
-    setEditSelectedIds(comparison.itemIds);
-    setUpdateError(null);
-    setEditDialogOpen(true);
-  };
-
-  const handleCancelEdit = () => {
-    setEditDialogOpen(false);
-    setEditName('');
-    setEditDescription('');
-    setEditSelectedIds([]);
-  };
-
-  const handleUpdateComparison = async () => {
-    if (!comparison || !editName.trim()) return;
-
-    try {
-      setUpdating(true);
-      setUpdateError(null);
-      await comparisonService.updateComparison(comparison._id, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-        itemIds: editSelectedIds,
-      });
-
-      // Invalidate and refetch the comparison data
-      queryClient.invalidateQueries({ queryKey: ['comparison', uuid] });
-
-      setEditDialogOpen(false);
-      setEditName('');
-      setEditDescription('');
-      setEditSelectedIds([]);
-    } catch (error) {
-      console.error('Error updating comparison:', error);
-      setUpdateError(error instanceof Error ? error.message : 'Could not save the comparison');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handleEditTrainingIdToggle = (trainingId: string) => {
-    setEditSelectedIds(prev =>
-      prev.includes(trainingId)
-        ? prev.filter(id => id !== trainingId)
-        : [...prev, trainingId]
-    );
-  };
-
-  const handleDeleteComparison = () => {
-    setDeleteError(null);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!comparison || !canEdit) return;
-
-    try {
-      setDeleting(true);
-      setDeleteError(null);
-      await comparisonService.deleteComparison(comparison._id);
-      // Navigate back to project or comparisons page
-      if (project) {
-        navigate(`/projects/${project.slug || project._id}`);
-      } else {
-        navigate('/comparisons');
-      }
-    } catch (error) {
-      console.error('Error deleting comparison:', error);
-      setDeleteError(error instanceof Error ? error.message : 'Could not delete the comparison');
-      setDeleting(false);
-    }
-  };
-
-  const handleCancelDelete = () => {
-    setDeleteDialogOpen(false);
-  };
-
-  // Helper function to format dates as DD.MM.YYYY
-  const formatDate = (date: string | Date) => {
-    const d = new Date(date);
-    const day = d.getDate().toString().padStart(2, '0');
-    const month = (d.getMonth() + 1).toString().padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}.${month}.${year}`;
-  };
 
   // Process test results data - use the already aggregated data from backend
   const evaluationsData = React.useMemo(() => {
@@ -249,37 +119,14 @@ const ComparisonDetailPage: React.FC = () => {
     return allBenchmarks;
   }, [comparisonData]);
 
-  // ── Export-all LaTeX ──────────────────────────────────────────
-  const trainingLatex = React.useMemo(
-    () => generateTrainingLatex(comparisonData, decimals, multiplier),
-    [comparisonData, decimals, multiplier]
+  const { trainingLatex, testingLatex, benchmarkingLatex, allLatex } = useComparisonLatex(
+    comparisonData,
+    evaluationsData,
+    benchmarksData,
+    project?.taxonomy,
+    decimals,
+    multiplier
   );
-
-  // The export runs outside the provider's subtree, so resolve the same taxonomy
-  // here: the project's labels merged with what these comparisons actually contain.
-  const exportTaxonomy = React.useMemo(
-    () =>
-      discoverAggregateVocabulary(
-        evaluationsData,
-        resolveTaxonomy(project?.taxonomy, {}),
-        DEFAULT_CLASS_METRICS
-      ).taxonomy,
-    [evaluationsData, project?.taxonomy]
-  );
-
-  const testingLatex = React.useMemo(
-    () => generateTestingLatex(evaluationsData, decimals, multiplier, exportTaxonomy),
-    [evaluationsData, decimals, multiplier, exportTaxonomy]
-  );
-
-  const benchmarkingLatex = React.useMemo(
-    () => generateBenchmarkingLatex(benchmarksData),
-    [benchmarksData]
-  );
-
-  const allLatex = [trainingLatex, testingLatex, benchmarkingLatex]
-    .filter(Boolean)
-    .join('\n\n% ─────────────────────────────────────────────────\n\n');
 
   const handleCopyLatex = () => {
     navigator.clipboard.writeText(allLatex);
@@ -322,112 +169,17 @@ const ComparisonDetailPage: React.FC = () => {
           { label: comparison.name, current: true }
         ]}
       />
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h4" component="h1" gutterBottom>
-              {comparison.name}
-            </Typography>
-
-            {comparison.description && (
-              <Typography
-                variant="body1"
-                sx={{
-                  color: "text.secondary",
-                  mb: 2
-                }}>
-                {comparison.description}
-              </Typography>
-            )}
-          </Box>
-
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <Tooltip title="Export All LaTeX">
-              <span>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CodeIcon />}
-                  onClick={() => { setExportLatexOpen(true); setExportLatexTab(0); }}
-                  disabled={!comparisonData.length}
-                >
-                  Export LaTeX
-                </Button>
-              </span>
-            </Tooltip>
-            {comparison.type === 'trainings' && (
-              <>
-                <Tooltip title="Export table">
-                  <Button variant="outlined" size="small" startIcon={<TableIcon />} onClick={(event) => setExportMenu(event.currentTarget)}>
-                    Export table
-                  </Button>
-                </Tooltip>
-                <Menu anchorEl={exportMenu} open={Boolean(exportMenu)} onClose={() => setExportMenu(null)}>
-                  {(['xlsx', 'csv'] as const).map((format) => (
-                    <MenuItem
-                      key={format}
-                      onClick={async () => {
-                        setExportMenu(null);
-                        setExportError(null);
-                        try {
-                          await comparisonService.exportTable(comparison._id, format);
-                        } catch (err) {
-                          setExportError(err instanceof Error ? err.message : 'Export failed');
-                        }
-                      }}
-                    >
-                      {format === 'xlsx' ? 'Excel (.xlsx)' : 'CSV (.csv)'}
-                    </MenuItem>
-                  ))}
-                </Menu>
-              </>
-            )}
-            {canEdit && (
-              <>
-              <Tooltip title="Edit Comparison">
-                <IconButton
-                  onClick={handleEditComparison}
-                  color="primary"
-                  sx={{
-                    bgcolor: 'background.paper',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    '&:hover': { bgcolor: 'action.hover' }
-                  }}
-                >
-                  <EditIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Delete Comparison">
-                <IconButton
-                  onClick={handleDeleteComparison}
-                  color="error"
-                  sx={{
-                    bgcolor: 'background.paper',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    '&:hover': { bgcolor: 'action.hover' }
-                  }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Tooltip>
-              </>
-            )}
-          </Box>
-        </Box>
-
-        {exportError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setExportError(null)}>{exportError}</Alert>}
-        <Typography variant="body2" sx={{
-          color: "text.secondary"
-        }}>
-          Created: {formatDate(comparison.createdAt)}
-          {comparison.updatedAt !== comparison.createdAt && (
-            <> • Updated: {formatDate(comparison.updatedAt)}</>
-          )}
-        </Typography>
-      </Box>
+      <ComparisonHeader
+        comparison={comparison}
+        canEdit={canEdit}
+        hasData={comparisonData.length > 0}
+        onExportLatex={() => {
+          setExportLatexOpen(true);
+          setExportLatexTab(0);
+        }}
+        onEdit={edit.begin}
+        onDelete={del.begin}
+      />
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
@@ -438,124 +190,35 @@ const ComparisonDetailPage: React.FC = () => {
       </Box>
       {/* Tab Content */}
       {activeTab === 0 && (
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Training Metrics Comparison
-          </Typography>
-
-          {/* Number Formatting Controls */}
-          <NumberFormattingControls
-            decimals={decimals}
-            multiplier={multiplier}
-            onDecimalsChange={setDecimals}
-            onMultiplierChange={setMultiplier}
-          />
-
-          {comparisonData.length > 0 ? (
-            <>
-              <ComparisonTable
-                comparisonData={comparisonData}
-                decimals={decimals}
-                multiplier={multiplier}
-              />
-
-              <Box sx={{ mt: 4 }}>
-                <TrainingClassIoUTable
-                  comparisonData={comparisonData}
-                  decimals={decimals}
-                  multiplier={multiplier}
-                />
-              </Box>
-
-              <Box sx={{ mt: 4 }}>
-                <TrainingValidationMetricsTable
-                  comparisonData={comparisonData}
-                  decimals={decimals}
-                  multiplier={multiplier}
-                />
-              </Box>
-            </>
-          ) : (
-            <Alert severity="info">No training data available for comparison.</Alert>
-          )}
-        </Box>
+        <TrainingMetricsPanel comparisonData={comparisonData} decimals={decimals} multiplier={multiplier} onDecimalsChange={setDecimals} onMultiplierChange={setMultiplier} />
       )}
       {activeTab === 1 && (
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Evaluations Comparison
-          </Typography>
-
-          {/* Number Formatting Controls */}
-          <NumberFormattingControls
-            decimals={decimals}
-            multiplier={multiplier}
-            onDecimalsChange={setDecimals}
-            onMultiplierChange={setMultiplier}
-          />
-
-          {evaluationsData.length > 0 ? (
-            <>
-              <PerformanceMetricsTable
-                comparisonData={evaluationsData}
-                decimals={decimals}
-                multiplier={multiplier}
-              />
-              <Box sx={{ mt: 4 }}>
-                <IoUMetricsTable
-                  comparisonData={evaluationsData}
-                  decimals={decimals}
-                  multiplier={multiplier}
-                />
-              </Box>
-              <Box sx={{ mt: 4 }}>
-                <APMetricsTable
-                  comparisonData={evaluationsData}
-                  decimals={decimals}
-                  multiplier={multiplier}
-                />
-              </Box>
-            </>
-          ) : (
-            <Alert severity="info">None of these runs has evaluations to compare. A run reports them from its test stage, after training.</Alert>
-          )}
-        </Box>
+        <EvaluationsPanel comparisonData={evaluationsData} decimals={decimals} multiplier={multiplier} onDecimalsChange={setDecimals} onMultiplierChange={setMultiplier} />
       )}
-      {activeTab === 2 && (
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Benchmarks Comparison
-          </Typography>
-          {benchmarksData.length > 0 ? (
-            <BenchmarksComparisonTable benchmarks={benchmarksData} />
-          ) : (
-            <Alert severity="info">No benchmark data available for comparison.</Alert>
-          )}
-        </Box>
-      )}
+      {activeTab === 2 && <BenchmarksPanel benchmarks={benchmarksData} />}
       {/* Edit Comparison Dialog */}
       <EditComparisonDialog
-        open={editDialogOpen}
-        onClose={handleCancelEdit}
-        onConfirm={handleUpdateComparison}
-        editName={editName}
-        onEditNameChange={setEditName}
-        editDescription={editDescription}
-        onEditDescriptionChange={setEditDescription}
+        open={edit.open}
+        onClose={edit.cancel}
+        onConfirm={edit.save}
+        editName={edit.name}
+        onEditNameChange={edit.setName}
+        editDescription={edit.description}
+        onEditDescriptionChange={edit.setDescription}
         trainings={trainings}
-        editSelectedIds={editSelectedIds}
-        onTrainingToggle={handleEditTrainingIdToggle}
+        editSelectedIds={edit.selectedIds}
+        onTrainingToggle={edit.toggleTraining}
         isTrainingsLoading={isTrainingsLoading}
-        updating={updating}
-        error={updateError}
+        updating={edit.updating}
+        error={edit.error}
       />
       {/* Delete Confirmation Dialog */}
       <DeleteComparisonDialog
-        open={deleteDialogOpen}
-        onClose={handleCancelDelete}
-        onConfirm={handleConfirmDelete}
-        error={deleteError}
-        deleting={deleting}
+        open={del.open}
+        onClose={del.cancel}
+        onConfirm={del.confirm}
+        error={del.error}
+        deleting={del.deleting}
       />
       {/* Export All LaTeX Dialog */}
       <ExportLatexDialog

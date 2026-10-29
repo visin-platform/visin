@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.2" cy="0.1" r="0.9">
+      <stop stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#1E1B4B" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <rect width="512" height="512" rx="112" fill="url(#shine)"/>
+  <g fill="#FFFFFF" filter="url(#lift)" transform="translate(256 256) scale(2.1504) translate(-100 -100)">
+    <rect x="40" y="40" width="45" height="45" rx="12"/>
+    <rect x="115" y="40" width="45" height="45" rx="12"/>
+    <rect x="77.5" y="115" width="45" height="45" rx="12"/>
+  </g>
+</svg>

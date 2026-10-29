@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import SortableTableCell from '../comparison/SortableTableCell';
+import { useKeyedColumnSort, type SortState } from '../comparison/useColumnSort';
 import {
   Paper,
   Box,
@@ -12,10 +14,6 @@ import {
   TableBody,
   useTheme
 } from '@mui/material';
-import {
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
-} from '@mui/icons-material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { livePalette, tint, surface } from '@visin/frontend-core';
 import { Link } from 'react-router-dom';
@@ -41,11 +39,6 @@ interface PerformanceMetricsTableProps {
   multiplier?: number;
 }
 
-interface SortState {
-  column: string;
-  direction: 'asc' | 'desc';
-}
-
 const DEFAULT_SORT: SortState = { column: 'training', direction: 'asc' };
 
 const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
@@ -57,9 +50,8 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
-  // Keyed by condition, filled lazily: the set of conditions is discovered, so
-  // there is no fixed list to seed this from.
-  const [sortStates, setSortStates] = useState<{ [condition: string]: SortState }>({});
+  // One sort per condition's table.
+  const { sortFor, sortProps } = useKeyedColumnSort(DEFAULT_SORT);
 
   const projectTaxonomy = useTaxonomy();
   const { taxonomy, conditions, classes, metrics } = useMemo(
@@ -67,61 +59,9 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
     [comparisonData, projectTaxonomy]
   );
 
-  const sortFor = (condition: string) => sortStates[condition] ?? DEFAULT_SORT;
-
-  const handleSort = (condition: string, column: string) => {
-    setSortStates(prev => {
-      const current = prev[condition] ?? DEFAULT_SORT;
-      return {
-        ...prev,
-        [condition]:
-          current.column === column
-            ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
-            : { column, direction: 'desc' }
-      };
-    });
-  };
-
   const getSortedData = (condition: string) => {
     const { column, direction } = sortFor(condition);
     return sortComparisonData(comparisonData, condition, column, direction);
-  };
-
-  const SortableTableCell = ({
-    condition,
-    column,
-    children,
-    align = 'center'
-  }: {
-    condition: string;
-    column: string;
-    children: React.ReactNode;
-    align?: 'left' | 'center' | 'right';
-  }) => {
-    const { column: sortColumn, direction: sortDirection } = sortFor(condition);
-    return (
-      <TableCell align={align}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
-            cursor: 'pointer',
-            '&:hover': { bgcolor: 'action.hover' }
-          }}
-          onClick={() => handleSort(condition, column)}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
-            {children}
-          </Typography>
-          {sortColumn === column && (
-            sortDirection === 'asc' ?
-              <ArrowUpwardIcon sx={{ fontSize: 16 }} /> :
-              <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-          )}
-        </Box>
-      </TableCell>
-    );
   };
 
   const handleGenerateLatex = (condition: string, conditionTitle: string) => {
@@ -207,16 +147,17 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                     )}
                   </TableRow>
                   <TableRow sx={{ bgcolor: 'background.default' }}>
-                    <SortableTableCell condition={condition.key} column="training" align="left">
+                    <SortableTableCell {...sortProps(condition.key)} column="training" align="left">
                       {conditionTitle}
                     </SortableTableCell>
                     {classes.map(className => (
                       <React.Fragment key={className.key}>
                         {metrics.map(metric => (
                           <SortableTableCell
+                            {...sortProps(condition.key)}
                             key={metric.key}
-                            condition={condition.key}
                             column={`${className.key}_${metric.key}`}
+                            align="center"
                           >
                             <MetricName label={metric.label} description={metric.description} />
                           </SortableTableCell>
@@ -224,7 +165,11 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                       </React.Fragment>
                     ))}
                     {summaryMetric && (
-                      <SortableTableCell condition={condition.key} column={`overall_${summaryMetric.key}`}>
+                      <SortableTableCell
+                        {...sortProps(condition.key)}
+                        column={`overall_${summaryMetric.key}`}
+                        align="center"
+                      >
                         <MetricName label={summaryMetric.label} description={summaryMetric.description} />
                       </SortableTableCell>
                     )}

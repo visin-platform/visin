@@ -43,6 +43,3 @@ export function parseHttpUrl(input: string): string | undefined {
     return undefined;
   }
 }
-
-export const arxivLink = (id: string): string => `https://arxiv.org/abs/${id}`;
-export const doiLink = (doi: string): string => `https://doi.org/${doi}`;

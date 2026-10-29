@@ -1,4 +1,4 @@
-import { MAX_PAGE_SIZE, paginationSchema, sortOrderSchema, looseStringParam } from '../../validation/common';
+import { MAX_PAGE_SIZE, paginationSchema, sortOrderSchema } from '../../validation/common';
 import {
   createFindingBodySchema,
   listFindingsQuerySchema,
@@ -64,12 +64,6 @@ describe('common', () => {
     expect(sortOrderSchema().parse('asc')).toBe(1);
     expect(sortOrderSchema().parse('desc')).toBe(-1);
     expect(sortOrderSchema().safeParse('sideways').success).toBe(false);
-  });
-
-  it('looseStringParam takes the first value of a repeated param', () => {
-    expect(looseStringParam.parse('a')).toBe('a');
-    expect(looseStringParam.parse(['a', 'b'])).toBe('a');
-    expect(looseStringParam.parse(undefined)).toBeUndefined();
   });
 });
 

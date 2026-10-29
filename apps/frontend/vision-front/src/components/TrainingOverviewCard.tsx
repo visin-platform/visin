@@ -36,6 +36,9 @@ import StoredModelDownloads from './models/StoredModelDownloads';
 import { hubModelUrl, hubSpaceUrl } from '../utils/hubLinks';
 import { isHubModel, modelTitle, storedCheckpoints } from '../utils/modelLinks';
 import { costOf } from '../costing/costing';
+import { discoverEpochMetrics } from '../taxonomy/discover';
+import { useTaxonomy } from '../taxonomy/useTaxonomy';
+import { pickHeadlineMetrics } from '../utils/headlineMetrics';
 import { useCosting, useFormatCost } from '../costing/useCosting';
 
 interface TrainingOverviewCardProps {
@@ -105,6 +108,12 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
 
   const costData = calculateTrainingCost();
   const lastEpoch = epochs.length > 0 ? epochs[epochs.length - 1] : null;
+  const taxonomy = useTaxonomy();
+  // Walks every epoch's results, so only when the epochs or the taxonomy change.
+  const headlineMetrics = React.useMemo(
+    () => pickHeadlineMetrics(discoverEpochMetrics(epochs), (key) => taxonomy.metric(key).direction === 'lower'),
+    [epochs, taxonomy]
+  );
 
   const InfoItem = ({ icon, label, value, copyable = false }: { icon: React.ReactNode, label: string, value: React.ReactNode, copyable?: boolean }) => (
     <Box
@@ -367,38 +376,21 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                     Latest Performance (Epoch {lastEpoch.epoch})
                   </Typography>
                   <Grid container spacing={2}>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <MetricCard 
-                        title="Train Loss" 
-                        value={formatNumber(lastEpoch.results?.train?.loss)} 
-                        icon={<TrendingDownIcon />} 
-                        color={livePalette(theme).error.main} 
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <MetricCard 
-                        title="Val Loss" 
-                        value={formatNumber(lastEpoch.results?.val?.loss)} 
-                        icon={<TrendingDownIcon />} 
-                        color={livePalette(theme).error.dark} 
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <MetricCard 
-                        title="Train mIoU" 
-                        value={formatNumber(lastEpoch.results?.train?.mean_iou)} 
-                        icon={<TrendingUpIcon />} 
-                        color={livePalette(theme).success.main} 
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <MetricCard 
-                        title="Val mIoU" 
-                        value={formatNumber(lastEpoch.results?.val?.mean_iou)} 
-                        icon={<TrendingUpIcon />} 
-                        color={livePalette(theme).success.dark} 
-                      />
-                    </Grid>
+                    {headlineMetrics.flatMap((key) => {
+                      const metric = taxonomy.metric(key);
+                      const lower = metric.direction === 'lower';
+                      const palette = livePalette(theme)[lower ? 'error' : 'success'];
+                      return (['train', 'val'] as const).map((split) => (
+                        <Grid key={`${split}-${key}`} size={{ xs: 6, sm: 3 }}>
+                          <MetricCard
+                            title={`${split === 'train' ? 'Train' : 'Val'} ${metric.label}`}
+                            value={formatNumber(lastEpoch.results?.[split]?.[key] as number | undefined)}
+                            icon={lower ? <TrendingDownIcon /> : <TrendingUpIcon />}
+                            color={split === 'train' ? palette.main : palette.dark}
+                          />
+                        </Grid>
+                      ));
+                    })}
                   </Grid>
                 </Box>
               )}

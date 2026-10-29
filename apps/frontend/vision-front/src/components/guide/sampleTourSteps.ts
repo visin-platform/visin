@@ -10,12 +10,12 @@ export interface TourStep {
 
 export const SAMPLE_TOUR: TourStep[] = [
   {
-    anchor: 'loss-chart',
+    anchor: 'metric-loss',
     title: 'Every epoch lands here',
     body: 'Each epoch your script sends adds a point. What it sends under train and val is drawn as two lines, so you can see a model start to overfit.'
   },
   {
-    anchor: 'miou-chart',
+    anchor: 'metric-mean_iou',
     title: 'Nothing to declare',
     body: 'Any metric you send gets its chart the first time it arrives. This one is mean_iou; a new class or metric shows up the same way.'
   },

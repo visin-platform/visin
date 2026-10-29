@@ -142,5 +142,3 @@ export const jsonFieldsQuerySchema = z.object({
 });
 export type JsonFieldsQuery = z.infer<typeof jsonFieldsQuerySchema>;
 
-/** label-service asking what one account may do with one dataset. */
-export const internalPermissionQuerySchema = z.object({ userId: z.string().min(1).optional() });

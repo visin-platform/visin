@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { Alert, Box, CircularProgress, Link, MenuItem, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useCompactLayout } from '@visin/frontend-core';
+import { useCompactLayout, VerificationMark } from '@visin/frontend-core';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { evaluationService } from '../../services/evaluationService';
 import type { RecordedLeaderboardQuery } from '../../types/evaluation';
 import LeaderboardPagination from './LeaderboardPagination';
 import { checkpointLabel, formatFixed } from './verdict';
-import VerificationMark from './VerificationMark';
 import { MobileListRow } from '../common/MobileList';
 
 /** Recorded scores, including migrated tests; verification is a label rather than an entry requirement. */

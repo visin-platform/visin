@@ -1,5 +1,5 @@
 import type { ComparisonEpoch, TrainingComparison, EpochMetrics, BenchmarkResult } from '@/types';
-import { formatTime, formatNumber } from '../comparisonLatexGenerator';
+import { formatTime, formatNumber } from '../formatComparison';
 import type { ResolvedTaxonomy } from '@/types/taxonomy';
 
 interface MetricStat {

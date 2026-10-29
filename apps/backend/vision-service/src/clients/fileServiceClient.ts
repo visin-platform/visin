@@ -6,6 +6,7 @@ import { Readable } from 'stream';
 import {
   logger,
   fetchWithTimeout,
+  createFileServiceClient,
   fileServiceUrl,
   fileServiceAuthHeaders,
   HttpError,
@@ -124,23 +125,15 @@ export const getUploadSignedUrl = async (
   }
 };
 
+const client = createFileServiceClient();
+
 /**
- * Delete file from file-service
+ * Delete file from file-service. A file already gone counts as deleted; a failure is logged and reported
+ * as `false`, never thrown.
  */
 export const deleteFile = async (fileId: string): Promise<boolean> => {
   try {
-    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
-      method: 'DELETE',
-      headers: {
-        ...fileServiceAuthHeaders()
-      },
-      serviceName: 'file-service'
-    });
-
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Delete failed with status ${response.status}`);
-    }
-
+    await client.deleteFile(fileId);
     logger.info('File deleted successfully', { fileId });
     return true;
   } catch (error) {
@@ -154,18 +147,7 @@ export const deleteFile = async (fileId: string): Promise<boolean> => {
  * failure, so a purge that could not remove the files keeps the records that
  * name them and tries again next time. A file already gone counts as deleted.
  */
-export const deleteFiles = async (fileIds: string[]): Promise<void> => {
-  for (let start = 0; start < fileIds.length; start += 1000) {
-    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/delete-files`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...fileServiceAuthHeaders() },
-      body: JSON.stringify({ fileIds: fileIds.slice(start, start + 1000) }),
-      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
-      serviceName: 'file-service'
-    });
-    if (!response.ok) throw new BadGatewayError(`file-service delete-files failed (${response.status})`);
-  }
-};
+export const { deleteFiles } = client;
 
 /**
  * Get file metadata

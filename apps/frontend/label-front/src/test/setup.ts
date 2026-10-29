@@ -1,4 +1,9 @@
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
+
+// The workbench tests render a whole editor page; on a loaded machine (CI, or a coverage run) the default 1 s
+// for a `waitFor` or `findBy` is not always enough for the first render to settle.
+configure({ asyncUtilTimeout: 4000 });
 
 // jsdom lacks these browser APIs the workbench uses.
 if (typeof globalThis.ResizeObserver === 'undefined') {

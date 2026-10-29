@@ -16,14 +16,13 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import { PageHeader, ShareButton, useCompactLayout } from '@visin/frontend-core';
+import { PageHeader, ShareButton, useCompactLayout, VerificationMark } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { MobileListRow } from '../components/common/MobileList';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DataTermsNote from '../components/licensing/DataTermsNote';
 import { checkpointLabel, formatFixed, publicDataText } from '../components/evaluations/verdict';
-import VerificationMark from '../components/evaluations/VerificationMark';
 import LeaderboardPagination from '../components/evaluations/LeaderboardPagination';
 import LeaderboardExport from '../components/evaluations/LeaderboardExport';
 import ObservedSwitch from '../components/evaluations/ObservedSwitch';
