@@ -45,10 +45,6 @@
     "prettier": "^3.9.9"
   },
   "overrides": {
-    "@module-federation/dts-plugin": "2.9.2",
-    "@scalar/json-magic": {
-      "undici": "7.29.1"
-    },
-    "@ai-sdk/provider-utils": "4.0.33"
+    "@module-federation/dts-plugin": "2.9.2"
   }
 }

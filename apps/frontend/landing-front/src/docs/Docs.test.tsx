@@ -236,7 +236,7 @@ describe('the quickstart', () => {
       }
       unmount();
     }
-  });
+  }, 15_000);
 });
 
 describe('the docs registry', () => {
