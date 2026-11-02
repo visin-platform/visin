@@ -1,4 +1,16 @@
 # Visin Changelog
+## [2.3.0](https://github.com/visin-platform/visin/compare/v2.2.1...v2.3.0) (2026-11-02)
+
+
+### Features
+
+* add Prometheus metrics, request tracing and query timing ([3532a98](https://github.com/visin-platform/visin/commit/3532a9826de6b2d925ff5697e87a23e388c1725e))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.17.0 ([134ee14](https://github.com/visin-platform/visin/commit/134ee146fa5884e7e7376bb44dbf596c3e9d5f12))
+
 ### [2.2.1](https://github.com/visin-platform/visin/compare/v2.2.0...v2.2.1) (2026-10-29)
 
 ## [2.2.0](https://github.com/visin-platform/visin/compare/v2.1.0...v2.2.0) (2026-10-29)
