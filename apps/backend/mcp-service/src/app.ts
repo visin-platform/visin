@@ -7,7 +7,16 @@ import {
   ListResourcesRequestSchema,
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
-import { logger, looksLikeApiKey, requireEnv, verifyAccessToken, verifyApiKey } from '@visin/backend-core';
+import {
+  logger,
+  looksLikeApiKey,
+  metricsHandler,
+  metricsMiddleware,
+  requireEnv,
+  tracingMiddleware,
+  verifyAccessToken,
+  verifyApiKey
+} from '@visin/backend-core';
 import type { ApiKeyScope } from '@visin/backend-core';
 import { SERVED_SCOPES, registerTools } from './tools';
 
@@ -217,6 +226,13 @@ function crossOrigin(_req: Request, res: Response, next: () => void): void {
 
 export function createApp() {
   const app = express();
+
+  // Not createBaseApp, so the same three lines by hand: Prometheus reads
+  // /metrics over the container network (the proxy does not forward it), and
+  // every request is traced and counted, one that CORS or a 404 refuses included.
+  app.get('/metrics', metricsHandler);
+  app.use(tracingMiddleware);
+  app.use(metricsMiddleware);
 
   app.use(crossOrigin);
   // Or the preflight falls through to the 404 and takes the real request with it.

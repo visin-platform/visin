@@ -64,6 +64,21 @@ export type { InternalServiceRequest } from './middleware/internalServiceAuth';
 export { errorHandler, asyncHandler } from './middleware/errorHandler';
 export { securityHeaders, createRateLimiter, standardRateLimiter, strictRateLimiter } from './middleware/security';
 export { requestLogger } from './middleware/requestLogger';
+
+// Observability: Prometheus metrics, OpenTelemetry traces, and the driver's query timings
+export {
+  metricsHandler,
+  metricsMiddleware,
+  routeLabel,
+  httpRequestsTotal,
+  httpRequestDuration,
+  activeConnections,
+  databaseQueriesTotal,
+  databaseQueryDuration,
+  register as metricsRegistry
+} from './metrics';
+export { initTracer, getTracer, tracingMiddleware, traceHeaders, sampleRatio } from './tracing';
+export { observeCommands } from './db/commandMonitoring';
 export { validateRequest } from './middleware/validate';
 export type { RequestSchemas, ValidateRequestHandler } from './middleware/validate';
 

@@ -104,6 +104,7 @@ services:
     environment:
       <<: *app-env
       PORT: 5001
+      SERVICE_NAME: auth-service
       GROUP_SERVICE_URL: http://group-service:5006
       # Checked when a user limits an API key to a project.
       VISION_SERVICE_URL: http://vision-service:4010
@@ -129,6 +130,7 @@ services:
     environment:
       <<: [*app-env, *file-creds]
       PORT: 5002
+      SERVICE_NAME: file-service
       FILE_SERVICE_DATA_DIR: /data
       # Browser-facing: this is what signed upload/download URLs are built from.
       FILE_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5002
@@ -144,6 +146,7 @@ services:
     environment:
       <<: *app-env
       PORT: 5006
+      SERVICE_NAME: group-service
       AUTH_SERVICE_URL: http://auth-service:5001
       VISION_SERVICE_URL: http://vision-service:4010
       DATASET_SERVICE_URL: http://dataset-service:5010
@@ -161,6 +164,7 @@ services:
     environment:
       <<: [*app-env, *file-creds]
       PORT: 4010
+      SERVICE_NAME: vision-service
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       # Internal: /internal/* calls, container to container.
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
@@ -182,6 +186,7 @@ services:
     environment:
       <<: [*app-env, *file-creds]
       PORT: 5008
+      SERVICE_NAME: label-service
       GROUP_SERVICE_URL: http://group-service:5006
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # The datasets a job's tasks are built from.
@@ -200,6 +205,7 @@ services:
     environment:
       <<: [*app-env, *file-creds]
       PORT: 5010
+      SERVICE_NAME: dataset-service
       VISION_SERVICE_URL: http://vision-service:4010
       GROUP_SERVICE_URL: http://group-service:5006
       # Where the names and avatars of dataset owners come from.
@@ -221,6 +227,7 @@ services:
     environment:
       <<: *app-env
       PORT: 5009
+      SERVICE_NAME: mcp-service
       VISION_INTERNAL_URL: http://vision-service:4010
       VISION_SERVICE_URL: http://vision-service:4010
       DATASET_INTERNAL_URL: http://dataset-service:5010

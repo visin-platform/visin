@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { logger } from '../logging/logger';
+import { observeCommands } from './commandMonitoring';
 
 export interface ConnectDbOptions {
   /** Mongo connection string. Defaults to process.env.MONGODB_URI. */
@@ -47,7 +48,10 @@ export async function connectDb(options: ConnectDbOptions): Promise<void> {
 
 async function connectOnce(mongoUri: string, serviceName: string): Promise<void> {
   try {
-    await mongoose.connect(mongoUri);
+    // The driver announces every command it sends; commandMonitoring turns those
+    // into query timings and spans.
+    await mongoose.connect(mongoUri, { monitorCommands: true });
+    observeCommands(mongoose.connection.getClient());
     connected = true;
 
     registerConnectionListeners(serviceName);

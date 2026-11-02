@@ -91,6 +91,14 @@ describe('the pages that are not the protocol', () => {
     });
   });
 
+  it('serves Prometheus metrics, counting its own requests by route', async () => {
+    await fetch(`${baseUrl}/health/live`);
+
+    const text = await (await fetch(`${baseUrl}/metrics`)).text();
+
+    expect(text).toContain('http_requests_total{method="GET",route="/health/live",status_code="200"');
+  });
+
   it('answers a liveness probe', async () => {
     expect(await (await fetch(`${baseUrl}/health/live`)).json()).toEqual({
       status: 'ok',

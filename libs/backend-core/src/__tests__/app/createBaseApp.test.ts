@@ -426,3 +426,50 @@ describe('createBaseApp publicCorsPaths', () => {
     });
   });
 });
+
+describe('createBaseApp observability', () => {
+  it('serves Prometheus metrics and counts the requests it sees', async () => {
+    await withServer({ corsOrigins: [] }, async baseUrl => {
+      await fetch(`${baseUrl}/cookie-check`);
+
+      const res = await fetch(`${baseUrl}/metrics`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/plain');
+      const text = await res.text();
+      expect(text).toContain('http_requests_total{method="GET",route="/cookie-check",status_code="200"');
+      expect(text).toContain('process_cpu_user_seconds_total');
+    });
+  });
+
+  it('answers a scrape even when the rate limit is spent, and does not count the scrape itself', async () => {
+    const original = process.env.RATE_LIMIT_PER_MINUTE;
+    process.env.RATE_LIMIT_PER_MINUTE = '1';
+    try {
+      await withServer({ corsOrigins: [] }, async baseUrl => {
+        await fetch(`${baseUrl}/cookie-check`);
+        expect((await fetch(`${baseUrl}/cookie-check`)).status).toBe(429);
+
+        const res = await fetch(`${baseUrl}/metrics`);
+
+        expect(res.status).toBe(200);
+        expect(await res.text()).not.toContain('route="/metrics"');
+      });
+    } finally {
+      if (original === undefined) delete process.env.RATE_LIMIT_PER_MINUTE;
+      else process.env.RATE_LIMIT_PER_MINUTE = original;
+    }
+  });
+
+  it('serves no metrics when they are switched off', async () => {
+    await withServer({ corsOrigins: [], metrics: false }, async baseUrl => {
+      expect((await fetch(`${baseUrl}/metrics`)).status).toBe(404);
+    });
+  });
+
+  it('still serves requests with tracing switched off', async () => {
+    await withServer({ corsOrigins: [], tracing: false }, async baseUrl => {
+      expect((await fetch(`${baseUrl}/cookie-check`)).status).toBe(200);
+    });
+  });
+});

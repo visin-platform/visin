@@ -1,5 +1,6 @@
 import { GatewayTimeoutError } from '../errors/HttpError';
 import { REQUEST_ID_HEADER, currentRequestId } from '../logging/requestContext';
+import { traceHeaders } from '../tracing';
 
 /**
  * Deadline for a control-plane inter-service call (signed-URL minting,
@@ -49,7 +50,8 @@ export interface FetchWithTimeoutInit extends RequestInit {
  * so whichever fires first aborts the request.
  *
  * Inside a request, the request's id is forwarded as `X-Request-Id` unless the
- * caller set one, so the peer logs under the same id.
+ * caller set one, so the peer logs under the same id. The trace goes along as a
+ * `traceparent`, so the peer's spans join the same trace.
  */
 export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeoutInit = {}): Promise<Response> {
   const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, serviceName, streamBody, signal, ...rest } = init;
@@ -63,7 +65,7 @@ export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeo
   try {
     return await fetch(input, {
       ...rest,
-      headers: withRequestId(rest.headers),
+      headers: withCorrelation(rest.headers),
       signal: signal ? AbortSignal.any([signal, deadline]) : deadline
     });
   } catch (error) {
@@ -80,10 +82,12 @@ export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeo
   }
 }
 
-function withRequestId(headers: RequestInit['headers']): RequestInit['headers'] {
+function withCorrelation(headers: RequestInit['headers']): RequestInit['headers'] {
   const requestId = currentRequestId();
-  if (!requestId) return headers;
+  const trace = traceHeaders();
+  if (!requestId && Object.keys(trace).length === 0) return headers;
   const merged = new Headers(headers);
-  if (!merged.has(REQUEST_ID_HEADER)) merged.set(REQUEST_ID_HEADER, requestId);
+  if (requestId && !merged.has(REQUEST_ID_HEADER)) merged.set(REQUEST_ID_HEADER, requestId);
+  for (const [name, value] of Object.entries(trace)) if (!merged.has(name)) merged.set(name, value);
   return merged;
 }

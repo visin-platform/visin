@@ -1,7 +1,8 @@
 jest.mock('mongoose', () => ({
   connect: jest.fn().mockResolvedValue(undefined),
-  connection: { on: jest.fn() }
+  connection: { on: jest.fn(), getClient: jest.fn(() => ({ client: true })) }
 }));
+jest.mock('../../db/commandMonitoring', () => ({ observeCommands: jest.fn() }));
 jest.mock('../../logging/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
 }));
@@ -12,14 +13,16 @@ type LoggerMock = { info: jest.Mock; warn: jest.Mock; error: jest.Mock };
 // a fresh copy of the module (and the mongoose mock instance it captured).
 function loadFresh() {
   let connectDb!: typeof import('../../db/connectDb').connectDb;
-  let mongooseMock!: { connect: jest.Mock; connection: { on: jest.Mock } };
+  let mongooseMock!: { connect: jest.Mock; connection: { on: jest.Mock; getClient: jest.Mock } };
   let loggerMock!: LoggerMock;
+  let observeCommands!: jest.Mock;
   jest.isolateModules(() => {
     mongooseMock = jest.requireMock('mongoose');
+    observeCommands = (jest.requireMock('../../db/commandMonitoring') as { observeCommands: jest.Mock }).observeCommands;
     loggerMock = (jest.requireMock('../../logging/logger') as { logger: LoggerMock }).logger;
     connectDb = (jest.requireActual('../../db/connectDb') as typeof import('../../db/connectDb')).connectDb;
   });
-  return { connectDb, mongooseMock, loggerMock };
+  return { connectDb, mongooseMock, loggerMock, observeCommands };
 }
 
 const ORIGINAL_MONGODB_URI = process.env.MONGODB_URI;
@@ -50,8 +53,16 @@ describe('connectDb', () => {
 
     await connectDb({ uri: 'mongodb://explicit-host/db', serviceName: 'vision-service' });
 
-    expect(mongooseMock.connect).toHaveBeenCalledWith('mongodb://explicit-host/db');
+    expect(mongooseMock.connect).toHaveBeenCalledWith('mongodb://explicit-host/db', { monitorCommands: true });
     expect(loggerMock.info).toHaveBeenCalledWith('[vision-service] MongoDB connected');
+  });
+
+  it('hands the driver client to the query timing, once connected', async () => {
+    const { connectDb, mongooseMock, observeCommands } = loadFresh();
+
+    await connectDb({ uri: 'mongodb://host/db', serviceName: 'vision-service' });
+
+    expect(observeCommands).toHaveBeenCalledWith(mongooseMock.connection.getClient.mock.results[0].value);
   });
 
   it('falls back to process.env.MONGODB_URI when no uri option is given', async () => {
@@ -60,7 +71,7 @@ describe('connectDb', () => {
 
     await connectDb({ serviceName: 'file-service' });
 
-    expect(mongooseMock.connect).toHaveBeenCalledWith('mongodb://env-host/db');
+    expect(mongooseMock.connect).toHaveBeenCalledWith('mongodb://env-host/db', { monitorCommands: true });
   });
 
   it('is a no-op on a second call once connected', async () => {

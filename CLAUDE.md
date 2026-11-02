@@ -202,6 +202,13 @@ including any failures.
   `onShutdown` for anything else that must finish first, like a queue worker.
 - **Request ids:** `requestLogger` gives each request an `X-Request-Id`, which is on every log line and forwarded by
   `fetchWithTimeout`. Log through `logger` and call peers through `fetchWithTimeout`, and the id follows.
+- **Metrics and traces:** `createBaseApp` serves `GET /metrics` (Prometheus) and makes a span per request, with the
+  route as its name and label, never the URL. A service that does not use it (mcp-service) mounts `metricsHandler`,
+  `tracingMiddleware` and `metricsMiddleware` itself. Set `SERVICE_NAME` in its `compose.yml` (it names the service in
+  both) and keep `/metrics` out of the public proxy: visin-ops answers 404 for it. Spans are exported only when
+  `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is set; the trace id reaches log lines either way. Queries are timed by
+  `connectDb` (`monitorCommands`), by collection and operation only, never the filter. `fetchWithTimeout` forwards the
+  `traceparent`.
 
 ### shell-front (module federation)
 

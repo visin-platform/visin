@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { securityHeaders } from '../middleware/security';
 import { requestLogger } from '../middleware/requestLogger';
+import { metricsHandler, metricsMiddleware } from '../metrics';
+import { tracingMiddleware } from '../tracing';
 import { ForbiddenError } from '../errors/HttpError';
 import { sharedSecretMatches } from '../auth/sharedSecret';
 
@@ -21,6 +23,13 @@ export interface CreateBaseAppOptions {
   publicCorsPaths?: (string | RegExp)[];
   /** Pass false to skip the global express.json() call, e.g. for services that parse JSON per-route or stream raw bodies. */
   json?: false | Parameters<typeof express.json>[0];
+  /**
+   * Serve `GET /metrics` for Prometheus and count every request (rate, duration, errors). Default true.
+   * The public proxy does not forward `/metrics`; Prometheus reads it over the container network.
+   */
+  metrics?: boolean;
+  /** Make a trace span per request and carry the trace id on log lines. Default true. */
+  tracing?: boolean;
 }
 
 /**
@@ -43,6 +52,14 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
   // Every service runs behind the nginx reverse proxy — trust its X-Forwarded-*
   // headers so express-rate-limit and req.ip key on the real client, not the proxy.
   app.set('trust proxy', 1);
+
+  // Ahead of everything else, so the rate limiter below can never turn a scrape
+  // into a 429, and so a request it or CORS refuses is still counted and traced.
+  if (options.metrics !== false) {
+    app.get('/metrics', metricsHandler);
+  }
+  if (options.tracing !== false) app.use(tracingMiddleware);
+  if (options.metrics !== false) app.use(metricsMiddleware);
 
   app.use(securityHeaders);
   // Populates req.cookies so authenticateToken can read the shared

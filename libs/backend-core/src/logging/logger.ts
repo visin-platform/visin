@@ -1,4 +1,5 @@
 import winston from 'winston';
+import { context, trace } from '@opentelemetry/api';
 import { currentRequestId } from './requestContext';
 
 const levels = { error: 0, warn: 1, info: 2, http: 3, debug: 4 };
@@ -16,6 +17,20 @@ const withRequestId = winston.format((info) => {
   return info;
 });
 
+/**
+ * Puts the trace id of the request being served on the line, so a log line found
+ * in Kibana leads to its trace in Jaeger, and the other way round. Lines logged
+ * outside a traced request (startup, background work) are left as they are.
+ */
+const withTraceContext = winston.format((info) => {
+  const spanContext = trace.getSpan(context.active())?.spanContext();
+  if (spanContext && trace.isSpanContextValid(spanContext)) {
+    info.traceId = spanContext.traceId;
+    info.spanId = spanContext.spanId;
+  }
+  return info;
+});
+
 const consoleFormat = winston.format.combine(
   withRequestId(),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -28,6 +43,7 @@ const consoleFormat = winston.format.combine(
 
 const jsonFormat = winston.format.combine(
   withRequestId(),
+  withTraceContext(),
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
   winston.format.json()

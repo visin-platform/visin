@@ -10,6 +10,13 @@ services:
       - '5008:5008'
     environment:
       - PORT=5008
+      # Names this service in /metrics and in traces.
+      - SERVICE_NAME=label-service
+      # Where spans are sent (Jaeger, http://jaeger:4318/v1/traces). Blank sends none;
+      # traces are still made, so the trace id reaches the log lines.
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+      # Share of requests traced, 0 to 1. Blank is 0.1.
+      - OTEL_TRACES_SAMPLER_ARG=${OTEL_TRACES_SAMPLER_ARG:-}
       - NODE_ENV=production
       - MONGODB_URI=${MONGODB_URI}
       - JWT_SECRET=${JWT_SECRET}
