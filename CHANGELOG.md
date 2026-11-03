@@ -1,4 +1,17 @@
 # Visin Changelog
+
+## [2.4.1](https://github.com/visin-platform/visin/compare/v2.4.0...v2.4.1) (2026-11-03)
+
+### Bug Fixes
+
+* **tests:** prevent ownership event race and load Vitest configs as ESM ([217d6e8](https://github.com/visin-platform/visin/commit/217d6e8e06261eb1cf035badd78248f3ec9bfc04))
+
+### Chores
+
+* **deps:** replace vulnerable tooling and update dependencies ([b435bde](https://github.com/visin-platform/visin/commit/b435bde9fabe283f186fb1c477cf75ed3a482178))
+* **release:** @visin/backend-core 1.17.1 ([5a271f5](https://github.com/visin-platform/visin/commit/5a271f51810ee8238a81b02f42a7f1f95972ad96))
+* **release:** @visin/frontend-core 1.21.1 ([043866f](https://github.com/visin-platform/visin/commit/043866f05e7f7c42725d170a9d6005a365222e61))
+
 ## [2.4.0](https://github.com/visin-platform/visin/compare/v2.3.0...v2.4.0) (2026-11-03)
 
 
