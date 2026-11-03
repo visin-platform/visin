@@ -1,4 +1,16 @@
 # Visin Changelog
+## [2.4.0](https://github.com/visin-platform/visin/compare/v2.3.0...v2.4.0) (2026-11-03)
+
+
+### Features
+
+* add chat assistants ([f06deb5](https://github.com/visin-platform/visin/commit/f06deb58dff0b64d4f3119fb61c5138f4467c18c))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.21.0 ([3f04184](https://github.com/visin-platform/visin/commit/3f0418452c1830475de79f7aa228ae7d721f81a1))
+
 ## [2.3.0](https://github.com/visin-platform/visin/compare/v2.2.1...v2.3.0) (2026-11-02)
 
 
