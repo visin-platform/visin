@@ -1,16 +1,6 @@
 import React, { useState } from 'react';
 import { PageHeader } from '@visin/frontend-core';
-import {
-  Alert,
-  Box,
-  Chip,
-  CircularProgress,
-  IconButton,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography
-} from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { LinkOff } from '@mui/icons-material';
 import { ConfirmDialog } from '../groups/GroupDialogs';
 import { useConnections, useRevokeConnection } from '../../hooks/useConnections';
@@ -30,7 +20,7 @@ const ConnectionsTab: React.FC = () => {
   // Revoked grants stay in the list on the server so the history is visible,
   // but this page answers "what can reach my account right now" — a disconnected
   // app in the list only invites someone to disconnect it again.
-  const active = connections.data?.filter(connection => !connection.revokedAt) ?? [];
+  const active = connections.data?.filter((connection) => !connection.revokedAt) ?? [];
 
   return (
     <Box>
@@ -52,21 +42,19 @@ const ConnectionsTab: React.FC = () => {
           </Alert>
         ) : active.length > 0 ? (
           <Stack spacing={2}>
-            {active.map(connection => (
+            {active.map((connection) => (
               <Paper
                 key={connection.id}
                 variant="outlined"
                 sx={{ p: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
               >
-                <Box
-                  sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}
-                >
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                       {connection.clientName}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                      {connection.scopes.map(scope => (
+                      {connection.scopes.map((scope) => (
                         <Tooltip key={scope} title={SCOPE_DESCRIPTIONS[scope]?.detail ?? scope}>
                           <Chip size="small" variant="outlined" label={scope} />
                         </Tooltip>
@@ -74,9 +62,7 @@ const ConnectionsTab: React.FC = () => {
                     </Box>
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                       Connected {formatDate(connection.createdAt)}
-                      {connection.lastRenewedAt
-                        ? ` · last active ${formatDate(connection.lastRenewedAt)}`
-                        : ''}
+                      {connection.lastRenewedAt ? ` · last active ${formatDate(connection.lastRenewedAt)}` : ''}
                     </Typography>
                   </Box>
 

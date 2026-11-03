@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AppLayout from './AppLayout';
 
@@ -17,6 +17,9 @@ vi.mock('../config/ConfigProvider', () => ({
   getGlobalConfig: () => ({ VISION_FRONT_URL: 'https://vision.test', LABEL_FRONT_URL: 'https://label.test' }),
 }));
 
+let mockCanConfigureAnalyst = false;
+vi.mock('../hooks/useAnalyst', () => ({ useCanConfigureAnalyst: () => mockCanConfigureAnalyst }));
+
 const renderAt = (path: string) =>
   render(
     <MemoryRouter initialEntries={[path]}>
@@ -33,6 +36,7 @@ const openAccount = () => fireEvent.click(screen.getByRole('button', { name: 'Ac
 beforeEach(() => {
   vi.clearAllMocks();
   mockUser = { name: 'Test User', email: 'test@example.com' };
+  mockCanConfigureAnalyst = false;
 });
 
 describe('AppLayout', () => {
@@ -42,6 +46,16 @@ describe('AppLayout', () => {
     expect(screen.getByText('page content')).toBeInTheDocument();
     expect(accountBar().getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page');
     expect(accountBar().getByRole('link', { name: 'Groups' })).toHaveAttribute('href', '/account/groups');
+  });
+
+  it('offers the Analyst section to administrators only', () => {
+    renderAt('/account/profile');
+    expect(accountBar().queryByRole('link', { name: 'Analyst' })).not.toBeInTheDocument();
+    cleanup();
+
+    mockCanConfigureAnalyst = true;
+    renderAt('/account/profile');
+    expect(accountBar().getByRole('link', { name: 'Analyst' })).toHaveAttribute('href', '/account/analyst');
   });
 
   it('shows the active section title in the desktop header', () => {
@@ -67,6 +81,7 @@ describe('AppLayout', () => {
 
   it('drops a group whose app is unconfigured rather than guessing a URL', async () => {
     vi.doMock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({}) }));
+    vi.doMock('../hooks/useAnalyst', () => ({ useCanConfigureAnalyst: () => false }));
     vi.resetModules();
     const { default: FreshAppLayout } = await import('./AppLayout');
 

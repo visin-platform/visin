@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.env
+.env.*
+credentials/
+cache/
+coverage
+test-results
+playwright-report
+.vitest-reports

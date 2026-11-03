@@ -1,4 +1,5 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
+import { usePageChatContext } from '../hooks/usePageChatContext';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import TrainingConfigTab from '../components/TrainingConfigTab';
 import TrainingVisualizationsTab from '../components/TrainingVisualizationsTab';
 import TrainingSystemInfoTab from '../components/TrainingSystemInfoTab';
 import TrainingBenchmarksTab from '../components/TrainingBenchmarksTab';
+import AnalyzeButton from '../components/analysis/AnalyzeButton';
 import FindingsPanel from '../components/analysis/FindingsPanel';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import UploadResultsDialog from '../components/training/UploadResultsDialog';
@@ -64,6 +66,11 @@ const TrainingDetailPage: React.FC = () => {
   });
 
   const project = projectResponse?.data;
+  usePageChatContext(
+    training?.projectId
+      ? { projectId: training.projectId, trainingIds: [training._id], title: training.name, projectName: project?.name }
+      : undefined
+  );
   const [returnToProject, setReturnToProject] = useState(false);
   const [useOpen, setUseOpen] = useState(false);
 
@@ -182,6 +189,7 @@ const TrainingDetailPage: React.FC = () => {
         onDeleteClick={() => setTrainingDeleteOpen(true)}
       />
       {useOpen && <UseThisDialog title="Use this run" snippets={runSnippets(training)} onClose={() => setUseOpen(false)} />}
+      <AnalyzeButton projectId={training.projectId} trainingIds={[training._id]} title={`Analyze ${training.name}`} />
       <TrainingDetailTabs value={detailTab} onChange={(_event, tab) => showTab(tab)} showModels={hasStoredModels} />
       <SampleTour
         onDeleteSample={() => {

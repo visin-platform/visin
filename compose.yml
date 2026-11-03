@@ -41,7 +41,7 @@ x-app-env: &app-env
   MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/visin}
   JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-before-exposing}
   INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-only-internal-token-change-before-exposing}
-  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3010,http://localhost:3012}
+  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3010,http://localhost:3012,http://localhost:3014}
 
 x-file-creds: &file-creds
   FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:-dev-only-file-api-key-change-before-exposing}
@@ -236,6 +236,34 @@ services:
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
 
+  chat-service:
+    build: ./apps/backend/chat-service
+    image: ${REGISTRY:-visin}/chat-service:${TAG:-local}
+    <<: *common
+    ports: ['${COMPOSE_BIND:-0.0.0.0}:5012:5012']
+    depends_on: *needs-mongo
+    environment:
+      <<: *app-env
+      PORT: 5012
+      SERVICE_NAME: chat-service
+      AUTH_SERVICE_URL: http://auth-service:5001
+      GROUP_SERVICE_URL: http://group-service:5006
+      VISION_SERVICE_URL: http://vision-service:4010
+      MCP_INTERNAL_URL: http://mcp-service:5009/mcp
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+
+  chat-front:
+    build: ./apps/frontend/chat-front
+    image: ${REGISTRY:-visin}/chat-front:${TAG:-local}
+    <<: *common
+    ports: ['${COMPOSE_BIND:-0.0.0.0}:3014:80']
+    environment:
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
+      # Where an administrator's "Set up" link goes when chat is not inside the shell.
+      ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+
   # ------------------------------------------------------------------ frontends
   # Every value here lands in a config.json the browser fetches at runtime, so
   # all of them are PUBLIC_HOST addresses — never container names.
@@ -276,6 +304,8 @@ services:
       VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+      # Account's Analyst section, for administrators, reads and writes the analyst's settings here.
+      CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
 
   label-front:
     build: ./apps/frontend/label-front
@@ -286,6 +316,7 @@ services:
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      CHAT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3014
       LABEL_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5008
       VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
 
@@ -300,6 +331,7 @@ services:
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      CHAT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3014
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
       SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       LANDING_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3000
@@ -318,6 +350,9 @@ services:
       VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      CHAT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3014
+      # Asked only whether to offer Account's Analyst section.
+      CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
       # Read by the home and Explore pages; unset, the parts they feed are left out.
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       DATASET_API_URL: ${PUBLIC_HOST:-http://localhost}:5010

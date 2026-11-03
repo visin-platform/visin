@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   Article,
   Assignment,
+  AutoAwesome,
   Explore,
   Folder,
   FolderCopy,
@@ -48,6 +49,8 @@ interface NavSection {
   signedInOnly?: boolean;
   /** Where the section lives for a visitor, where that differs from `path`. */
   signedOutPath?: string;
+  /** Left out unless the app says so through the option of this name: it is not for everyone. */
+  requires?: 'analystSettings';
 }
 
 interface NavGroup {
@@ -129,7 +132,9 @@ const ACCOUNT_SECTIONS: NavSection[] = [
   { app: 'account', text: 'Groups', icon: <Groups />, path: '/account/groups' },
   { app: 'account', text: 'API keys', icon: <Key />, path: '/account/api-keys' },
   { app: 'account', text: 'Connected apps', icon: <LinkIcon />, path: '/account/connections' },
-  { app: 'account', text: 'Assistant activity', icon: <Insights />, path: '/account/activity' }
+  { app: 'account', text: 'Assistant activity', icon: <Insights />, path: '/account/activity' },
+  // The analyst's provider, key and model: for platform administrators only, so the app decides.
+  { app: 'account', text: 'Analyst', icon: <AutoAwesome />, path: '/account/analyst', requires: 'analystSettings' }
 ];
 
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
@@ -141,6 +146,11 @@ export interface VisinNavigationOptions {
    * true: label-front and account-front serve no visitors.
    */
   isAuthenticated?: boolean;
+  /**
+   * Whether the viewer may change the chat analyst's settings (a platform administrator, where chat is set up).
+   * Adds the Analyst section to Account. Only a hint for the menu: the service checks the role on every request.
+   */
+  analystSettings?: boolean;
 }
 
 /**
@@ -157,12 +167,15 @@ export interface VisinNavigationOptions {
 export function createVisinNavigation(
   localApps: VisinApp | readonly VisinApp[] | null,
   urls: VisinAppUrls,
-  { isAuthenticated = true }: VisinNavigationOptions = {}
+  { isAuthenticated = true, analystSettings = false }: VisinNavigationOptions = {}
 ): VisinNavigation {
   const local = new Set<VisinApp>(localApps === null ? [] : typeof localApps === 'string' ? [localApps] : localApps);
 
-  const toItems = ({ app, text, icon, path, signedInOnly, signedOutPath }: NavSection): AppLayoutNavItem[] => {
+  const toItems = ({ app, text, icon, path, signedInOnly, signedOutPath, requires }: NavSection): AppLayoutNavItem[] => {
     if (signedInOnly && !isAuthenticated) {
+      return [];
+    }
+    if (requires === 'analystSettings' && !analystSettings) {
       return [];
     }
     const target = !isAuthenticated && signedOutPath ? signedOutPath : path;

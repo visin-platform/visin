@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Add, AddTask, GitHub, MenuBook, PhotoLibrary } from '@mui/icons-material';
 import {
@@ -12,6 +12,9 @@ import { useConfig } from '../config/ConfigProvider';
 import { useAuth } from '../contexts/AuthContext';
 import { APPS, appForPath } from '../apps';
 import { visitIcon, visitLabel } from './home/visitKinds';
+import { ChatButton, ChatSidePanel } from './chat/ChatDock';
+import { useChatDock } from './chat/chatDock';
+import { useCanConfigureAnalyst } from '../hooks/useCanConfigureAnalyst';
 
 /** Outside any app's routes (Home, Explore, the not-found page): the widest frame, no header. */
 const NO_APP_LAYOUT = { maxContentWidth: 1600, showPageHeader: false };
@@ -21,7 +24,6 @@ const NO_APP_LAYOUT = { maxContentWidth: 1600, showPageHeader: false };
  * menu leaves out what needs an account, so none of it leads to a sign-in wall.
  */
 const APP_LIST = ['shell', 'vision', 'label', 'account'] as const;
-const MEMBER_NAVIGATION = createVisinNavigation(APP_LIST, {});
 const VISITOR_NAVIGATION = createVisinNavigation(APP_LIST, {}, { isAuthenticated: false });
 
 /** The project's source, which is the same for every deployment of it. */
@@ -47,10 +49,14 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const config = useConfig();
   const { user, isAuthenticated, isLoading, login, signup, logout } = useAuth();
+  const chat = useChatDock();
   const app = appForPath(pathname);
   const definition = app ? APPS[app] : null;
   const layout = definition ? definition.layout(pathname) : NO_APP_LAYOUT;
-  const navigation = isAuthenticated ? MEMBER_NAVIGATION : VISITOR_NAVIGATION;
+  // Account's Analyst section is for platform administrators, which chat-service says.
+  const analystSettings = useCanConfigureAnalyst();
+  const memberNavigation = useMemo(() => createVisinNavigation(APP_LIST, {}, { analystSettings }), [analystSettings]);
+  const navigation = isAuthenticated ? memberNavigation : VISITOR_NAVIGATION;
   // Where this browser was lately, offered by the search box before anything is typed.
   const recent = useRecentVisits()
     .slice(0, RECENT_OFFERED)
@@ -95,6 +101,10 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       siteLinks={siteLinks}
       maxContentWidth={layout.maxContentWidth}
       showPageHeader={layout.showPageHeader}
+      // Chat is a companion to whatever page is open, not a place in the menu: a button in the bar, and a panel
+      // docked beside the page.
+      headerActions={chat.available ? <ChatButton /> : undefined}
+      sidePanel={chat.open ? <ChatSidePanel /> : undefined}
     >
       {children}
     </AppLayout>

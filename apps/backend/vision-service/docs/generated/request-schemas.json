@@ -609,6 +609,10 @@
   "CreateFindingBody": {
     "type": "object",
     "properties": {
+      "sourceId": {
+        "type": "string",
+        "pattern": "^chat:[a-f\\d]{24}$"
+      },
       "project": {
         "type": "string",
         "minLength": 1

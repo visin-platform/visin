@@ -79,9 +79,7 @@ describe('list states', () => {
   it('hides an already-revoked grant', async () => {
     // The page answers "what can reach my account right now"; a disconnected app
     // in the list only invites someone to disconnect it again.
-    mockedService.list.mockResolvedValue([
-      makeConnection({ revokedAt: '2026-09-05T00:00:00.000Z' })
-    ]);
+    mockedService.list.mockResolvedValue([makeConnection({ revokedAt: '2026-09-05T00:00:00.000Z' })]);
     renderTab();
 
     expect(await screen.findByText(/no apps are connected/i)).toBeInTheDocument();

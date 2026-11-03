@@ -57,6 +57,9 @@ jobs:
             file-service:
               - *backend-shared
               - 'apps/backend/file-service/**'
+            chat-service:
+              - *backend-shared
+              - 'apps/backend/chat-service/**'
             group-service:
               - *backend-shared
               - 'apps/backend/group-service/**'
@@ -69,6 +72,9 @@ jobs:
             vision-service:
               - *backend-shared
               - 'apps/backend/vision-service/**'
+            chat-front:
+              - *frontend-shared
+              - 'apps/frontend/chat-front/**'
             account-front:
               - *frontend-shared
               - 'apps/frontend/account-front/**'
@@ -102,7 +108,7 @@ jobs:
 
       - name: Build e2e workspace matrix
         id: set-e2e-matrix
-        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c '[.[] | select(IN("account-front","auth-front","label-front","landing-front","vision-front","shell-front"))]')" >> "$GITHUB_OUTPUT"
+        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c '[.[] | select(IN("account-front","auth-front","chat-front","label-front","landing-front","vision-front","shell-front"))]')" >> "$GITHUB_OUTPUT"
 
   # Deployed images install the libs from npm, so a consumer left on an older
   # pinned version silently compiles against stale typings inside Docker's

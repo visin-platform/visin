@@ -8,6 +8,8 @@ export interface AppConfig {
   GROUP_SERVICE_URL?: string;
   /** mcp-service's public address, shown to people connecting an assistant. */
   MCP_PUBLIC_URL?: string;
+  /** chat-service, where the analyst's settings live. Unset, Account has no Analyst section. */
+  CHAT_SERVICE_URL?: string;
 }
 
 function createDevConfig(): AppConfig {
@@ -17,7 +19,8 @@ function createDevConfig(): AppConfig {
     VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL,
     LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL,
     GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL,
-    MCP_PUBLIC_URL: import.meta.env.VITE_MCP_PUBLIC_URL
+    MCP_PUBLIC_URL: import.meta.env.VITE_MCP_PUBLIC_URL,
+    CHAT_SERVICE_URL: import.meta.env.VITE_CHAT_SERVICE_URL
   };
 }
 

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import ShellLayout from './components/ShellLayout';
 import ShellRoutes from './routes';
+import { ChatProvider } from './components/chat/ChatDock';
 import VisionUploads from './components/VisionUploads';
 
 // The shell's own queries: the home page's. Each remote brings its own client,
@@ -21,9 +22,11 @@ function App() {
     <Router>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ShellLayout>
-            <ShellRoutes />
-          </ShellLayout>
+          <ChatProvider>
+            <ShellLayout>
+              <ShellRoutes />
+            </ShellLayout>
+          </ChatProvider>
           <VisionUploads />
         </AuthProvider>
       </QueryClientProvider>

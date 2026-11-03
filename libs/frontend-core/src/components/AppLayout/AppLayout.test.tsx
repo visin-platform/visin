@@ -638,6 +638,24 @@ describe('AppLayout', () => {
     expect(screen.getByText('page content')).toBeInTheDocument();
   });
 
+  describe('app extensions', () => {
+    it("puts the app's own controls in the top bar", () => {
+      const { container } = renderAt('/projects', undefined, { headerActions: <button>Chat</button> });
+      expect(bar(container).getByRole('button', { name: 'Chat' })).toBeInTheDocument();
+    });
+
+    it('docks a side panel beside the bar and the page, not inside the page', () => {
+      const { container } = renderAt('/projects', undefined, {
+        sidePanel: <aside aria-label="Side conversation">Panel</aside>
+      });
+      const panel = screen.getByRole('complementary', { name: 'Side conversation' });
+      const content = container.querySelector('main')!;
+      expect(content.contains(panel)).toBe(false);
+      expect(container.querySelector('header')!.contains(panel)).toBe(false);
+      expect(content.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
   describe('on a phone', () => {
     beforeEach(() => {
       Object.defineProperty(window, 'matchMedia', {
@@ -658,6 +676,11 @@ describe('AppLayout', () => {
 
     afterEach(() => {
       delete (window as { matchMedia?: unknown }).matchMedia;
+    });
+
+    it("leaves out the side panel, which has no room beside a phone's page", () => {
+      renderAt('/projects', undefined, { sidePanel: <aside aria-label="Side conversation">Panel</aside> });
+      expect(screen.queryByRole('complementary', { name: 'Side conversation' })).not.toBeInTheDocument();
     });
 
     it('moves the groups to a tab bar under the content', () => {

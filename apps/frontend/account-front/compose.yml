@@ -13,6 +13,7 @@ services:
       LABEL_FRONT_URL: ${LABEL_FRONT_URL}
       MCP_PUBLIC_URL: ${MCP_PUBLIC_URL}
       GROUP_SERVICE_URL: ${GROUP_SERVICE_URL}
+      CHAT_SERVICE_URL: ${CHAT_SERVICE_URL:-}
     ports:
       - '3007:80'
     init: true

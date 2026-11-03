@@ -567,10 +567,28 @@ files['context.svg'] = doc(
     )
   );
 
-  b.push(edge([[mx + mw, cy(1) + 20], [545, cy(1) + 20], [545, cy(3) - 20], [mx + mw, cy(3) - 20]],
-    { label: 'dataset refs', at: [575, cy(2) - 14] }));
-  b.push(edge([[mx + mw, cy(3) + 20], [605, cy(3) + 20], [605, cy(1) - 20], [mx + mw, cy(1) - 20]],
-    { label: 'project owner', at: [575, cy(2) + 14] }));
+  b.push(
+    edge(
+      [
+        [mx + mw, cy(1) + 20],
+        [545, cy(1) + 20],
+        [545, cy(3) - 20],
+        [mx + mw, cy(3) - 20]
+      ],
+      { label: 'dataset refs', at: [575, cy(2) - 14] }
+    )
+  );
+  b.push(
+    edge(
+      [
+        [mx + mw, cy(3) + 20],
+        [605, cy(3) + 20],
+        [605, cy(1) - 20],
+        [mx + mw, cy(1) - 20]
+      ],
+      { label: 'project owner', at: [575, cy(2) + 14] }
+    )
+  );
 
   // Stores
   const sy = bottom + 40;
@@ -747,6 +765,118 @@ files['context.svg'] = doc(
     b
   );
 }
+
+// ---------------------------------------------------------------- research chat
+files['chat.svg'] = doc(
+  800,
+  660,
+  'Visin: research chat',
+  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations and durable analyst jobs in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision.',
+  [
+    node.web({
+      x: 20,
+      y: 20,
+      w: 360,
+      h: 90,
+      title: 'Chat front',
+      lines: ['Full page and shell side panel', 'Private assistant, DMs, rooms and channels']
+    }),
+    node.web({
+      x: 420,
+      y: 20,
+      w: 360,
+      h: 90,
+      title: 'Vision front',
+      lines: ['Analyze this run / comparison', 'Project discussion; existing findings']
+    }),
+    edge(
+      [
+        [600, 110],
+        [200, 110]
+      ],
+      { label: 'explicit page context', at: [400, 135] }
+    ),
+    node.service({
+      x: 20,
+      y: 190,
+      w: 360,
+      h: 110,
+      title: 'Chat service',
+      lines: [
+        'Session auth, invitation / history boundaries',
+        'REST + SSE replay; durable analyst worker',
+        'Short-lived, project-limited credentials'
+      ]
+    }),
+    node.data({
+      x: 420,
+      y: 190,
+      w: 360,
+      h: 110,
+      title: 'MongoDB',
+      lines: ['Conversations, messages, analyst jobs', 'Token reservations and blocks']
+    }),
+    edge(
+      [
+        [200, 110],
+        [200, 190]
+      ],
+      { label: 'HTTPS + session cookie', at: [180, 155] }
+    ),
+    edge([
+      [380, 245],
+      [420, 245]
+    ]),
+    node.service({
+      x: 20,
+      y: 400,
+      w: 230,
+      h: 95,
+      title: 'Auth + Group',
+      lines: ['Current sessions and memberships', 'Public handle lookup']
+    }),
+    node.service({
+      x: 285,
+      y: 400,
+      w: 230,
+      h: 95,
+      title: 'MCP + Vision',
+      lines: ['Read-only project tools', 'Reviewed, idempotent finding saves']
+    }),
+    node.external({
+      x: 550,
+      y: 400,
+      w: 230,
+      h: 95,
+      title: 'Assistant provider',
+      lines: ['Private analyst requests only', 'Explicit opt-in deployment setting']
+    }),
+    edge([
+      [120, 300],
+      [120, 400]
+    ]),
+    edge([
+      [260, 300],
+      [400, 400]
+    ]),
+    edge([
+      [350, 300],
+      [665, 400]
+    ]),
+    texts({
+      x: 20,
+      y: 550,
+      w: 760,
+      title: 'Conversation access does not grant project access',
+      lines: [
+        'Human messaging works without a provider. Shared AI remains disabled pending audience-aware access checks.',
+        'Durable sequence IDs replay messages; polling revalidates access and falls back when SSE is unavailable.'
+      ],
+      color: C.ink,
+      sub: C.body
+    })
+  ]
+);
 
 const stale = [];
 for (const [name, svg] of Object.entries(files)) {

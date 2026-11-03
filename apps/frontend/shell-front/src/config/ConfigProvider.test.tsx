@@ -35,6 +35,8 @@ describe('shell ConfigProvider', () => {
       'VITE_VISION_FRONT_URL',
       'VITE_LABEL_FRONT_URL',
       'VITE_ACCOUNT_FRONT_URL',
+      'VITE_CHAT_FRONT_URL',
+      'VITE_CHAT_SERVICE_URL',
     ]) {
       vi.stubEnv(name, '');
     }
@@ -45,6 +47,8 @@ describe('shell ConfigProvider', () => {
       VISION_FRONT_URL: 'http://localhost:3012',
       LABEL_FRONT_URL: 'http://localhost:3008',
       ACCOUNT_FRONT_URL: 'http://localhost:3007',
+      CHAT_FRONT_URL: 'http://localhost:3014',
+      CHAT_SERVICE_URL: 'http://localhost:5012',
       VISION_API_URL: 'http://localhost:4010',
       LABEL_SERVICE_URL: 'http://localhost:5008',
       GROUP_SERVICE_URL: 'http://localhost:5006',

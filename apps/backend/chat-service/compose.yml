@@ -1,0 +1,25 @@
+services:
+  chat-service:
+    build: .
+    image: ${REGISTRY:-ghcr.io/visin-platform}/chat-service:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
+    ports: ['5012:5012']
+    environment:
+      NODE_ENV: production
+      PORT: 5012
+      SERVICE_NAME: chat-service
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      GROUP_SERVICE_URL: ${GROUP_SERVICE_URL}
+      VISION_SERVICE_URL: ${VISION_SERVICE_URL}
+      MCP_INTERNAL_URL: ${MCP_INTERNAL_URL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    networks: [visinnet]
+networks:
+  visinnet:
+    external: true

@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_LABEL_FRONT_URL: string;
   readonly VITE_MCP_PUBLIC_URL: string;
   readonly VITE_GROUP_SERVICE_URL: string;
+  readonly VITE_CHAT_SERVICE_URL: string;
 }
 
 interface ImportMeta {

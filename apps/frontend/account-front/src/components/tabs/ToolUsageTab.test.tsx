@@ -12,8 +12,24 @@ const usage = [
 ];
 
 const calls = [
-  { at: '2026-09-05T12:00:00.000Z', tool: 'list_projects', ms: 90, tokens: 157, failed: false, actorLabel: 'Claude', actorKind: 'oauth' as const },
-  { at: '2026-09-05T11:00:00.000Z', tool: 'get_test_results', ms: 2800, tokens: 86, failed: true, actorLabel: 'CI key', actorKind: 'api_key' as const }
+  {
+    at: '2026-09-05T12:00:00.000Z',
+    tool: 'list_projects',
+    ms: 90,
+    tokens: 157,
+    failed: false,
+    actorLabel: 'Claude',
+    actorKind: 'oauth' as const
+  },
+  {
+    at: '2026-09-05T11:00:00.000Z',
+    tool: 'get_test_results',
+    ms: 2800,
+    tokens: 86,
+    failed: true,
+    actorLabel: 'CI key',
+    actorKind: 'api_key' as const
+  }
 ];
 
 const renderTab = () => {
@@ -38,9 +54,9 @@ describe('the summary', () => {
     renderTab();
     await screen.findByText('get_training_curve');
 
-    const rows = screen.getAllByRole('row').map(r => r.textContent ?? '');
-    const curve = rows.findIndex(t => t.includes('get_training_curve'));
-    const projects = rows.findIndex(t => t.includes('list_projects'));
+    const rows = screen.getAllByRole('row').map((r) => r.textContent ?? '');
+    const curve = rows.findIndex((t) => t.includes('get_training_curve'));
+    const projects = rows.findIndex((t) => t.includes('list_projects'));
 
     expect(curve).toBeLessThan(projects);
   });

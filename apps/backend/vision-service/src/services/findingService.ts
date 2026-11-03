@@ -5,7 +5,12 @@ import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import Project from '../models/Project';
 import { ExportOptions, ExportRun, findingToLatex } from './latexExport';
-import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds, resolveProject } from './projectAccessService';
+import {
+  checkProjectAccess,
+  createProjectAccessChecker,
+  getVisibleProjectIds,
+  resolveProject
+} from './projectAccessService';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import { parseFindingCursor } from './findingCursor';
 import { touchProjectActivity } from './projectActivity';
@@ -69,18 +74,13 @@ const toPlain = (finding: IFinding) => finding.toObject() as Record<string, unkn
  * the names but still counted in `trainingIds`, so the citation count stays
  * honest rather than quietly shrinking.
  */
-async function attachCitations(
-  findings: IFinding[],
-  userId: string | undefined
-): Promise<FindingWithCitations[]> {
+async function attachCitations(findings: IFinding[], userId: string | undefined): Promise<FindingWithCitations[]> {
   const cited = [...new Set(findings.flatMap((finding) => finding.trainingIds))];
   if (cited.length === 0) {
     return findings.map((finding) => ({ ...toPlain(finding), citedTrainings: [] }));
   }
 
-  const runs = await Training.find({ _id: { $in: cited }, deletedAt: null }).select(
-    'name status projectId'
-  );
+  const runs = await Training.find({ _id: { $in: cited }, deletedAt: null }).select('name status projectId');
 
   const hasProjectAccess = createProjectAccessChecker(userId);
   const byId = new Map<string, CitedTraining>();
@@ -133,10 +133,7 @@ export const listFindings = async (
   if (filters.before !== undefined) {
     const { createdAt, id } = parseFindingCursor(filters.before);
     // Keep this separate from the subject-or-citation condition above.
-    query.$and = [{ $or: [
-      { createdAt: { $lt: createdAt } },
-      { createdAt, _id: { $lt: id } },
-    ] }];
+    query.$and = [{ $or: [{ createdAt: { $lt: createdAt } }, { createdAt, _id: { $lt: id } }] }];
   }
 
   const findings = await Finding.find(query)
@@ -146,10 +143,7 @@ export const listFindings = async (
   return attachCitations(findings, userId);
 };
 
-export const getFinding = async (
-  id: string,
-  userId: string | undefined
-): Promise<FindingWithCitations> => {
+export const getFinding = async (id: string, userId: string | undefined): Promise<FindingWithCitations> => {
   const finding = await Finding.findOne({ _id: id, deletedAt: null });
   if (!finding) throw new NotFoundError('Finding not found');
   if (!(await checkProjectAccess(userId, finding.projectId))) throw new ForbiddenError();
@@ -159,6 +153,7 @@ export const getFinding = async (
 };
 
 export interface CreateFindingInput {
+  sourceId?: string;
   project: string;
   training?: string;
   title: string;
@@ -173,10 +168,7 @@ export interface Author {
   userId: string;
 }
 
-export const createFinding = async (
-  input: CreateFindingInput,
-  author: Author
-): Promise<FindingWithCitations> => {
+export const createFinding = async (input: CreateFindingInput, author: Author): Promise<FindingWithCitations> => {
   const projectId = await resolveProjectId(input.project);
   if (!(await checkProjectAccess(author.userId, projectId))) throw new ForbiddenError();
 
@@ -192,9 +184,7 @@ export const createFinding = async (
   // finding about t1 citing t2 and t3 named every run it compared against and
   // not the one it was about, which is the first thing a reader looks for.
   // Subject first, because that is the run the conclusion is nominally about.
-  const cited = [
-    ...new Set([...(input.training ? [input.training] : []), ...(input.trainingIds ?? [])])
-  ];
+  const cited = [...new Set([...(input.training ? [input.training] : []), ...(input.trainingIds ?? [])])];
   if (cited.length > 0) {
     if (tokenProjectId()) {
       const trainings = await Training.find({ _id: { $in: cited }, deletedAt: null });
@@ -210,7 +200,15 @@ export const createFinding = async (
     }
   }
 
-  const finding = await Finding.create({
+  if (input.sourceId) {
+    const previous = await Finding.findOne({ projectId, authorUserId: author.userId, sourceId: input.sourceId });
+    if (previous) {
+      if (previous.deletedAt) throw new BadRequestError('The saved finding was removed');
+      return (await attachCitations([previous], author.userId))[0];
+    }
+  }
+
+  const fields = {
     projectId,
     trainingId: input.training,
     title: input.title,
@@ -219,8 +217,17 @@ export const createFinding = async (
     trainingIds: cited,
     authorKind: author.kind,
     authorLabel: author.label,
-    authorUserId: author.userId
-  });
+    authorUserId: author.userId,
+    ...(input.sourceId ? { sourceId: input.sourceId } : {})
+  };
+  let finding;
+  try {
+    finding = await Finding.create(fields);
+  } catch (error) {
+    if (!input.sourceId || (error as { code?: number }).code !== 11000) throw error;
+    finding = await Finding.findOne({ projectId, authorUserId: author.userId, sourceId: input.sourceId });
+    if (!finding || finding.deletedAt) throw new BadRequestError('The saved finding is unavailable');
+  }
 
   await touchProjectActivity(projectId);
 

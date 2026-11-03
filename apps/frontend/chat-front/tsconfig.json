@@ -1,0 +1,6 @@
+{
+  // Two projects, checked together by `tsc -b`: the app in the browser, and
+  // the build and e2e tooling that runs in Node.
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+}

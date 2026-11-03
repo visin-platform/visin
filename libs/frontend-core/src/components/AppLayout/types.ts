@@ -113,4 +113,11 @@ export interface AppLayoutProps {
   createItems?: AppLayoutNavItem[];
   /** Links out of the app (Docs, About, GitHub), in the top bar of a desktop for visitors and members alike. */
   siteLinks?: AppLayoutSiteLink[];
+  /** The app's own controls in the top bar (a chat toggle), before the colour-scheme switch. */
+  headerActions?: ReactNode;
+  /**
+   * A column docked on the right of a desktop screen, beside the top bar and the page and as tall as the window,
+   * so it stays in view while the page scrolls. It sizes itself. Not drawn in the compact layout, which has no room.
+   */
+  sidePanel?: ReactNode;
 }

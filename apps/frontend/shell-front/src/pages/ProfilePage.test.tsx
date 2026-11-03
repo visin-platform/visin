@@ -10,6 +10,8 @@ const { config, authState } = vi.hoisted(() => ({
 
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
+const dock = vi.hoisted(() => ({ available: false, openWith: vi.fn() }));
+vi.mock('../components/chat/chatDock', () => ({ useChatDock: () => dock }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
   exploreApi: { user: vi.fn(), projects: vi.fn(), publicDatasets: vi.fn(), activity: vi.fn(), publicPapers: vi.fn() },
@@ -299,5 +301,31 @@ describe('ProfilePage', () => {
     await screen.findByRole('heading', { level: 1, name: 'Ann Lee' });
     expect(api.projects).not.toHaveBeenCalled();
     expect(screen.queryByRole('group', { name: 'Show' })).not.toBeInTheDocument();
+  });
+});
+
+describe('messaging', () => {
+  beforeEach(() => {
+    dock.available = true;
+  });
+
+  it('offers a signed-in visitor a message to the person, in chat', async () => {
+    authState.user = { id: 'u1' };
+    renderAt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Message' }));
+    expect(dock.openWith).toHaveBeenCalledWith({ kind: 'direct', handle: 'ann-lee', name: 'Ann Lee' });
+  });
+
+  it('offers no message to oneself, nor where chat is unavailable', async () => {
+    authState.user = { id: 'u9' };
+    const own = renderAt();
+    await screen.findByRole('heading', { level: 1, name: 'Ann Lee' });
+    expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
+    own.unmount();
+    dock.available = false;
+    authState.user = { id: 'u1' };
+    renderAt();
+    await screen.findByRole('heading', { level: 1, name: 'Ann Lee' });
+    expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
   });
 });

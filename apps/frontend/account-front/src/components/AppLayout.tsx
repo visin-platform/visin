@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { AppLayout as SharedAppLayout, createVisinNavigation } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getGlobalConfig } from '../config/ConfigProvider';
+import { useCanConfigureAnalyst } from '../hooks/useAnalyst';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -10,15 +11,18 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const config = getGlobalConfig();
   const { user, logout } = useAuth();
+  // The Analyst section is for administrators; the service says who is one.
+  const analystSettings = useCanConfigureAnalyst();
 
   // The same groups every other app shows, in the same place, linking across;
   // Account's own sections are local here and fill the section bar. It used to
   // offer a lone "Back to Vision" link instead, so Labeling was unreachable from
   // here and the menu changed shape on the way in and out.
-  const { groups, accountItems } = createVisinNavigation('account', {
-    vision: config.VISION_FRONT_URL,
-    label: config.LABEL_FRONT_URL
-  });
+  const { groups, accountItems } = createVisinNavigation(
+    'account',
+    { vision: config.VISION_FRONT_URL, label: config.LABEL_FRONT_URL },
+    { analystSettings }
+  );
 
   return (
     <SharedAppLayout

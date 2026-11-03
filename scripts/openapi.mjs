@@ -28,6 +28,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * A published spec names its server as a variable for the reader to fill in.
  */
 const SPECS = {
+  chat: { path: 'apps/backend/chat-service/docs/openapi.json', publish: false },
   vision: {
     path: 'apps/backend/vision-service/docs/openapi.yml',
     publish: true,

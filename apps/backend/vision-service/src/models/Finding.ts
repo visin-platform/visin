@@ -24,6 +24,7 @@ export interface IFinding extends Document {
    * project rather than to any one of them.
    */
   trainingId?: string;
+  sourceId?: string;
   title: string;
   /** markdown; rendered in the app, handed to the model as-is */
   body: string;
@@ -57,6 +58,7 @@ const FindingSchema = new Schema<IFinding>(
   {
     projectId: { type: String, required: true },
     trainingId: { type: String },
+    sourceId: { type: String },
     title: { type: String, required: true, trim: true, maxlength: 200 },
     // Capped generously but capped: an assistant asked for "a summary" can
     // produce an essay, and an unbounded field is one bad prompt from a
@@ -70,6 +72,12 @@ const FindingSchema = new Schema<IFinding>(
     deletedAt: { type: Date, default: null }
   },
   { timestamps: true, collection: 'findings' }
+);
+
+// An assistant save can be retried after a dropped response without duplicating a finding.
+FindingSchema.index(
+  { projectId: 1, authorUserId: 1, sourceId: 1 },
+  { unique: true, partialFilterExpression: { sourceId: { $type: 'string' } } }
 );
 
 // Stable pages within visible projects, including equal creation timestamps.

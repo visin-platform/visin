@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { clearVisits, recordVisit } from '@visin/frontend-core';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
@@ -15,8 +15,12 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 
 const config: Record<string, string | undefined> = {};
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config }));
+let analystAdmin = false;
+vi.mock('../hooks/useCanConfigureAnalyst', () => ({ useCanConfigureAnalyst: () => analystAdmin }));
+vi.mock('../remotes', () => ({ remoteChatPanel: () => () => <div>Embedded conversations</div>, forgetChatPanel: vi.fn() }));
 
 import ShellLayout from './ShellLayout';
+import { ChatProvider } from './chat/ChatDock';
 
 const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
 
@@ -37,6 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   authState.isAuthenticated = true;
   authState.isLoading = false;
+  analystAdmin = false;
   for (const key of Object.keys(config)) delete config[key];
   config.VISION_FRONT_URL = 'https://vision.test';
 });
@@ -137,6 +142,21 @@ describe('ShellLayout', () => {
 
     expect(sectionBar('Account').getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/account/profile');
     expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
+  });
+
+  it("offers Account's Analyst section to administrators only, and never to a visitor", () => {
+    renderAt('/account/profile');
+    expect(sectionBar('Account').queryByRole('link', { name: 'Analyst' })).not.toBeInTheDocument();
+    cleanup();
+
+    analystAdmin = true;
+    renderAt('/account/profile');
+    expect(sectionBar('Account').getByRole('link', { name: 'Analyst' })).toHaveAttribute('href', '/account/analyst');
+    cleanup();
+
+    authState.isAuthenticated = false;
+    renderAt('/explore');
+    expect(screen.queryByRole('link', { name: 'Analyst' })).not.toBeInTheDocument();
   });
 
   it('keeps Account sections out of the section bar elsewhere', () => {
@@ -291,5 +311,32 @@ describe('ShellLayout', () => {
 
       expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
     });
+  });
+});
+
+describe('chat', () => {
+  const renderWithChat = (path: string) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <ChatProvider>
+          <ShellLayout>
+            <Path />
+          </ShellLayout>
+        </ChatProvider>
+      </MemoryRouter>
+    );
+
+  it('is a button in the bar, not a place in the menu, and docks beside the page', () => {
+    config.CHAT_FRONT_URL = 'https://chat.test';
+    const { container } = renderWithChat('/projects');
+    expect(main().queryByRole('link', { name: 'Chat' })).toBeNull();
+    fireEvent.click(within(container.querySelector('header')!).getByRole('button', { name: 'Chat' }));
+    const panel = screen.getByRole('complementary', { name: 'Chat' });
+    expect(container.querySelector('main')!.contains(panel)).toBe(false);
+  });
+
+  it('is left out where chat is not configured', () => {
+    renderWithChat('/projects');
+    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
   });
 });

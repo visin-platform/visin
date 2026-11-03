@@ -1,26 +1,10 @@
 import React, { useState } from 'react';
 import { PageHeader } from '@visin/frontend-core';
-import {
-  Alert,
-  Box,
-  Chip,
-  CircularProgress,
-  IconButton,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography
-} from '@mui/material';
+import { Alert, Box, Chip, CircularProgress, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { Delete, Key, Visibility, Block } from '@mui/icons-material';
 import { ConfirmDialog } from '../groups/GroupDialogs';
 import { CreateApiKeyDialog, ShowTokenDialog } from '../apiKeys/ApiKeyDialogs';
-import {
-  useApiKeys,
-  useCreateApiKey,
-  useDeleteApiKey,
-  useRevealApiKey,
-  useRevokeApiKey
-} from '../../hooks/useApiKeys';
+import { useApiKeys, useCreateApiKey, useDeleteApiKey, useRevealApiKey, useRevokeApiKey } from '../../hooks/useApiKeys';
 import { ApiKey, ApiKeyScope, SCOPE_DESCRIPTIONS, statusOf } from '../../types/apiKey';
 
 type PendingConfirm = { kind: 'revoke' | 'delete'; key: ApiKey };
@@ -47,17 +31,17 @@ const ApiKeysTab: React.FC = () => {
   const deleteKey = useDeleteApiKey();
 
   const mutations = [createKey, revealKey, revokeKey, deleteKey];
-  const busy = mutations.some(mutation => mutation.isPending);
+  const busy = mutations.some((mutation) => mutation.isPending);
   // auth-service answers with a specific message for each rejection — a 501
   // when the deployment has not enabled keys, a 404 for a key that is not
   // yours. Surface it rather than a generic failure.
-  const mutationError = mutations.find(mutation => mutation.error)?.error;
+  const mutationError = mutations.find((mutation) => mutation.error)?.error;
 
   const create = (name: string, scopes: ApiKeyScope[], expiresInDays?: number) => {
     createKey.mutate(
       { name, scopes, expiresInDays },
       {
-        onSuccess: created => {
+        onSuccess: (created) => {
           setCreateOpen(false);
           setShown({ token: created.token, isNew: true });
         }
@@ -66,7 +50,7 @@ const ApiKeysTab: React.FC = () => {
   };
 
   const reveal = (key: ApiKey) => {
-    revealKey.mutate(key.id, { onSuccess: token => setShown({ token, isNew: false }) });
+    revealKey.mutate(key.id, { onSuccess: (token) => setShown({ token, isNew: false }) });
   };
 
   const confirmCopy = (pending: PendingConfirm) =>
@@ -113,7 +97,7 @@ const ApiKeysTab: React.FC = () => {
           </Alert>
         ) : keys.data && keys.data.length > 0 ? (
           <Stack spacing={2}>
-            {keys.data.map(key => {
+            {keys.data.map((key) => {
               const status = statusOf(key);
               return (
                 <Paper
@@ -134,14 +118,11 @@ const ApiKeysTab: React.FC = () => {
                           </Tooltip>
                         )}
                       </Box>
-                      <Typography
-                        variant="body2"
-                        sx={{ color: 'text.secondary', fontFamily: 'monospace', mb: 1 }}
-                      >
+                      <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: 'monospace', mb: 1 }}>
                         {key.prefix}…
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                        {key.scopes.map(scope => (
+                        {key.scopes.map((scope) => (
                           <Tooltip key={scope} title={SCOPE_DESCRIPTIONS[scope]?.detail ?? scope}>
                             <Chip size="small" variant="outlined" label={scope} />
                           </Tooltip>

@@ -86,20 +86,20 @@ const ToolUsageTab: React.FC = () => {
       <PageHeader
         subtitle="What your connected assistants have called, and what each answer cost. A tool result stays in the conversation and is sent again with every later message, so the tool worth shrinking is the one with the largest total — not the one called most often."
         actions={
-      <TextField
-        select
-        size="small"
-        label="Window"
-        value={days}
-        onChange={event => setDays(Number(event.target.value))}
-        sx={{ minWidth: 150, flexShrink: 0 }}
-      >
-        {WINDOWS.map(option => (
-          <MenuItem key={option.value} value={option.value}>
-            {option.label}
-          </MenuItem>
-        ))}
-      </TextField>
+          <TextField
+            select
+            size="small"
+            label="Window"
+            value={days}
+            onChange={(event) => setDays(Number(event.target.value))}
+            sx={{ minWidth: 150, flexShrink: 0 }}
+          >
+            {WINDOWS.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
         }
       />
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: '16px' }}>
@@ -120,8 +120,7 @@ const ToolUsageTab: React.FC = () => {
         ) : (
           <>
             <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-              {number(totalCalls)} calls, about {number(totalTokens)} tokens over{' '}
-              {summary.data?.windowDays} days.
+              {number(totalCalls)} calls, about {number(totalTokens)} tokens over {summary.data?.windowDays} days.
             </Typography>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small">
@@ -137,15 +136,15 @@ const ToolUsageTab: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {usage.map(row => (
+                  {usage.map((row) => (
                     <UsageRow key={row.tool} row={row} worst={worst} />
                   ))}
                 </TableBody>
               </Table>
             </Box>
             <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, display: 'block' }}>
-              Token counts are estimated at four characters each — close enough to tell an
-              expensive tool from a cheap one, not a billing figure.
+              Token counts are estimated at four characters each — close enough to tell an expensive tool from a cheap
+              one, not a billing figure.
             </Typography>
           </>
         )}
@@ -186,9 +185,7 @@ const ToolUsageTab: React.FC = () => {
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{time(call.at)}</TableCell>
                     <TableCell sx={{ fontFamily: 'monospace' }}>
                       {call.tool}
-                      {call.failed && (
-                        <Chip size="small" color="warning" label="failed" sx={{ ml: 1 }} />
-                      )}
+                      {call.failed && <Chip size="small" color="warning" label="failed" sx={{ ml: 1 }} />}
                     </TableCell>
                     <TableCell>
                       {call.actorLabel}

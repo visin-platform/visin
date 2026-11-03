@@ -9,7 +9,7 @@ import ProfileTab from './ProfileTab';
 vi.mock('./SessionsCard', () => ({ default: () => null }));
 vi.mock('../../utils/resizeImage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../utils/resizeImage')>()),
-  resizeToAvatar: vi.fn().mockResolvedValue(new Blob(['x'], { type: 'image/webp' })),
+  resizeToAvatar: vi.fn().mockResolvedValue(new Blob(['x'], { type: 'image/webp' }))
 }));
 
 const renderTab = () =>
@@ -22,10 +22,10 @@ const renderTab = () =>
   );
 
 vi.mock('../../services/authService', () => ({
-  authService: { getProfile: vi.fn() },
+  authService: { getProfile: vi.fn() }
 }));
 vi.mock('../../services/profileService', () => ({
-  profileService: { updateProfile: vi.fn(), changePassword: vi.fn(), uploadPicture: vi.fn(), removePicture: vi.fn() },
+  profileService: { updateProfile: vi.fn(), changePassword: vi.fn(), uploadPicture: vi.fn(), removePicture: vi.fn() }
 }));
 
 import { authService } from '../../services/authService';
@@ -76,7 +76,7 @@ describe('ProfileTab', () => {
     mockedGetProfile.mockResolvedValue(user);
     mockedUpdateProfile.mockResolvedValue({
       success: true,
-      user: { ...user, firstName: 'Grace' },
+      user: { ...user, firstName: 'Grace' }
     });
     renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
@@ -107,13 +107,13 @@ describe('ProfileTab', () => {
 
     await waitFor(() =>
       expect(mockedUpdateProfile).toHaveBeenCalledWith({
-      firstName: 'Grace',
-      lastName: 'Lovelace',
-      bio: '',
-      links: [],
-      profilePublic: false,
-      showActivity: true
-    })
+        firstName: 'Grace',
+        lastName: 'Lovelace',
+        bio: '',
+        links: [],
+        profilePublic: false,
+        showActivity: true
+      })
     );
   });
 
@@ -253,7 +253,7 @@ describe('ProfileTab public profile', () => {
     handle: 'ada',
     bio: 'Analytical engines',
     links: ['https://ada.example.test'],
-    profilePublic: true,
+    profilePublic: true
   };
   const open = async (value: object = profile) => {
     mockedGetProfile.mockResolvedValue(value);
@@ -277,7 +277,10 @@ describe('ProfileTab public profile', () => {
 
   it('saves a new handle, bio and links, each in a box of its own, lowercased and trimmed', async () => {
     await open();
-    mockedUpdateProfile.mockResolvedValue({ success: true, user: { ...profile, handle: 'ada-l', bio: 'Notes' , links: ['https://a.test', 'https://b.test'] } });
+    mockedUpdateProfile.mockResolvedValue({
+      success: true,
+      user: { ...profile, handle: 'ada-l', bio: 'Notes', links: ['https://a.test', 'https://b.test'] }
+    });
 
     fireEvent.change(screen.getByLabelText('Handle'), { target: { value: 'Ada-L' } });
     fireEvent.change(screen.getByLabelText('Bio'), { target: { value: '  Notes ' } });
@@ -296,7 +299,7 @@ describe('ProfileTab public profile', () => {
       bio: 'Notes',
       links: ['https://a.test', 'https://b.test'],
       profilePublic: true,
-      showActivity: true,
+      showActivity: true
     });
     // The form now shows what was saved, so there is nothing left to save.
     expect(screen.getByLabelText('Link 1')).toHaveValue('https://a.test');
@@ -336,10 +339,12 @@ describe('ProfileTab public profile', () => {
     expect(screen.getByText(/no place in search or the People directory/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View your page' })).not.toBeInTheDocument();
     save();
-    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ profilePublic: false })));
+    await waitFor(() =>
+      expect(mockedUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ profilePublic: false }))
+    );
   });
 
-  it('says why a handle was refused, in the server\'s words', async () => {
+  it("says why a handle was refused, in the server's words", async () => {
     await open();
     mockedUpdateProfile.mockRejectedValue(new ApiError(409, 'That handle is taken'));
 
@@ -349,7 +354,7 @@ describe('ProfileTab public profile', () => {
     expect(await screen.findByText('That handle is taken')).toBeInTheDocument();
   });
 
-  it('keeps a failure that is not the person\'s to fix generic', async () => {
+  it("keeps a failure that is not the person's to fix generic", async () => {
     await open();
     mockedUpdateProfile.mockRejectedValue(new ApiError(500, 'stack trace'));
 
@@ -366,7 +371,9 @@ describe('ProfileTab public profile', () => {
     vi.mocked(profileService.uploadPicture).mockResolvedValue(picture);
     vi.mocked(profileService.removePicture).mockResolvedValue();
 
-    fireEvent.change(screen.getByTestId('picture-input'), { target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] } });
+    fireEvent.change(screen.getByTestId('picture-input'), {
+      target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] }
+    });
 
     await waitFor(() => expect(document.querySelector(`img[src="${picture}"]`)).not.toBeNull());
     expect(screen.getByRole('button', { name: /Save Changes/ })).toBeDisabled();
@@ -430,8 +437,12 @@ describe('ProfileTab public profile', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Show my recent activity on my page' }));
     save();
 
-    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ showActivity: false })));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Show my recent activity on my page' })).not.toBeChecked());
+    await waitFor(() =>
+      expect(mockedUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ showActivity: false }))
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Show my recent activity on my page' })).not.toBeChecked()
+    );
   });
 
   it('starts an account that predates handles empty and hidden, with no page to view yet', async () => {

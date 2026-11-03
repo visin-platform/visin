@@ -428,3 +428,38 @@ describe('deleteFinding', () => {
     await expect(deleteFinding('nope', OWNER)).rejects.toThrow(/not found/);
   });
 });
+
+describe('idempotent chat finding saves', () => {
+  const sourceId = 'chat:111111111111111111111111';
+  it('returns the original finding on a repeated chat save', async () => {
+    finding.findOne.mockResolvedValue(row({ sourceId, trainingIds: [] }));
+    const result = await createFinding(
+      { project: 'aaaaaaaaaaaaaaaaaaaaaaaa', title: 'Review', body: 'Measured result', sourceId },
+      author
+    );
+    expect(result.title).toBe('Window ablation');
+    expect(finding.create).not.toHaveBeenCalled();
+  });
+  it('does not resurrect a deleted finding on retry', async () => {
+    finding.findOne.mockResolvedValue(row({ sourceId, deletedAt: new Date() }));
+    await expect(
+      createFinding({ project: 'aaaaaaaaaaaaaaaaaaaaaaaa', title: 'Review', body: 'Result', sourceId }, author)
+    ).rejects.toThrow('removed');
+  });
+  it('deduplicates concurrent creates using the source index', async () => {
+    finding.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(row({ sourceId }));
+    finding.create.mockRejectedValueOnce(Object.assign(new Error('Duplicate source'), { code: 11000 }));
+    const result = await createFinding(
+      { project: 'aaaaaaaaaaaaaaaaaaaaaaaa', title: 'Review', body: 'Result', sourceId },
+      author
+    );
+    expect(result.title).toBe('Window ablation');
+  });
+  it('propagates ordinary storage errors', async () => {
+    finding.findOne.mockResolvedValue(null);
+    finding.create.mockRejectedValueOnce(new Error('Database unavailable'));
+    await expect(
+      createFinding({ project: 'aaaaaaaaaaaaaaaaaaaaaaaa', title: 'Review', body: 'Result', sourceId }, author)
+    ).rejects.toThrow('Database unavailable');
+  });
+});

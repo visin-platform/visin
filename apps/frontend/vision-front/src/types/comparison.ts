@@ -59,6 +59,7 @@ export interface ComparisonEpoch {
 export interface TrainingComparison {
   training: {
     _id: string;
+    projectId?: string;
     name: string;
     description?: string;
     status: Training['status'];

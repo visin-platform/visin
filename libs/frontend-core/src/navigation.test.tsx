@@ -157,4 +157,27 @@ describe('account items', () => {
   it('are absent when account-front is unconfigured', () => {
     expect(createVisinNavigation('vision', {}).accountItems).toEqual([]);
   });
+
+  describe('the analyst settings', () => {
+    it('are left out unless the app says the viewer may change them', () => {
+      expect(createVisinNavigation('account', urls).accountItems.map(item => item.text)).not.toContain('Analyst');
+      expect(
+        createVisinNavigation('account', urls, { analystSettings: false }).accountItems.map(item => item.text)
+      ).not.toContain('Analyst');
+    });
+
+    it('join Account as its last section, a local route where Account is served', () => {
+      const { accountItems } = createVisinNavigation('account', urls, { analystSettings: true });
+
+      expect(accountItems.map(item => item.text)).toEqual([...sections, 'Analyst']);
+      expect(accountItems.at(-1)).toMatchObject({ path: '/account/analyst' });
+    });
+
+    it('link to account-front from another app, and to nowhere without it', () => {
+      expect(createVisinNavigation('vision', urls, { analystSettings: true }).accountItems.at(-1)).toMatchObject({
+        href: 'https://account.test/account/analyst'
+      });
+      expect(createVisinNavigation('vision', {}, { analystSettings: true }).accountItems).toEqual([]);
+    });
+  });
 });

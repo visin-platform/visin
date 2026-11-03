@@ -1,7 +1,7 @@
 import type { AppConfig } from './config/ConfigProvider';
 
 /** The remotes the shell renders, by their module-federation name. */
-export const SHELL_APPS = ['vision', 'label', 'account'] as const;
+export const SHELL_APPS = ['vision', 'label', 'account', 'chat'] as const;
 export type ShellApp = (typeof SHELL_APPS)[number];
 
 export interface ShellLayoutOptions {
@@ -12,7 +12,7 @@ export interface ShellLayoutOptions {
 export interface ShellAppDefinition {
   title: string;
   /** Config key holding the app's base URL, where its remoteEntry.js lives. */
-  urlKey: keyof Pick<AppConfig, 'VISION_FRONT_URL' | 'LABEL_FRONT_URL' | 'ACCOUNT_FRONT_URL'>;
+  urlKey: keyof Pick<AppConfig, 'VISION_FRONT_URL' | 'LABEL_FRONT_URL' | 'ACCOUNT_FRONT_URL' | 'CHAT_FRONT_URL'>;
   /** First path segments the app owns. The three apps' routes never overlap. */
   prefixes: string[];
   layout: (pathname: string) => ShellLayoutOptions;
@@ -62,6 +62,12 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
       WORKBENCH.test(pathname)
         ? { maxContentWidth: FULL_BLEED, showPageHeader: false }
         : { maxContentWidth: LABEL_READING_WIDTH, showPageHeader: true }
+  },
+  chat: {
+    title: 'Chat',
+    urlKey: 'CHAT_FRONT_URL',
+    prefixes: ['/chat'],
+    layout: () => ({ maxContentWidth: 1600, showPageHeader: false })
   },
   account: {
     title: 'Account',

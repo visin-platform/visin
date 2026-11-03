@@ -1,15 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  CircularProgress,
-  Grid,
-  Paper,
-  Fade
-} from '@mui/material';
+import { Box, Typography, TextField, Button, Alert, CircularProgress, Grid, Paper, Fade } from '@mui/material';
 import { ApiError } from '@visin/frontend-core';
 import { Person, Save } from '@mui/icons-material';
 import { profileService } from '../../services/profileService';
@@ -99,7 +89,9 @@ const ProfileTab: React.FC = () => {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         // Only what changed: sending an unchanged handle would still ask the server to claim it.
-        ...(publicProfile.handle !== (user.handle ?? '') && publicProfile.handle ? { handle: publicProfile.handle } : {}),
+        ...(publicProfile.handle !== (user.handle ?? '') && publicProfile.handle
+          ? { handle: publicProfile.handle }
+          : {}),
         bio: publicProfile.bio.trim(),
         links,
         profilePublic: publicProfile.profilePublic,
@@ -142,12 +134,23 @@ const ProfileTab: React.FC = () => {
 
   const SectionHeader = ({ title, subtitle }: { title: string; subtitle: string }) => (
     <Box sx={{ mb: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{
-        fontWeight: 600
-      }}>{title}</Typography>
-      <Typography variant="body2" sx={{
-        color: "text.secondary"
-      }}>{subtitle}</Typography>
+      <Typography
+        variant="h6"
+        gutterBottom
+        sx={{
+          fontWeight: 600
+        }}
+      >
+        {title}
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary'
+        }}
+      >
+        {subtitle}
+      </Typography>
     </Box>
   );
 
@@ -155,11 +158,7 @@ const ProfileTab: React.FC = () => {
     <Fade in={!loading}>
       <Box>
         {message && (
-          <Alert 
-            severity={message.type} 
-            sx={{ mb: 3 }}
-            onClose={() => setMessage(null)}
-          >
+          <Alert severity={message.type} sx={{ mb: 3 }} onClose={() => setMessage(null)}>
             {message.text}
           </Alert>
         )}
@@ -175,7 +174,9 @@ const ProfileTab: React.FC = () => {
                   upload={profileService.uploadPicture}
                   remove={profileService.removePicture}
                   initial={(firstName || email).charAt(0).toUpperCase() || <Person sx={{ fontSize: 40 }} />}
-                  onChange={(picture) => updateCachedProfile((current) => (current ? { ...current, picture } : current))}
+                  onChange={(picture) =>
+                    updateCachedProfile((current) => (current ? { ...current, picture } : current))
+                  }
                 />
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="h6" noWrap sx={{ lineHeight: 1.3 }}>
@@ -192,9 +193,13 @@ const ProfileTab: React.FC = () => {
                 subtitle="Your name as teammates see it in groups and labeling jobs."
               />
 
-              <Grid container spacing={4} sx={{
-                alignItems: "center"
-              }}>
+              <Grid
+                container
+                spacing={4}
+                sx={{
+                  alignItems: 'center'
+                }}
+              >
                 <Grid size={12}>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -256,28 +261,25 @@ const ProfileTab: React.FC = () => {
           <Grid size={12}>
             <SessionsCard />
           </Grid>
-
         </Grid>
 
         {/* Action Bar */}
-        <Box sx={{ 
-          mt: 6, 
-          pt: 4, 
-          borderTop: '1px solid', 
-          borderColor: 'divider',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 2
-        }}>
-          <Button 
-            onClick={handleCancel}
-            disabled={saving || !hasChanges}
-            sx={{ color: 'text.secondary' }}
-          >
+        <Box
+          sx={{
+            mt: 6,
+            pt: 4,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 2
+          }}
+        >
+          <Button onClick={handleCancel} disabled={saving || !hasChanges} sx={{ color: 'text.secondary' }}>
             Cancel
           </Button>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={handleSave}
             disabled={saving || !hasChanges}
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <Save />}

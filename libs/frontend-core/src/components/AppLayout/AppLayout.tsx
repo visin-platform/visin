@@ -55,7 +55,9 @@ export function AppLayout({
   recent = [],
   onSignup,
   createItems = [],
-  siteLinks = []
+  siteLinks = [],
+  headerActions: appActions,
+  sidePanel
 }: AppLayoutProps) {
   const { pathname } = useLocation();
   const theme = useTheme();
@@ -325,6 +327,7 @@ export function AppLayout({
     <Box sx={{ display: 'flex', alignItems: 'center', gap: mobile ? 0.5 : 1.5, flexShrink: 0, ml: 'auto' }}>
       {searchTrigger}
       {siteLinkButtons}
+      {appActions}
       {themeButton}
       {!authPending && visitorActions}
       {!authPending && createMenu}
@@ -489,6 +492,13 @@ export function AppLayout({
           </Box>
         </Box>
       </Box>
+
+      {!mobile && sidePanel && (
+        // Beside the bar and the page, not under the bar: as tall as the window, and still there when the page scrolls.
+        <Box sx={{ position: 'sticky', top: 0, alignSelf: 'flex-start', height: '100vh', display: 'flex', flexShrink: 0 }}>
+          {sidePanel}
+        </Box>
+      )}
 
       {mobile && (
         <Box

@@ -7,6 +7,9 @@ vi.mock('./contexts/AuthContext', () => ({
 vi.mock('./components/ShellLayout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
 }));
+vi.mock('./components/chat/ChatDock', () => ({
+  ChatProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 vi.mock('./routes', () => ({ default: () => <div>routes</div> }));
 
 import App from './App';

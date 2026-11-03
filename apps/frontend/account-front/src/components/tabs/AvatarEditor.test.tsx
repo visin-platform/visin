@@ -5,7 +5,7 @@ import AvatarEditor from './AvatarEditor';
 
 vi.mock('../../utils/resizeImage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../utils/resizeImage')>()),
-  resizeToAvatar: vi.fn(),
+  resizeToAvatar: vi.fn()
 }));
 
 import { AvatarError, resizeToAvatar } from '../../utils/resizeImage';
@@ -21,7 +21,9 @@ const renderEditor = (picture?: string) => {
   return onChange;
 };
 const choose = (name = 'me.png') =>
-  fireEvent.change(screen.getByTestId('picture-input'), { target: { files: [new File(['x'], name, { type: 'image/png' })] } });
+  fireEvent.change(screen.getByTestId('picture-input'), {
+    target: { files: [new File(['x'], name, { type: 'image/png' })] }
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();

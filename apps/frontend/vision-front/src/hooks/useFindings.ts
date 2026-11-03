@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { findingService } from '../services/findingService';
 import {
@@ -14,6 +15,12 @@ export const findingKeys = {
 const PAGE_SIZE = 50;
 
 export const useFindings = (params: { project?: string; training?: string }) => {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const refresh = () => { void queryClient.invalidateQueries({ queryKey: ['findings'] }); };
+    window.addEventListener('visin:finding-saved', refresh);
+    return () => window.removeEventListener('visin:finding-saved', refresh);
+  }, [queryClient]);
   const query = useInfiniteQuery({
     queryKey: [...findingKeys.list(params.project, params.training), 'pages'],
     initialPageParam: undefined as string | undefined,

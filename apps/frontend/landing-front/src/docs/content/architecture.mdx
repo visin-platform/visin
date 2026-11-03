@@ -79,3 +79,13 @@ queue, so a large import survives a restart and never holds up a request.
   alt="Thirteen steps: the browser gets a signed URL from the dataset service and uploads the zip to the file service in chunks; the dataset service queues a scan; the person maps the contents; an import worker reads the zip, stores each image in the file service and the items in MongoDB."
   caption="Uploading and importing a dataset"
 />
+
+## Research chat
+
+Chat runs as a full page or a resizable panel inside the shell. Private assistant threads analyze a selected project; direct messages, invited rooms and group/project discussions support human collaboration. Conversation membership never grants access to a project. Shared assistant processing remains disabled pending audience-aware authorization.
+
+<Diagram
+  name="chat.svg"
+  alt="Chat front in the shell or full page, conversation membership checks, durable analyst jobs in MongoDB, read-only MCP tools and reviewed finding saves."
+  caption="Research chat and private training analysis"
+/>

@@ -51,11 +51,11 @@ const GroupsTab: React.FC = () => {
     updateMemberRole,
     removeMember
   ];
-  const busy = mutations.some(mutation => mutation.isPending);
+  const busy = mutations.some((mutation) => mutation.isPending);
   // group-service returns a specific message for each rejection (last owner,
   // duplicate member, insufficient role) — surface it rather than a generic
   // "something went wrong".
-  const mutationError = mutations.find(mutation => mutation.error)?.error;
+  const mutationError = mutations.find((mutation) => mutation.error)?.error;
 
   const confirmCopy = (pending: PendingConfirm) => {
     switch (pending.kind) {
@@ -76,7 +76,7 @@ const GroupsTab: React.FC = () => {
           title:
             pending.userId === user?.id
               ? `Leave ${pending.group.name}?`
-              : `Remove ${pending.group.members.find(member => member.userId === pending.userId)?.email || pending.userId}?`,
+              : `Remove ${pending.group.members.find((member) => member.userId === pending.userId)?.email || pending.userId}?`,
           message: `They lose access to everything shared with ${pending.group.name}.`,
           confirmLabel: 'Remove'
         };
@@ -118,17 +118,17 @@ const GroupsTab: React.FC = () => {
             Could not load your groups. {(groups.error as Error).message}
           </Alert>
         ) : groups.data && groups.data.length > 0 ? (
-          groups.data.map(group => (
+          groups.data.map((group) => (
             <GroupCard
               key={group._id}
               group={group}
               currentUserId={user?.id}
               busy={busy}
               onRename={(groupId, name) => renameGroup.mutate({ groupId, name })}
-              onDelete={target => setConfirm({ kind: 'deleteGroup', group: target })}
+              onDelete={(target) => setConfirm({ kind: 'deleteGroup', group: target })}
               onChangeRole={(groupId, userId, role) => updateMemberRole.mutate({ groupId, userId, role })}
               onRemoveMember={(groupId, userId) => {
-                const target = groups.data.find(candidate => candidate._id === groupId);
+                const target = groups.data.find((candidate) => candidate._id === groupId);
                 if (target) setConfirm({ kind: 'removeMember', group: target, userId });
               }}
             />
@@ -150,8 +150,8 @@ const GroupsTab: React.FC = () => {
           currentUserId={user?.id}
           expanded={trashOpen}
           onToggle={setTrashOpen}
-          onRestore={groupId => restoreGroup.mutate(groupId)}
-          onDeleteForever={group => setConfirm({ kind: 'deleteForever', group })}
+          onRestore={(groupId) => restoreGroup.mutate(groupId)}
+          onDeleteForever={(group) => setConfirm({ kind: 'deleteForever', group })}
         />
       </Box>
 
@@ -159,7 +159,7 @@ const GroupsTab: React.FC = () => {
         open={createOpen}
         busy={createGroup.isPending}
         onClose={() => setCreateOpen(false)}
-        onCreate={name => createGroup.mutate(name, { onSuccess: () => setCreateOpen(false) })}
+        onCreate={(name) => createGroup.mutate(name, { onSuccess: () => setCreateOpen(false) })}
       />
 
       {confirm && (

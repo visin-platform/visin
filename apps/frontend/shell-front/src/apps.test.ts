@@ -23,7 +23,7 @@ describe('appForPath', () => {
     ['/jobs/j1/work', 'label'],
     ['/account', 'account'],
     ['/account/api-keys', 'account'],
-    ['/invite', 'account'],
+    ['/invite', 'account']
   ])('sends %s to %s', (path, app) => {
     expect(appForPath(path)).toBe(app);
   });
@@ -59,4 +59,9 @@ describe('app layouts', () => {
   it('frames Account at its narrow width with the shell header', () => {
     expect(APPS.account.layout('/account/profile')).toEqual({ maxContentWidth: 800, showPageHeader: true });
   });
+});
+
+it('routes full chat inside the shell and gives it room for conversations', () => {
+  expect(appForPath('/chat')).toBe('chat');
+  expect(APPS.chat.layout('/chat')).toEqual({ maxContentWidth: 1600, showPageHeader: false });
 });

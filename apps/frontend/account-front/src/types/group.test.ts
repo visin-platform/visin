@@ -69,7 +69,10 @@ describe('isLastOwner', () => {
   it('is false once a second owner exists', () => {
     const twoOwners: Group = {
       ...group,
-      members: [...group.members, { userId: 'owner2-ID', email: 'owner2@x.com', role: 'owner', joinedAt: '2026-01-04T00:00:00.000Z' }]
+      members: [
+        ...group.members,
+        { userId: 'owner2-ID', email: 'owner2@x.com', role: 'owner', joinedAt: '2026-01-04T00:00:00.000Z' }
+      ]
     };
 
     expect(isLastOwner(twoOwners, 'owner-ID')).toBe(false);

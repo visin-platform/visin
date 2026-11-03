@@ -84,7 +84,12 @@ describe('list states', () => {
 
   it('marks a key limited to a project, and only that one', async () => {
     mockedService.list.mockResolvedValue([
-      makeKey({ id: 'k2', name: 'nightly training', scopes: ['vision:write'], project: { id: 'p1', name: 'Road scenes' } }),
+      makeKey({
+        id: 'k2',
+        name: 'nightly training',
+        scopes: ['vision:write'],
+        project: { id: 'p1', name: 'Road scenes' }
+      }),
       makeKey()
     ]);
     renderTab();
@@ -215,9 +220,7 @@ describe('creating a key', () => {
     fireEvent.click(screen.getByRole('button', { name: /create key/i }));
 
     await waitFor(() =>
-      expect(mockedService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ expiresInDays: 90 })
-      )
+      expect(mockedService.create).toHaveBeenCalledWith(expect.objectContaining({ expiresInDays: 90 }))
     );
   });
 

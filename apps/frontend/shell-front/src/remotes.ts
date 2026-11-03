@@ -111,3 +111,17 @@ export function remoteComponent(app: ShellApp): LazyExoticComponent<ComponentTyp
 export function forgetRemote(app: ShellApp): void {
   components.delete(app);
 }
+
+let chatPanel: LazyExoticComponent<ComponentType> | undefined;
+export function remoteChatPanel(): LazyExoticComponent<ComponentType> {
+  chatPanel ??= lazy(async () => {
+    ensureRemotesRegistered();
+    const module = await loadRemote<{ default: ComponentType }>('chat/Panel');
+    if (!module) throw new Error('Chat did not provide its panel.');
+    return module;
+  });
+  return chatPanel;
+}
+export function forgetChatPanel(): void {
+  chatPanel = undefined;
+}

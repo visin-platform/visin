@@ -120,6 +120,7 @@ export async function compareTrainings(userId: string | undefined, trainingIds: 
     return {
       training: {
         _id: training._id,
+        projectId: training.projectId,
         name: training.name,
         description: training.description,
         status: training.status,

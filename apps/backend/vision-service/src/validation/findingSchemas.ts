@@ -8,6 +8,10 @@ export const listFindingsQuerySchema = z.object({
 });
 
 export const createFindingBodySchema = z.object({
+  sourceId: z
+    .string()
+    .regex(/^chat:[a-f\d]{24}$/i)
+    .optional(),
   project: z.string().min(1, 'A project is required'),
   training: z.string().optional(),
   title: z.string().trim().min(1, 'A title is required').max(200),
@@ -33,7 +37,12 @@ export const exportFindingQuerySchema = z.object({
     .string()
     .max(500)
     .optional()
-    .transform((value) => value?.split(',').map((metric) => metric.trim()).filter(Boolean))
+    .transform((value) =>
+      value
+        ?.split(',')
+        .map((metric) => metric.trim())
+        .filter(Boolean)
+    )
 });
 
 export type ListFindingsQuery = z.infer<typeof listFindingsQuerySchema>;

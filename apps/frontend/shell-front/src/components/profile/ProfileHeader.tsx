@@ -4,6 +4,7 @@ import { Avatar, Box, Button, Link, Typography } from '@mui/material';
 import { Edit } from '@mui/icons-material';
 import { panelSx } from '../home/panel';
 import { describeLink } from './socialLinks';
+import type { ReactNode } from 'react';
 
 interface ProfileHeaderProps {
   name: string;
@@ -16,10 +17,22 @@ interface ProfileHeaderProps {
   shareUrl?: string;
   /** A way to edit it, shown to whoever owns it. */
   edit?: { to: string };
+  /** What a visitor can do here, first among the buttons: Message. */
+  actions?: ReactNode;
 }
 
 /** Who a public page is about, as its owner wrote it. A person's, and a group's, look the same. */
-export function ProfileHeader({ name, handle, picture, bio, links = [], meta, edit, shareUrl }: ProfileHeaderProps) {
+export function ProfileHeader({
+  name,
+  handle,
+  picture,
+  bio,
+  links = [],
+  meta,
+  edit,
+  shareUrl,
+  actions
+}: ProfileHeaderProps) {
   return (
     <Box
       sx={{
@@ -86,6 +99,7 @@ export function ProfileHeader({ name, handle, picture, bio, links = [], meta, ed
           {meta}
         </Typography>
       </Box>
+      {actions}
       <ShareButton url={shareUrl} />
       {edit && (
         <Button component={RouterLink} to={edit.to} variant="outlined" size="small" startIcon={<Edit />}>

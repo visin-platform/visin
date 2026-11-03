@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 660" width="800" height="660" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Visin: research chat</title>
+  <desc id="desc">Chat-front runs as a full page or shell side panel. Chat-service stores human conversations and durable analyst jobs in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-brand" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="800" height="660" fill="#ffffff"/>
+  <g><!-- web app: Chat front -->
+    <rect x="20" y="20" width="360" height="90" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M20,36 h360" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="30" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="38" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="46" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="32" y="56" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Chat front</text>
+    <text x="32" y="74" font-size="12" fill="#475569" text-anchor="start">Full page and shell side panel</text>
+    <text x="32" y="89" font-size="12" fill="#475569" text-anchor="start">Private assistant, DMs, rooms and channels</text>
+    
+  </g>
+  <g><!-- web app: Vision front -->
+    <rect x="420" y="20" width="360" height="90" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M420,36 h360" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="430" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="438" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="446" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="432" y="56" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Vision front</text>
+    <text x="432" y="74" font-size="12" fill="#475569" text-anchor="start">Analyze this run / comparison</text>
+    <text x="432" y="89" font-size="12" fill="#475569" text-anchor="start">Project discussion; existing findings</text>
+    
+  </g>
+  <g><path d="M600,110 L200,110" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="332.8" y="125" width="134.4" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="400.0" y="140" font-size="11.5" fill="#0f172a" text-anchor="middle">explicit page context</text></g>
+  <g><!-- service: Chat service -->
+    <rect x="20" y="190" width="360" height="110" rx="10" fill="#2563eb"/>
+    <text x="32" y="214" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Chat service</text>
+    <text x="32" y="232" font-size="12" fill="#dbeafe" text-anchor="start">Session auth, invitation / history boundaries</text>
+    <text x="32" y="247" font-size="12" fill="#dbeafe" text-anchor="start">REST + SSE replay; durable analyst worker</text>
+    <text x="32" y="262" font-size="12" fill="#dbeafe" text-anchor="start">Short-lived, project-limited credentials</text>
+  </g>
+  <g><!-- data store: MongoDB -->
+    <path d="M420,198 v94 a180,8 0 0 0 360,0 v-94" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="600" cy="198" rx="180" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="432" y="226" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">MongoDB</text>
+    <text x="432" y="244" font-size="12" fill="#475569" text-anchor="start">Conversations, messages, analyst jobs</text>
+    <text x="432" y="259" font-size="12" fill="#475569" text-anchor="start">Token reservations and blocks</text>
+  </g>
+  <g><path d="M200,110 L200,190" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="106.4" y="145" width="147.1" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="180.0" y="160" font-size="11.5" fill="#0f172a" text-anchor="middle">HTTPS + session cookie</text></g>
+  <g><path d="M380,245 L420,245" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><!-- service: Auth + Group -->
+    <rect x="20" y="400" width="230" height="95" rx="10" fill="#2563eb"/>
+    <text x="32" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Auth + Group</text>
+    <text x="32" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Current sessions and memberships</text>
+    <text x="32" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Public handle lookup</text>
+  </g>
+  <g><!-- service: MCP + Vision -->
+    <rect x="285" y="400" width="230" height="95" rx="10" fill="#2563eb"/>
+    <text x="297" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">MCP + Vision</text>
+    <text x="297" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Read-only project tools</text>
+    <text x="297" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Reviewed, idempotent finding saves</text>
+  </g>
+  <g><!-- external: Assistant provider -->
+    <rect x="550" y="400" width="230" height="95" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text x="562" y="426" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Assistant provider</text>
+    <text x="562" y="444" font-size="12" fill="#475569" text-anchor="start">Private analyst requests only</text>
+    <text x="562" y="459" font-size="12" fill="#475569" text-anchor="start">Explicit opt-in deployment setting</text>
+  </g>
+  <g><path d="M120,300 L120,400" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><path d="M260,300 L400,400" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><path d="M350,300 L665,400" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+<text x="20" y="550" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Conversation access does not grant project access</text>
+    <text x="20" y="568" font-size="12" fill="#475569" text-anchor="start">Human messaging works without a provider. Shared AI remains disabled pending audience-aware access checks.</text>
+    <text x="20" y="583" font-size="12" fill="#475569" text-anchor="start">Durable sequence IDs replay messages; polling revalidates access and falls back when SSE is unavailable.</text>
+</svg>

@@ -51,22 +51,29 @@ const SessionsCard: React.FC = () => {
   const revokeOthers = useRevokeOtherSessions();
 
   const list = sessions.data ?? [];
-  const others = list.filter(session => !session.current);
+  const others = list.filter((session) => !session.current);
   const busy = revoke.isPending || revokeOthers.isPending;
   const error = revoke.error ?? revokeOthers.error;
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
       <Box
-        sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}
+        sx={{
+          mb: 3,
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 2
+        }}
       >
         <Box>
           <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
             Where you're signed in
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Signing a device out ends its session straight away. A device you have not used for 30 days is
-            signed out on its own.
+            Signing a device out ends its session straight away. A device you have not used for 30 days is signed out on
+            its own.
           </Typography>
         </Box>
         {others.length > 0 && (
@@ -92,7 +99,7 @@ const SessionsCard: React.FC = () => {
         </Alert>
       ) : (
         <Stack spacing={1.5}>
-          {list.map(session => {
+          {list.map((session) => {
             const method = METHOD_LABELS[session.method];
             return (
               <Box

@@ -16,7 +16,8 @@ interface PublicProfileCardProps {
  * beside what the account owns. Saved with the rest of the profile.
  */
 const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHandle, onChange }) => {
-  const set = <K extends keyof PublicProfileValues>(key: K, value: PublicProfileValues[K]) => onChange({ ...values, [key]: value });
+  const set = <K extends keyof PublicProfileValues>(key: K, value: PublicProfileValues[K]) =>
+    onChange({ ...values, [key]: value });
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
@@ -25,9 +26,9 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
           Public profile
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Off until you turn it on. Shown, anyone can see your name, handle and what you write here, find you in
-          search and the People directory, and see your name beside the projects and datasets you make public. Your
-          email is never shown.
+          Off until you turn it on. Shown, anyone can see your name, handle and what you write here, find you in search
+          and the People directory, and see your name beside the projects and datasets you make public. Your email is
+          never shown.
           {savedHandle && values.profilePublic && (
             <>
               {' '}
@@ -66,7 +67,9 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
           examples={['github:your-name', 'linkedin:your-name', 'orcid:0000-0002-1825-0097', 'your-site.example.com']}
         />
         <FormControlLabel
-          control={<Switch checked={values.profilePublic} onChange={(event) => set('profilePublic', event.target.checked)} />}
+          control={
+            <Switch checked={values.profilePublic} onChange={(event) => set('profilePublic', event.target.checked)} />
+          }
           label="Show my public page"
         />
         {!values.profilePublic && (
@@ -76,7 +79,9 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
           </Typography>
         )}
         <FormControlLabel
-          control={<Switch checked={values.showActivity} onChange={(event) => set('showActivity', event.target.checked)} />}
+          control={
+            <Switch checked={values.showActivity} onChange={(event) => set('showActivity', event.target.checked)} />
+          }
           label="Show my recent activity on my page"
         />
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>

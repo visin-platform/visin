@@ -5,6 +5,7 @@ import GroupsTab from '../components/tabs/GroupsTab';
 import ApiKeysTab from '../components/tabs/ApiKeysTab';
 import ConnectionsTab from '../components/tabs/ConnectionsTab';
 import ToolUsageTab from '../components/tabs/ToolUsageTab';
+import AnalystTab from '../components/tabs/AnalystTab';
 
 const AccountPage: React.FC = () => {
   return (
@@ -15,6 +16,7 @@ const AccountPage: React.FC = () => {
       <Route path="api-keys" element={<ApiKeysTab />} />
       <Route path="connections" element={<ConnectionsTab />} />
       <Route path="activity" element={<ToolUsageTab />} />
+      <Route path="analyst" element={<AnalystTab />} />
     </Routes>
   );
 };

@@ -4,10 +4,10 @@ import { render, screen } from '@testing-library/react';
 
 vi.mock('@module-federation/runtime', () => ({
   loadRemote: vi.fn(),
-  registerRemotes: vi.fn(),
+  registerRemotes: vi.fn()
 }));
 vi.mock('./config/ConfigProvider', () => ({
-  getGlobalConfig: vi.fn(),
+  getGlobalConfig: vi.fn()
 }));
 
 import { loadRemote, registerRemotes } from '@module-federation/runtime';
@@ -38,7 +38,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedConfig.mockReturnValue({
     VISION_FRONT_URL: 'https://vision.test/',
-    LABEL_FRONT_URL: 'https://label.test',
+    LABEL_FRONT_URL: 'https://label.test'
   });
   mockedLoad.mockResolvedValue({ default: () => <div>vision pages</div> });
 });
@@ -64,7 +64,7 @@ describe('remoteComponent', () => {
     expect(mockedRegister).toHaveBeenCalledTimes(1);
     expect(mockedRegister).toHaveBeenCalledWith([
       { name: 'vision', entry: 'https://vision.test/remoteEntry.js', type: 'module' },
-      { name: 'label', entry: 'https://label.test/remoteEntry.js', type: 'module' },
+      { name: 'label', entry: 'https://label.test/remoteEntry.js', type: 'module' }
     ]);
   });
 
@@ -124,7 +124,7 @@ describe('VisionUploads', () => {
 
   it('stays away until Vision has loaded, then shows Vision’s upload corner on any page', async () => {
     mockedLoad.mockImplementation(async (id: string) => ({
-      default: () => <div>{id === 'vision/Uploads' ? 'upload corner' : 'vision pages'}</div>,
+      default: () => <div>{id === 'vision/Uploads' ? 'upload corner' : 'vision pages'}</div>
     }));
     const { VisionUploads, remoteComponent } = await freshUploads();
 
@@ -141,13 +141,38 @@ describe('VisionUploads', () => {
 
   it('renders nothing, and keeps the page, when the corner cannot load', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    mockedLoad.mockImplementation(async (id: string) => (id === 'vision/Uploads' ? null : { default: () => <div>vision pages</div> }));
+    mockedLoad.mockImplementation(async (id: string) =>
+      id === 'vision/Uploads' ? null : { default: () => <div>vision pages</div> }
+    );
     const { VisionUploads, remoteComponent } = await freshUploads();
 
     renderRemote(remoteComponent('vision'));
     await screen.findByText('vision pages');
     const { container } = render(<VisionUploads />);
-    await vi.waitFor(() => expect(console.error).toHaveBeenCalledWith('Vision upload panel failed to load', expect.any(Error)));
+    await vi.waitFor(() =>
+      expect(console.error).toHaveBeenCalledWith('Vision upload panel failed to load', expect.any(Error))
+    );
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('chat panel remote', () => {
+  it('loads and caches the panel export independently from the full page', async () => {
+    const { remoteChatPanel, forgetChatPanel } = await freshRemotes();
+    const Panel = remoteChatPanel();
+    expect(remoteChatPanel()).toBe(Panel);
+    renderRemote(Panel);
+    await screen.findByText('vision pages');
+    expect(mockedLoad).toHaveBeenCalledWith('chat/Panel');
+    forgetChatPanel();
+    expect(remoteChatPanel()).not.toBe(Panel);
+  });
+  it('reports a missing panel export', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockedLoad.mockResolvedValue(null);
+    const { remoteChatPanel } = await freshRemotes();
+    renderRemote(remoteChatPanel());
+    expect(await screen.findByText(/Chat did not provide its panel/)).toBeInTheDocument();
+    log.mockRestore();
   });
 });

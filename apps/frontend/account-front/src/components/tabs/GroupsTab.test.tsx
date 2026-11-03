@@ -23,7 +23,9 @@ const mockedService = vi.hoisted(() => ({
 
 vi.mock('../../services/groupService', () => ({ groupService: mockedService }));
 
-const auth = vi.hoisted(() => ({ user: { id: 'owner-ID', email: 'owner@x.com' } as { id: string; email: string } | null }));
+const auth = vi.hoisted(() => ({
+  user: { id: 'owner-ID', email: 'owner@x.com' } as { id: string; email: string } | null
+}));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }));
 
 const makeGroup = (overrides: Partial<Group> = {}): Group => ({
@@ -95,7 +97,9 @@ describe('GroupsTab list states', () => {
 
   it('singularises the member count', async () => {
     mockedService.listMine.mockResolvedValue([
-      makeGroup({ members: [{ userId: 'owner-ID', email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' }] })
+      makeGroup({
+        members: [{ userId: 'owner-ID', email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' }]
+      })
     ]);
     renderTab();
 
@@ -161,9 +165,7 @@ describe('GroupsTab group actions', () => {
     fireEvent.change(screen.getByLabelText('Group name'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByLabelText('Save name'));
 
-    await waitFor(() =>
-      expect(mockedService.rename).toHaveBeenCalledWith('g1', 'Renamed')
-    );
+    await waitFor(() => expect(mockedService.rename).toHaveBeenCalledWith('g1', 'Renamed'));
   });
 
   it("lets the owner set the group's public page, and refreshes the list after", async () => {
@@ -175,7 +177,11 @@ describe('GroupsTab group actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save public page' }));
 
     await waitFor(() =>
-      expect(mockedService.updatePage).toHaveBeenCalledWith('g1', { handle: 'team', description: '', profilePublic: true })
+      expect(mockedService.updatePage).toHaveBeenCalledWith('g1', {
+        handle: 'team',
+        description: '',
+        profilePublic: true
+      })
     );
     await waitFor(() => expect(mockedService.listMine).toHaveBeenCalledTimes(2));
   });
@@ -240,7 +246,9 @@ describe('GroupsTab member management', () => {
     await openGroup();
     fireEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
     await waitFor(() => expect(mockedService.createInvitation).toHaveBeenCalledWith('g1', 'member'));
-    expect(await screen.findByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite#${'a'.repeat(64)}`);
+    expect(await screen.findByLabelText('Invitation link')).toHaveValue(
+      `${window.location.origin}/invite#${'a'.repeat(64)}`
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Revoke pending invites' }));
     await waitFor(() => expect(mockedService.revokeInvitations).toHaveBeenCalledWith('g1'));
     await waitFor(() => expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument());
@@ -261,9 +269,7 @@ describe('GroupsTab member management', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Role for member@x.com' }));
     fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'admin' }));
 
-    await waitFor(() =>
-      expect(mockedService.updateMemberRole).toHaveBeenCalledWith('g1', 'member-ID', 'admin')
-    );
+    await waitFor(() => expect(mockedService.updateMemberRole).toHaveBeenCalledWith('g1', 'member-ID', 'admin'));
   });
 
   it('removes a member after confirmation', async () => {
@@ -273,9 +279,7 @@ describe('GroupsTab member management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove member@x.com' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() =>
-      expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID')
-    );
+    await waitFor(() => expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID'));
   });
 
   it('will not let the last owner be demoted or removed', async () => {
@@ -350,9 +354,7 @@ describe('GroupsTab leaving a group', () => {
     expect(screen.getByText('Leave Team?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() =>
-      expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID')
-    );
+    await waitFor(() => expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID'));
   });
 });
 
@@ -428,10 +430,14 @@ describe('GroupsTab error reporting', () => {
 });
 
 it('manages ID-only memberships while displaying their account IDs', async () => {
-  mockedService.listMine.mockResolvedValue([makeGroup({ members: [
-    { userId: 'owner-ID', role: 'owner', joinedAt: '2026-01-01' },
-    { userId: 'member-ID', role: 'member', joinedAt: '2026-01-01' }
-  ] })]);
+  mockedService.listMine.mockResolvedValue([
+    makeGroup({
+      members: [
+        { userId: 'owner-ID', role: 'owner', joinedAt: '2026-01-01' },
+        { userId: 'member-ID', role: 'member', joinedAt: '2026-01-01' }
+      ]
+    })
+  ]);
   renderTab();
   await openGroup();
   expect(screen.getByText('member-ID')).toBeInTheDocument();

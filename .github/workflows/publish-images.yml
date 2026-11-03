@@ -41,12 +41,14 @@ on:
           - auth-service
           - dataset-service
           - file-service
+          - chat-service
           - group-service
           - label-service
           - mcp-service
           - vision-service
           - landing-front
           - auth-front
+          - chat-front
           - account-front
           - label-front
           - vision-front
@@ -93,7 +95,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           IMAGE_BASE: ${{ env.REGISTRY }}/${{ github.repository_owner }}
         run: |
-          ALL="auth-service dataset-service file-service group-service label-service mcp-service vision-service \
+          ALL="chat-service chat-front auth-service dataset-service file-service group-service label-service mcp-service vision-service \
                landing-front auth-front account-front label-front vision-front shell-front"
           RETAG=""
           PREVIOUS=""

@@ -11,12 +11,15 @@ export interface AppConfig {
   VISION_FRONT_URL?: string;
   LABEL_FRONT_URL?: string;
   ACCOUNT_FRONT_URL?: string;
+  CHAT_FRONT_URL?: string;
   /** The services the home and Explore pages read. Unset, the parts they feed are left out. */
   VISION_API_URL?: string;
   DATASET_API_URL?: string;
   LABEL_SERVICE_URL?: string;
   /** Invitations waiting for the viewer; unset, the home page leaves them out. */
   GROUP_SERVICE_URL?: string;
+  /** chat-service; asked only whether to offer Account's Analyst section. Unset, the section is never offered. */
+  CHAT_SERVICE_URL?: string;
   /**
    * The landing site, where Docs and About live. Unset, a visitor's top bar leaves
    * those links out rather than pointing somewhere else.
@@ -33,10 +36,12 @@ function createDevConfig(): AppConfig {
     VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL || 'http://localhost:3012',
     LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL || 'http://localhost:3008',
     ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007',
+    CHAT_FRONT_URL: import.meta.env.VITE_CHAT_FRONT_URL || 'http://localhost:3014',
     VISION_API_URL: import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010',
     DATASET_API_URL: import.meta.env.VITE_DATASET_API_URL || 'http://localhost:5010',
     LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL || 'http://localhost:5008',
     GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL || 'http://localhost:5006',
+    CHAT_SERVICE_URL: import.meta.env.VITE_CHAT_SERVICE_URL || 'http://localhost:5012',
     LANDING_FRONT_URL: import.meta.env.VITE_LANDING_FRONT_URL || 'http://localhost:3000'
   };
 }
@@ -45,7 +50,5 @@ export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = cre
   createDevConfig,
   isDev: import.meta.env.DEV,
   // The one Visin theme and light/dark switch, so crossing apps inside the shell never changes the look.
-  renderChildren: (children) => (
-    <VisinThemeProvider>{children}</VisinThemeProvider>
-  )
+  renderChildren: (children) => <VisinThemeProvider>{children}</VisinThemeProvider>
 });

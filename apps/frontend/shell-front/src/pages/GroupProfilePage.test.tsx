@@ -6,6 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const { config } = vi.hoisted(() => ({ config: {} as Record<string, string | undefined> }));
 
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
+const dock = vi.hoisted(() => ({ available: false, openWith: vi.fn() }));
+vi.mock('../components/chat/chatDock', () => ({ useChatDock: () => dock }));
+const myGroups = vi.hoisted(() => vi.fn(async () => [] as { id: string; name: string }[]));
+vi.mock('../services/homeApi', () => ({ homeApi: { myGroups } }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
   exploreApi: { group: vi.fn(), projects: vi.fn(), publicDatasets: vi.fn(), activity: vi.fn() },
@@ -144,5 +148,25 @@ describe('GroupProfilePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Road lab' })).toBeInTheDocument();
+  });
+});
+
+describe('messaging the group', () => {
+  beforeEach(() => {
+    dock.available = true;
+  });
+
+  it("opens the group's channel for a member", async () => {
+    myGroups.mockResolvedValue([{ id: 'g7', name: 'Road lab' }]);
+    renderAt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Message group' }));
+    expect(dock.openWith).toHaveBeenCalledWith({ kind: 'group', groupId: 'g7', title: 'Road lab' });
+  });
+
+  it('offers nothing to someone outside the group', async () => {
+    myGroups.mockResolvedValue([{ id: 'other', name: 'Elsewhere' }]);
+    renderAt();
+    await screen.findByRole('heading', { level: 1, name: 'Road lab' });
+    expect(screen.queryByRole('button', { name: 'Message group' })).toBeNull();
   });
 });

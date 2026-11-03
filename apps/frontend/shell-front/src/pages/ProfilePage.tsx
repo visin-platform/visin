@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
+import { ChatBubbleOutlined } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useTrackVisit } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +8,7 @@ import { usePageMeta } from '../hooks/usePageMeta';
 import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
+import { useChatDock } from '../components/chat/chatDock';
 
 const shell = {
   width: '100%',
@@ -25,6 +27,7 @@ const shell = {
 export function ProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
   const { user: me } = useAuth();
+  const chat = useChatDock();
   const profile = useQuery({ queryKey: ['profile', handle], queryFn: () => exploreApi.user(handle) });
   const person = profile.data ?? undefined;
   usePageMeta(
@@ -82,6 +85,19 @@ export function ProfilePage({ now }: { now?: Date }) {
         links={person.links}
         meta={`Joined ${joined}`}
         edit={me?.id === person.id ? { to: '/account/profile' } : undefined}
+        actions={
+          chat.available &&
+          me?.id !== person.id && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<ChatBubbleOutlined />}
+              onClick={() => chat.openWith({ kind: 'direct', handle: person.handle, name: person.name })}
+            >
+              Message
+            </Button>
+          )
+        }
       />
       <ProfileLists
         owner={{ user: person.id }}

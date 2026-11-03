@@ -74,7 +74,8 @@ export const SCOPE_DESCRIPTIONS: Record<ApiKeyScope, { label: string; detail: st
   },
   'analysis:write': {
     label: 'Record analysis',
-    detail: 'Write conclusions onto your own projects. Cannot rename a project or change a run — that is a separate permission.'
+    detail:
+      'Write conclusions onto your own projects. Cannot rename a project or change a run — that is a separate permission.'
   }
 };
 

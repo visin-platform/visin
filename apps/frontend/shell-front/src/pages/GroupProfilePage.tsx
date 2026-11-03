@@ -1,11 +1,14 @@
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
+import { ChatBubbleOutlined } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useTrackVisit } from '@visin/frontend-core';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
+import { useChatDock } from '../components/chat/chatDock';
+import { homeApi } from '../services/homeApi';
 
 const shell = {
   width: '100%',
@@ -23,6 +26,10 @@ const shell = {
 export function GroupProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
   const group = useQuery({ queryKey: ['group-profile', handle], queryFn: () => exploreApi.group(handle) });
+  const chat = useChatDock();
+  // Its channel is for its members; nobody else is offered a way in.
+  const myGroups = useQuery({ queryKey: ['home', 'my-groups'], queryFn: homeApi.myGroups, enabled: chat.available });
+  const member = Boolean(group.data && myGroups.data?.some((mine) => mine.id === group.data?.id));
   const page = group.data ?? undefined;
   usePageMeta(
     page
@@ -77,6 +84,19 @@ export function GroupProfilePage({ now }: { now?: Date }) {
         bio={page.description}
         links={page.links}
         meta={`Group since ${created}`}
+        actions={
+          chat.available &&
+          member && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<ChatBubbleOutlined />}
+              onClick={() => chat.openWith({ kind: 'group', groupId: page.id, title: page.name })}
+            >
+              Message group
+            </Button>
+          )
+        }
       />
       <ProfileLists owner={{ owner: page.id }} cacheKey={`group:${handle}`} now={now} />
     </Box>

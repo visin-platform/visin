@@ -1,0 +1,16 @@
+services:
+  chat-front:
+    build: .
+    image: ${REGISTRY:-ghcr.io/visin-platform}/chat-front:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    ports: ['3014:80']
+    environment:
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      AUTH_FRONT_URL: ${AUTH_FRONT_URL}
+      CHAT_SERVICE_URL: ${CHAT_SERVICE_URL}
+      ACCOUNT_FRONT_URL: ${ACCOUNT_FRONT_URL:-}
+    networks: [visinnet]
+networks:
+  visinnet:
+    external: true

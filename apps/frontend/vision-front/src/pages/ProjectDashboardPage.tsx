@@ -1,3 +1,5 @@
+import AnalyzeButton from '../components/analysis/AnalyzeButton';
+import { usePageChatContext } from '../hooks/usePageChatContext';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Container, CircularProgress, Alert, Button } from '@mui/material';
@@ -63,10 +65,15 @@ const ProjectDashboardPage: React.FC = () => {
   const tab: ProjectTabKey = resolveProjectTab(requestedTab, project?.permissions.manage ?? false);
 
   usePageTitle(project ? `${project.name} - Vision` : 'Project - Vision');
+  usePageChatContext(
+    project ? { projectId: project._id, trainingIds: [], title: project.name, projectName: project.name } : undefined
+  );
 
   // So it is one of the places the search box offers next time.
   useTrackVisit(
-    project ? { kind: 'project', id: project._id, name: project.name, path: `/projects/${project.slug || project._id}` } : null
+    project
+      ? { kind: 'project', id: project._id, name: project.name, path: `/projects/${project.slug || project._id}` }
+      : null
   );
 
   const handleTabChange = (next: ProjectTabKey) => setSearchParams({ tab: next });
@@ -127,6 +134,7 @@ const ProjectDashboardPage: React.FC = () => {
           />
 
           <ProjectHeader project={project} />
+          <AnalyzeButton projectId={project._id} trainingIds={[]} title={`${project.name} discussion`} discussion />
 
           <CitedInPapers projectId={project._id} />
 

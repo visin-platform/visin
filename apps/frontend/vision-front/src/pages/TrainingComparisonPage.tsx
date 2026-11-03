@@ -1,3 +1,5 @@
+import AnalyzeButton from '../components/analysis/AnalyzeButton';
+import { usePageChatContext } from '../hooks/usePageChatContext';
 import React, { useState } from 'react';
 import ScrollableTabs from '../components/common/ScrollableTabs';
 import { PageHeader } from '@visin/frontend-core';
@@ -96,6 +98,16 @@ const TrainingComparisonPage: React.FC = () => {
     return allBenchmarks;
   }, [comparisonData]);
 
+  // One project's runs only: the analyst reads a comparison within the project it is limited to.
+  const comparedProject = comparisonData[0]?.training.projectId;
+  const sameProject =
+    comparisonData.length > 1 && !!comparedProject && comparisonData.every(item => item.training.projectId === comparedProject);
+  usePageChatContext(
+    sameProject && comparedProject
+      ? { projectId: comparedProject, trainingIds, title: `Compare ${comparisonData.length} runs` }
+      : undefined
+  );
+
   if (isLoading) {
     return (
       <Container maxWidth="lg" sx={{ pb: 4, textAlign: 'center' }}>
@@ -130,6 +142,9 @@ const TrainingComparisonPage: React.FC = () => {
         title="Training Comparison"
         subtitle={`Comparing ${comparisonData.length} training run${comparisonData.length !== 1 ? 's' : ''}`}
       />
+      {comparisonData.length > 1 && comparisonData.every(item => item.training.projectId === comparisonData[0].training.projectId) && (
+        <AnalyzeButton projectId={comparisonData[0].training.projectId} trainingIds={trainingIds} title="Compare selected runs" />
+      )}
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <ScrollableTabs 

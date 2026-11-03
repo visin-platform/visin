@@ -7,7 +7,8 @@ cat <<EOF > /usr/share/nginx/html/config.json
   "VISION_FRONT_URL": "${VISION_FRONT_URL}",
   "LABEL_FRONT_URL": "${LABEL_FRONT_URL}",
   "MCP_PUBLIC_URL": "${MCP_PUBLIC_URL}",
-  "GROUP_SERVICE_URL": "${GROUP_SERVICE_URL}"
+  "GROUP_SERVICE_URL": "${GROUP_SERVICE_URL}",
+  "CHAT_SERVICE_URL": "${CHAT_SERVICE_URL}"
 }
 EOF
 exec "$@"
