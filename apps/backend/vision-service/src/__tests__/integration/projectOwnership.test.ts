@@ -6,6 +6,7 @@ const { otherMembership } = vi.hoisted(() => {
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHmac } from 'crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -67,6 +68,12 @@ const ROLES: Record<string, { id: string; name: string; role: 'owner' | 'admin' 
  * transfer: the rules end to end, against a real database.
  */
 describe('project ownership with in-memory MongoDB', () => {
+  // History writes deliberately outlive the HTTP response. Drain them before
+  // querying history or deleting collections so they cannot leak into another test.
+  const createEvent = ResourceEvent.create.bind(ResourceEvent);
+  const eventWrites = vi.spyOn(ResourceEvent, 'create');
+  const finishEventWrites = () =>
+    Promise.all(eventWrites.mock.results.filter((result) => result.type === 'return').map((result) => result.value));
   let mongo: MongoMemoryServer;
   let server: Server;
   let baseUrl: string;
@@ -103,9 +110,12 @@ describe('project ownership with in-memory MongoDB', () => {
     otherMembership.mockReset().mockResolvedValue({ member: false, role: null });
   });
   afterEach(async () => {
+    await finishEventWrites();
+    eventWrites.mockClear();
     await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
   afterAll(async () => {
+    eventWrites.mockRestore();
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -158,7 +168,20 @@ describe('project ownership with in-memory MongoDB', () => {
     );
   const names = async (path: string, user?: string) =>
     ((await call(path, { user })).body.data as { name: string }[]).map((project) => project.name).sort();
-  const events = () => ResourceEvent.find({ resourceType: 'project' }).sort({ at: 1 }).lean();
+  const events = async (resourceId: string) => {
+    await finishEventWrites();
+    return ResourceEvent.find({ resourceType: 'project', resourceId }).sort({ at: 1, _id: 1 }).lean();
+  };
+
+  it('waits for history writes that finish after the HTTP response', async () => {
+    const id = await teamProject();
+    eventWrites.mockImplementationOnce(async (...args) => {
+      await delay(50);
+      return createEvent(...args);
+    });
+    expect((await call(`/projects/${id}`, { method: 'PUT', body: { visibility: 'public' } })).status).toBe(200);
+    await expect(events(id)).resolves.toMatchObject([{ resourceId: id, action: 'visibility' }]);
+  });
 
   describe('who sees and changes a project', () => {
     it("follows the owning group's roles: members contribute, admins manage, its owner owns", async () => {
@@ -218,7 +241,7 @@ describe('project ownership with in-memory MongoDB', () => {
       // Changing a project is something happening in it.
       expect((await Project.findById(id).lean())?.lastActivityAt).toBeInstanceOf(Date);
       expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(200);
-      expect((await events()).map((event) => event.action)).toEqual(['visibility']);
+      expect((await events(id)).map((event) => event.action)).toEqual(['visibility']);
     });
   });
 
@@ -331,7 +354,7 @@ describe('project ownership with in-memory MongoDB', () => {
       });
       // Now the group's: a member no longer owns it, so cannot take it back.
       expect((await transfer(MEMBER, { kind: 'user', id: MEMBER })).status).toBe(403);
-      expect((await events()).at(-1)).toMatchObject({
+      expect((await events(id)).at(-1)).toMatchObject({
         action: 'transfer',
         from: { kind: 'user', id: MEMBER },
         to: { kind: 'group', id: GROUP },
@@ -425,7 +448,7 @@ describe('project ownership with in-memory MongoDB', () => {
       expect((await Training.findById(training))?.deletedAt).toBeUndefined();
       expect((await Training.findById(alone))?.deletedAt).toEqual(new Date(0));
       expect(await Evaluation.countDocuments({ deletedAt: null })).toBe(1);
-      expect((await events()).map((event) => event.action)).toEqual(['trash', 'restore']);
+      expect((await events(id)).map((event) => event.action)).toEqual(['trash', 'restore']);
     });
 
     it('deletes for good only from the trash and only for its owner, files first', async () => {
@@ -463,7 +486,7 @@ describe('project ownership with in-memory MongoDB', () => {
       ] as unknown as mongoose.Model<unknown>[]) {
         expect(await model.countDocuments()).toBe(0);
       }
-      expect((await events()).at(-1)).toMatchObject({ action: 'purge' });
+      expect((await events(id)).at(-1)).toMatchObject({ action: 'purge' });
     });
 
     it('purges what has waited 30 days: projects with everything in them, and trainings trashed alone', async () => {
