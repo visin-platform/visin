@@ -1,21 +1,37 @@
+import { vi } from 'vitest';
 import type { Request } from 'express';
 import { createHmac } from 'crypto';
 import { fetchWithTimeout, GatewayTimeoutError } from '@visin/backend-core';
 import { getUserGroups } from '../../clients/projectGroupsClient';
 import { identityContextMiddleware, requestIdentityContext } from '../../middleware/requestIdentityContext';
 
-jest.mock('@visin/backend-core', () => ({ ...jest.requireActual('@visin/backend-core'), fetchWithTimeout: jest.fn() }));
-const fetchMock = jest.mocked(fetchWithTimeout);
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    fetchWithTimeout: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+const fetchMock = vi.mocked(fetchWithTimeout);
 const user = { id: 'u1', email: 'user@example.test' };
 const group = { id: 'a'.repeat(24), name: 'Research', role: 'admin' };
 const response = (body: unknown, ok = true) => ({ ok, json: async () => body }) as Response;
-const inRequest = <T>(callback: () => T, identity = user) => requestIdentityContext.run({ request: { user: identity } as Request }, callback);
+const inRequest = <T>(callback: () => T, identity = user) =>
+  requestIdentityContext.run({ request: { user: identity } as Request }, callback);
 const previous = { secret: process.env.JWT_SECRET, nodeEnv: process.env.NODE_ENV };
 
-beforeEach(() => { jest.resetAllMocks(); process.env.JWT_SECRET = 'test-secret'; process.env.NODE_ENV = 'test'; delete process.env.GROUP_SERVICE_URL; fetchMock.mockResolvedValue(response({ data: [group] })); });
+beforeEach(() => {
+  vi.resetAllMocks();
+  process.env.JWT_SECRET = 'test-secret';
+  process.env.NODE_ENV = 'test';
+  delete process.env.GROUP_SERVICE_URL;
+  fetchMock.mockResolvedValue(response({ data: [group] }));
+});
 afterAll(() => {
-  if (previous.secret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previous.secret;
-  if (previous.nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous.nodeEnv;
+  if (previous.secret === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = previous.secret;
+  if (previous.nodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = previous.nodeEnv;
 });
 
 it('requires the service actor to match the authenticated request identity', async () => {
@@ -36,7 +52,11 @@ it('signs only the verified identity and caches membership only within a request
   expect(url).toBe('http://localhost:5006/api/internal/project-groups');
   const body = JSON.parse(options!.body as string);
   expect(body).toEqual({ userId: 'u1', issuedAt: expect.any(Number), signature: expect.any(String) });
-  expect(body.signature).toBe(createHmac('sha256', 'test-secret').update(JSON.stringify(['vision-project-groups', 'u1', body.issuedAt])).digest('hex'));
+  expect(body.signature).toBe(
+    createHmac('sha256', 'test-secret')
+      .update(JSON.stringify(['vision-project-groups', 'u1', body.issuedAt]))
+      .digest('hex')
+  );
   await inRequest(() => getUserGroups('u1'));
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
@@ -51,9 +71,21 @@ it('calls the configured group-service', async () => {
   await inRequest(() => getUserGroups('u1'));
   expect(fetchMock.mock.calls[0][0]).toBe('http://group-service:5006/api/internal/project-groups');
 });
-it.each([null, 'invalid', {}, { data: null }, { data: [null] }, { data: [{ id: 'invalid', name: 'Group' }] }, { data: [{ id: group.id, name: 2 }] }, { data: [{ id: group.id, name: 'Group', role: 'boss' }] }])('fails closed on malformed responses (%j)', async body => {
+it.each([
+  null,
+  'invalid',
+  {},
+  { data: null },
+  { data: [null] },
+  { data: [{ id: 'invalid', name: 'Group' }] },
+  { data: [{ id: group.id, name: 2 }] },
+  { data: [{ id: group.id, name: 'Group', role: 'boss' }] }
+])('fails closed on malformed responses (%j)', async (body) => {
   fetchMock.mockResolvedValue(response(body));
-  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502, message: 'Invalid group membership response' });
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({
+    statusCode: 502,
+    message: 'Invalid group membership response'
+  });
 });
 // A group-service from before roles were sent: the least a member can be.
 it('reads a group without a role as a plain member', async () => {
@@ -62,15 +94,26 @@ it('reads a group without a role as a plain member', async () => {
 });
 it('fails closed on rejected membership requests', async () => {
   fetchMock.mockResolvedValue(response({}, false));
-  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('Could not verify') });
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({
+    statusCode: 502,
+    message: expect.stringContaining('Could not verify')
+  });
 });
 // Reported as group-service's failure, which API clients retry, rather than a 500 here.
 it('reports an unreachable group-service as a 502, not a 500', async () => {
   fetchMock.mockRejectedValue(new TypeError('fetch failed'));
-  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('unreachable') });
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({
+    statusCode: 502,
+    message: expect.stringContaining('unreachable')
+  });
 });
 it('reports unparseable JSON as a 502', async () => {
-  fetchMock.mockResolvedValue({ ok: true, json: async () => { throw new SyntaxError('Unexpected token'); } } as unknown as Response);
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: async () => {
+      throw new SyntaxError('Unexpected token');
+    }
+  } as unknown as Response);
   await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502 });
 });
 it('keeps a group-service timeout a 504', async () => {
@@ -79,7 +122,7 @@ it('keeps a group-service timeout a 504', async () => {
 });
 it('holds the request until downstream authentication populates its identity', async () => {
   const request = {} as Request;
-  const next = jest.fn(() => {
+  const next = vi.fn(function () {
     request.user = user;
     expect(requestIdentityContext.getStore()?.request.user).toEqual(user);
   });
@@ -89,5 +132,10 @@ it('holds the request until downstream authentication populates its identity', a
 });
 
 it('accepts an ID-only identity without using email as authority', async () => {
-  await inRequest(async () => { expect(await getUserGroups('u1')).toHaveLength(1); }, { id: 'u1', email: '' });
+  await inRequest(
+    async () => {
+      expect(await getUserGroups('u1')).toHaveLength(1);
+    },
+    { id: 'u1', email: '' }
+  );
 });

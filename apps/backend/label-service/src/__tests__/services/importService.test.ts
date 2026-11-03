@@ -1,22 +1,41 @@
-jest.mock('../../models/LabelJob', () => ({
-  MAX_CLASSES: 100,
-  LabelJob: { updateOne: jest.fn(), findById: jest.fn() },
-}));
-jest.mock('../../models/LabelTask', () => ({
-  LabelTask: { find: jest.fn(), updateOne: jest.fn(), countDocuments: jest.fn() },
-}));
-jest.mock('../../models/LabelAnnotation', () => ({
-  LabelAnnotation: { findOneAndUpdate: jest.fn() },
-}));
-jest.mock('../../models/LabelSuggestion', () => ({
-  LabelSuggestion: { findOne: jest.fn(), findOneAndUpdate: jest.fn() },
-}));
-jest.mock('../../clients/datasetServiceClient', () => ({}));
-jest.mock('../../clients/fileServiceClient', () => ({
-  putFile: jest.fn(),
-  deleteFile: jest.fn(),
-  jobFolder: (jobId: string) => `label/${jobId}/`,
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/LabelJob', async () => {
+  const module = await (() => ({
+    MAX_CLASSES: 100,
+    LabelJob: { updateOne: vi.fn(), findById: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelTask', async () => {
+  const module = await (() => ({
+    LabelTask: { find: vi.fn(), updateOne: vi.fn(), countDocuments: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelAnnotation', async () => {
+  const module = await (() => ({
+    LabelAnnotation: { findOneAndUpdate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelSuggestion', async () => {
+  const module = await (() => ({
+    LabelSuggestion: { findOne: vi.fn(), findOneAndUpdate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({}))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    putFile: vi.fn(),
+    deleteFile: vi.fn(),
+    jobFolder: (jobId: string) => `label/${jobId}/`
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -33,11 +52,11 @@ import { decodePng, encodeGrayscalePng } from '../../utils/png';
 import type { ILabelJob } from '../../models/LabelJob';
 import type { ImportQuery } from '../../validation/jobSchemas';
 
-const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
-const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
-const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
-const mockedSuggestion = LabelSuggestion as unknown as Record<string, jest.Mock>;
-const mockedFiles = files as unknown as Record<string, jest.Mock>;
+const mockedJob = LabelJob as unknown as Record<string, Mock>;
+const mockedTask = LabelTask as unknown as Record<string, Mock>;
+const mockedAnnotation = LabelAnnotation as unknown as Record<string, Mock>;
+const mockedSuggestion = LabelSuggestion as unknown as Record<string, Mock>;
+const mockedFiles = files as unknown as Record<string, Mock>;
 
 const user = { id: 'u1', email: 'Manager@X.com', name: 'Manager' };
 
@@ -49,14 +68,14 @@ const makeJob = (overrides: Record<string, unknown> = {}): ILabelJob =>
     classes: [
       { key: 'car', name: 'Car', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 },
       { key: 'road', name: 'Road', color: '#00ff00', tools: ['mask'], maskIndex: 2, modelClass: 'street' },
-      { key: 'sign', name: 'Traffic sign', color: '#0000ff', tools: ['box'], maskIndex: 3 },
+      { key: 'sign', name: 'Traffic sign', color: '#0000ff', tools: ['box'], maskIndex: 3 }
     ],
-    ...overrides,
+    ...overrides
   }) as unknown as ILabelJob;
 
 const taskDoc = (id: string, stem: string, size: Record<string, number> = { width: 8, height: 6 }) => ({
   _id: id,
-  frame: { fileId: `f-${id}`, path: `camera/${stem}.jpg`, stem, ...size },
+  frame: { fileId: `f-${id}`, path: `camera/${stem}.jpg`, stem, ...size }
 });
 
 const query = (overrides: Partial<Record<keyof ImportQuery, unknown>> = {}): ImportQuery =>
@@ -64,9 +83,9 @@ const query = (overrides: Partial<Record<keyof ImportQuery, unknown>> = {}): Imp
 
 let folder: string;
 beforeEach(async () => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   folder = await mkdtemp(join(tmpdir(), 'import-test-'));
-  mockedTask.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([taskDoc('t1', '0001'), taskDoc('t2', '0002')]) });
+  mockedTask.find.mockReturnValue({ sort: vi.fn().mockResolvedValue([taskDoc('t1', '0001'), taskDoc('t2', '0002')]) });
   mockedTask.countDocuments.mockResolvedValue(1);
   mockedTask.updateOne.mockResolvedValue({ modifiedCount: 1 });
   mockedSuggestion.findOne.mockResolvedValue(null);
@@ -94,7 +113,7 @@ const yoloArchive = () =>
     'data.yaml': 'names: [Car, street, Pedestrian, Traffic sign]\n',
     'labels/0001.txt': '0 0.25 0.25 0.5 0.5\n2 0.5 0.5 0.25 0.25\n3 0.75 0.75 0.2 0.2\n1 0.5 0.5 0.5 0.5\n',
     'labels/0002.txt': '0 0.5 0.5 0.5 0.5\n',
-    'labels/9999.txt': '0 0.5 0.5 0.5 0.5\n',
+    'labels/9999.txt': '0 0.5 0.5 0.5 0.5\n'
   });
 
 describe('importing boxes', () => {
@@ -110,13 +129,13 @@ describe('importing boxes', () => {
       // Car ×2 and Traffic sign; street → road takes masks only, Pedestrian has no class.
       boxes: 3,
       maskFrames: 0,
-      createdClasses: [],
+      createdClasses: []
     });
     expect(report.classes).toEqual([
       { name: 'Car', boxes: 2, maskFrames: 0, target: 'car', matched: true },
       { name: 'street', boxes: 1, maskFrames: 0, target: 'road', matched: true },
       { name: 'Pedestrian', boxes: 1, maskFrames: 0, target: null, matched: false },
-      { name: 'Traffic sign', boxes: 1, maskFrames: 0, target: 'sign', matched: true },
+      { name: 'Traffic sign', boxes: 1, maskFrames: 0, target: 'sign', matched: true }
     ]);
     expect(mockedSuggestion.findOneAndUpdate).not.toHaveBeenCalled();
     expect(mockedFiles.putFile).not.toHaveBeenCalled();
@@ -141,7 +160,7 @@ describe('importing boxes', () => {
   });
 
   it('counts frames in the file that the job does not have', async () => {
-    mockedTask.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([taskDoc('t1', '0001')]) });
+    mockedTask.find.mockReturnValue({ sort: vi.fn().mockResolvedValue([taskDoc('t1', '0001')]) });
 
     const report = await importLabels(makeJob(), user, await yoloArchive(), query({ dryRun: 'true' }));
 
@@ -151,9 +170,9 @@ describe('importing boxes', () => {
   it('lists frames of a format that reads them without needing the job’s size', async () => {
     const archive = await zip({
       'job.json': JSON.stringify({ classes: [{ key: 'car', name: 'Car', maskIndex: 1 }] }),
-      'annotations.jsonl': '{"stem":"0001","objects":[]}\n',
+      'annotations.jsonl': '{"stem":"0001","objects":[]}\n'
     });
-    mockedTask.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([taskDoc('t1', '0001', {})]) });
+    mockedTask.find.mockReturnValue({ sort: vi.fn().mockResolvedValue([taskDoc('t1', '0001', {})]) });
 
     const report = await importLabels(makeJob(), user, archive, query({ dryRun: 'true' }));
 
@@ -171,7 +190,7 @@ describe('class choices', () => {
       await yoloArchive(),
       query({
         dryRun: 'true',
-        classMap: { Car: 'sign', street: null, Pedestrian: '+' },
+        classMap: { Car: 'sign', street: null, Pedestrian: '+' }
       })
     );
 
@@ -179,7 +198,7 @@ describe('class choices', () => {
       ['Car', 'sign', false],
       ['street', null, false],
       ['Pedestrian', '+', false],
-      ['Traffic sign', 'sign', true],
+      ['Traffic sign', 'sign', true]
     ]);
     // Counts what will be brought in: Car→sign (2) + Pedestrian (1, as a new class) + Traffic sign (1).
     expect(report.boxes).toBe(4);
@@ -187,18 +206,13 @@ describe('class choices', () => {
   });
 
   it('adds the classes asked for to the job, numbering them after the existing ones', async () => {
-    const report = await importLabels(
-      makeJob(),
-      user,
-      await yoloArchive(),
-      query({ classMap: { Pedestrian: '+' } })
-    );
+    const report = await importLabels(makeJob(), user, await yoloArchive(), query({ classMap: { Pedestrian: '+' } }));
 
     expect(report.createdClasses).toEqual(['pedestrian']);
     const [filter, update] = mockedJob.updateOne.mock.calls[0];
     expect(filter).toEqual({ _id: 'j1' });
     expect(update.$push.classes.$each).toEqual([
-      { key: 'pedestrian', name: 'Pedestrian', color: '#eda100', hotkey: '4', tools: ['box', 'mask'], maskIndex: 4 },
+      { key: 'pedestrian', name: 'Pedestrian', color: '#eda100', hotkey: '4', tools: ['box', 'mask'], maskIndex: 4 }
     ]);
     const stored = mockedSuggestion.findOneAndUpdate.mock.calls[0][1].$set.objects;
     expect(stored.map((object: { classKey: string }) => object.classKey)).toEqual(['car', 'pedestrian', 'sign']);
@@ -223,10 +237,10 @@ describe('importing masks', () => {
       'classes.json': JSON.stringify([
         { index: 1, name: 'Car' },
         { index: 2, name: 'Road' },
-        { index: 3, name: 'Traffic sign' },
+        { index: 3, name: 'Traffic sign' }
       ]),
       'masks/0001.png': encodeGrayscalePng(8, 6, data),
-      ...extra,
+      ...extra
     });
   };
 
@@ -238,7 +252,7 @@ describe('importing masks', () => {
     expect(report.classes.map((plan) => [plan.name, plan.maskFrames, plan.target])).toEqual([
       ['Car', 1, 'car'],
       ['Road', 1, 'road'],
-      ['Traffic sign', 1, 'sign'],
+      ['Traffic sign', 1, 'sign']
     ]);
   });
 
@@ -273,7 +287,7 @@ describe('importing masks', () => {
 
   it('leaves out a mask whose size is not the frame’s', async () => {
     mockedTask.find.mockReturnValue({
-      sort: jest.fn().mockResolvedValue([taskDoc('t1', '0001', { width: 16, height: 12 })]),
+      sort: vi.fn().mockResolvedValue([taskDoc('t1', '0001', { width: 16, height: 12 })])
     });
 
     const report = await importLabels(makeJob(), user, await maskArchive(), query());
@@ -288,7 +302,7 @@ describe('importing masks', () => {
     const archive = await zip({
       'job.json': JSON.stringify({ classes: [{ key: 'car', name: 'Car', maskIndex: 1 }] }),
       'annotations.jsonl': '{"stem":"0001","mask":"masks/0001.png","objects":[]}\n',
-      'masks/0001.png': encodeGrayscalePng(4, 3, new Uint8Array(12).fill(1)),
+      'masks/0001.png': encodeGrayscalePng(4, 3, new Uint8Array(12).fill(1))
     });
 
     const report = await importLabels(makeJob(), user, archive, query());
@@ -301,7 +315,7 @@ describe('importing masks', () => {
   it('leaves out a mask that holds nothing for this job’s classes', async () => {
     const archive = await zip({
       'classes.json': JSON.stringify([{ index: 1, name: 'Unrelated' }]),
-      'masks/0001.png': encodeGrayscalePng(8, 6, new Uint8Array(48).fill(1)),
+      'masks/0001.png': encodeGrayscalePng(8, 6, new Uint8Array(48).fill(1))
     });
 
     const report = await importLabels(makeJob(), user, archive, query());
@@ -316,7 +330,7 @@ describe('importing as finished labels', () => {
     const archive = await zip({
       'data.yaml': 'names: [Unknown]\n',
       'labels/0001.txt': '',
-      'labels/0002.txt': '0 0.5 0.5 0.5 0.5\n',
+      'labels/0002.txt': '0 0.5 0.5 0.5 0.5\n'
     });
     await importLabels(makeJob(), user, archive, query({ as: 'done' }));
     expect(mockedAnnotation.findOneAndUpdate).toHaveBeenCalledTimes(1);
@@ -344,7 +358,7 @@ describe('importing as finished labels', () => {
         $inc: { answersCount: 1 },
         $addToSet: { answeredBy: 'u1' },
         $pull: { skippedBy: 'u1' },
-        $unset: { leasedBy: '', leaseExpiresAt: '' },
+        $unset: { leasedBy: '', leaseExpiresAt: '' }
       }
     );
     // A draft job is not completed by importing into it.
@@ -356,7 +370,7 @@ describe('importing as finished labels', () => {
     mockedTask.updateOne.mockResolvedValueOnce({ modifiedCount: 0 });
     const archive = await zip({
       'classes.json': JSON.stringify([{ index: 1, name: 'Car' }]),
-      'masks/0001.png': encodeGrayscalePng(8, 6, new Uint8Array(48).fill(1)),
+      'masks/0001.png': encodeGrayscalePng(8, 6, new Uint8Array(48).fill(1))
     });
 
     await importLabels(makeJob(), user, archive, query({ as: 'done' }));
@@ -373,7 +387,10 @@ describe('importing as finished labels', () => {
 
     await importLabels(makeJob({ status: 'active' }), user, await yoloArchive(), query({ as: 'done' }));
 
-    expect(mockedJob.updateOne).toHaveBeenCalledWith({ _id: 'j1', status: 'active' }, { $set: { status: 'completed' } });
+    expect(mockedJob.updateOne).toHaveBeenCalledWith(
+      { _id: 'j1', status: 'active' },
+      { $set: { status: 'completed' } }
+    );
   });
 
   it('does not touch labels on a dry run', async () => {
@@ -417,7 +434,7 @@ describe('what it refuses', () => {
     const archive = await zip({
       'job.json': '{}',
       'annotations.jsonl': '{"stem":"0001","mask":"masks/0001.png","objects":[]}\n',
-      'masks/0001.png': 'not a png',
+      'masks/0001.png': 'not a png'
     });
 
     await expect(importLabels(makeJob(), user, archive, query())).rejects.toThrow('Not a PNG');
@@ -426,9 +443,17 @@ describe('what it refuses', () => {
 
 describe('normalizeNames', () => {
   it('removes a single wrapping folder, macOS metadata and directory entries', () => {
-    expect(normalizeNames(['export/', 'export/labels/a.txt', 'export/data.yaml', '__MACOSX/export/._a.txt', 'export/.DS_Store'])).toEqual({
+    expect(
+      normalizeNames([
+        'export/',
+        'export/labels/a.txt',
+        'export/data.yaml',
+        '__MACOSX/export/._a.txt',
+        'export/.DS_Store'
+      ])
+    ).toEqual({
       names: ['labels/a.txt', 'data.yaml'],
-      strip: 'export/',
+      strip: 'export/'
     });
   });
 

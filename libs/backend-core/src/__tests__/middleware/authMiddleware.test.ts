@@ -1,4 +1,8 @@
-jest.mock('../../auth/session', () => ({ isCurrentSession: jest.fn() }));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../auth/session', async () => {
+  const module = await (() => ({ isCurrentSession: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 import { isCurrentSession } from '../../auth/session';
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
@@ -13,20 +17,20 @@ const makeReq = (authHeader?: string, cookies?: Record<string, string>): Request
   ({
     headers: authHeader ? { authorization: authHeader } : {},
     cookies: cookies ?? {}
-  } as unknown as Request);
+  }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response;
 };
 
-const next = jest.fn() as unknown as NextFunction;
+const next = vi.fn() as unknown as NextFunction;
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  (isCurrentSession as jest.Mock).mockResolvedValue(true);
+  vi.clearAllMocks();
+  (isCurrentSession as Mock).mockResolvedValue(true);
   process.env.JWT_SECRET = SECRET;
 });
 
@@ -163,7 +167,6 @@ describe('optionalAuth', () => {
   });
 });
 
-
 /**
  * A session and an MCP access token are signed with the same secret and arrive
  * in the same header. Read as a session, an access token names the user in
@@ -224,8 +227,8 @@ describe('session revocation boundary', () => {
     [false, 401],
     ['database failure', 503]
   ])('refuses required auth when the current account check fails (%s → %i)', async (result, status) => {
-    if (result === false) (isCurrentSession as jest.Mock).mockResolvedValue(false);
-    else (isCurrentSession as jest.Mock).mockRejectedValue(new Error(String(result)));
+    if (result === false) (isCurrentSession as Mock).mockResolvedValue(false);
+    else (isCurrentSession as Mock).mockRejectedValue(new Error(String(result)));
     const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET)}`);
     const res = makeRes();
     await authenticateToken(req, res, next);
@@ -233,14 +236,17 @@ describe('session revocation boundary', () => {
     expect(req.user).toBeUndefined();
     expect(next).not.toHaveBeenCalledWith();
   });
-  it.each([false, 'database failure'])('optional auth continues only anonymously on failed session check (%s)', async result => {
-    if (result === false) (isCurrentSession as jest.Mock).mockResolvedValue(false);
-    else (isCurrentSession as jest.Mock).mockRejectedValue(new Error(String(result)));
-    const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET)}`);
-    await optionalAuth(req, makeRes(), next);
-    expect(req.user).toBeUndefined();
-    expect(next).toHaveBeenCalledTimes(1);
-  });
+  it.each([false, 'database failure'])(
+    'optional auth continues only anonymously on failed session check (%s)',
+    async (result) => {
+      if (result === false) (isCurrentSession as Mock).mockResolvedValue(false);
+      else (isCurrentSession as Mock).mockRejectedValue(new Error(String(result)));
+      const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET)}`);
+      await optionalAuth(req, makeRes(), next);
+      expect(req.user).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    }
+  );
   it('preserves a verified non-session credential on optional auth', async () => {
     const req = makeReq();
     req.user = PAYLOAD;

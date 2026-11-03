@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import mongoose from 'mongoose';
 import Redis from 'ioredis';
 import { Worker, type Job } from 'bullmq';
@@ -28,20 +29,39 @@ import { fileStore } from '../fixtures/fileStore';
 import { zip } from '../fixtures/zip';
 import { startRedis } from '../fixtures/redis';
 
-jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn(async () => new Map()) }));
-jest.mock('../../clients/groupServiceClient', () => ({
-  getMyGroups: jest.fn(async () => []),
-  checkMembership: jest.fn()
-}));
-jest.mock('../../queue/constants', () => ({
-  ...jest.requireActual('../../queue/constants'),
-  IMPORT_BACKOFF_MS: 1,
-  IMPORT_ATTEMPTS: 2,
-  QUEUE_TIMEOUT_MS: 150
-}));
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () =>
+    (await vi.importActual<typeof import('../fixtures/fileStore')>('../fixtures/fileStore')).fileStore.client)();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({
+    lookupOwnerIdentities: vi.fn(async function () {
+      return new Map();
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/groupServiceClient', async () => {
+  const module = await (() => ({
+    getMyGroups: vi.fn(async function () {
+      return [];
+    }),
+    checkMembership: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../queue/constants', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../queue/constants')>('../../queue/constants')),
+    IMPORT_BACKOFF_MS: 1,
+    IMPORT_ATTEMPTS: 2,
+    QUEUE_TIMEOUT_MS: 150
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-jest.setTimeout(30_000);
+vi.setConfig({ testTimeout: 30_000 });
 let mongo: MongoMemoryServer;
 let redis: Awaited<ReturnType<typeof startRedis>>;
 let control: Redis;
@@ -70,7 +90,7 @@ afterEach(async () => {
   await closeImportQueue();
   await control.flushdb();
   fileStore.stored.clear();
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   await Promise.all([Dataset.deleteMany({}), DatasetItem.deleteMany({})]);
 });
 
@@ -159,7 +179,7 @@ it('starts only one import when requests race to persist and enqueue work', asyn
 it('refuses an import if a labeling hold arrives after the request read its dataset', async () => {
   const record = await dataset();
   const claim = Dataset.collection.findOneAndUpdate.bind(Dataset.collection);
-  const race = jest.spyOn(Dataset.collection, 'findOneAndUpdate').mockImplementationOnce(async (...args) => {
+  const race = vi.spyOn(Dataset.collection, 'findOneAndUpdate').mockImplementationOnce(async function (...args) {
     await Dataset.updateOne(
       { _id: record._id },
       { $push: { holds: { service: 'label-service', ref: 'new-job', createdAt: new Date() } } }
@@ -185,7 +205,7 @@ it('does not cancel a newer resumed delivery after reading an older running impo
   await record.save();
   const access = createDatasetAccess('owner');
   const claim = Dataset.collection.findOneAndUpdate.bind(Dataset.collection);
-  const race = jest.spyOn(Dataset.collection, 'findOneAndUpdate').mockImplementationOnce(async (...args) => {
+  const race = vi.spyOn(Dataset.collection, 'findOneAndUpdate').mockImplementationOnce(async function (...args) {
     await Dataset.updateOne({ _id: record._id }, { $set: { 'import.status': 'failed' } });
     await resumeImport(access, record._id.toString());
     return claim(...args);
@@ -420,7 +440,7 @@ it('leaves a legacy scan that starts while its delivery identity is being assign
   const record = await dataset();
   record.scan = { status: 'queued', fileId: record.archive!.fileId };
   await record.save();
-  const claim = jest.spyOn(Dataset.collection, 'findOneAndUpdate').mockImplementationOnce(async () => {
+  const claim = vi.spyOn(Dataset.collection, 'findOneAndUpdate').mockImplementationOnce(async function () {
     await Dataset.updateOne(
       { _id: record._id },
       { $set: { 'scan.status': 'running', 'scan.heartbeatAt': new Date() } }
@@ -445,28 +465,29 @@ it('renews a slow scan heartbeat without overlapping writes and survives a trans
     releaseRead = resolve;
   });
   const read = fileStore.client.getFileRange.getMockImplementation()!;
-  fileStore.client.getFileRange.mockImplementationOnce(async (...args) => {
+  fileStore.client.getFileRange.mockImplementationOnce(async function (...args) {
     await readGate;
     return read(...args);
   });
   const interval = global.setInterval;
-  const clock = jest
-    .spyOn(global, 'setInterval')
-    .mockImplementation((callback, delay, ...args) => interval(callback, delay === 5000 ? 10 : delay, ...args));
-  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+  const clock = vi.spyOn(global, 'setInterval').mockImplementation(function (callback, delay, ...args) {
+    return interval(callback, delay === 5000 ? 10 : delay, ...args);
+  });
+  const warn = vi.spyOn(logger, 'warn').mockImplementation(function () {
+    return logger;
+  });
   const running = runScan(record._id.toString(), record.scan.fileId, record.scan.id);
   await eventually(async () => fileStore.client.getFileRange.mock.calls.length > 0);
   const firstBeat = (await Dataset.findById(record._id).lean())!.scan!.heartbeatAt!;
   const update = Dataset.collection.updateOne.bind(Dataset.collection);
   let releaseBeat: () => void = () => undefined;
-  const renewal = jest.spyOn(Dataset.collection, 'updateOne').mockImplementationOnce(
-    (...args) =>
-      new Promise((resolve, reject) => {
-        releaseBeat = () => {
-          Promise.resolve(update(...args)).then(resolve, reject);
-        };
-      })
-  );
+  const renewal = vi.spyOn(Dataset.collection, 'updateOne').mockImplementationOnce(function (...args) {
+    return new Promise((resolve, reject) => {
+      releaseBeat = () => {
+        Promise.resolve(update(...args)).then(resolve, reject);
+      };
+    });
+  });
   try {
     await eventually(async () => renewal.mock.calls.length > 0);
     await new Promise((resolve) => setTimeout(resolve, 35));
@@ -498,7 +519,7 @@ it('cannot publish a scan result after another rescan supersedes it', async () =
   record.scan = { id: 'scan-old', status: 'queued', fileId: record.archive!.fileId };
   await record.save();
   const read = fileStore.client.getFileRange.getMockImplementation()!;
-  fileStore.client.getFileRange.mockImplementationOnce(async (...args) => {
+  fileStore.client.getFileRange.mockImplementationOnce(async function (...args) {
     await Dataset.updateOne({ _id: record._id }, { $set: { 'scan.id': 'scan-new', 'scan.status': 'queued' } });
     return read(...args);
   });

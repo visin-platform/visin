@@ -1,37 +1,50 @@
-jest.mock('../../services/trainingHeartbeatService', () => ({ touchTraining: jest.fn() }));
+import { vi, type Mock, type Mocked } from 'vitest';
+vi.mock('../../services/trainingHeartbeatService', async () => {
+  const module = await (() => ({ touchTraining: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 import type { Request, Response } from 'express';
 import { NotFoundError, ForbiddenError } from '@visin/backend-core';
 import { getEpochById, getEpochByUuid, createEpoch, deleteEpoch } from '../../controllers/epochController';
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response;
 };
 
-jest.mock('../../models/Epoch');
-jest.mock('../../models/Training');
-jest.mock('../../models/Project', () => ({ __esModule: true, default: { findById: jest.fn().mockResolvedValue({ _id: 'p1' }) } }));
-jest.mock('../../models/Evaluation');
-jest.mock('../../services/projectAccessService', () => ({
-  checkProjectAccess: jest.fn(),
-  projectPermission: jest.fn().mockResolvedValue('own'),
-  isWithinTokenScope: jest.fn().mockReturnValue(true)
-}));
+vi.mock('../../models/Epoch');
+vi.mock('../../models/Training');
+vi.mock('../../models/Project', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { findById: vi.fn().mockResolvedValue({ _id: 'p1' }) }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Evaluation');
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (() => ({
+    checkProjectAccess: vi.fn(),
+    projectPermission: vi.fn().mockResolvedValue('own'),
+    isWithinTokenScope: vi.fn().mockReturnValue(true)
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import Epoch from '../../models/Epoch';
 import Training from '../../models/Training';
 import Evaluation from '../../models/Evaluation';
 import { checkProjectAccess } from '../../services/projectAccessService';
 
-const mockEpoch = Epoch as jest.Mocked<typeof Epoch>;
-const mockTraining = Training as jest.Mocked<typeof Training>;
-const mockEvaluation = Evaluation as jest.Mocked<typeof Evaluation>;
-const mockCheckProjectAccess = checkProjectAccess as jest.Mock;
+const mockEpoch = Epoch as Mocked<typeof Epoch>;
+const mockTraining = Training as Mocked<typeof Training>;
+const mockEvaluation = Evaluation as Mocked<typeof Evaluation>;
+const mockCheckProjectAccess = checkProjectAccess as Mock;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('getEpochById', () => {
@@ -104,7 +117,7 @@ describe('deleteEpoch', () => {
   });
 
   it('refuses a caller who cannot reach the parent training, deleting nothing', async () => {
-    const epoch = { trainingId: 't1', epoch_uuid: 'e1', save: jest.fn() };
+    const epoch = { trainingId: 't1', epoch_uuid: 'e1', save: vi.fn() };
     mockEpoch.findById.mockResolvedValueOnce(epoch as never);
     mockTraining.findById.mockResolvedValueOnce({ projectId: 'p1' } as never);
     mockCheckProjectAccess.mockResolvedValueOnce(false);
@@ -115,7 +128,7 @@ describe('deleteEpoch', () => {
   });
 
   it('soft-deletes the epoch and what a run recorded without a suite at it, under one timestamp', async () => {
-    const epoch: Record<string, unknown> = { trainingId: 't1', epoch_uuid: 'e1', save: jest.fn() };
+    const epoch: Record<string, unknown> = { trainingId: 't1', epoch_uuid: 'e1', save: vi.fn() };
     mockEpoch.findById.mockResolvedValueOnce(epoch as never);
     // A run in a project the caller owns.
     mockTraining.findById.mockResolvedValueOnce({ ownerId: 'u1', projectId: 'p1' } as never);

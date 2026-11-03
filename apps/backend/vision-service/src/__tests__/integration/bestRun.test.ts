@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHmac } from 'crypto';
@@ -13,7 +14,10 @@ import Training from '../../models/Training';
 import trainingRoutes from '../../routes/trainingRoutes';
 import { headlineMetric } from '../../services/bestRunService';
 
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 const OWNER = '000000000000000000000001';
 const STRANGER = '000000000000000000000004';
@@ -24,8 +28,14 @@ describe('headlineMetric', () => {
   });
 
   it('guesses a quality score in the validation block, whatever the pipeline calls the block', () => {
-    expect(headlineMetric(['train.mean_iou', 'val.accuracy', 'val.loss'], undefined)).toEqual({ path: 'val.accuracy', source: 'guessed' });
-    expect(headlineMetric(['Validation.mIoU', 'Validation.loss'], undefined)).toEqual({ path: 'Validation.mIoU', source: 'guessed' });
+    expect(headlineMetric(['train.mean_iou', 'val.accuracy', 'val.loss'], undefined)).toEqual({
+      path: 'val.accuracy',
+      source: 'guessed'
+    });
+    expect(headlineMetric(['Validation.mIoU', 'Validation.loss'], undefined)).toEqual({
+      path: 'Validation.mIoU',
+      source: 'guessed'
+    });
   });
 
   it('falls back to the validation loss, then to a score outside validation, then to nothing', () => {
@@ -53,44 +63,85 @@ describe('best run with in-memory MongoDB', () => {
     app.use('/trainings', trainingRoutes);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 120_000);
 
   beforeEach(async () => {
-    const ids = [OWNER, STRANGER].map(id => new mongoose.Types.ObjectId(id));
-    await mongoose.connection.collection('users').insertMany(ids.map(_id => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
-    await mongoose.connection.collection('user_sessions').insertMany(ids.map(_id => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    jest.mocked(getUserGroups).mockResolvedValue([]);
+    const ids = [OWNER, STRANGER].map((id) => new mongoose.Types.ObjectId(id));
+    await mongoose.connection
+      .collection('users')
+      .insertMany(ids.map((_id) => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
+    await mongoose.connection
+      .collection('user_sessions')
+      .insertMany(ids.map((_id) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
+    vi.mocked(getUserGroups).mockResolvedValue([]);
   });
   afterEach(async () => {
-    await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
+    await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
   const get = async (path: string, user: string | '' = OWNER) => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: user, email: `${user}@example.test`, tokenVersion: 1, sid: user, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
-      .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: user,
+        email: `${user}@example.test`,
+        tokenVersion: 1,
+        sid: user,
+        typ: 'session',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${baseUrl}${path}`, { headers: user ? { Authorization: `Bearer ${token}` } : {} });
     return { status: response.status, body: await response.json() };
   };
 
   const project = async (fields: Record<string, unknown> = {}) =>
-    String((await Project.create({ name: 'Road', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, ...fields }))._id);
-  const run = async (projectId: string, name: string, epochs: Record<string, unknown>[], extra: Record<string, unknown> = {}) => {
-    const training = await Training.create({ uuid: `run-${new mongoose.Types.ObjectId()}`, name, ownerId: OWNER, projectId, status: 'completed', ...extra });
+    String(
+      (await Project.create({ name: 'Road', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, ...fields }))._id
+    );
+  const run = async (
+    projectId: string,
+    name: string,
+    epochs: Record<string, unknown>[],
+    extra: Record<string, unknown> = {}
+  ) => {
+    const training = await Training.create({
+      uuid: `run-${new mongoose.Types.ObjectId()}`,
+      name,
+      ownerId: OWNER,
+      projectId,
+      status: 'completed',
+      ...extra
+    });
     for (const [index, results] of epochs.entries()) {
-      await Epoch.create({ trainingId: String(training._id), training_uuid: 'u', epoch_uuid: `e-${training._id}-${index}`, epoch: index + 1, timestamp: new Date(), results });
+      await Epoch.create({
+        trainingId: String(training._id),
+        training_uuid: 'u',
+        epoch_uuid: `e-${training._id}-${index}`,
+        epoch: index + 1,
+        timestamp: new Date(),
+        results
+      });
     }
     return String(training._id);
   };
-  const scores = (...values: number[]) => values.map(value => ({ val: { mean_iou: value, loss: 1 - value } }));
+  const scores = (...values: number[]) => values.map((value) => ({ val: { mean_iou: value, loss: 1 - value } }));
 
   it('crowns the run with the highest validation score, at the epoch it peaked, and says the metric was guessed', async () => {
     const projectId = await project();
@@ -112,9 +163,14 @@ describe('best run with in-memory MongoDB', () => {
   });
 
   it('judges by the project’s headline result and reads lower as better when the taxonomy says so', async () => {
-    const projectId = await project({ taxonomy: { primaryMetric: 'val.error', metrics: [{ key: 'error', direction: 'lower' }] } });
+    const projectId = await project({
+      taxonomy: { primaryMetric: 'val.error', metrics: [{ key: 'error', direction: 'lower' }] }
+    });
     await run(projectId, 'noisy', [{ val: { error: 0.4, mean_iou: 0.9 } }]);
-    const winner = await run(projectId, 'steady', [{ val: { error: 0.3, mean_iou: 0.2 } }, { val: { error: 0.1, mean_iou: 0.2 } }]);
+    const winner = await run(projectId, 'steady', [
+      { val: { error: 0.3, mean_iou: 0.2 } },
+      { val: { error: 0.1, mean_iou: 0.2 } }
+    ]);
 
     const { body } = await get(`/trainings/best?projectId=${projectId}`);
 
@@ -129,30 +185,54 @@ describe('best run with in-memory MongoDB', () => {
   it('ranks runs that log a bare number beside their blocks, instead of reporting no best run', async () => {
     const projectId = await project();
     await run(projectId, 'weak', [{ lr: 0.001, train: { loss: 0.5 }, val: { loss: 0.6, mean_iou: 0.4 } }]);
-    const winner = await run(projectId, 'strong', [{ lr: 0.001, train: { loss: 0.3 }, val: { loss: 0.3, mean_iou: 0.8 } }]);
+    const winner = await run(projectId, 'strong', [
+      { lr: 0.001, train: { loss: 0.3 }, val: { loss: 0.3, mean_iou: 0.8 } }
+    ]);
 
     const { body } = await get(`/trainings/best?projectId=${projectId}`);
 
-    expect(body.data.best).toMatchObject({ training: { _id: winner }, metric: { path: 'val.mean_iou', source: 'guessed' }, value: 0.8 });
+    expect(body.data.best).toMatchObject({
+      training: { _id: winner },
+      metric: { path: 'val.mean_iou', source: 'guessed' },
+      value: 0.8
+    });
   });
 
   it('ranks on a result whose name holds a dot or punctuation', async () => {
     const projectId = await project({ taxonomy: { primaryMetric: 'val.map_0.5' } });
     await run(projectId, 'weak', [{ val: { 'map_0.5': 0.3 } }]);
     const winner = await run(projectId, 'strong', [{ val: { 'map_0.5': 0.6 } }, { val: { 'map_0.5': 0.5 } }]);
-    expect((await get(`/trainings/best?projectId=${projectId}`)).body.data.best).toMatchObject({ training: { _id: winner }, metric: { path: 'val.map_0.5' }, value: 0.6, epoch: 1 });
+    expect((await get(`/trainings/best?projectId=${projectId}`)).body.data.best).toMatchObject({
+      training: { _id: winner },
+      metric: { path: 'val.map_0.5' },
+      value: 0.6,
+      epoch: 1
+    });
 
     const punctuated = await project({ name: 'Punctuated', taxonomy: { primaryMetric: 'metrics/mAP50-95(B)' } });
     await run(punctuated, 'a', [{ 'metrics/mAP50-95(B)': 0.2 }]);
     const other = await run(punctuated, 'b', [{ 'metrics/mAP50-95(B)': 0.7 }]);
-    expect((await get(`/trainings/best?projectId=${punctuated}`)).body.data.best).toMatchObject({ training: { _id: other }, metric: { path: 'metrics/mAP50-95(B)' }, value: 0.7 });
+    expect((await get(`/trainings/best?projectId=${punctuated}`)).body.data.best).toMatchObject({
+      training: { _id: other },
+      metric: { path: 'metrics/mAP50-95(B)' },
+      value: 0.7
+    });
   });
 
   it('picks the headline from what the runs report, not from the one run with the most epochs', async () => {
     const projectId = await project();
     // An evaluation-only run with a very long history, and many short runs that report a validation score.
-    await run(projectId, 'long', Array.from({ length: 30 }, (_, i) => ({ probe: { latency: i + 1 } })));
-    for (const [name, value] of [['a', 0.4], ['b', 0.9], ['c', 0.5]] as const) await run(projectId, name, scores(value));
+    await run(
+      projectId,
+      'long',
+      Array.from({ length: 30 }, (_, i) => ({ probe: { latency: i + 1 } }))
+    );
+    for (const [name, value] of [
+      ['a', 0.4],
+      ['b', 0.9],
+      ['c', 0.5]
+    ] as const)
+      await run(projectId, name, scores(value));
 
     const { body } = await get(`/trainings/best?projectId=${projectId}`);
 
@@ -183,7 +263,12 @@ describe('best run with in-memory MongoDB', () => {
     const { body } = await get('/trainings/best?datasetId=zod');
 
     expect(body.data.runs).toBe(5);
-    expect(body.data.best).toMatchObject({ training: { _id: best }, project: { name: 'Lab' }, metric: { path: 'val.mean_iou' }, value: 0.9 });
+    expect(body.data.best).toMatchObject({
+      training: { _id: best },
+      project: { name: 'Lab' },
+      metric: { path: 'val.mean_iou' },
+      value: 0.9
+    });
   });
 
   it('keeps a private project’s runs to those who may read them', async () => {

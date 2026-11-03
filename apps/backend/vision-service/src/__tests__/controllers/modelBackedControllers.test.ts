@@ -1,96 +1,135 @@
-jest.mock('../../services/uploadReservationService', () => ({
-  ...jest.requireActual('../../services/uploadReservationService'),
-  reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
-  claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
-    const files = jest.requireMock('../../clients/fileServiceClient');
-    const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
-    return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
-  }),
-  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../clients/fileServiceClient').deleteFile(fileId))
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../services/uploadReservationService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/uploadReservationService')>(
+      '../../services/uploadReservationService'
+    )),
+    reserveUpload: vi.fn(async function () {
+      return { allocationId: 'reserved-id' };
+    }),
+    claimUpload: vi.fn(async function (
+      _fileId: string,
+      _kind: string,
+      _parent: string,
+      _resource: string,
+      _user: string,
+      resourceId?: string
+    ) {
+      const files = await import('../../clients/fileServiceClient');
+      const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
+      return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
+    }),
+    deleteReservedFile: vi.fn(async function (fileId: string) {
+      return (await import('../../clients/fileServiceClient')).deleteFile(fileId);
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
-jest.mock('../../services/writeAccessService', () => ({
-  ...jest.requireActual('../../services/writeAccessService'),
-  assertResourceWrite: jest.fn(async (resource: unknown) => {
-    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-  }),
-  assertEpochWrite: jest.fn(async (uuid: string) => {
-    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
-    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-    return epoch;
-  })
-}));
+vi.mock('../../services/writeAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/writeAccessService')>('../../services/writeAccessService')),
+    assertResourceWrite: vi.fn(async function (resource: unknown) {
+      if (!resource)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+    }),
+    assertEpochWrite: vi.fn(async function (uuid: string) {
+      const epoch = await (await import('../../models/Epoch')).default.findOne({ epoch_uuid: uuid });
+      if (!epoch)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+      return epoch;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 /**
  * Covers the controllers that talk to Mongoose models directly (older style):
  * config.
  */
-jest.mock('../../models/Config', () => {
-  const ctor = Object.assign(jest.fn(), {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    findById: jest.fn(),
-    countDocuments: jest.fn(),
-  });
-  return { __esModule: true, default: ctor };
+vi.mock('../../models/Config', async () => {
+  const module = await (() => {
+    const ctor = Object.assign(vi.fn(), {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      findById: vi.fn(),
+      countDocuments: vi.fn()
+    });
+    return { __esModule: true, default: ctor };
+  })();
+  return Object.assign({ default: module }, module);
 });
-jest.mock('../../models/Training', () => ({
-  __esModule: true,
-  default: { findById: jest.fn(), findOne: jest.fn(), distinct: jest.fn().mockResolvedValue([]) },
-}));
-jest.mock('../../clients/fileServiceClient', () => ({
-  getSignedUrl: jest.fn(),
-  getUploadSignedUrl: jest.fn(),
-  getFileMetadata: jest.fn(),
-  deleteFile: jest.fn(),
-}));
-jest.mock('../../services/projectAccessService', () => ({
-  ...jest.requireActual('../../services/projectAccessService'),
-  checkProjectAccess: jest.fn().mockResolvedValue(true),
-  getVisibleProjectIds: jest.fn().mockResolvedValue([]),
-  resolveProject: jest.fn().mockResolvedValue({ _id: { toString: () => 'p1' } }),
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../models/Training', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { findById: vi.fn(), findOne: vi.fn(), distinct: vi.fn().mockResolvedValue([]) }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    getSignedUrl: vi.fn(),
+    getUploadSignedUrl: vi.fn(),
+    getFileMetadata: vi.fn(),
+    deleteFile: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/projectAccessService')>(
+      '../../services/projectAccessService'
+    )),
+    checkProjectAccess: vi.fn().mockResolvedValue(true),
+    getVisibleProjectIds: vi.fn().mockResolvedValue([]),
+    resolveProject: vi.fn().mockResolvedValue({ _id: { toString: () => 'p1' } })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { Request, Response } from 'express';
 import * as configCtrl from '../../controllers/configController';
 import Config from '../../models/Config';
 import Training from '../../models/Training';
 
-const mockedConfig = Config as unknown as jest.Mock & Record<string, jest.Mock>;
-const mockedTraining = Training as unknown as Record<string, jest.Mock>;
+const mockedConfig = Config as unknown as Mock & Record<string, Mock>;
+const mockedTraining = Training as unknown as Record<string, Mock>;
 
 type AnyDoc = Record<string, unknown>;
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ params: {}, query: {}, body: {}, user: { id: 'u1' }, ...overrides } as unknown as Request);
+  ({ params: {}, query: {}, body: {}, user: { id: 'u1' }, ...overrides }) as unknown as Request;
 
-const mockChain = (target: jest.Mock, docs: unknown[]) => {
+const mockChain = (target: Mock, docs: unknown[]) => {
   const chain: AnyDoc = {};
   Object.assign(chain, {
-    sort: jest.fn().mockReturnValue(chain),
-    limit: jest.fn().mockReturnValue(chain),
-    skip: jest.fn().mockReturnValue(chain),
+    sort: vi.fn().mockReturnValue(chain),
+    limit: vi.fn().mockReturnValue(chain),
+    skip: vi.fn().mockReturnValue(chain),
     then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
-      Promise.resolve(docs).then(resolve, reject),
+      Promise.resolve(docs).then(resolve, reject)
   });
   target.mockReturnValue(chain);
   return chain;
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('configController', () => {
@@ -108,24 +147,21 @@ describe('configController', () => {
     mockedConfig.countDocuments.mockResolvedValue(11);
     const res = makeRes();
 
-    await configCtrl.getAllConfigs(
-      makeReq({ query: { page: 2, limit: 5, sortBy: 'createdAt', order: -1 } }),
-      res
-    );
+    await configCtrl.getAllConfigs(makeReq({ query: { page: 2, limit: 5, sortBy: 'createdAt', order: -1 } }), res);
 
     expect(res.json.mock.calls[0][0].data.pagination).toEqual({
       page: 2,
       limit: 5,
       total: 11,
-      pages: 3,
+      pages: 3
     });
   });
 
   it('getConfigsByTraining handles missing training, linked config, and none', async () => {
     mockedTraining.findOne.mockResolvedValue(null);
-    await expect(
-      configCtrl.getConfigsByTraining(makeReq({ params: { trainingId: 't1' } }), makeRes())
-    ).rejects.toThrow('Training not found');
+    await expect(configCtrl.getConfigsByTraining(makeReq({ params: { trainingId: 't1' } }), makeRes())).rejects.toThrow(
+      'Training not found'
+    );
 
     mockedTraining.findOne.mockResolvedValue({ _id: 't1', configId: 'c1' });
     mockedConfig.findOne.mockResolvedValue({ _id: 'c1' });
@@ -151,9 +187,9 @@ describe('configController', () => {
     ).rejects.toThrow('Config not found');
 
     mockedConfig.findOne.mockResolvedValue(null);
-    await expect(
-      configCtrl.getConfigByUuid(makeReq({ params: { uuid: 'x' } }), makeRes())
-    ).rejects.toThrow('Config not found');
+    await expect(configCtrl.getConfigByUuid(makeReq({ params: { uuid: 'x' } }), makeRes())).rejects.toThrow(
+      'Config not found'
+    );
 
     mockedConfig.findOne.mockResolvedValue({ _id: 'c1' });
     const res = makeRes();
@@ -162,10 +198,12 @@ describe('configController', () => {
   });
 
   it('createConfig and createConfigFromJson generate a uuid and save', async () => {
-    mockedConfig.mockImplementation((d: AnyDoc) => ({
-      ...d,
-      save: jest.fn().mockResolvedValue({ ...d, _id: 'new' }),
-    }));
+    mockedConfig.mockImplementation(function (d: AnyDoc) {
+      return {
+        ...d,
+        save: vi.fn().mockResolvedValue({ ...d, _id: 'new' })
+      };
+    });
     const res = makeRes();
 
     await configCtrl.createConfig(makeReq({ body: { summary: 's', config_data: {}, projectId: 'slug' } }), res);
@@ -173,8 +211,10 @@ describe('configController', () => {
     expect(mockedConfig.mock.calls[0][0].projectId).toBe('p1');
     expect(res.status).toHaveBeenCalledWith(201);
 
-    await configCtrl.createConfigFromJson(makeReq({ body: { summary: 's2', config_data: {}, projectId: 'slug' } }), makeRes());
+    await configCtrl.createConfigFromJson(
+      makeReq({ body: { summary: 's2', config_data: {}, projectId: 'slug' } }),
+      makeRes()
+    );
     expect(mockedConfig.mock.calls[1][0].summary).toBe('s2');
   });
 });
-

@@ -1,3 +1,8 @@
+import { vi } from 'vitest';
+const { membership } = vi.hoisted(() => {
+  const membership = vi.fn();
+  return { membership };
+});
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHmac } from 'crypto';
@@ -22,12 +27,23 @@ import trainingRoutes from '../../routes/trainingRoutes';
 import { protocolDigest } from '../../services/suiteProtocol';
 import { suiteProtocolSchema } from '../../validation/suiteSchemas';
 
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
-const membership = jest.fn();
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  createGroupServiceClient: () => ({ checkMembership: membership, getMyGroups: jest.fn(async () => []) })
-}));
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    createGroupServiceClient: () => ({
+      checkMembership: membership,
+      getMyGroups: vi.fn(async function () {
+        return [];
+      })
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 const OWNER = '000000000000000000000001';
 const ADMIN = '000000000000000000000002';
@@ -64,35 +80,60 @@ describe('Hub model references with in-memory MongoDB', () => {
     app.use('/.well-known', discoveryRoutes);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 120_000);
 
   beforeEach(async () => {
-    const ids = [OWNER, ADMIN, MEMBER, STRANGER].map(id => new mongoose.Types.ObjectId(id));
-    await mongoose.connection.collection('users').insertMany(ids.map(_id => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
-    await mongoose.connection.collection('user_sessions').insertMany(ids.map(_id => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    jest.mocked(getUserGroups).mockImplementation(async userId => ROLES[userId ?? ''] ?? []);
-    membership.mockImplementation(async (_group: string, userId: string) => {
+    const ids = [OWNER, ADMIN, MEMBER, STRANGER].map((id) => new mongoose.Types.ObjectId(id));
+    await mongoose.connection
+      .collection('users')
+      .insertMany(ids.map((_id) => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
+    await mongoose.connection
+      .collection('user_sessions')
+      .insertMany(ids.map((_id) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
+    vi.mocked(getUserGroups).mockImplementation(async function (userId) {
+      return ROLES[userId ?? ''] ?? [];
+    });
+    membership.mockImplementation(async function (_group: string, userId: string) {
       const role = ROLES[userId]?.[0]?.role;
       return role ? { member: true, role } : { member: false, role: null };
     });
   });
   afterEach(async () => {
-    await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
+    await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   type Body = { data: any; error?: string; message?: string };
-  const call = async (path: string, { method = 'GET', user = OWNER, body }: { method?: string; user?: string; body?: unknown } = {}) => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: user, email: `${user}@example.test`, tokenVersion: 1, sid: user, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
-      .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
+  const call = async (
+    path: string,
+    { method = 'GET', user = OWNER, body }: { method?: string; user?: string; body?: unknown } = {}
+  ) => {
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: user,
+        email: `${user}@example.test`,
+        tokenVersion: 1,
+        sid: user,
+        typ: 'session',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${baseUrl}${path}`, {
       method,
@@ -103,10 +144,22 @@ describe('Hub model references with in-memory MongoDB', () => {
     return { status: response.status, body: (text ? JSON.parse(text) : {}) as Body };
   };
   const project = async (storage?: { provider: 'visin' | 'hf'; settings?: { namespace?: string } }) =>
-    String((await Project.create({ name: 'Team project', owner: { kind: 'group', id: GROUP }, createdBy: OWNER, ...(storage ? { storage } : {}) }))._id);
+    String(
+      (
+        await Project.create({
+          name: 'Team project',
+          owner: { kind: 'group', id: GROUP },
+          createdBy: OWNER,
+          ...(storage ? { storage } : {})
+        })
+      )._id
+    );
   const run = async (projectId: string, ownerId = MEMBER) =>
-    String((await Training.create({ uuid: `run-${new mongoose.Types.ObjectId()}`, name: 'Run', ownerId, projectId }))._id);
-  const link = (trainingId: string, body: unknown, user = MEMBER) => call(`/trainings/${trainingId}/models`, { method: 'POST', user, body });
+    String(
+      (await Training.create({ uuid: `run-${new mongoose.Types.ObjectId()}`, name: 'Run', ownerId, projectId }))._id
+    );
+  const link = (trainingId: string, body: unknown, user = MEMBER) =>
+    call(`/trainings/${trainingId}/models`, { method: 'POST', user, body });
   const model = { provider: 'hf', repo: 'acme/clftv2-zod', revision: COMMIT };
 
   describe('the project storage choice', () => {
@@ -119,30 +172,66 @@ describe('Hub model references with in-memory MongoDB', () => {
       expect(refused.body.message).toMatch(/keeps its files on Visin/);
       expect((await Training.findById(trainingId))?.models).toBeUndefined();
 
-      expect((await project({ provider: 'visin' }).then(id => run(id).then(t => link(t, model)))).status).toBe(409);
+      expect((await project({ provider: 'visin' }).then((id) => run(id).then((t) => link(t, model)))).status).toBe(409);
     });
 
     it('is changed by whoever manages the project, and replaces the whole setting', async () => {
       const projectId = await project();
-      expect((await call(`/projects/${projectId}`, { method: 'PUT', user: MEMBER, body: { storage: { provider: 'hf' } } })).status).toBe(403);
-      const switched = await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { storage: { provider: 'hf', settings: { namespace: 'acme' } } } });
+      expect(
+        (await call(`/projects/${projectId}`, { method: 'PUT', user: MEMBER, body: { storage: { provider: 'hf' } } }))
+          .status
+      ).toBe(403);
+      const switched = await call(`/projects/${projectId}`, {
+        method: 'PUT',
+        user: ADMIN,
+        body: { storage: { provider: 'hf', settings: { namespace: 'acme' } } }
+      });
       expect(switched.status).toBe(200);
       expect(switched.body.data.storage).toEqual({ provider: 'hf', settings: { namespace: 'acme' } });
-      expect((await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { storage: { provider: 'hf' } } })).body.data.storage).toEqual({ provider: 'hf' });
-      expect((await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { name: 'Renamed' } })).body.data.storage).toEqual({ provider: 'hf' });
-      expect((await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { storage: { provider: 's3' } } })).status).toBe(400);
-      expect((await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { storage: { provider: 'hf', settings: { namespace: 'no/slash' } } } })).status).toBe(400);
+      expect(
+        (await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { storage: { provider: 'hf' } } }))
+          .body.data.storage
+      ).toEqual({ provider: 'hf' });
+      expect(
+        (await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { name: 'Renamed' } })).body.data
+          .storage
+      ).toEqual({ provider: 'hf' });
+      expect(
+        (await call(`/projects/${projectId}`, { method: 'PUT', user: ADMIN, body: { storage: { provider: 's3' } } }))
+          .status
+      ).toBe(400);
+      expect(
+        (
+          await call(`/projects/${projectId}`, {
+            method: 'PUT',
+            user: ADMIN,
+            body: { storage: { provider: 'hf', settings: { namespace: 'no/slash' } } }
+          })
+        ).status
+      ).toBe(400);
     });
 
     it('saves the stall timeout on create and update', async () => {
-      const created = await call('/projects', { method: 'POST', user: OWNER, body: { name: 'Timed', stallAfterMinutes: 90 } });
+      const created = await call('/projects', {
+        method: 'POST',
+        user: OWNER,
+        body: { name: 'Timed', stallAfterMinutes: 90 }
+      });
       expect(created.body.data.stallAfterMinutes).toBe(90);
-      const updated = await call(`/projects/${created.body.data._id}`, { method: 'PUT', user: OWNER, body: { stallAfterMinutes: 15 } });
+      const updated = await call(`/projects/${created.body.data._id}`, {
+        method: 'PUT',
+        user: OWNER,
+        body: { stallAfterMinutes: 15 }
+      });
       expect(updated.body.data.stallAfterMinutes).toBe(15);
     });
 
     it('can be chosen when the project is created', async () => {
-      const created = await call('/projects', { method: 'POST', user: OWNER, body: { name: 'Hub project', storage: { provider: 'hf', settings: { namespace: 'acme' } } } });
+      const created = await call('/projects', {
+        method: 'POST',
+        user: OWNER,
+        body: { name: 'Hub project', storage: { provider: 'hf', settings: { namespace: 'acme' } } }
+      });
       expect(created.status).toBe(201);
       expect(created.body.data.storage).toEqual({ provider: 'hf', settings: { namespace: 'acme' } });
     });
@@ -161,19 +250,33 @@ describe('Hub model references with in-memory MongoDB', () => {
     it('pins the repo to a commit and shows it with the run', async () => {
       const projectId = await project({ provider: 'hf' });
       const trainingId = await run(projectId);
-      const created = await link(trainingId, { ...model, revision: COMMIT.toUpperCase(), path: 'checkpoints/best.safetensors', epoch: 12 });
+      const created = await link(trainingId, {
+        ...model,
+        revision: COMMIT.toUpperCase(),
+        path: 'checkpoints/best.safetensors',
+        epoch: 12
+      });
       expect(created.status).toBe(201);
       expect(created.body.data).toHaveLength(1);
-      expect(created.body.data[0]).toMatchObject({ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT, path: 'checkpoints/best.safetensors', epoch: 12 });
-      expect((await call(`/trainings/${trainingId}`)).body.data.models).toMatchObject([{ repo: 'acme/clftv2-zod', revision: COMMIT }]);
+      expect(created.body.data[0]).toMatchObject({
+        provider: 'hf',
+        kind: 'model',
+        repo: 'acme/clftv2-zod',
+        revision: COMMIT,
+        path: 'checkpoints/best.safetensors',
+        epoch: 12
+      });
+      expect((await call(`/trainings/${trainingId}`)).body.data.models).toMatchObject([
+        { repo: 'acme/clftv2-zod', revision: COMMIT }
+      ]);
       expect((await call(`/trainings/${trainingId}/epochs`)).body.data.training.models).toHaveLength(1);
     });
 
     it('is safe to retry, even at the same moment, and keeps distinct commits and paths apart', async () => {
       const trainingId = await run(await project({ provider: 'hf' }));
       const replies = await Promise.all([1, 2, 3, 4].map(() => link(trainingId, model)));
-      expect(replies.filter(reply => reply.status === 201)).toHaveLength(1);
-      expect(replies.filter(reply => reply.status === 200)).toHaveLength(3);
+      expect(replies.filter((reply) => reply.status === 201)).toHaveLength(1);
+      expect(replies.filter((reply) => reply.status === 200)).toHaveLength(3);
       expect((await link(trainingId, model)).body.data).toHaveLength(1);
       expect((await link(trainingId, { ...model, revision: OTHER_COMMIT })).status).toBe(201);
       expect((await link(trainingId, { ...model, path: 'onnx/model.onnx' })).status).toBe(201);
@@ -193,13 +296,24 @@ describe('Hub model references with in-memory MongoDB', () => {
         { ...model, kind: 'dataset' },
         { ...model, epoch: -1 },
         { repo: model.repo }
-      ]) expect((await link(trainingId, body)).status).toBe(400);
+      ])
+        expect((await link(trainingId, body)).status).toBe(400);
       expect((await Training.findById(trainingId))?.models).toBeUndefined();
     });
 
     it('caps the links a run can carry, without refusing a repeat of one it has', async () => {
       const trainingId = await run(await project({ provider: 'hf' }));
-      await Training.updateOne({ _id: trainingId }, { models: Array.from({ length: 50 }, (_, index) => ({ provider: 'hf', kind: 'model', repo: 'acme/m', revision: index.toString(16).padStart(40, '0') })) });
+      await Training.updateOne(
+        { _id: trainingId },
+        {
+          models: Array.from({ length: 50 }, (_, index) => ({
+            provider: 'hf',
+            kind: 'model',
+            repo: 'acme/m',
+            revision: index.toString(16).padStart(40, '0')
+          }))
+        }
+      );
       expect((await link(trainingId, model)).status).toBe(400);
       expect((await link(trainingId, { provider: 'hf', repo: 'acme/m', revision: '0'.repeat(40) })).status).toBe(200);
     });
@@ -218,7 +332,7 @@ describe('Hub model references with in-memory MongoDB', () => {
     it('reports a run deleted while the link was being made', async () => {
       const trainingId = await run(await project({ provider: 'hf' }));
       const lookup = Project.findById.bind(Project);
-      jest.spyOn(Project, 'findById').mockImplementationOnce((async (id: unknown) => {
+      vi.spyOn(Project, 'findById').mockImplementationOnce((async (id: unknown) => {
         await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
         return lookup(id);
       }) as never);
@@ -235,24 +349,66 @@ describe('Hub model references with in-memory MongoDB', () => {
   });
 
   describe('the model card', () => {
-    const card = (trainingId: string, query = '', user = MEMBER) => call(`/trainings/${trainingId}/model-card${query}`, { user });
+    const card = (trainingId: string, query = '', user = MEMBER) =>
+      call(`/trainings/${trainingId}/model-card${query}`, { user });
     const seed = async (taxonomy?: Record<string, unknown>, inProject?: string) => {
       const projectId = inProject ?? (await project({ provider: 'hf' }));
       if (taxonomy) await Project.updateOne({ _id: projectId }, { taxonomy });
       const trainingId = await run(projectId);
-      await Training.updateOne({ _id: trainingId }, { description: 'Fusion of camera and lidar.', dataset: { source: 'visin', id: 'd1', name: 'ZOD | frames', revision: 'rev-1' } });
-      for (const [number, mean_iou, loss] of [[1, 0.4, 0.9], [2, 0.6, 0.5], [3, 0.55, 0.45]] as const) {
-        await Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: `e${number}`, epoch: number, timestamp: new Date(), results: { val: { mean_iou, loss, vehicle: { iou: 0.1 } }, train: { loss: loss + 0.1 }, system_info: { cpu: 8 } } });
+      await Training.updateOne(
+        { _id: trainingId },
+        {
+          description: 'Fusion of camera and lidar.',
+          dataset: { source: 'visin', id: 'd1', name: 'ZOD | frames', revision: 'rev-1' }
+        }
+      );
+      for (const [number, mean_iou, loss] of [
+        [1, 0.4, 0.9],
+        [2, 0.6, 0.5],
+        [3, 0.55, 0.45]
+      ] as const) {
+        await Epoch.create({
+          trainingId,
+          training_uuid: 'u',
+          epoch_uuid: `e${number}`,
+          epoch: number,
+          timestamp: new Date(),
+          results: {
+            val: { mean_iou, loss, vehicle: { iou: 0.1 } },
+            train: { loss: loss + 0.1 },
+            system_info: { cpu: 8 }
+          }
+        });
       }
-      await recordTest({ projectId, trainingId, epoch: 2, epoch_uuid: 'e2', test_uuid: 't1', timestamp: new Date(), test_results: { day: { overall: { iou: 0.71234, f1: 0.8 }, vehicle: { iou: 0.2 } }, night: { overall: { iou: 0.5 } } } });
-      await Benchmark.create({ training_id: trainingId, epoch: 2, timestamp: new Date(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [{ device: 'cuda', fps: 119.04, mean_time_ms: 8.4, total_parameters: 4_500_000 }] });
+      await recordTest({
+        projectId,
+        trainingId,
+        epoch: 2,
+        epoch_uuid: 'e2',
+        test_uuid: 't1',
+        timestamp: new Date(),
+        test_results: {
+          day: { overall: { iou: 0.71234, f1: 0.8 }, vehicle: { iou: 0.2 } },
+          night: { overall: { iou: 0.5 } }
+        }
+      });
+      await Benchmark.create({
+        training_id: trainingId,
+        epoch: 2,
+        timestamp: new Date(),
+        system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 },
+        results: [{ device: 'cuda', fps: 119.04, mean_time_ms: 8.4, total_parameters: 4_500_000 }]
+      });
       return trainingId;
     };
 
     describe('the leaderboards section', () => {
       const saved = { app: process.env.SHELL_FRONT_URL, api: process.env.VISION_API_URL };
       afterEach(() => {
-        for (const [name, value] of [['SHELL_FRONT_URL', saved.app], ['VISION_API_URL', saved.api]] as const) {
+        for (const [name, value] of [
+          ['SHELL_FRONT_URL', saved.app],
+          ['VISION_API_URL', saved.api]
+        ] as const) {
           if (value === undefined) delete process.env[name];
           else process.env[name] = value;
         }
@@ -261,29 +417,70 @@ describe('Hub model references with in-memory MongoDB', () => {
       /** The project the published result is in: a card lists only the standings of its own project's results. */
       let publishedIn: string | undefined;
       /** A published result of the checkpoint the card is for, on a public suite in a public project. */
-      const publishCheckpoint = async (repo: string, revision: string, options: { published?: boolean; suiteVisibility?: 'public' | 'private'; slug?: string } = {}) => {
+      const publishCheckpoint = async (
+        repo: string,
+        revision: string,
+        options: { published?: boolean; suiteVisibility?: 'public' | 'private'; slug?: string } = {}
+      ) => {
         const existing = await Project.findOne({ slug: 'public-home' });
-        const home = existing ? String(existing._id) : String((await Project.create({ name: 'Public home', slug: 'public-home', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else', visibility: 'public', storage: { provider: 'hf' } }))._id);
+        const home = existing
+          ? String(existing._id)
+          : String(
+              (
+                await Project.create({
+                  name: 'Public home',
+                  slug: 'public-home',
+                  owner: { kind: 'user', id: 'someone-else' },
+                  createdBy: 'someone-else',
+                  visibility: 'public',
+                  storage: { provider: 'hf' }
+                })
+              )._id
+            );
         publishedIn = home;
         const protocol = suiteProtocolSchema.parse({
-          task: 'seg', data: { kind: 'external', label: 'x', manifestSha256: 'a'.repeat(64) }, split: 'test',
-          conditions: [{ name: 'day', sampleCount: 1 }], metrics: [{ key: 'mIoU', direction: 'max', headline: true }],
-          aggregation: 'pooled', evaluator: { package: 'p' }
+          task: 'seg',
+          data: { kind: 'external', label: 'x', manifestSha256: 'a'.repeat(64) },
+          split: 'test',
+          conditions: [{ name: 'day', sampleCount: 1 }],
+          metrics: [{ key: 'mIoU', direction: 'max', headline: true }],
+          aggregation: 'pooled',
+          evaluator: { package: 'p' }
         });
-        const suite = await Suite.create({ slug: options.slug ?? 'road-test', version: 1, name: 'Road test', projectId: home, visibility: options.suiteVisibility ?? 'public', createdBy: 'someone-else', protocol, digest: protocolDigest(protocol) });
+        const suite = await Suite.create({
+          slug: options.slug ?? 'road-test',
+          version: 1,
+          name: 'Road test',
+          projectId: home,
+          visibility: options.suiteVisibility ?? 'public',
+          createdBy: 'someone-else',
+          protocol,
+          digest: protocolDigest(protocol)
+        });
         const key = `hf:${repo.toLowerCase()}@${revision}:`;
         const scores = { conditions: { day: { mIoU: 0.7351 } }, overall: { mIoU: 0.7351 } };
         const evaluation = await Evaluation.create({
-          uuid: `card-${options.slug ?? 'road-test'}`, projectId: home, ownerId: 'someone-else', checkpoint: { kind: 'hf', repo, commit: revision }, checkpointKey: key,
-          suite: { id: String(suite._id), slug: options.slug ?? 'road-test', version: 1, digest: suite.digest }, status: 'completed', results: {},
-          receivedAt: new Date(), validation: { version: 2, state: 'eligible', evidence: 'reported', reasons: [], warnings: [], scores }, contentHash: 'h',
+          uuid: `card-${options.slug ?? 'road-test'}`,
+          projectId: home,
+          ownerId: 'someone-else',
+          checkpoint: { kind: 'hf', repo, commit: revision },
+          checkpointKey: key,
+          suite: { id: String(suite._id), slug: options.slug ?? 'road-test', version: 1, digest: suite.digest },
+          status: 'completed',
+          results: {},
+          receivedAt: new Date(),
+          validation: { version: 2, state: 'eligible', evidence: 'reported', reasons: [], warnings: [], scores },
+          contentHash: 'h',
           ...(options.published === false ? {} : { publishedAt: new Date(), publishedBy: 'someone-else' })
         });
         return { key, evaluationId: String(evaluation._id) };
       };
       const cardFor = async () => {
         const trainingId = await seed(undefined, publishedIn);
-        await Training.updateOne({ _id: trainingId }, { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] });
+        await Training.updateOne(
+          { _id: trainingId },
+          { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] }
+        );
         return card(trainingId, '?repo=acme/clftv2-zod&epoch=2');
       };
 
@@ -295,7 +492,9 @@ describe('Hub model references with in-memory MongoDB', () => {
         expect(readme).toContain('## Leaderboards');
         expect(readme).toContain(`[road-test@1](https://app.example.test/leaderboards/road-test/1/${evaluationId})`);
         expect(readme).toContain('| 1 of 1 | mIoU 0.7351 |');
-        expect(readme).toContain(`[![road-test@1](https://api.example.test/api/public/badges/road-test/1/${encodeURIComponent(key)}.svg?project=public-home)](https://app.example.test/leaderboards/road-test/1/${evaluationId})`);
+        expect(readme).toContain(
+          `[![road-test@1](https://api.example.test/api/public/badges/road-test/1/${encodeURIComponent(key)}.svg?project=public-home)](https://app.example.test/leaderboards/road-test/1/${evaluationId})`
+        );
       });
 
       it('writes no badge for a project that has no slug to name it by', async () => {
@@ -354,19 +553,27 @@ describe('Hub model references with in-memory MongoDB', () => {
         expect((await cardFor()).body.data.readme).not.toContain('## Leaderboards');
       });
 
-      it('says nothing of another project\'s result of the same checkpoint', async () => {
+      it("says nothing of another project's result of the same checkpoint", async () => {
         process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const trainingId = await seed();
-        await Training.updateOne({ _id: trainingId }, { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] });
-        expect((await card(trainingId, '?repo=acme/clftv2-zod&epoch=2')).body.data.readme).not.toContain('## Leaderboards');
+        await Training.updateOne(
+          { _id: trainingId },
+          { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] }
+        );
+        expect((await card(trainingId, '?repo=acme/clftv2-zod&epoch=2')).body.data.readme).not.toContain(
+          '## Leaderboards'
+        );
       });
 
       it('says nothing for a card that names no repo', async () => {
         process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const trainingId = await seed();
-        await Training.updateOne({ _id: trainingId }, { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] });
+        await Training.updateOne(
+          { _id: trainingId },
+          { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] }
+        );
         expect((await card(trainingId, '?epoch=2')).body.data.readme).not.toContain('## Leaderboards');
       });
     });
@@ -376,10 +583,14 @@ describe('Hub model references with in-memory MongoDB', () => {
       const response = await card(trainingId, '?repo=acme/clftv2-zod&epoch=2');
       expect(response.status).toBe(200);
       const readme: string = response.body.data.readme;
-      expect(readme.startsWith('---\nlibrary_name: visin-trained\ntags:\n  - visin\n  - image-segmentation\nmodel-index:')).toBe(true);
+      expect(
+        readme.startsWith('---\nlibrary_name: visin-trained\ntags:\n  - visin\n  - image-segmentation\nmodel-index:')
+      ).toBe(true);
       expect(readme).toContain('  - name: "clftv2-zod"');
       expect(readme).toContain('type: "image-segmentation"');
-      expect(readme).toContain('          - type: "val.mean_iou"\n            value: 0.6\n            name: "val.mean_iou"');
+      expect(readme).toContain(
+        '          - type: "val.mean_iou"\n            value: 0.6\n            name: "val.mean_iou"'
+      );
       expect(readme).not.toContain('val.vehicle.iou');
       expect(readme).not.toContain('system_info');
       expect(readme).toContain('# clftv2-zod');
@@ -415,18 +626,36 @@ describe('Hub model references with in-memory MongoDB', () => {
       const projectId = await project({ provider: 'hf' });
       const plain = await run(projectId);
       for (const number of [1, 2]) {
-        await Epoch.create({ trainingId: plain, training_uuid: 'u', epoch_uuid: `p${number}`, epoch: number, timestamp: new Date(), results: { weld: { quality: number } } });
+        await Epoch.create({
+          trainingId: plain,
+          training_uuid: 'u',
+          epoch_uuid: `p${number}`,
+          epoch: number,
+          timestamp: new Date(),
+          results: { weld: { quality: number } }
+        });
       }
       const unranked: string = (await card(plain)).body.data.readme;
-      expect(unranked).toContain('| This checkpoint | epoch 2 (the last epoch, as the run reports no result to pick the best by) |');
-      expect((await card(trainingId, '?epoch=1')).body.data.readme).toContain('| This checkpoint | epoch 1 (the epoch asked for) |');
+      expect(unranked).toContain(
+        '| This checkpoint | epoch 2 (the last epoch, as the run reports no result to pick the best by) |'
+      );
+      expect((await card(trainingId, '?epoch=1')).body.data.readme).toContain(
+        '| This checkpoint | epoch 1 (the epoch asked for) |'
+      );
     });
 
     it('does not publish the learning rate as a score when a pipeline logs it beside its blocks', async () => {
       const projectId = await project({ provider: 'hf' });
       await Project.updateOne({ _id: projectId }, { taxonomy: { taskType: 'segmentation' } });
       const trainingId = await run(projectId);
-      await Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: 'e1', epoch: 1, timestamp: new Date(), results: { lr: 0.0001, val: { mean_iou: 0.7 } } });
+      await Epoch.create({
+        trainingId,
+        training_uuid: 'u',
+        epoch_uuid: 'e1',
+        epoch: 1,
+        timestamp: new Date(),
+        results: { lr: 0.0001, val: { mean_iou: 0.7 } }
+      });
       const readme: string = (await card(trainingId)).body.data.readme;
       expect(readme).toContain('- type: "val.mean_iou"');
       expect(readme).not.toContain('"lr"');
@@ -442,12 +671,47 @@ describe('Hub model references with in-memory MongoDB', () => {
     it('falls back where the run recorded little: no dataset, a config summary, odd benchmark and test shapes', async () => {
       const projectId = await project({ provider: 'hf' });
       await Project.updateOne({ _id: projectId }, { taxonomy: { taskType: 'detection' } });
-      const config = await Config.create({ config_uuid: 'c1', summary: 'Baseline | lr 1e-4', config_data: { secret: 'hunter2' }, projectId });
+      const config = await Config.create({
+        config_uuid: 'c1',
+        summary: 'Baseline | lr 1e-4',
+        config_data: { secret: 'hunter2' },
+        projectId
+      });
       const trainingId = await run(projectId, MEMBER);
-      await Training.updateOne({ _id: trainingId }, { configId: String(config._id), datasetId: 'local-set', name: 'Plain run' });
-      await Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: 'e1', epoch: 1, timestamp: new Date(), results: { note: 'only text' } });
-      await recordTest({ projectId: (await Training.findById(trainingId))!.projectId!, trainingId, epoch: 1, epoch_uuid: 'e1', test_uuid: 't1', timestamp: new Date(), test_results: { day: { vehicle: { iou: 0.2 } }, dusk: { overall: { note: 'text' } }, ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [`c${i}`, { overall: { iou: 0.5 } }])) } });
-      await Benchmark.create({ training_id: trainingId, timestamp: new Date(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [{ device_type: 'cpu', fps: 'fast', total_parameters_m: 2.5 }, { device: 'cuda', mean_time_ms: 5 }] });
+      await Training.updateOne(
+        { _id: trainingId },
+        { configId: String(config._id), datasetId: 'local-set', name: 'Plain run' }
+      );
+      await Epoch.create({
+        trainingId,
+        training_uuid: 'u',
+        epoch_uuid: 'e1',
+        epoch: 1,
+        timestamp: new Date(),
+        results: { note: 'only text' }
+      });
+      await recordTest({
+        projectId: (await Training.findById(trainingId))!.projectId!,
+        trainingId,
+        epoch: 1,
+        epoch_uuid: 'e1',
+        test_uuid: 't1',
+        timestamp: new Date(),
+        test_results: {
+          day: { vehicle: { iou: 0.2 } },
+          dusk: { overall: { note: 'text' } },
+          ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [`c${i}`, { overall: { iou: 0.5 } }]))
+        }
+      });
+      await Benchmark.create({
+        training_id: trainingId,
+        timestamp: new Date(),
+        system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 },
+        results: [
+          { device_type: 'cpu', fps: 'fast', total_parameters_m: 2.5 },
+          { device: 'cuda', mean_time_ms: 5 }
+        ]
+      });
       const readme: string = (await card(trainingId, '?epoch=1')).body.data.readme;
       expect(readme).toContain('| Dataset | local-set |');
       expect(readme).toContain('| Configuration | Baseline \\| lr 1e-4 |');
@@ -513,42 +777,104 @@ describe('Hub model references with in-memory MongoDB', () => {
   describe('the run summary', () => {
     const summary = (trainingId: string, user = MEMBER) => call(`/trainings/${trainingId}/summary`, { user });
     const epoch = (trainingId: string, number: number, results: Record<string, unknown>) =>
-      Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: `e-${trainingId}-${number}`, epoch: number, timestamp: new Date(), results });
+      Epoch.create({
+        trainingId,
+        training_uuid: 'u',
+        epoch_uuid: `e-${trainingId}-${number}`,
+        epoch: number,
+        timestamp: new Date(),
+        results
+      });
 
     it('gives the best epoch beside the last for each result, in the direction that makes it better', async () => {
       const projectId = await project({ provider: 'hf' });
       const trainingId = await run(projectId);
-      await Training.updateOne({ _id: trainingId }, { datasetId: 'zod', status: 'completed', configId: 'c1', models: [{ provider: 'hf', kind: 'model', repo: 'acme/m', revision: COMMIT }] });
+      await Training.updateOne(
+        { _id: trainingId },
+        {
+          datasetId: 'zod',
+          status: 'completed',
+          configId: 'c1',
+          models: [{ provider: 'hf', kind: 'model', repo: 'acme/m', revision: COMMIT }]
+        }
+      );
       await epoch(trainingId, 1, { val: { mean_iou: 0.4, loss: 0.9, vehicle: { iou: 0.1 } }, system_info: { cpu: 8 } });
       await epoch(trainingId, 2, { val: { mean_iou: 0.7, loss: 0.5 } });
       await epoch(trainingId, 3, { val: { mean_iou: 0.6, loss: 0.2 } });
       const { status, body } = await summary(trainingId);
       expect(status).toBe(200);
-      expect(body.data).toMatchObject({ epochCount: 3, lastEpoch: 3, training: { status: 'completed', datasetId: 'zod', configId: 'c1' }, models: [{ repo: 'acme/m' }] });
+      expect(body.data).toMatchObject({
+        epochCount: 3,
+        lastEpoch: 3,
+        training: { status: 'completed', datasetId: 'zod', configId: 'c1' },
+        models: [{ repo: 'acme/m' }]
+      });
       expect(body.data.metrics).toEqual([
-        { path: 'val.loss', direction: 'lower', directionFrom: 'default', best: { value: 0.2, epoch: 3 }, last: { value: 0.2, epoch: 3 } },
-        { path: 'val.mean_iou', direction: 'higher', directionFrom: 'default', best: { value: 0.7, epoch: 2 }, last: { value: 0.6, epoch: 3 } }
+        {
+          path: 'val.loss',
+          direction: 'lower',
+          directionFrom: 'default',
+          best: { value: 0.2, epoch: 3 },
+          last: { value: 0.2, epoch: 3 }
+        },
+        {
+          path: 'val.mean_iou',
+          direction: 'higher',
+          directionFrom: 'default',
+          best: { value: 0.7, epoch: 2 },
+          last: { value: 0.6, epoch: 3 }
+        }
       ]);
       expect(body.data).not.toHaveProperty('provenance');
     });
 
     it('lists the validation results of a run that also logs a bare number beside its blocks', async () => {
       const trainingId = await run(await project({ provider: 'hf' }));
-      await epoch(trainingId, 1, { lr: 0.001, epoch_time_s: 30, train: { loss: 0.9 }, val: { loss: 0.8, mean_iou: 0.4 } });
-      await epoch(trainingId, 2, { lr: 0.0005, epoch_time_s: 31, train: { loss: 0.5 }, val: { loss: 0.6, mean_iou: 0.6 } });
+      await epoch(trainingId, 1, {
+        lr: 0.001,
+        epoch_time_s: 30,
+        train: { loss: 0.9 },
+        val: { loss: 0.8, mean_iou: 0.4 }
+      });
+      await epoch(trainingId, 2, {
+        lr: 0.0005,
+        epoch_time_s: 31,
+        train: { loss: 0.5 },
+        val: { loss: 0.6, mean_iou: 0.6 }
+      });
       const { body } = await summary(trainingId);
-      expect(body.data.metrics.map((metric: { path: string }) => metric.path)).toEqual(['train.loss', 'val.loss', 'val.mean_iou']);
+      expect(body.data.metrics.map((metric: { path: string }) => metric.path)).toEqual([
+        'train.loss',
+        'val.loss',
+        'val.mean_iou'
+      ]);
       expect(body.data.metrics[2]).toMatchObject({ best: { value: 0.6, epoch: 2 } });
     });
 
     it('lets the project say which way a result is better, by leaf name or full path', async () => {
       const projectId = await project({ provider: 'hf' });
-      await Project.updateOne({ _id: projectId }, { taxonomy: { metrics: [{ key: 'mean_iou', direction: 'lower' }, { key: 'val.score', direction: 'higher' }] } });
+      await Project.updateOne(
+        { _id: projectId },
+        {
+          taxonomy: {
+            metrics: [
+              { key: 'mean_iou', direction: 'lower' },
+              { key: 'val.score', direction: 'higher' }
+            ]
+          }
+        }
+      );
       const trainingId = await run(projectId);
       await epoch(trainingId, 1, { val: { mean_iou: 0.4, score: 1, flops: 9 } });
       await epoch(trainingId, 2, { val: { mean_iou: 0.7, score: 3, flops: 4 } });
-      const byPath = Object.fromEntries((await summary(trainingId)).body.data.metrics.map((m: { path: string }) => [m.path, m]));
-      expect(byPath['val.mean_iou']).toMatchObject({ direction: 'lower', directionFrom: 'taxonomy', best: { epoch: 1 } });
+      const byPath = Object.fromEntries(
+        (await summary(trainingId)).body.data.metrics.map((m: { path: string }) => [m.path, m])
+      );
+      expect(byPath['val.mean_iou']).toMatchObject({
+        direction: 'lower',
+        directionFrom: 'taxonomy',
+        best: { epoch: 1 }
+      });
       expect(byPath['val.score']).toMatchObject({ direction: 'higher', directionFrom: 'taxonomy', best: { epoch: 2 } });
       expect(byPath['val.flops']).toMatchObject({ direction: 'higher', directionFrom: 'default' });
     });
@@ -560,15 +886,27 @@ describe('Hub model references with in-memory MongoDB', () => {
 
     it('prefers a full-path direction over the leaf default regardless of row order', async () => {
       const projectId = await project({ provider: 'hf' });
-      await Project.updateOne({ _id: projectId }, { taxonomy: { metrics: [{ key: 'score', direction: 'higher' }, { key: 'val.score', direction: 'lower' }] } });
+      await Project.updateOne(
+        { _id: projectId },
+        {
+          taxonomy: {
+            metrics: [
+              { key: 'score', direction: 'higher' },
+              { key: 'val.score', direction: 'lower' }
+            ]
+          }
+        }
+      );
       const trainingId = await run(projectId);
       await epoch(trainingId, 1, { val: { score: 0.2 }, train: { score: 0.2 } });
       await epoch(trainingId, 2, { val: { score: 0.8 }, train: { score: 0.8 } });
       const { body } = await summary(trainingId);
-      expect(body.data.metrics).toEqual(expect.arrayContaining([
-        expect.objectContaining({ path: 'val.score', direction: 'lower', best: { epoch: 1, value: 0.2 } }),
-        expect.objectContaining({ path: 'train.score', direction: 'higher', best: { epoch: 2, value: 0.8 } })
-      ]));
+      expect(body.data.metrics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'val.score', direction: 'lower', best: { epoch: 1, value: 0.2 } }),
+          expect.objectContaining({ path: 'train.score', direction: 'higher', best: { epoch: 2, value: 0.8 } })
+        ])
+      );
     });
 
     it('reads the same epochs when the training ID is written in uppercase', async () => {
@@ -576,7 +914,11 @@ describe('Hub model references with in-memory MongoDB', () => {
       await epoch(trainingId, 1, { val: { loss: 0.4 } });
       const { status, body } = await summary(trainingId.toUpperCase());
       expect(status).toBe(200);
-      expect(body.data).toMatchObject({ epochCount: 1, lastEpoch: 1, metrics: [expect.objectContaining({ path: 'val.loss' })] });
+      expect(body.data).toMatchObject({
+        epochCount: 1,
+        lastEpoch: 1,
+        metrics: [expect.objectContaining({ path: 'val.loss' })]
+      });
       const card = await call(`/trainings/${trainingId.toUpperCase()}/model-card?epoch=1`);
       expect(card.status).toBe(200);
       expect(card.body.data.readme).toContain('## Results at epoch 1');
@@ -598,37 +940,73 @@ describe('Hub model references with in-memory MongoDB', () => {
 
   describe('run notes', () => {
     const create = async (body: Record<string, unknown>) =>
-      call('/trainings', { method: 'POST', user: OWNER, body: { name: 'Noted', projectId: await project({ provider: 'hf' }), ...body } });
+      call('/trainings', {
+        method: 'POST',
+        user: OWNER,
+        body: { name: 'Noted', projectId: await project({ provider: 'hf' }), ...body }
+      });
 
     it('are the researcher’s own text, trimmed, changed by whoever may write, and removed when emptied', async () => {
       const created = await create({ notes: '  used the relabelled night set  ' });
       expect(created.body.data.notes).toBe('used the relabelled night set');
       const id = created.body.data._id;
-      expect((await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { notes: 'reran with seed 2' } })).body.data.notes).toBe('reran with seed 2');
-      expect((await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { name: 'Renamed' } })).body.data.notes).toBe('reran with seed 2');
+      expect(
+        (await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { notes: 'reran with seed 2' } })).body.data
+          .notes
+      ).toBe('reran with seed 2');
+      expect(
+        (await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { name: 'Renamed' } })).body.data.notes
+      ).toBe('reran with seed 2');
       const cleared = await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { notes: '   ' } });
       expect(cleared.body.data).not.toHaveProperty('notes');
-      expect((await call(`/trainings/${id}`, { method: 'PUT', user: STRANGER, body: { notes: 'mine' } })).status).toBe(403);
+      expect((await call(`/trainings/${id}`, { method: 'PUT', user: STRANGER, body: { notes: 'mine' } })).status).toBe(
+        403
+      );
     });
 
     it('are limited to five thousand characters, and absent from a run that has none', async () => {
       const created = await create({});
       expect(created.body.data).not.toHaveProperty('notes');
-      expect((await call(`/trainings/${created.body.data._id}`, { method: 'PUT', user: OWNER, body: { notes: 'x'.repeat(5001) } })).status).toBe(400);
-      expect((await call(`/trainings/${created.body.data._id}`, { method: 'PUT', user: OWNER, body: { notes: 'x'.repeat(5000) } })).status).toBe(200);
+      expect(
+        (
+          await call(`/trainings/${created.body.data._id}`, {
+            method: 'PUT',
+            user: OWNER,
+            body: { notes: 'x'.repeat(5001) }
+          })
+        ).status
+      ).toBe(400);
+      expect(
+        (
+          await call(`/trainings/${created.body.data._id}`, {
+            method: 'PUT',
+            user: OWNER,
+            body: { notes: 'x'.repeat(5000) }
+          })
+        ).status
+      ).toBe(200);
     });
   });
 
   describe('provenance', () => {
     const provenance = {
-      git: { commit: 'a'.repeat(40), branch: 'main', dirty: true, remote: 'https://ghp_secret123@github.com/acme/fusion.git' },
+      git: {
+        commit: 'a'.repeat(40),
+        branch: 'main',
+        dirty: true,
+        remote: 'https://ghp_secret123@github.com/acme/fusion.git'
+      },
       command: 'python -m visin_fusion.engine.stages.train -c cfg.json',
       packages: { torch: '2.5.0', visin: '0.7.0' },
       host: { hostname: 'gpu-3', platform: 'Linux-6.8', python: '3.12.1', cuda: '12.4' },
       invented: 'dropped'
     };
     const create = async (body: Record<string, unknown>) =>
-      call('/trainings', { method: 'POST', user: OWNER, body: { name: 'Prov', projectId: await project({ provider: 'hf' }), ...body } });
+      call('/trainings', {
+        method: 'POST',
+        user: OWNER,
+        body: { name: 'Prov', projectId: await project({ provider: 'hf' }), ...body }
+      });
 
     it('records what the run started from, without credentials or unknown fields, and returns it in the summary', async () => {
       const created = await create({ provenance });
@@ -639,17 +1017,38 @@ describe('Hub model references with in-memory MongoDB', () => {
         packages: provenance.packages,
         host: provenance.host
       });
-      expect((await call(`/trainings/${created.body.data._id}/summary`, { user: OWNER })).body.data.provenance.git.commit).toBe('a'.repeat(40));
+      expect(
+        (await call(`/trainings/${created.body.data._id}/summary`, { user: OWNER })).body.data.provenance.git.commit
+      ).toBe('a'.repeat(40));
     });
 
     it('can be set later, and is refused when it is not a commit or has too many packages', async () => {
       const created = await create({});
       const id = created.body.data._id;
       expect(created.body.data).not.toHaveProperty('provenance');
-      expect((await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { provenance: { git: { commit: 'a1b2c3d' } } } })).body.data.provenance).toEqual({ git: { commit: 'a1b2c3d' } });
-      expect((await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { provenance: { git: { commit: 'main' } } } })).status).toBe(400);
+      expect(
+        (
+          await call(`/trainings/${id}`, {
+            method: 'PUT',
+            user: OWNER,
+            body: { provenance: { git: { commit: 'a1b2c3d' } } }
+          })
+        ).body.data.provenance
+      ).toEqual({ git: { commit: 'a1b2c3d' } });
+      expect(
+        (
+          await call(`/trainings/${id}`, {
+            method: 'PUT',
+            user: OWNER,
+            body: { provenance: { git: { commit: 'main' } } }
+          })
+        ).status
+      ).toBe(400);
       const many = Object.fromEntries(Array.from({ length: 301 }, (_, i) => [`p${i}`, '1']));
-      expect((await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { provenance: { packages: many } } })).status).toBe(400);
+      expect(
+        (await call(`/trainings/${id}`, { method: 'PUT', user: OWNER, body: { provenance: { packages: many } } }))
+          .status
+      ).toBe(400);
     });
   });
 
@@ -670,9 +1069,13 @@ describe('Hub model references with in-memory MongoDB', () => {
       const removed = await call(`/trainings/${trainingId}/models/${first._id}`, { method: 'DELETE', user: MEMBER });
       expect(removed.status).toBe(200);
       expect(removed.body.data).toMatchObject([{ _id: second._id, path: 'b' }]);
-      expect((await call(`/trainings/${trainingId}/models/${first._id}`, { method: 'DELETE', user: MEMBER })).status).toBe(404);
+      expect(
+        (await call(`/trainings/${trainingId}/models/${first._id}`, { method: 'DELETE', user: MEMBER })).status
+      ).toBe(404);
       expect((await call(`/trainings/${trainingId}/models/nope`, { method: 'DELETE', user: MEMBER })).status).toBe(400);
-      expect((await call(`/trainings/${trainingId}/models/${second._id}`, { method: 'DELETE', user: STRANGER })).status).toBe(403);
+      expect(
+        (await call(`/trainings/${trainingId}/models/${second._id}`, { method: 'DELETE', user: STRANGER })).status
+      ).toBe(403);
     });
   });
 });
@@ -695,46 +1098,99 @@ describe('the model registry with in-memory MongoDB', () => {
     app.use('/models', modelRoutes);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 120_000);
   beforeEach(async () => {
-    const ids = [OWNER, STRANGER].map(id => new mongoose.Types.ObjectId(id));
-    await mongoose.connection.collection('users').insertMany(ids.map(_id => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
-    await mongoose.connection.collection('user_sessions').insertMany(ids.map(_id => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    jest.mocked(getUserGroups).mockResolvedValue([]);
+    const ids = [OWNER, STRANGER].map((id) => new mongoose.Types.ObjectId(id));
+    await mongoose.connection
+      .collection('users')
+      .insertMany(ids.map((_id) => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
+    await mongoose.connection
+      .collection('user_sessions')
+      .insertMany(ids.map((_id) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
+    vi.mocked(getUserGroups).mockResolvedValue([]);
   });
   afterEach(async () => {
-    await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
+    await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const list = async (query = '', user: string | '' = OWNER): Promise<{ status: number; data: any; message?: string }> => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: user, email: `${user}@example.test`, tokenVersion: 1, sid: user, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
-      .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
+  // The list response intentionally has varied, ad hoc model shapes.
+  /* oxlint-disable typescript/no-explicit-any */
+  const list = async (
+    query = '',
+    user: string | '' = OWNER
+  ): Promise<{ status: number; data: any; message?: string }> => {
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: user,
+        email: `${user}@example.test`,
+        tokenVersion: 1,
+        sid: user,
+        typ: 'session',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
-    const response = await fetch(`${baseUrl}/models${query}`, { headers: user ? { Authorization: `Bearer ${token}` } : {} });
-    const body = await response.json() as { data?: unknown; message?: string };
+    const response = await fetch(`${baseUrl}/models${query}`, {
+      headers: user ? { Authorization: `Bearer ${token}` } : {}
+    });
+    const body = (await response.json()) as { data?: unknown; message?: string };
     return { status: response.status, data: body.data, message: body.message };
   };
+  /* oxlint-enable typescript/no-explicit-any */
   const project = async (fields: Record<string, unknown> = {}) =>
-    String((await Project.create({ name: 'Road', slug: `road-${new mongoose.Types.ObjectId()}`, owner: { kind: 'user', id: OWNER }, createdBy: OWNER, ...fields }))._id);
-  const run = async (projectId: string, name: string, models: { repo: string; revision?: string; path?: string; addedAt?: Date; epoch?: number }[], extra: Record<string, unknown> = {}) => {
+    String(
+      (
+        await Project.create({
+          name: 'Road',
+          slug: `road-${new mongoose.Types.ObjectId()}`,
+          owner: { kind: 'user', id: OWNER },
+          createdBy: OWNER,
+          ...fields
+        })
+      )._id
+    );
+  const run = async (
+    projectId: string,
+    name: string,
+    models: { repo: string; revision?: string; path?: string; addedAt?: Date; epoch?: number }[],
+    extra: Record<string, unknown> = {}
+  ) => {
     const training = await Training.create({
-      uuid: `run-${new mongoose.Types.ObjectId()}`, name, ownerId: OWNER, projectId, ...extra,
-      models: models.map(model => ({ provider: 'hf', kind: 'model', revision: A, ...model }))
+      uuid: `run-${new mongoose.Types.ObjectId()}`,
+      name,
+      ownerId: OWNER,
+      projectId,
+      ...extra,
+      models: models.map((model) => ({ provider: 'hf', kind: 'model', revision: A, ...model }))
     });
     return String(training._id);
   };
   const epoch = (trainingId: string, number: number, results: Record<string, unknown>) =>
-    Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: `e-${trainingId}-${number}`, epoch: number, timestamp: new Date(), results });
-  const repos = (data: { models: { model: { repo: string } }[] }) => data.models.map(row => row.model.repo);
+    Epoch.create({
+      trainingId,
+      training_uuid: 'u',
+      epoch_uuid: `e-${trainingId}-${number}`,
+      epoch: number,
+      timestamp: new Date(),
+      results
+    });
+  const repos = (data: { models: { model: { repo: string } }[] }) => data.models.map((row) => row.model.repo);
 
   it('offers numeric results from visible model runs without exposing private metrics', async () => {
     const visible = await project({ visibility: 'public' });
@@ -753,7 +1209,10 @@ describe('the model registry with in-memory MongoDB', () => {
     const hidden = await project({ owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER });
     const open = await project({ owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER, visibility: 'public' });
     await run(mine, 'old', [{ repo: 'acme/old', addedAt: new Date('2026-01-01') }]);
-    await run(mine, 'new', [{ repo: 'acme/new', addedAt: new Date('2026-03-01') }, { repo: 'acme/newer', addedAt: new Date('2026-04-01') }]);
+    await run(mine, 'new', [
+      { repo: 'acme/new', addedAt: new Date('2026-03-01') },
+      { repo: 'acme/newer', addedAt: new Date('2026-04-01') }
+    ]);
     await run(mine, 'no models', []);
     await run(hidden, 'private', [{ repo: 'secret/model' }]);
     await run(open, 'public', [{ repo: 'open/model', addedAt: new Date('2026-02-01') }]);
@@ -762,7 +1221,11 @@ describe('the model registry with in-memory MongoDB', () => {
     const mineAndPublic = await list();
     expect(repos(mineAndPublic.data)).toEqual(['acme/newer', 'acme/new', 'open/model', 'acme/old']);
     expect(mineAndPublic.data.pagination).toMatchObject({ total: 4, pages: 1 });
-    expect(mineAndPublic.data.models[0]).toMatchObject({ training: { name: 'new', status: 'pending' }, project: { name: 'Road' }, model: { revision: A } });
+    expect(mineAndPublic.data.models[0]).toMatchObject({
+      training: { name: 'new', status: 'pending' },
+      project: { name: 'Road' },
+      model: { revision: A }
+    });
     expect(repos((await list('', '')).data)).toEqual(['open/model']);
     expect(repos((await list('', STRANGER)).data)).toEqual(['secret/model', 'open/model']);
   });
@@ -815,7 +1278,12 @@ describe('the model registry with in-memory MongoDB', () => {
 
   it('scores a checkpoint by the epoch it was saved at, not by where its run peaked', async () => {
     const id = await project();
-    const early = await run(id, 'early', [{ repo: 'acme/early', epoch: 1 }, { repo: 'acme/late', epoch: 3 }, { repo: 'acme/unsaved', epoch: 9 }, { repo: 'acme/any' }]);
+    const early = await run(id, 'early', [
+      { repo: 'acme/early', epoch: 1 },
+      { repo: 'acme/late', epoch: 3 },
+      { repo: 'acme/unsaved', epoch: 9 },
+      { repo: 'acme/any' }
+    ]);
     await epoch(early, 1, { val: { mean_iou: 0.4, loss: 0.9 } });
     await epoch(early, 2, { val: { mean_iou: 0.8, loss: 0.2 } });
     await epoch(early, 3, { val: { mean_iou: 0.6, loss: 0.5 } });
@@ -824,7 +1292,9 @@ describe('the model registry with in-memory MongoDB', () => {
     // acme/any names no epoch, so it is ranked by the run's peak (0.8); acme/unsaved names an epoch
     // that reported nothing and is not credited with that peak.
     expect(repos(ranked.data)).toEqual(['acme/any', 'acme/late', 'acme/early', 'acme/unsaved']);
-    const byRepo = Object.fromEntries(ranked.data.models.map((row: { model: { repo: string } }) => [row.model.repo, row]));
+    const byRepo = Object.fromEntries(
+      ranked.data.models.map((row: { model: { repo: string } }) => [row.model.repo, row])
+    );
     expect(byRepo['acme/early'].checkpoint).toEqual({ metric: 'val.mean_iou', direction: 'max', value: 0.4, epoch: 1 });
     expect(byRepo['acme/early'].best).toMatchObject({ value: 0.8, epoch: 2 });
     expect(byRepo['acme/late'].checkpoint).toMatchObject({ value: 0.6, epoch: 3 });
@@ -840,7 +1310,15 @@ describe('the model registry with in-memory MongoDB', () => {
   it('scores a checkpoint from the newest row when an epoch was posted twice', async () => {
     const id = await project();
     const run1 = await run(id, 'reposted', [{ repo: 'acme/reposted', epoch: 2 }]);
-    const row = (value: number, createdAt: string) => ({ trainingId: run1, training_uuid: 'u', epoch_uuid: `e-${value}`, epoch: 2, timestamp: new Date(), createdAt: new Date(createdAt), results: { val: { mean_iou: value } } });
+    const row = (value: number, createdAt: string) => ({
+      trainingId: run1,
+      training_uuid: 'u',
+      epoch_uuid: `e-${value}`,
+      epoch: 2,
+      timestamp: new Date(),
+      createdAt: new Date(createdAt),
+      results: { val: { mean_iou: value } }
+    });
     // Written straight to the collection so the timestamps stay as given; the older row is inserted last.
     await Epoch.collection.insertMany([row(0.9, '2026-10-02T00:00:00Z'), row(0.2, '2026-10-01T00:00:00Z')]);
     const ranked = await list('?metric=val.mean_iou&sortBy=best');
@@ -850,19 +1328,51 @@ describe('the model registry with in-memory MongoDB', () => {
   describe('what each checkpoint scored on suites', () => {
     const suiteIn = async (projectId: string, version = 1, slug = 'road-test') => {
       const protocol = suiteProtocolSchema.parse({
-        task: 'seg', data: { kind: 'external', label: 'x', manifestSha256: 'a'.repeat(64) }, split: 'test',
-        conditions: [{ name: 'day', sampleCount: 1 }], metrics: [{ key: 'mIoU', direction: 'max', unit: 'ratio', headline: true }],
-        aggregation: 'pooled', evaluator: { package: 'p' }
+        task: 'seg',
+        data: { kind: 'external', label: 'x', manifestSha256: 'a'.repeat(64) },
+        split: 'test',
+        conditions: [{ name: 'day', sampleCount: 1 }],
+        metrics: [{ key: 'mIoU', direction: 'max', unit: 'ratio', headline: true }],
+        aggregation: 'pooled',
+        evaluator: { package: 'p' }
       });
-      return Suite.create({ slug, version, name: `Suite ${slug}`, projectId, visibility: 'private', createdBy: OWNER, protocol, digest: protocolDigest(protocol) });
+      return Suite.create({
+        slug,
+        version,
+        name: `Suite ${slug}`,
+        projectId,
+        visibility: 'private',
+        createdBy: OWNER,
+        protocol,
+        digest: protocolDigest(protocol)
+      });
     };
     const keyOf = (repo: string, revision = A, path = '') => `hf:${repo.toLowerCase()}@${revision}:${path}`;
-    const evaluate = async (projectId: string, suite: { _id: unknown; slug: string; version: number; digest: string }, key: string, value: number, extra: Record<string, unknown> = {}) =>
+    const evaluate = async (
+      projectId: string,
+      suite: { _id: unknown; slug: string; version: number; digest: string },
+      key: string,
+      value: number,
+      extra: Record<string, unknown> = {}
+    ) =>
       Evaluation.create({
-        uuid: `ev-${new mongoose.Types.ObjectId()}`, projectId, ownerId: OWNER, checkpointKey: key,
-        suite: { id: String(suite._id), slug: suite.slug, version: suite.version, digest: suite.digest }, status: 'completed', results: {},
-        receivedAt: new Date(), contentHash: 'h',
-        validation: { version: 2, state: 'eligible', evidence: 'observed', reasons: [], warnings: [], scores: { conditions: { day: { mIoU: value } }, overall: { mIoU: value } } },
+        uuid: `ev-${new mongoose.Types.ObjectId()}`,
+        projectId,
+        ownerId: OWNER,
+        checkpointKey: key,
+        suite: { id: String(suite._id), slug: suite.slug, version: suite.version, digest: suite.digest },
+        status: 'completed',
+        results: {},
+        receivedAt: new Date(),
+        contentHash: 'h',
+        validation: {
+          version: 2,
+          state: 'eligible',
+          evidence: 'observed',
+          reasons: [],
+          warnings: [],
+          scores: { conditions: { day: { mIoU: value } }, overall: { mIoU: value } }
+        },
         ...extra
       });
 
@@ -870,20 +1380,38 @@ describe('the model registry with in-memory MongoDB', () => {
       const id = await project();
       const v1 = await suiteIn(id);
       const v2 = await suiteIn(id, 2);
-      await run(id, 'trained', [{ repo: 'Acme/Clft', revision: A, path: 'best.pt' }, { repo: 'acme/clft', revision: B }]);
+      await run(id, 'trained', [
+        { repo: 'Acme/Clft', revision: A, path: 'best.pt' },
+        { repo: 'acme/clft', revision: B }
+      ]);
       const key = keyOf('acme/clft', A, 'best.pt');
       await evaluate(id, v1, key, 0.5, { receivedAt: new Date('2026-10-01') });
       const newest = await evaluate(id, v1, key, 0.7351, { receivedAt: new Date('2026-10-03') });
       await evaluate(id, v1, key, 0.99, { receivedAt: new Date('2026-10-05'), status: 'failed' });
-      await evaluate(id, v1, key, 0.98, { receivedAt: new Date('2026-10-06'), validation: { version: 2, state: 'incomplete', evidence: 'reported', reasons: [], warnings: [] } });
+      await evaluate(id, v1, key, 0.98, {
+        receivedAt: new Date('2026-10-06'),
+        validation: { version: 2, state: 'incomplete', evidence: 'reported', reasons: [], warnings: [] }
+      });
       await evaluate(id, v1, key, 0.97, { receivedAt: new Date('2026-10-07'), deletedAt: new Date() });
-      const second = await evaluate(id, v2, key, 0.6, { validation: { version: 2, state: 'eligible', evidence: 'attested', reasons: [], warnings: [], scores: { conditions: { day: { mIoU: 0.6 } }, overall: { mIoU: 0.6 } } } });
+      const second = await evaluate(id, v2, key, 0.6, {
+        validation: {
+          version: 2,
+          state: 'eligible',
+          evidence: 'attested',
+          reasons: [],
+          warnings: [],
+          scores: { conditions: { day: { mIoU: 0.6 } }, overall: { mIoU: 0.6 } }
+        }
+      });
 
       const { data } = await list();
       const withPath = data.models.find((row: { model: { path?: string } }) => row.model.path === 'best.pt');
       const named = (evaluation: { _id: unknown }, version: number, value: number, evidence: string) => ({
-        evaluationId: String(evaluation._id), suite: { slug: 'road-test', version, name: 'Suite road-test' },
-        headline: { key: 'mIoU', value, unit: 'ratio' }, evidence, receivedAt: expect.any(String)
+        evaluationId: String(evaluation._id),
+        suite: { slug: 'road-test', version, name: 'Suite road-test' },
+        headline: { key: 'mIoU', value, unit: 'ratio' },
+        evidence,
+        receivedAt: expect.any(String)
       });
       // newest suite version first; on each, only the latest eligible evaluation, never a failed, unranked or trashed one
       expect(withPath.evaluations).toEqual([named(second, 2, 0.6, 'attested'), named(newest, 1, 0.7351, 'observed')]);
@@ -899,17 +1427,46 @@ describe('the model registry with in-memory MongoDB', () => {
       await evaluate(id, zebra, key, 0.5);
       await evaluate(id, apple, key, 0.6);
       // a result whose scores lack the suite's headline figure, and a report judged before evidence levels existed
-      await evaluate(id, broken, key, 0.7, { validation: { version: 1, state: 'eligible', reasons: [], warnings: [], scores: { conditions: {}, overall: {} } } });
-      const second = await evaluate(id, apple, key, 0.65, { validation: { version: 1, state: 'eligible', reasons: [], warnings: [], scores: { conditions: {}, overall: { mIoU: 0.65 } } }, receivedAt: new Date(Date.now() + 1000) });
+      await evaluate(id, broken, key, 0.7, {
+        validation: {
+          version: 1,
+          state: 'eligible',
+          reasons: [],
+          warnings: [],
+          scores: { conditions: {}, overall: {} }
+        }
+      });
+      const second = await evaluate(id, apple, key, 0.65, {
+        validation: {
+          version: 1,
+          state: 'eligible',
+          reasons: [],
+          warnings: [],
+          scores: { conditions: {}, overall: { mIoU: 0.65 } }
+        },
+        receivedAt: new Date(Date.now() + 1000)
+      });
       const { data } = await list();
-      expect(data.models[0].evaluations.map((row: { suite: { slug: string } }) => row.suite.slug)).toEqual(['apple', 'zebra']);
-      expect(data.models[0].evaluations[0]).toMatchObject({ evaluationId: String(second._id), evidence: 'none', headline: { value: 0.65 } });
+      expect(data.models[0].evaluations.map((row: { suite: { slug: string } }) => row.suite.slug)).toEqual([
+        'apple',
+        'zebra'
+      ]);
+      expect(data.models[0].evaluations[0]).toMatchObject({
+        evaluationId: String(second._id),
+        evidence: 'none',
+        headline: { value: 0.65 }
+      });
     });
 
     it('does not join another commit, another file or another repo to a checkpoint that was evaluated', async () => {
       const id = await project();
       const suite = await suiteIn(id);
-      await run(id, 'trained', [{ repo: 'acme/clft', revision: A }, { repo: 'acme/clft', revision: B }, { repo: 'acme/clft', revision: A, path: 'other.pt' }, { repo: 'acme/other', revision: A }]);
+      await run(id, 'trained', [
+        { repo: 'acme/clft', revision: A },
+        { repo: 'acme/clft', revision: B },
+        { repo: 'acme/clft', revision: A, path: 'other.pt' },
+        { repo: 'acme/other', revision: A }
+      ]);
       await evaluate(id, suite, keyOf('acme/clft', A), 0.7);
       const { data } = await list();
       const withEvaluations = data.models.filter((row: { evaluations?: unknown[] }) => row.evaluations);
@@ -940,15 +1497,21 @@ describe('the model registry with in-memory MongoDB', () => {
     it('leaves a row without evaluations as it was, and reads one query for a whole page of rows', async () => {
       const id = await project();
       const suite = await suiteIn(id);
-      await run(id, 'trained', [{ repo: 'acme/a', revision: A }, { repo: 'acme/b', revision: A }, { repo: 'acme/c', revision: A }]);
+      await run(id, 'trained', [
+        { repo: 'acme/a', revision: A },
+        { repo: 'acme/b', revision: A },
+        { repo: 'acme/c', revision: A }
+      ]);
       await evaluate(id, suite, keyOf('acme/a', A), 0.6);
       await evaluate(id, suite, keyOf('acme/b', A), 0.7);
-      const aggregate = jest.spyOn(Evaluation, 'aggregate');
+      const aggregate = vi.spyOn(Evaluation, 'aggregate');
       const { data } = await list();
       expect(aggregate).toHaveBeenCalledTimes(1);
       aggregate.mockRestore();
       expect(data.models.filter((row: { evaluations?: unknown[] }) => row.evaluations)).toHaveLength(2);
-      expect(data.models.find((row: { model: { repo: string } }) => row.model.repo === 'acme/c')).not.toHaveProperty('evaluations');
+      expect(data.models.find((row: { model: { repo: string } }) => row.model.repo === 'acme/c')).not.toHaveProperty(
+        'evaluations'
+      );
     });
   });
 
@@ -974,7 +1537,10 @@ describe('the model registry with in-memory MongoDB', () => {
 
   it('shows a run once per model and pages the rows', async () => {
     const id = await project();
-    await run(id, 'two', [{ repo: 'acme/a', revision: A, addedAt: new Date('2026-01-01') }, { repo: 'acme/a', revision: B, addedAt: new Date('2026-02-01') }]);
+    await run(id, 'two', [
+      { repo: 'acme/a', revision: A, addedAt: new Date('2026-01-01') },
+      { repo: 'acme/a', revision: B, addedAt: new Date('2026-02-01') }
+    ]);
     await run(id, 'one', [{ repo: 'acme/c', addedAt: new Date('2026-03-01') }]);
     const first = await list('?limit=2');
     expect(first.data.models.map((row: { model: { revision: string } }) => row.model.revision)).toEqual([A, B]);

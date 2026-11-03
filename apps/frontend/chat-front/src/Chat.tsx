@@ -316,7 +316,7 @@ export default function Chat({ panel = false }: { panel?: boolean }) {
     if (composing || (current && current.kind !== 'assistant')) return;
     analyze(pageContext);
     // Follows the page, not each new copy of the same context.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, enabled, pageKey, analyze]);
 
   useEffect(() => {

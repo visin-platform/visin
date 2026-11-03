@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
@@ -9,8 +10,11 @@ import internalRoutes from '../../routes/internalRoutes';
 import Project from '../../models/Project';
 import { getUserGroups } from '../../clients/projectGroupsClient';
 
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
-const groupsOf = getUserGroups as jest.Mock;
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+const groupsOf = getUserGroups as Mock;
 
 describe('internal key-access check for auth-service', () => {
   let mongo: MongoMemoryServer;
@@ -31,13 +35,25 @@ describe('internal key-access check for auth-service', () => {
     app.use('/internal', internalRoutes);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/internal`;
   }, 120_000);
 
   beforeEach(async () => {
-    groupsOf.mockReset().mockImplementation(async (userId: string) => (userId === editor ? [{ id: '0000000000000000000000aa', name: 'Team' }] : []));
-    project = String((await Project.create({ name: 'Road scenes', slug: 'road', owner: { kind: 'user', id: owner }, createdBy: owner, editorGroupIds: ['0000000000000000000000aa'] }))._id);
+    groupsOf.mockReset().mockImplementation(async function (userId: string) {
+      return userId === editor ? [{ id: '0000000000000000000000aa', name: 'Team' }] : [];
+    });
+    project = String(
+      (
+        await Project.create({
+          name: 'Road scenes',
+          slug: 'road',
+          owner: { kind: 'user', id: owner },
+          createdBy: owner,
+          editorGroupIds: ['0000000000000000000000aa']
+        })
+      )._id
+    );
   });
 
   afterEach(async () => {
@@ -47,18 +63,37 @@ describe('internal key-access check for auth-service', () => {
   afterAll(async () => {
     if (saved === undefined) delete process.env.INTERNAL_SERVICE_TOKEN;
     else process.env.INTERNAL_SERVICE_TOKEN = saved;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
   const check = async (id: string, userId: string, token = 'internal-test-token') => {
-    const response = await fetch(`${url}/projects/${id}/key-access?userId=${userId}`, { headers: { 'x-internal-token': token } });
-    return { status: response.status, body: (await response.json()) as { data?: { id: string; name: string; canWrite: boolean } } };
+    const response = await fetch(`${url}/projects/${id}/key-access?userId=${userId}`, {
+      headers: { 'x-internal-token': token }
+    });
+    return {
+      status: response.status,
+      body: (await response.json()) as { data?: { id: string; name: string; canWrite: boolean } }
+    };
   };
 
   it('answers with the project name and whether the user may write there, groups included', async () => {
-    expect((await check(project, owner)).body.data).toEqual({ id: project, name: 'Road scenes', canWrite: true, owner: { kind: 'user', id: owner } });
-    expect((await check('road', editor)).body.data).toEqual({ id: project, name: 'Road scenes', canWrite: true, owner: { kind: 'user', id: owner } });
+    expect((await check(project, owner)).body.data).toEqual({
+      id: project,
+      name: 'Road scenes',
+      canWrite: true,
+      owner: { kind: 'user', id: owner }
+    });
+    expect((await check('road', editor)).body.data).toEqual({
+      id: project,
+      name: 'Road scenes',
+      canWrite: true,
+      owner: { kind: 'user', id: owner }
+    });
     expect((await check(project, stranger)).body.data?.canWrite).toBe(false);
   });
 
@@ -78,7 +113,8 @@ describe('internal key-access check for auth-service', () => {
       { name: 'Team one', owner: { kind: 'group', id: group }, createdBy: owner },
       { name: 'Team trashed', owner: { kind: 'group', id: group }, createdBy: owner, trashedAt: new Date() }
     ]);
-    const owned = async (token = 'internal-test-token') => fetch(`${url}/groups/${group}/owned`, { headers: { 'x-internal-token': token } });
+    const owned = async (token = 'internal-test-token') =>
+      fetch(`${url}/groups/${group}/owned`, { headers: { 'x-internal-token': token } });
     expect((await (await owned()).json()).data).toEqual({ count: 2, names: ['Team one', 'Team trashed'] });
     expect((await owned('wrong')).status).toBe(401);
     await Project.deleteMany({ 'owner.id': group });

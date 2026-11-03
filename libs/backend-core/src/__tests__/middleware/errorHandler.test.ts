@@ -1,28 +1,33 @@
+import { redactRequestDiagnostic } from '../../logging/requestDiagnostics';
+import { vi, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { errorHandler, asyncHandler } from '../../middleware/errorHandler';
 import { NotFoundError, ForbiddenError, UnauthorizedError } from '../../errors/HttpError';
 
-jest.mock('../../logging/logger', () => ({ logger: { warn: jest.fn(), debug: jest.fn(), error: jest.fn() } }));
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({ logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
 
-const { logger } = jest.requireMock('../../logging/logger') as {
-  logger: { warn: jest.Mock; debug: jest.Mock; error: jest.Mock };
+const { logger } = (await import('../../logging/logger')) as unknown as {
+  logger: { warn: Mock; debug: Mock; error: Mock };
 };
 
 const makeReq = () => ({ originalUrl: '/api/things/123', method: 'GET' }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
-  return res as unknown as Response & { status: jest.Mock; json: jest.Mock };
+  return res as unknown as Response & { status: Mock; json: Mock };
 };
 
-const next = jest.fn() as unknown as NextFunction;
+const next = vi.fn() as unknown as NextFunction;
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -76,7 +81,9 @@ describe('errorHandler', () => {
 
   it('maps a duplicate-key error to 409 without echoing the index or key', () => {
     const error = Object.assign(
-      new Error('E11000 duplicate key error collection: visin.training_epoches index: epoch_uuid_1 dup key: { epoch_uuid: "e1" }'),
+      new Error(
+        'E11000 duplicate key error collection: visin.training_epoches index: epoch_uuid_1 dup key: { epoch_uuid: "e1" }'
+      ),
       { name: 'MongoServerError', code: 11000 }
     );
     const res = makeRes();
@@ -99,7 +106,12 @@ describe('errorHandler', () => {
     ['entity.verify.failed', 403, 'RequestBodyError', 'The request body could not be read']
   ])('maps a body-parsing error (%s) to its status, not a 500', (type, status, name, message) => {
     // The shape express.json() gives these: http-errors with a status and an `entity.*` type.
-    const error = Object.assign(new SyntaxError('Unexpected token b in JSON'), { type, status, statusCode: status, expose: true });
+    const error = Object.assign(new SyntaxError('Unexpected token b in JSON'), {
+      type,
+      status,
+      statusCode: status,
+      expose: true
+    });
     const res = makeRes();
 
     errorHandler(error, makeReq(), res, next);
@@ -109,7 +121,11 @@ describe('errorHandler', () => {
   });
 
   it('leaves an error with a non-client status or no entity type to the 500 path', () => {
-    for (const shape of [{ type: 'entity.parse.failed', status: 500 }, { type: 'request.aborted', status: 400 }, { type: 'entity.x', status: '400' }]) {
+    for (const shape of [
+      { type: 'entity.parse.failed', status: 500 },
+      { type: 'request.aborted', status: 400 },
+      { type: 'entity.x', status: '400' }
+    ]) {
       const res = makeRes();
       errorHandler(Object.assign(new Error('x'), shape), makeReq(), res, next);
       expect(res.status).toHaveBeenCalledWith(500);
@@ -125,7 +141,10 @@ describe('errorHandler', () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(logger.error).toHaveBeenCalledWith(
       'Unhandled error',
-      expect.objectContaining({ error: 'db exploded', stack: error.stack })
+      expect.objectContaining({
+        error: 'db exploded',
+        stack: redactRequestDiagnostic(error.stack, makeReq().originalUrl)
+      })
     );
   });
 
@@ -161,7 +180,7 @@ describe('asyncHandler', () => {
     const handler = asyncHandler(async () => {
       throw error;
     });
-    const nextFn = jest.fn();
+    const nextFn = vi.fn();
 
     handler(makeReq(), makeRes(), nextFn);
     await new Promise(process.nextTick);
@@ -174,7 +193,7 @@ describe('asyncHandler', () => {
       res.json({ ok: true });
     });
     const res = makeRes();
-    const nextFn = jest.fn();
+    const nextFn = vi.fn();
 
     handler(makeReq(), res, nextFn);
     await new Promise(process.nextTick);

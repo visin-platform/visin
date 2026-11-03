@@ -1,24 +1,39 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 
-jest.mock('../../services/jobService', () => ({
-  getJob: jest.fn(),
-}));
-jest.mock('../../services/taskService', () => ({
-  nextTask: jest.fn(),
-  getTaskItem: jest.fn(),
-  getTaskItemAtIndex: jest.fn(),
-  getTaskWithJob: jest.fn(),
-  saveObjects: jest.fn(),
-  saveMask: jest.fn(),
-  clearMask: jest.fn(),
-  finishTask: jest.fn(),
-}));
-jest.mock('../../services/groupAccessService', () => ({
-  requireUser: jest.fn((req: Request) => req.user),
-}));
-jest.mock('../../services/jobAccessService', () => ({
-  assertCanWork: jest.fn(),
-}));
+vi.mock('../../services/jobService', async () => {
+  const module = await (() => ({
+    getJob: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/taskService', async () => {
+  const module = await (() => ({
+    nextTask: vi.fn(),
+    getTaskItem: vi.fn(),
+    getTaskItemAtIndex: vi.fn(),
+    getTaskWithJob: vi.fn(),
+    saveObjects: vi.fn(),
+    saveMask: vi.fn(),
+    clearMask: vi.fn(),
+    finishTask: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/groupAccessService', async () => {
+  const module = await (() => ({
+    requireUser: vi.fn(function (req: Request) {
+      return req.user;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/jobAccessService', async () => {
+  const module = await (() => ({
+    assertCanWork: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import * as ctrl from '../../controllers/taskController';
 import * as jobs from '../../services/jobService';
@@ -26,25 +41,25 @@ import * as tasks from '../../services/taskService';
 import { assertCanWork } from '../../services/jobAccessService';
 import { ConflictError } from '@visin/backend-core';
 
-const mockedJobs = jobs as unknown as Record<string, jest.Mock>;
-const mockedTasks = tasks as unknown as Record<string, jest.Mock>;
-const mockedCanWork = assertCanWork as jest.Mock;
+const mockedJobs = jobs as unknown as Record<string, Mock>;
+const mockedTasks = tasks as unknown as Record<string, Mock>;
+const mockedCanWork = assertCanWork as Mock;
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ body: {}, query: {}, params: {}, user: { id: 'u1', email: 'w@x.com' }, ...overrides } as unknown as Request);
+  ({ body: {}, query: {}, params: {}, user: { id: 'u1', email: 'w@x.com' }, ...overrides }) as unknown as Request;
 
 const activeJob = { _id: 'j1', datasetId: 'd1', status: 'active' };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('getTask', () => {
@@ -59,7 +74,7 @@ describe('getTask', () => {
     expect(mockedTasks.getTaskItem).toHaveBeenCalledWith('t1', 'u1');
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { task: { _id: 't1' }, images: { frame: { stem: 'frame_000012' } } },
+      data: { task: { _id: 't1' }, images: { frame: { stem: 'frame_000012' } } }
     });
   });
 
@@ -139,7 +154,13 @@ describe('nextTask', () => {
 
 describe('writing labels', () => {
   const pair = { task: { _id: 't1' }, job: activeJob };
-  const annotation = { status: 'draft', objects: [{ id: 'o1' }], updatedAt: new Date(0), userId: 'u1', userEmail: 'w@x.com' };
+  const annotation = {
+    status: 'draft',
+    objects: [{ id: 'o1' }],
+    updatedAt: new Date(0),
+    userId: 'u1',
+    userEmail: 'w@x.com'
+  };
 
   beforeEach(() => {
     mockedCanWork.mockReset();
@@ -174,7 +195,7 @@ describe('writing labels', () => {
     expect(mockedTasks.saveObjects).toHaveBeenCalledWith(pair.task, pair.job, req.user, { objects: [{ id: 'o1' }] });
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { status: 'draft', objects: [{ id: 'o1' }], updatedAt: new Date(0) },
+      data: { status: 'draft', objects: [{ id: 'o1' }], updatedAt: new Date(0) }
     });
   });
 
@@ -192,7 +213,9 @@ describe('writing labels', () => {
   it('treats a body that was not sent as raw bytes as an empty mask, which the service refuses', async () => {
     mockedTasks.saveMask.mockRejectedValue(new Error('Not a Visin mask'));
 
-    await expect(ctrl.saveMask(makeReq({ params: { id: 't1' }, body: {} }), makeRes())).rejects.toThrow('Not a Visin mask');
+    await expect(ctrl.saveMask(makeReq({ params: { id: 't1' }, body: {} }), makeRes())).rejects.toThrow(
+      'Not a Visin mask'
+    );
     expect((mockedTasks.saveMask.mock.calls[0][3] as Buffer).length).toBe(0);
   });
 
@@ -207,7 +230,7 @@ describe('writing labels', () => {
 
   it.each([
     ['finishDone', 'done'],
-    ['finishSkip', 'skipped'],
+    ['finishSkip', 'skipped']
   ] as const)('%s closes the frame as %s', async (handler, outcome) => {
     mockedTasks.finishTask.mockResolvedValue({ ...annotation, status: outcome });
     const res = makeRes();

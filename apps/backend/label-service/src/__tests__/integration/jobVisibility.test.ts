@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import express from 'express';
 import type { Server } from 'node:http';
 import jwt from 'jsonwebtoken';
@@ -14,18 +15,28 @@ import { addHold, datasetIdsFor, getDataset, getPermission } from '../../clients
 import { getDownloadUrls } from '../../clients/fileServiceClient';
 import { setJobVisibility } from '../../services/jobService';
 
-jest.mock('../../clients/datasetServiceClient', () => ({
-  getPermission: jest.fn(),
-  datasetIdsFor: jest.fn(),
-  getDataset: jest.fn(),
-  addHold: jest.fn()
-}));
-jest.mock('../../clients/fileServiceClient', () => ({ getDownloadUrls: jest.fn() }));
-const permission = getPermission as jest.Mock;
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    getPermission: vi.fn(),
+    datasetIdsFor: vi.fn(),
+    getDataset: vi.fn(),
+    addHold: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({ getDownloadUrls: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+const permission = getPermission as Mock;
 /** Whether dataset d1 is public: what lets a job on it be seen outside its owners. */
 let datasetPublic = false;
-const sign = getDownloadUrls as jest.Mock;
-const actors: Record<string, string> = { owner: '000000000000000000000001', member: '000000000000000000000002', stranger: '000000000000000000000003' };
+const sign = getDownloadUrls as Mock;
+const actors: Record<string, string> = {
+  owner: '000000000000000000000001',
+  member: '000000000000000000000002',
+  stranger: '000000000000000000000003'
+};
 const creator = { userId: 'owner', email: 'PRIVATE_CREATOR@example.test' };
 
 describe('job publication and task access with in-memory MongoDB', () => {
@@ -42,51 +53,108 @@ describe('job publication and task access with in-memory MongoDB', () => {
     app.use('/jobs', jobRoutes);
     app.use('/tasks', taskRoutes);
     app.use(errorHandler);
-    server = await new Promise<Server>(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+    server = await new Promise<Server>((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   }, 120_000);
   beforeEach(async () => {
-    await mongoose.connection.collection('users').insertMany(Object.entries(actors).map(([name, id]) => ({ _id: new mongoose.Types.ObjectId(id), email: `${name}@example.test`, tokenVersion: 1 })));
+    await mongoose.connection.collection('users').insertMany(
+      Object.entries(actors).map(([name, id]) => ({
+        _id: new mongoose.Types.ObjectId(id),
+        email: `${name}@example.test`,
+        tokenVersion: 1
+      }))
+    );
     // Each test token names a session whose id is its user's.
-    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    jest.clearAllMocks();
+    await mongoose.connection.collection('user_sessions').insertMany(
+      (
+        await mongoose.connection
+          .collection('users')
+          .find({}, { projection: { _id: 1 } })
+          .toArray()
+      ).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) }))
+    );
+    vi.clearAllMocks();
     datasetPublic = false;
     // The owner manages dataset d1, the member contributes to it; others read it only while it is public.
-    permission.mockImplementation(async (datasetId: string, userId?: string) => {
+    permission.mockImplementation(async function (datasetId: string, userId?: string) {
       if (datasetId !== 'd1') return 'none';
       if (userId === actors.owner) return 'manage';
       if (userId === actors.member) return 'contribute';
       return datasetPublic ? 'read' : 'none';
     });
-    (datasetIdsFor as jest.Mock).mockImplementation(async () => (datasetPublic ? ['d1'] : []));
-    (getDataset as jest.Mock).mockResolvedValue({ _id: 'd1', name: 'Frames', groups: [{ name: 'frames', images: 1, jsons: 0 }] });
-    (addHold as jest.Mock).mockResolvedValue(undefined);
+    (datasetIdsFor as Mock).mockImplementation(async function () {
+      return datasetPublic ? ['d1'] : [];
+    });
+    (getDataset as Mock).mockResolvedValue({
+      _id: 'd1',
+      name: 'Frames',
+      groups: [{ name: 'frames', images: 1, jsons: 0 }]
+    });
+    (addHold as Mock).mockResolvedValue(undefined);
     sign.mockResolvedValue({ 'frame-file': 'SIGNED_IMAGE_URL' });
   });
   afterEach(async () => {
-    await Promise.all([mongoose.connection.collection('users').deleteMany({}), mongoose.connection.collection('user_sessions').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({}), LabelAnnotation.deleteMany({}), LabelSuggestion.deleteMany({})]);
+    await Promise.all([
+      mongoose.connection.collection('users').deleteMany({}),
+      mongoose.connection.collection('user_sessions').deleteMany({}),
+      LabelJob.deleteMany({}),
+      LabelTask.deleteMany({}),
+      LabelAnnotation.deleteMany({}),
+      LabelSuggestion.deleteMany({})
+    ]);
   });
   afterAll(async () => {
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     await mongoose.disconnect();
     await mongo.stop();
     if (oldSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = oldSecret;
   });
-  const request = (path: string, userId?: string, method = 'GET', body?: object) => fetch(`${base}${path}`, {
-    method, headers: { 'content-type': 'application/json', ...(userId ? { authorization: `Bearer ${jwt.sign({ id: actors[userId], tokenVersion: 1, email: `${userId}@example.test`, name: userId, sid: actors[userId], typ: 'session' }, process.env.JWT_SECRET!, { expiresIn: '1h' })}` } : {}) },
-    ...(body ? { body: JSON.stringify(body) } : {})
-  });
+  const request = (path: string, userId?: string, method = 'GET', body?: object) =>
+    fetch(`${base}${path}`, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        ...(userId
+          ? {
+              authorization: `Bearer ${jwt.sign({ id: actors[userId], tokenVersion: 1, email: `${userId}@example.test`, name: userId, sid: actors[userId], typ: 'session' }, process.env.JWT_SECRET!, { expiresIn: '1h' })}`
+            }
+          : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
   const fixture = async (status: JobStatus = 'active', isPublic?: boolean) => {
-    const job = await LabelJob.create({ name: 'Private content', createdBy: creator, status,
-      datasetId: 'd1', taskType: 'annotate', sensors: [{ key: 'camera', group: 'frames' }],
-      classes: [{ key: 'private-class', name: 'Private class', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 }], tasksCount: 1, ...(isPublic !== undefined ? { isPublic } : {}) });
-    const task = await LabelTask.create({ jobId: job.id, frame: { fileId: 'frame-file', path: 'frames/frame.png', stem: 'frame' }, order: 0 });
+    const job = await LabelJob.create({
+      name: 'Private content',
+      createdBy: creator,
+      status,
+      datasetId: 'd1',
+      taskType: 'annotate',
+      sensors: [{ key: 'camera', group: 'frames' }],
+      classes: [
+        { key: 'private-class', name: 'Private class', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 }
+      ],
+      tasksCount: 1,
+      ...(isPublic !== undefined ? { isPublic } : {})
+    });
+    const task = await LabelTask.create({
+      jobId: job.id,
+      frame: { fileId: 'frame-file', path: 'frames/frame.png', stem: 'frame' },
+      order: 0
+    });
     return { job, task };
   };
-  const paths = (jobId: string, taskId: string) => [`/jobs/${jobId}`, `/jobs/${jobId}/stats`, `/tasks/${taskId}`, `/jobs/${jobId}/tasks/at/0`, `/jobs/${jobId}/tasks/at/999`];
+  const paths = (jobId: string, taskId: string) => [
+    `/jobs/${jobId}`,
+    `/jobs/${jobId}/stats`,
+    `/tasks/${taskId}`,
+    `/jobs/${jobId}/tasks/at/0`,
+    `/jobs/${jobId}/tasks/at/999`
+  ];
 
-  it.each(JOB_STATUSES)('requires access to the dataset for private %s jobs on every read route', async status => {
+  it.each(JOB_STATUSES)('requires access to the dataset for private %s jobs on every read route', async (status) => {
     const { job, task } = await fixture(status);
     for (const path of paths(job.id, task.id)) {
       expect((await request(path)).status).toBe(403);
@@ -104,15 +172,18 @@ describe('job publication and task access with in-memory MongoDB', () => {
     expect(((await (await request('/jobs')).json()) as { data: unknown[] }).data).toHaveLength(0);
   });
 
-  it.each(JOB_STATUSES)('exposes a published %s job on a public dataset outside its owners only while active', async status => {
-    datasetPublic = true;
-    const { job, task } = await fixture(status, true);
-    const expected = status === 'active' ? 200 : 403;
-    for (const path of paths(job.id, task.id)) expect((await request(path)).status).toBe(expected);
-    if (expected === 403) expect(sign).not.toHaveBeenCalled();
-    const list = await (await request('/jobs')).json() as { data: unknown[] };
-    expect(list.data).toHaveLength(expected === 200 ? 1 : 0);
-  });
+  it.each(JOB_STATUSES)(
+    'exposes a published %s job on a public dataset outside its owners only while active',
+    async (status) => {
+      datasetPublic = true;
+      const { job, task } = await fixture(status, true);
+      const expected = status === 'active' ? 200 : 403;
+      for (const path of paths(job.id, task.id)) expect((await request(path)).status).toBe(expected);
+      if (expected === 403) expect(sign).not.toHaveBeenCalled();
+      const list = (await (await request('/jobs')).json()) as { data: unknown[] };
+      expect(list.data).toHaveLength(expected === 200 ? 1 : 0);
+    }
+  );
 
   it('makes activation independent of publication and restricts visibility changes to the dataset’s managers', async () => {
     datasetPublic = true;
@@ -121,12 +192,16 @@ describe('job publication and task access with in-memory MongoDB', () => {
     expect((await LabelJob.findById(job.id))!.isPublic).toBe(false);
     expect((await request(`/tasks/${task.id}`)).status).toBe(403);
     for (const userId of [undefined, 'stranger', 'member']) {
-      expect((await request(`/jobs/${job.id}/visibility`, userId, 'PUT', { isPublic: true })).status).toBe(userId ? 403 : 401);
+      expect((await request(`/jobs/${job.id}/visibility`, userId, 'PUT', { isPublic: true })).status).toBe(
+        userId ? 403 : 401
+      );
     }
     expect((await request(`/jobs/${job.id}/visibility`, 'owner', 'PUT', { isPublic: 'true' })).status).toBe(400);
     expect((await request(`/jobs/${job.id}/visibility`, 'owner', 'PUT', { isPublic: true })).status).toBe(200);
     // A public job on a public dataset: anyone signed in may label it.
-    const publicView = await (await request(`/jobs/${job.id}`, 'stranger')).json() as { data: { canLabel: boolean; createdBy?: unknown } };
+    const publicView = (await (await request(`/jobs/${job.id}`, 'stranger')).json()) as {
+      data: { canLabel: boolean; createdBy?: unknown };
+    };
     expect(publicView.data.canLabel).toBe(true);
     expect(publicView.data.createdBy).toBeUndefined();
     expect((await request(`/tasks/${task.id}`)).status).toBe(200);
@@ -161,23 +236,29 @@ describe('job publication and task access with in-memory MongoDB', () => {
   });
 
   it('ignores publication fields during creation and grants labeling capability only to contributors', async () => {
-    const body = { name: 'New job', datasetId: 'd1', sensors: [{ key: 'camera', group: 'frames' }], classes: [{ name: 'Car' }] };
+    const body = {
+      name: 'New job',
+      datasetId: 'd1',
+      sensors: [{ key: 'camera', group: 'frames' }],
+      classes: [{ name: 'Car' }]
+    };
     expect((await request('/jobs', 'member', 'POST', body)).status).toBe(403);
     const response = await request('/jobs', 'owner', 'POST', { ...body, isPublic: true });
     expect(response.status).toBe(201);
-    expect((await response.json() as { data: { isPublic: boolean } }).data.isPublic).toBe(false);
+    expect(((await response.json()) as { data: { isPublic: boolean } }).data.isPublic).toBe(false);
     const { job } = await fixture('completed');
-    const detail = await (await request(`/jobs/${job.id}`, 'member')).json() as { data: { canLabel: boolean } };
+    const detail = (await (await request(`/jobs/${job.id}`, 'member')).json()) as { data: { canLabel: boolean } };
     expect(detail.data.canLabel).toBe(true);
   });
   it('rejects revoked sessions before private frame signing or publication changes', async () => {
     const { job, task } = await fixture();
     expect((await request(`/tasks/${task.id}`, 'owner')).status).toBe(200);
-    await mongoose.connection.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(actors.owner) }, { $inc: { tokenVersion: 1 } });
+    await mongoose.connection
+      .collection('users')
+      .updateOne({ _id: new mongoose.Types.ObjectId(actors.owner) }, { $inc: { tokenVersion: 1 } });
     sign.mockClear();
     expect((await request(`/tasks/${task.id}`, 'owner')).status).toBe(403);
     expect((await request(`/jobs/${job.id}/visibility`, 'owner', 'PUT', { isPublic: true })).status).toBe(401);
     expect(sign).not.toHaveBeenCalled();
   });
-
 });

@@ -1,6 +1,10 @@
-jest.mock('../../clients/ownedResourcesClient', () => ({
-  ownedByGroup: jest.fn().mockResolvedValue({ projects: { count: 0, names: [] }, datasets: { count: 0, names: [] } }),
-}));
+import { vi } from 'vitest';
+vi.mock('../../clients/ownedResourcesClient', async () => {
+  const module = await (() => ({
+    ownedByGroup: vi.fn().mockResolvedValue({ projects: { count: 0, names: [] }, datasets: { count: 0, names: [] } })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import express from 'express';
 import type { Server } from 'node:http';
 import mongoose from 'mongoose';
@@ -13,7 +17,7 @@ import {
   createInvitation,
   deleteGroup,
   getPublicGroup,
-  updateGroup,
+  updateGroup
 } from '../../services/groupService';
 import publicGroupRoutes from '../../routes/publicGroupRoutes';
 import internalGroupRoutes from '../../routes/internalGroupRoutes';
@@ -78,7 +82,11 @@ describe('group public pages against in-memory MongoDB', () => {
 
       const group = await publish(id);
 
-      expect(group).toMatchObject({ handle: 'road-lab', description: 'Segmentation under bad weather', profilePublic: true });
+      expect(group).toMatchObject({
+        handle: 'road-lab',
+        description: 'Segmentation under bad weather',
+        profilePublic: true
+      });
     });
 
     it('leaves an admin able to rename the group but not to touch its public page', async () => {
@@ -88,7 +96,7 @@ describe('group public pages against in-memory MongoDB', () => {
       for (const updates of [{ handle: 'mine' }, { description: 'x' }, { profilePublic: true }]) {
         await expect(updateGroup(id, ADMIN, updates)).rejects.toMatchObject({
           statusCode: 403,
-          message: "Only the group's owner can change its public page",
+          message: "Only the group's owner can change its public page"
         });
       }
       await expect(updateGroup(id, MEMBER, { name: 'No' })).rejects.toMatchObject({ statusCode: 403 });
@@ -99,7 +107,7 @@ describe('group public pages against in-memory MongoDB', () => {
 
       await expect(updateGroup(id, OWNER, { profilePublic: true })).rejects.toMatchObject({
         statusCode: 400,
-        message: 'Choose a handle before showing the public page',
+        message: 'Choose a handle before showing the public page'
       });
       // Handle and switch together are fine; a handle alone leaves the page off.
       expect((await updateGroup(id, OWNER, { handle: 'lab' })).profilePublic).toBe(false);
@@ -113,7 +121,7 @@ describe('group public pages against in-memory MongoDB', () => {
 
       await expect(updateGroup(second._id.toString(), OWNER, { handle: 'taken' })).rejects.toMatchObject({
         statusCode: 409,
-        message: 'That handle is taken',
+        message: 'That handle is taken'
       });
       expect((await Group.findById(second._id))!.handle).toBeUndefined();
     });
@@ -142,7 +150,12 @@ describe('group public pages against in-memory MongoDB', () => {
 
       expect(status).toBe(200);
       expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'description', 'handle', 'id', 'links', 'name']);
-      expect(body.data).toMatchObject({ id, handle: 'road-lab', name: 'Road lab', description: 'Segmentation under bad weather' });
+      expect(body.data).toMatchObject({
+        id,
+        handle: 'road-lab',
+        name: 'Road lab',
+        description: 'Segmentation under bad weather'
+      });
       expect(JSON.stringify(body)).not.toMatch(new RegExp(`${OWNER}|${ADMIN}|${MEMBER}|members`));
     });
 
@@ -238,7 +251,11 @@ describe('group public pages against in-memory MongoDB', () => {
 
     it('escapes what a group calls itself', async () => {
       const id = (await createGroup(OWNER, '"><script>alert(1)</script>'))._id.toString();
-      await updateGroup(id, OWNER, { handle: 'evil', description: '<img src=x onerror=alert(1)>', profilePublic: true });
+      await updateGroup(id, OWNER, {
+        handle: 'evil',
+        description: '<img src=x onerror=alert(1)>',
+        profilePublic: true
+      });
 
       const { text } = await share('evil');
 
@@ -359,9 +376,17 @@ describe('group public pages against in-memory MongoDB', () => {
       return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown>[] } };
     };
     const handles = async (query: string) => ((await find(query)).body.data ?? []).map((group) => group.handle);
-    const page = async (name: string, handle: string, extra: { description?: string; profilePublic?: boolean } = {}) => {
+    const page = async (
+      name: string,
+      handle: string,
+      extra: { description?: string; profilePublic?: boolean } = {}
+    ) => {
       const id = (await createGroup(OWNER, name))._id.toString();
-      await updateGroup(id, OWNER, { handle, ...(extra.description ? { description: extra.description } : {}), profilePublic: extra.profilePublic ?? true });
+      await updateGroup(id, OWNER, {
+        handle,
+        ...(extra.description ? { description: extra.description } : {}),
+        profilePublic: extra.profilePublic ?? true
+      });
       return id;
     };
 
@@ -391,7 +416,9 @@ describe('group public pages against in-memory MongoDB', () => {
     it('lists a name, a handle and a description, and nothing about members', async () => {
       const { body } = await find('q=road-lab');
 
-      expect(body.data).toEqual([{ id: expect.any(String), handle: 'road-lab', name: 'Road lab', description: 'Segmentation' }]);
+      expect(body.data).toEqual([
+        { id: expect.any(String), handle: 'road-lab', name: 'Road lab', description: 'Segmentation' }
+      ]);
       expect(JSON.stringify(body)).not.toMatch(new RegExp(`${OWNER}|members`));
     });
 
@@ -416,7 +443,7 @@ describe('group public pages against in-memory MongoDB', () => {
       const response = await fetch(`${base}/internal/groups/public`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(token ? { 'x-internal-token': token } : {}) },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       });
       return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown>[] } };
     };

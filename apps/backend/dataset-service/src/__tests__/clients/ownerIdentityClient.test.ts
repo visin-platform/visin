@@ -1,6 +1,7 @@
+import { vi } from 'vitest';
 import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 const realFetch = global.fetch;
 const saved = process.env.AUTH_SERVICE_URL;
 
@@ -16,7 +17,11 @@ afterEach(() => {
 });
 
 it('asks auth-service for the people, identifying itself as dataset-service', async () => {
-  fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: [{ id: 'u1', name: 'Ada' }] }) } as Response);
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: [{ id: 'u1', name: 'Ada' }] })
+  } as Response);
 
   const owners = await lookupOwnerIdentities([{ kind: 'user', id: 'u1' }]);
 

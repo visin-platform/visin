@@ -1,31 +1,39 @@
+import { vi } from 'vitest';
+const { exported } = vi.hoisted(() => {
+  const exported: ReadableSpan[] = [];
+  return { exported };
+});
 /**
  * The real OpenTelemetry SDK, with the OTLP exporter swapped for one that keeps
  * the spans, so what a request and a query leave in a trace can be read back.
  */
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-node';
 
-const exported: ReadableSpan[] = [];
+vi.mock('@opentelemetry/exporter-trace-otlp-http', async () => {
+  const module = await (() => ({
+    OTLPTraceExporter: class {
+      export(spans: ReadableSpan[], done: (result: { code: number }) => void) {
+        exported.push(...spans);
+        done({ code: 0 });
+      }
+      shutdown() {
+        return Promise.resolve();
+      }
+      forceFlush() {
+        return Promise.resolve();
+      }
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-jest.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
-  OTLPTraceExporter: class {
-    export(spans: ReadableSpan[], done: (result: { code: number }) => void) {
-      exported.push(...spans);
-      done({ code: 0 });
-    }
-    shutdown() {
-      return Promise.resolve();
-    }
-    forceFlush() {
-      return Promise.resolve();
-    }
-  }
-}));
-
-process.env.SERVICE_NAME = 'trace-test-service';
-process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = 'http://jaeger.invalid:4318/v1/traces';
-process.env.OTEL_TRACES_SAMPLER_ARG = '1';
-// The logger picks its format when it is loaded; only the production one is JSON with a trace id.
-process.env.NODE_ENV = 'production';
+vi.hoisted(() => {
+  process.env.SERVICE_NAME = 'trace-test-service';
+  process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = 'http://jaeger.invalid:4318/v1/traces';
+  process.env.OTEL_TRACES_SAMPLER_ARG = '1';
+  // The logger picks its format when it is loaded; only the production one is JSON with a trace id.
+  process.env.NODE_ENV = 'production';
+});
 
 import express from 'express';
 import { createServer } from 'http';
@@ -231,7 +239,7 @@ describe('logger inside a trace', () => {
     const span = getTracer().startSpan('logging');
     const lines: Array<Record<string, unknown>> = [];
     const sink = logger.transports[0];
-    const write = jest.spyOn(sink, 'log').mockImplementation((info: Record<string, unknown>, next?: () => void) => {
+    const write = vi.spyOn(sink, 'log').mockImplementation(function (info: Record<string, unknown>, next?: () => void) {
       lines.push(info);
       next?.();
     });
@@ -275,7 +283,8 @@ describe('observeCommands', () => {
       ])
     );
     const sum = (await labelled('database_query_duration_seconds')).find(
-      (v) => v.metricName === 'database_query_duration_seconds_sum' && v.labels.operation === 'find'
+      (v) =>
+        'metricName' in v && v.metricName === 'database_query_duration_seconds_sum' && v.labels.operation === 'find'
     );
     expect(sum?.value).toBeCloseTo(0.025);
     expect(JSON.stringify(await register.getMetricsAsJSON())).not.toContain('private person');

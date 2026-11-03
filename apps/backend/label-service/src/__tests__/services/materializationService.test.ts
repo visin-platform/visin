@@ -1,19 +1,34 @@
-jest.mock('../../services/taskSetService', () => ({
-  ...jest.requireActual('../../services/taskSetService'),
-  beginTaskSet: jest.fn(async () => 'stage'),
-  renewTaskSet: jest.fn(), abandonTaskSet: jest.fn(),
-  publishTaskSet: jest.fn(async (job, generation, tasksCount, selection) => {
-    job.taskGeneration = generation; job.tasksCount = tasksCount; job.selection = selection;
-  })
-}));
-jest.mock('../../clients/datasetServiceClient', () => ({
-  getDataset: jest.fn(),
-  listItems: jest.fn(),
-  getManifest: jest.fn()
-}));
-jest.mock('../../models/LabelTask', () => ({
-  LabelTask: { deleteMany: jest.fn(), insertMany: jest.fn() },
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../services/taskSetService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/taskSetService')>('../../services/taskSetService')),
+    beginTaskSet: vi.fn(async function () {
+      return 'stage';
+    }),
+    renewTaskSet: vi.fn(),
+    abandonTaskSet: vi.fn(),
+    publishTaskSet: vi.fn(async function (job, generation, tasksCount, selection) {
+      job.taskGeneration = generation;
+      job.tasksCount = tasksCount;
+      job.selection = selection;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    getDataset: vi.fn(),
+    listItems: vi.fn(),
+    getManifest: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelTask', async () => {
+  const module = await (() => ({
+    LabelTask: { deleteMany: vi.fn(), insertMany: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { materializeTasks, toPoints, MAX_POINTS_PER_FRAME } from '../../services/materializationService';
 import * as datasets from '../../clients/datasetServiceClient';
@@ -21,8 +36,8 @@ import { LabelTask } from '../../models/LabelTask';
 import { BadRequestError, ConflictError } from '@visin/backend-core';
 import type { ILabelJob } from '../../models/LabelJob';
 
-const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
-const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
+const mockedDatasets = datasets as unknown as Record<string, Mock>;
+const mockedTask = LabelTask as unknown as Record<string, Mock>;
 
 type Item = {
   _id: string;
@@ -64,8 +79,8 @@ const makeJob = (overrides: Partial<ILabelJob> = {}): ILabelJob =>
     datasetId: 'd1',
     taskType: 'annotate',
     sensors: [{ key: 'camera', group: 'camera', kind: 'image' }],
-    save: jest.fn(),
-    ...overrides,
+    save: vi.fn(),
+    ...overrides
   }) as unknown as ILabelJob;
 
 const dataset = (groups = ['camera', 'lidar', 'radar']) => ({
@@ -79,22 +94,24 @@ const dataset = (groups = ['camera', 'lidar', 'radar']) => ({
 
 /** Serve the dataset's items the way dataset-service would, per group, kind and variant. */
 const stubItems = (items: Item[]) => {
-  mockedDatasets.listItems.mockImplementation(
-    async (_id: string, filter: { group: string; kind: string; variant?: string; noVariant?: boolean }) =>
-      items.filter(
-        (item) =>
-          item.group === filter.group &&
-          item.kind === filter.kind &&
-          (filter.variant === undefined || item.variant === filter.variant) &&
-          (!filter.noVariant || !item.variant)
-      )
-  );
+  mockedDatasets.listItems.mockImplementation(async function (
+    _id: string,
+    filter: { group: string; kind: string; variant?: string; noVariant?: boolean }
+  ) {
+    return items.filter(
+      (item) =>
+        item.group === filter.group &&
+        item.kind === filter.kind &&
+        (filter.variant === undefined || item.variant === filter.variant) &&
+        (!filter.noVariant || !item.variant)
+    );
+  });
 };
 
 const inserted = (): Record<string, unknown>[] => mockedTask.insertMany.mock.calls[0][0];
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedDatasets.getDataset.mockResolvedValue(dataset());
   mockedTask.deleteMany.mockResolvedValue({});
   mockedTask.insertMany.mockResolvedValue([]);
@@ -112,8 +129,8 @@ describe('materializeTasks guards', () => {
     const job = makeJob({
       sensors: [
         { key: 'camera', group: 'camera', kind: 'image' },
-        { key: 'lidar', group: 'lidar', kind: 'image' },
-      ],
+        { key: 'lidar', group: 'lidar', kind: 'image' }
+      ]
     } as Partial<ILabelJob>);
 
     await expect(materializeTasks(job, { kind: 'filter' })).rejects.toThrow('no image group "lidar" (lidar)');
@@ -134,7 +151,7 @@ describe('filter path', () => {
     expect(inserted().map((task) => task.order)).toEqual([0, 1, 2]);
     expect(inserted()[0]).toMatchObject({
       jobId: 'j1',
-      frame: { fileId: 'file/camera/a.png', path: 'camera/a.png', stem: 'a', width: 4, height: 2 },
+      frame: { fileId: 'file/camera/a.png', path: 'camera/a.png', stem: 'a', width: 4, height: 2 }
     });
     expect(inserted()[0]).not.toHaveProperty('sensors');
     expect(job.tasksCount).toBe(3);
@@ -174,8 +191,8 @@ describe('sensors', () => {
       sensors: [
         { key: 'camera', group: 'camera', kind: 'image' },
         { key: 'lidar', group: 'lidar', kind: 'image' },
-        { key: 'radar', group: 'radar', kind: 'points' },
-      ],
+        { key: 'radar', group: 'radar', kind: 'points' }
+      ]
     } as Partial<ILabelJob>);
 
   it('copies each overlay the frame has, and reports how many frames each covers', async () => {
@@ -184,7 +201,7 @@ describe('sensors', () => {
       frame('b'),
       image('lidar', 'a'),
       points('radar', 'a', [{ u: 1, v: 2, range: 30 }]),
-      points('radar', 'b', { points: [[5, 6, 7]] }),
+      points('radar', 'b', { points: [[5, 6, 7]] })
     ]);
 
     const result = await materializeTasks(rig(), { kind: 'filter' });
@@ -192,7 +209,7 @@ describe('sensors', () => {
     expect(result.sensors).toEqual({ lidar: 1, radar: 2 });
     expect(inserted()[0].sensors).toEqual([
       { key: 'lidar', kind: 'image', fileId: 'file/lidar/a.png' },
-      { key: 'radar', kind: 'points', points: [{ u: 1, v: 2, value: 30 }] },
+      { key: 'radar', kind: 'points', points: [{ u: 1, v: 2, value: 30 }] }
     ]);
     expect(inserted()[1].sensors).toEqual([{ key: 'radar', kind: 'points', points: [{ u: 5, v: 6, value: 7 }] }]);
   });
@@ -209,13 +226,13 @@ describe('sensors', () => {
   it('finds a sensor that shares a group with the camera by its file-name variant', async () => {
     stubItems([
       image('camera', 'a', { width: 4, height: 2 }),
-      image('camera', 'a', { variant: 'lidar', fileId: 'file/camera/a.lidar.png' }),
+      image('camera', 'a', { variant: 'lidar', fileId: 'file/camera/a.lidar.png' })
     ]);
     const job = makeJob({
       sensors: [
         { key: 'camera', group: 'camera', kind: 'image' },
-        { key: 'lidar', group: 'camera', kind: 'image', variant: 'lidar' },
-      ],
+        { key: 'lidar', group: 'camera', kind: 'image', variant: 'lidar' }
+      ]
     } as Partial<ILabelJob>);
 
     await materializeTasks(job, { kind: 'filter' });
@@ -225,11 +242,7 @@ describe('sensors', () => {
   });
 
   it('skips a point sidecar that holds no list, and an image item with no file', async () => {
-    stubItems([
-      frame('a'),
-      points('radar', 'a', { detections: 3 }),
-      { ...image('lidar', 'a'), fileId: undefined },
-    ]);
+    stubItems([frame('a'), points('radar', 'a', { detections: 3 }), { ...image('lidar', 'a'), fileId: undefined }]);
 
     const result = await materializeTasks(rig(), { kind: 'filter' });
 
@@ -246,7 +259,7 @@ describe('toPoints', () => {
         { u: 7, v: 8, rcs: '9.5' },
         { u: 1, v: 1 },
         [2, 3],
-        [2, 3, 4],
+        [2, 3, 4]
       ])
     ).toEqual([
       { u: 1, v: 2, value: 3 },
@@ -254,7 +267,7 @@ describe('toPoints', () => {
       { u: 7, v: 8, value: 9.5 },
       { u: 1, v: 1 },
       { u: 2, v: 3 },
-      { u: 2, v: 3, value: 4 },
+      { u: 2, v: 3, value: 4 }
     ]);
   });
 
@@ -278,7 +291,7 @@ describe('manifest path', () => {
     mockedDatasets.getManifest.mockResolvedValue([
       { stem: 'c', attributes: { stratum: 'night' } },
       { stem: 'a', attributes: {} },
-      { stem: 'zz', attributes: {} },
+      { stem: 'zz', attributes: {} }
     ]);
     const job = makeJob();
 

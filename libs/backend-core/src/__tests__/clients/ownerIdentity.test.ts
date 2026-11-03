@@ -1,25 +1,40 @@
+import { vi } from 'vitest';
 import { fetchWithTimeout } from '../../http/fetchWithTimeout';
 import { createOwnerIdentityLookup } from '../../clients/ownerIdentity';
 
-jest.mock('../../http/fetchWithTimeout', () => ({ fetchWithTimeout: jest.fn() }));
-jest.mock('../../logging/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+vi.mock('../../http/fetchWithTimeout', async () => {
+  const module = await (() => ({ fetchWithTimeout: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
 
 const lookupOwnerIdentities = createOwnerIdentityLookup('vision-service');
-const fetchMock = jest.mocked(fetchWithTimeout);
+const fetchMock = vi.mocked(fetchWithTimeout);
 const response = (body: unknown, ok = true, status = 200) => ({ ok, status, json: async () => body }) as Response;
 const id = (n: number) => n.toString(16).padStart(24, '0');
 const person = (n: number) => ({ kind: 'user' as const, id: id(n) });
 const group = (n: number) => ({ kind: 'group' as const, id: id(n) });
-const saved = { auth: process.env.AUTH_SERVICE_URL, group: process.env.GROUP_SERVICE_URL, token: process.env.INTERNAL_SERVICE_TOKEN };
+const saved = {
+  auth: process.env.AUTH_SERVICE_URL,
+  group: process.env.GROUP_SERVICE_URL,
+  token: process.env.INTERNAL_SERVICE_TOKEN
+};
 
 beforeEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
   process.env.AUTH_SERVICE_URL = 'http://auth-service:5001/';
   process.env.GROUP_SERVICE_URL = 'http://group-service:5006';
   process.env.INTERNAL_SERVICE_TOKEN = 'internal-secret';
 });
 afterAll(() => {
-  for (const [key, value] of [['AUTH_SERVICE_URL', saved.auth], ['GROUP_SERVICE_URL', saved.group], ['INTERNAL_SERVICE_TOKEN', saved.token]] as const) {
+  for (const [key, value] of [
+    ['AUTH_SERVICE_URL', saved.auth],
+    ['GROUP_SERVICE_URL', saved.group],
+    ['INTERNAL_SERVICE_TOKEN', saved.token]
+  ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
@@ -27,7 +42,11 @@ afterAll(() => {
 
 describe('createOwnerIdentityLookup', () => {
   it('asks auth-service once, as this service, for the distinct people', async () => {
-    fetchMock.mockResolvedValue(response({ data: [{ id: id(1), handle: 'ann', name: 'Ann Lee', picture: 'https://p.test/a.jpg' }, { id: id(2) }] }));
+    fetchMock.mockResolvedValue(
+      response({
+        data: [{ id: id(1), handle: 'ann', name: 'Ann Lee', picture: 'https://p.test/a.jpg' }, { id: id(2) }]
+      })
+    );
 
     const owners = await lookupOwnerIdentities([person(1), person(2), person(1)]);
 
@@ -45,11 +64,11 @@ describe('createOwnerIdentityLookup', () => {
   });
 
   it('asks group-service for the groups, each service only for its own kind', async () => {
-    fetchMock.mockImplementation(async (url) =>
-      String(url).includes('/auth/')
+    fetchMock.mockImplementation(async function (url) {
+      return String(url).includes('/auth/')
         ? response({ data: [{ id: id(1), name: 'Ann Lee' }] })
-        : response({ data: [{ id: id(9), handle: 'road-lab', name: 'Road lab' }] })
-    );
+        : response({ data: [{ id: id(9), handle: 'road-lab', name: 'Road lab' }] });
+    });
 
     const owners = await lookupOwnerIdentities([person(1), group(9)]);
 
@@ -81,7 +100,9 @@ describe('createOwnerIdentityLookup', () => {
     await lookupOwnerIdentities(Array.from({ length: 250 }, (_, index) => person(index + 1)));
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls.map(([, options]) => JSON.parse(options!.body as string).ids.length)).toEqual([100, 100, 50]);
+    expect(fetchMock.mock.calls.map(([, options]) => JSON.parse(options!.body as string).ids.length)).toEqual([
+      100, 100, 50
+    ]);
   });
 
   it('makes no call for nothing, or for a service that is not configured', async () => {
@@ -104,7 +125,7 @@ describe('createOwnerIdentityLookup', () => {
   });
 
   it('keeps what one service found when the other fails', async () => {
-    fetchMock.mockImplementation(async (url) => {
+    fetchMock.mockImplementation(async function (url) {
       if (String(url).includes('group-service')) throw new Error('timeout');
       return response({ data: [{ id: id(1), handle: 'ann' }] });
     });

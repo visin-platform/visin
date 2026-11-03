@@ -1,22 +1,22 @@
+import { vi } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { requireInternalServiceToken } from '../../middleware/internalServiceAuth';
 
-const makeReq = (headers: Record<string, string> = {}): Request =>
-  ({ headers } as unknown as Request);
+const makeReq = (headers: Record<string, string> = {}): Request => ({ headers }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response;
 };
 
-const next = jest.fn() as unknown as NextFunction;
+const next = vi.fn() as unknown as NextFunction;
 
 const TOKEN = 'test-internal-secret-token-32chars!!';
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.INTERNAL_SERVICE_TOKEN = TOKEN;
 });
 
@@ -58,11 +58,7 @@ describe('requireInternalServiceToken', () => {
   it('returns 401 for a token with the correct value but different length', () => {
     const res = makeRes();
 
-    requireInternalServiceToken(
-      makeReq({ 'x-internal-token': TOKEN + 'x' }),
-      res,
-      next
-    );
+    requireInternalServiceToken(makeReq({ 'x-internal-token': TOKEN + 'x' }), res, next);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(next).not.toHaveBeenCalledWith();

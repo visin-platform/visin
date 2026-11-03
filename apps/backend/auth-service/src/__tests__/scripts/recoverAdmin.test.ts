@@ -1,8 +1,15 @@
-jest.mock('mongoose', () => ({
-  __esModule: true,
-  default: { connect: jest.fn(), disconnect: jest.fn() },
-}));
-jest.mock('../../services/bootstrapService', () => ({ recoverAdministrator: jest.fn() }));
+import { vi, type Mock } from 'vitest';
+vi.mock('mongoose', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { connect: vi.fn(), disconnect: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/bootstrapService', async () => {
+  const module = await (() => ({ recoverAdministrator: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 import mongoose from 'mongoose';
 import { recoverAdministrator } from '../../services/bootstrapService';
@@ -13,19 +20,23 @@ const originalUri = process.env.MONGODB_URI;
 const originalExitCode = process.exitCode;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.argv = ['node', 'recoverAdmin.js', id];
   process.env.MONGODB_URI = 'mongodb://test.invalid/test';
   process.exitCode = undefined;
-  (mongoose.connect as jest.Mock).mockResolvedValue(undefined);
-  (mongoose.disconnect as jest.Mock).mockResolvedValue(undefined);
-  (recoverAdministrator as jest.Mock).mockResolvedValue({ _id: { toString: () => id } });
-  jest.spyOn(console, 'info').mockImplementation(() => undefined);
-  jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  (mongoose.connect as Mock).mockResolvedValue(undefined);
+  (mongoose.disconnect as Mock).mockResolvedValue(undefined);
+  (recoverAdministrator as Mock).mockResolvedValue({ _id: { toString: () => id } });
+  vi.spyOn(console, 'info').mockImplementation(function () {
+    return undefined;
+  });
+  vi.spyOn(console, 'error').mockImplementation(function () {
+    return undefined;
+  });
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
   process.argv = originalArgv;
   process.exitCode = originalExitCode;
   if (originalUri === undefined) delete process.env.MONGODB_URI;
@@ -33,12 +44,21 @@ afterEach(() => {
 });
 
 async function runCommand() {
-  await jest.isolateModulesAsync(async () => {
+  await (vi.resetModules(),
+  (async () => {
     // Share the test doubles with the isolated command instance.
-    jest.doMock('mongoose', () => ({ __esModule: true, default: mongoose }));
-    jest.doMock('../../services/bootstrapService', () => ({ recoverAdministrator }));
-    await jest.requireActual<typeof import('../../scripts/recoverAdmin')>('../../scripts/recoverAdmin').completion;
-  });
+    vi.doMock('mongoose', async () => {
+      const module = await (() => ({ __esModule: true, default: mongoose }))();
+      return Object.assign({ default: module }, module);
+    });
+    vi.doMock('../../services/bootstrapService', async () => {
+      const module = await (() => ({ recoverAdministrator }))();
+      return Object.assign({ default: module }, module);
+    });
+    await (
+      await vi.importActual<typeof import('../../scripts/recoverAdmin')>('../../scripts/recoverAdmin')
+    ).completion;
+  })());
 }
 
 it('recovers the selected identity and always closes its database connection', async () => {
@@ -67,7 +87,7 @@ it('requires explicit database configuration', async () => {
 });
 
 it('reports recovery failures with a nonzero exit and closes the connection', async () => {
-  (recoverAdministrator as jest.Mock).mockRejectedValueOnce(new Error('User not found'));
+  (recoverAdministrator as Mock).mockRejectedValueOnce(new Error('User not found'));
   await runCommand();
   expect(console.error).toHaveBeenCalledWith('User not found');
   expect(mongoose.disconnect).toHaveBeenCalledTimes(1);
@@ -75,7 +95,7 @@ it('reports recovery failures with a nonzero exit and closes the connection', as
 });
 
 it('also closes the connection after a failed connection attempt', async () => {
-  (mongoose.connect as jest.Mock).mockRejectedValueOnce(new Error('database unavailable'));
+  (mongoose.connect as Mock).mockRejectedValueOnce(new Error('database unavailable'));
   await runCommand();
   expect(recoverAdministrator).not.toHaveBeenCalled();
   expect(mongoose.disconnect).toHaveBeenCalledTimes(1);

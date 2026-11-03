@@ -1,9 +1,10 @@
+import { vi } from 'vitest';
 import type { Request, Response } from 'express';
 import { listSessions, revokeSession, revokeOtherSessions } from '../../controllers/sessionController';
 
 // The happy paths run end to end in integration/sessionRevocation.test.ts; these
 // are the guards a route mounted without authentication would hit.
-const makeRes = () => ({ json: jest.fn(), clearCookie: jest.fn() }) as unknown as Response;
+const makeRes = () => ({ json: vi.fn(), clearCookie: vi.fn() }) as unknown as Response;
 
 describe('session controllers without a session', () => {
   it.each([

@@ -1,28 +1,31 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  authenticateToken: jest.fn(),
-}));
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    authenticateToken: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { authenticateToken } from '../../middleware/authMiddleware';
 import { authenticateToken as coreAuthenticateToken } from '@visin/backend-core';
 
-const mockedCoreAuth = coreAuthenticateToken as jest.Mock;
+const mockedCoreAuth = coreAuthenticateToken as Mock;
 
-const makeReq = (headers: Record<string, string> = {}): Request =>
-  ({ headers } as unknown as Request);
+const makeReq = (headers: Record<string, string> = {}): Request => ({ headers }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
-  return res as unknown as Response & { status: jest.Mock };
+  return res as unknown as Response & { status: Mock };
 };
-let next: jest.Mock;
+let next: Mock;
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  next = jest.fn();
+  vi.clearAllMocks();
+  next = vi.fn();
   process.env.INTERNAL_SERVICE_TOKEN = 'svc-token';
 });
 

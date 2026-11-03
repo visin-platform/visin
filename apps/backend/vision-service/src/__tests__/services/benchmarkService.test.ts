@@ -1,44 +1,75 @@
-jest.mock('../../models/Epoch', () => ({ __esModule: true, default: { findOne: jest.fn(async () => ({ trainingId: 't2' })) } }));
+import Epoch from '../../models/Epoch';
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/Epoch', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: {
+      findOne: vi.fn(async function () {
+        return { trainingId: 't2' };
+      })
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import { assertResourceWrite } from '../../services/writeAccessService';
 import { ForbiddenError } from '@visin/backend-core';
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
-jest.mock('../../services/writeAccessService', () => ({
-  ...jest.requireActual('../../services/writeAccessService'),
-  assertResourceWrite: jest.fn(async (resource: unknown) => {
-    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-  }),
-  assertLibraryWrite: jest.fn(),
-  assertDatasetWrite: jest.fn(),
-  assertEpochWrite: jest.fn(async (uuid: string) => {
-    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
-    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-    return epoch;
-  })
-}));
-jest.mock('../../models/Benchmark', () => {
-  const ctor = Object.assign(jest.fn(), {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    countDocuments: jest.fn(),
-  });
-  return { __esModule: true, default: ctor };
+vi.mock('../../services/writeAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/writeAccessService')>('../../services/writeAccessService')),
+    assertResourceWrite: vi.fn(async function (resource: unknown) {
+      if (!resource)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+    }),
+    assertLibraryWrite: vi.fn(),
+    assertDatasetWrite: vi.fn(),
+    assertEpochWrite: vi.fn(async function (uuid: string) {
+      const epoch = await (await import('../../models/Epoch')).default.findOne({ epoch_uuid: uuid });
+      if (!epoch)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+      return epoch;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
 });
-jest.mock('../../models/Training', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findOneAndUpdate: jest.fn() },
-}));
-jest.mock('../../services/projectAccessService', () => ({
-  ...jest.requireActual('../../services/projectAccessService'),
-  checkProjectAccess: jest.fn(),
-  getVisibleTrainingIds: jest.fn(),
-  isWithinTokenScope: jest.fn(),
-  resolveProject: jest.fn(),
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../models/Benchmark', async () => {
+  const module = await (() => {
+    const ctor = Object.assign(vi.fn(), {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      countDocuments: vi.fn()
+    });
+    return { __esModule: true, default: ctor };
+  })();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Training', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), findOne: vi.fn(), findById: vi.fn(), findOneAndUpdate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/projectAccessService')>(
+      '../../services/projectAccessService'
+    )),
+    checkProjectAccess: vi.fn(),
+    getVisibleTrainingIds: vi.fn(),
+    isWithinTokenScope: vi.fn(),
+    resolveProject: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   getBenchmarks,
@@ -47,7 +78,7 @@ import {
   uploadBenchmark,
   getBenchmarkStats,
   updateBenchmark,
-  deleteBenchmark,
+  deleteBenchmark
 } from '../../services/benchmarkService';
 import Benchmark from '../../models/Benchmark';
 import Training from '../../models/Training';
@@ -55,20 +86,20 @@ import {
   checkProjectAccess,
   getVisibleTrainingIds,
   isWithinTokenScope,
-  resolveProject,
+  resolveProject
 } from '../../services/projectAccessService';
 import type { CreateBenchmarkBody } from '../../validation/benchmarkSchemas';
 
-const mockedBenchmark = Benchmark as unknown as jest.Mock & Record<string, jest.Mock>;
-const mockedTraining = Training as unknown as Record<string, jest.Mock>;
-const mockedCheckAccess = checkProjectAccess as jest.Mock;
-const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
-const mockedTokenScope = isWithinTokenScope as jest.Mock;
-const mockedResolveProject = resolveProject as jest.Mock;
+const mockedBenchmark = Benchmark as unknown as Mock & Record<string, Mock>;
+const mockedTraining = Training as unknown as Record<string, Mock>;
+const mockedCheckAccess = checkProjectAccess as Mock;
+const mockedVisibleTrainings = getVisibleTrainingIds as Mock;
+const mockedTokenScope = isWithinTokenScope as Mock;
+const mockedResolveProject = resolveProject as Mock;
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 const benchmarkDoc = (overrides: AnyDoc = {}): AnyDoc => ({
@@ -81,10 +112,10 @@ const benchmarkDoc = (overrides: AnyDoc = {}): AnyDoc => ({
   toObject() {
     return { _id: this._id, training_id: this.training_id, system_info: this.system_info };
   },
-  save: jest.fn().mockImplementation(function (this: unknown) {
+  save: vi.fn().mockImplementation(function (this: unknown) {
     return Promise.resolve(this);
   }),
-  ...overrides,
+  ...overrides
 });
 
 const trainingDoc = (id: string, overrides: AnyDoc = {}): AnyDoc => ({
@@ -92,17 +123,17 @@ const trainingDoc = (id: string, overrides: AnyDoc = {}): AnyDoc => ({
   uuid: `uuid-${id}`,
   name: `Training ${id}`,
   projectId: 'p1',
-  ...overrides,
+  ...overrides
 });
 
 const mockBenchmarkFindChain = (docs: unknown[]) => {
   const chain: AnyDoc = {};
   Object.assign(chain, {
-    sort: jest.fn().mockReturnValue(chain),
-    skip: jest.fn().mockReturnValue(chain),
-    limit: jest.fn().mockResolvedValue(docs),
+    sort: vi.fn().mockReturnValue(chain),
+    skip: vi.fn().mockReturnValue(chain),
+    limit: vi.fn().mockResolvedValue(docs),
     then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
-      Promise.resolve(docs).then(resolve, reject),
+      Promise.resolve(docs).then(resolve, reject)
   });
   mockedBenchmark.find.mockReturnValue(chain);
   return chain;
@@ -111,7 +142,7 @@ const mockBenchmarkFindChain = (docs: unknown[]) => {
 const baseFilters = { sortBy: 'timestamp' as const, order: -1 as const };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p1' } });
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
@@ -122,16 +153,14 @@ describe('getBenchmarks', () => {
     mockedVisibleTrainings.mockResolvedValue(['t1']);
     mockBenchmarkFindChain([benchmarkDoc()]);
     mockedBenchmark.countDocuments.mockResolvedValue(1);
-    const select = jest.fn().mockResolvedValue([trainingDoc('t1')]);
+    const select = vi.fn().mockResolvedValue([trainingDoc('t1')]);
     mockedTraining.find.mockReturnValue({ select });
 
     const result = await getBenchmarks(baseFilters, 'u1');
 
     expect(mockedBenchmark.find).toHaveBeenCalledWith({
       deletedAt: null,
-      $or: [
-        { training_id: { $in: ['t1'] } },
-      ],
+      $or: [{ training_id: { $in: ['t1'] } }]
     });
     expect((result.benchmarks[0] as AnyDoc).training_id.name).toBe('Training t1');
     expect(result.pagination).toEqual({ page: 1, limit: 25, total: 1, pages: 1 });
@@ -167,7 +196,7 @@ describe('getBenchmarks', () => {
 
     expect(mockedBenchmark.find).toHaveBeenCalledWith({
       deletedAt: null,
-      training_id: { $in: ['t1'] },
+      training_id: { $in: ['t1'] }
     });
   });
 
@@ -187,7 +216,7 @@ describe('getBenchmarks', () => {
     mockedVisibleTrainings.mockResolvedValue([]);
     mockBenchmarkFindChain([benchmarkDoc()]);
     mockedBenchmark.countDocuments.mockResolvedValue(1);
-    const select = jest.fn().mockRejectedValue(new Error('db'));
+    const select = vi.fn().mockRejectedValue(new Error('db'));
     mockedTraining.find.mockReturnValue({ select });
 
     const result = await getBenchmarks(baseFilters, 'u1');
@@ -202,7 +231,7 @@ describe('getBenchmarkById', () => {
     await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Benchmark not found');
   });
   it('checks the raw parent before population', async () => {
-    const doc = benchmarkDoc({ populate: jest.fn().mockResolvedValue(undefined) });
+    const doc = benchmarkDoc({ populate: vi.fn().mockResolvedValue(undefined) });
     mockedBenchmark.findOne.mockResolvedValue(doc);
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     await expect(getBenchmarkById('b1', 'u1')).resolves.toBe(doc);
@@ -219,19 +248,49 @@ describe('getBenchmarkById', () => {
   });
 });
 
+describe('benchmark epoch ancestry', () => {
+  it('checks access to the live training reached through an epoch before populating', async () => {
+    const doc = benchmarkDoc({ training_id: null, training_uuid: undefined, epoch_uuid: 'e1', populate: vi.fn() });
+    mockedBenchmark.findOne.mockResolvedValue(doc);
+    vi.mocked(Epoch.findOne).mockResolvedValueOnce({ trainingId: 't2' } as never);
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t2'));
+    await expect(getBenchmarkById('b1', 'u1')).resolves.toBe(doc);
+    expect(Epoch.findOne).toHaveBeenCalledWith({ epoch_uuid: 'e1', deletedAt: null });
+    expect(mockedTraining.findOne).toHaveBeenCalledWith({ _id: 't2', deletedAt: null });
+    expect(mockedCheckAccess).toHaveBeenCalledWith('u1', 'p1');
+  });
+  it('refuses an epoch whose training has disappeared', async () => {
+    mockedBenchmark.findOne.mockResolvedValue(
+      benchmarkDoc({ training_id: null, training_uuid: undefined, epoch_uuid: 'e1' })
+    );
+    vi.mocked(Epoch.findOne).mockResolvedValueOnce({ trainingId: 't2' } as never);
+    mockedTraining.findOne.mockResolvedValue(null);
+    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Training not found');
+  });
+  it('refuses a missing epoch rather than treating the benchmark as standalone', async () => {
+    mockedBenchmark.findOne.mockResolvedValue(
+      benchmarkDoc({ training_id: null, training_uuid: undefined, epoch_uuid: 'e1' })
+    );
+    vi.mocked(Epoch.findOne).mockResolvedValueOnce(null);
+    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Epoch not found');
+  });
+});
+
 describe('createBenchmark / uploadBenchmark', () => {
   const body: CreateBenchmarkBody = {
     timestamp: new Date('2026-01-01'),
     system_info: { cpu_count: 8, cpu_count_logical: 16, memory_total_gb: 32 },
     results: [],
-    training_uuid: 'uuid-t1',
+    training_uuid: 'uuid-t1'
   };
 
   beforeEach(() => {
-    mockedBenchmark.mockImplementation((data: AnyDoc) => ({
-      ...data,
-      save: jest.fn().mockResolvedValue({ ...data, _id: 'new' }),
-    }));
+    mockedBenchmark.mockImplementation(function (data: AnyDoc) {
+      return {
+        ...data,
+        save: vi.fn().mockResolvedValue({ ...data, _id: 'new' })
+      };
+    });
   });
 
   it('links the benchmark to its training and touches its timestamp', async () => {
@@ -251,9 +310,7 @@ describe('createBenchmark / uploadBenchmark', () => {
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTokenScope.mockReturnValue(false);
 
-    await expect(createBenchmark(body, 'p-other', 'u1')).rejects.toThrow(
-      "Access denied"
-    );
+    await expect(createBenchmark(body, 'p-other', 'u1')).rejects.toThrow('Access denied');
   });
 
   it('rejects an unresolved training uuid', async () => {
@@ -292,9 +349,9 @@ describe('getBenchmarkStats', () => {
       benchmarkDoc({
         results: [
           { total_parameters: 100, flops_giga: 10, fps: 30, gpu_memory_mean_mb: 500 },
-          { total_parameters: 300, flops_giga: 20, fps: 60, ram_memory_mean_mb: 100 },
-        ],
-      }),
+          { total_parameters: 300, flops_giga: 20, fps: 60, ram_memory_mean_mb: 100 }
+        ]
+      })
     ]);
 
     const stats = await getBenchmarkStats(undefined, 'u1');
@@ -319,7 +376,7 @@ describe('getBenchmarkStats', () => {
       avgParameters: 0,
       avgFlops: 0,
       avgFps: 0,
-      avgMemoryUsage: 0,
+      avgMemoryUsage: 0
     });
   });
 
@@ -348,7 +405,7 @@ describe('updateBenchmark', () => {
   });
 
   it('403s when the current training is out of reach', async () => {
-    jest.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError());
+    vi.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError());
     mockedBenchmark.findOne.mockResolvedValue(benchmarkDoc());
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
@@ -363,7 +420,10 @@ describe('updateBenchmark', () => {
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
     const newTraining = trainingDoc('t2');
-    mockedTraining.findOne.mockResolvedValueOnce(trainingDoc('t1')).mockResolvedValueOnce(trainingDoc('t1')).mockResolvedValue(newTraining);
+    mockedTraining.findOne
+      .mockResolvedValueOnce(trainingDoc('t1'))
+      .mockResolvedValueOnce(trainingDoc('t1'))
+      .mockResolvedValue(newTraining);
 
     await updateBenchmark(
       'b1',
@@ -373,7 +433,7 @@ describe('updateBenchmark', () => {
         results: [{ fps: 30 }],
         training_uuid: 'uuid-t2',
         epoch_uuid: 'e9',
-        epoch: 9,
+        epoch: 9
       },
       'u1',
       undefined
@@ -394,9 +454,7 @@ describe('updateBenchmark', () => {
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t2'));
     mockedTokenScope.mockReturnValue(false);
 
-    await expect(
-      updateBenchmark('b1', { training_uuid: 'uuid-t2' }, 'u1', 'p-token')
-    ).rejects.toThrow();
+    await expect(updateBenchmark('b1', { training_uuid: 'uuid-t2' }, 'u1', 'p-token')).rejects.toThrow();
   });
 
   it('unlinks the training when training_uuid is cleared', async () => {

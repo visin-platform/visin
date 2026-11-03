@@ -1,42 +1,64 @@
-jest.mock('../../models/Finding', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), countDocuments: jest.fn() },
-}));
-jest.mock('../../models/Project', () => ({
-  __esModule: true,
-  default: { findOne: jest.fn(), findById: jest.fn() },
-}));
-jest.mock('../../models/Training', () => ({
-  __esModule: true,
-  default: { countDocuments: jest.fn(), find: jest.fn() },
-}));
-jest.mock('../../models/Epoch', () => ({ __esModule: true, default: { find: jest.fn() } }));
-jest.mock('../../services/projectAccessService', () => ({
-  ...jest.requireActual('../../services/projectAccessService'),
-  checkProjectAccess: jest.fn(),
-  getVisibleProjectIds: jest.fn(),
-  createProjectAccessChecker: jest.fn(),
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/Finding', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), findOne: vi.fn(), create: vi.fn(), countDocuments: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Project', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { findOne: vi.fn(), findById: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Training', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { countDocuments: vi.fn(), find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Epoch', async () => {
+  const module = await (() => ({ __esModule: true, default: { find: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/projectAccessService')>(
+      '../../services/projectAccessService'
+    )),
+    checkProjectAccess: vi.fn(),
+    getVisibleProjectIds: vi.fn(),
+    createProjectAccessChecker: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import Finding from '../../models/Finding';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
-import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from '../../services/projectAccessService';
+import {
+  checkProjectAccess,
+  createProjectAccessChecker,
+  getVisibleProjectIds
+} from '../../services/projectAccessService';
 import {
   createFinding,
   deleteFinding,
   exportFindingAsLatex,
   getFinding,
-  listFindings,
+  listFindings
 } from '../../services/findingService';
 
-const finding = Finding as unknown as Record<string, jest.Mock>;
-const project = Project as unknown as Record<string, jest.Mock>;
-const training = Training as unknown as Record<string, jest.Mock>;
-const epoch = Epoch as unknown as Record<string, jest.Mock>;
-const access = checkProjectAccess as unknown as jest.Mock;
-const accessChecker = createProjectAccessChecker as unknown as jest.Mock;
+const finding = Finding as unknown as Record<string, Mock>;
+const project = Project as unknown as Record<string, Mock>;
+const training = Training as unknown as Record<string, Mock>;
+const epoch = Epoch as unknown as Record<string, Mock>;
+const access = checkProjectAccess as unknown as Mock;
+const accessChecker = createProjectAccessChecker as unknown as Mock;
 
 const OWNER = 'u1';
 const author = { kind: 'assistant' as const, label: 'Claude', userId: OWNER };
@@ -44,8 +66,8 @@ const author = { kind: 'assistant' as const, label: 'Claude', userId: OWNER };
 /** A Mongoose document, as the model actually hands one back. */
 const asDoc = <T extends Record<string, unknown>>(data: T) => ({
   ...data,
-  save: jest.fn().mockResolvedValue(undefined),
-  toObject: () => data,
+  save: vi.fn().mockResolvedValue(undefined),
+  toObject: () => data
 });
 
 const row = (over: Record<string, unknown> = {}) =>
@@ -59,40 +81,44 @@ const row = (over: Record<string, unknown> = {}) =>
     authorLabel: 'Claude',
     createdAt: new Date('2026-09-06T10:00:00.000Z'),
     deletedAt: null,
-    ...over,
+    ...over
   });
 
 /** What `Training.find(...).select(...)` resolves to when citations are named. */
 const citedRunsAre = (runs: Array<Record<string, unknown>>) => {
-  const select = jest.fn().mockResolvedValue(
-    runs.map((run) => ({ status: 'completed', projectId: 'p1', ...run }))
-  );
+  const select = vi.fn().mockResolvedValue(runs.map((run) => ({ status: 'completed', projectId: 'p1', ...run })));
   training.find.mockReturnValue({ select });
   return select;
 };
 
 const listReturns = (rows: unknown[]) => {
-  const limit = jest.fn().mockResolvedValue(rows);
-  finding.find.mockReturnValue({ sort: jest.fn().mockReturnValue({ limit }) });
+  const limit = vi.fn().mockResolvedValue(rows);
+  finding.find.mockReturnValue({ sort: vi.fn().mockReturnValue({ limit }) });
   return limit;
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   access.mockResolvedValue(true);
-  (getVisibleProjectIds as jest.Mock).mockResolvedValue(['mine']);
+  (getVisibleProjectIds as Mock).mockResolvedValue(['mine']);
   project.findOne.mockResolvedValue(null);
-  project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, owner: { kind: 'user', id: OWNER }, visibility: 'private' });
+  project.findById.mockResolvedValue({
+    _id: { toString: () => 'p1' },
+    owner: { kind: 'user', id: OWNER },
+    visibility: 'private'
+  });
   training.countDocuments.mockResolvedValue(0);
   citedRunsAre([]);
-  accessChecker.mockImplementation(() => async () => true);
-  epoch.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort: jest.fn().mockResolvedValue([]) }) });
+  accessChecker.mockImplementation(function () {
+    return async () => true;
+  });
+  epoch.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue([]) }) });
 });
 
 /** What `Epoch.find(...).select(...).sort(...)` resolves to. */
 const epochsAre = (rows: Array<Record<string, unknown>>) => {
-  const sort = jest.fn().mockResolvedValue(rows);
-  epoch.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+  const sort = vi.fn().mockResolvedValue(rows);
+  epoch.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
 };
 
 describe('listFindings', () => {
@@ -109,10 +135,7 @@ describe('listFindings', () => {
 
     await listFindings(OWNER, { training: 't7' });
 
-    expect(finding.find.mock.calls[0][0].$or).toEqual([
-      { trainingId: 't7' },
-      { trainingIds: 't7' },
-    ]);
+    expect(finding.find.mock.calls[0][0].$or).toEqual([{ trainingId: 't7' }, { trainingIds: 't7' }]);
   });
 
   it('scopes an unscoped listing to visible projects before applying the limit', async () => {
@@ -141,14 +164,14 @@ describe('naming the runs a finding cites', () => {
     listReturns([row({ trainingIds: ['t1', 't2'] }), row({ _id: 'f2', trainingIds: ['t2'] })]);
     citedRunsAre([
       { _id: { toString: () => 't1' }, name: 'window16' },
-      { _id: { toString: () => 't2' }, name: 'window8' },
+      { _id: { toString: () => 't2' }, name: 'window8' }
     ]);
 
     const [first, second] = await listFindings(OWNER, { project: 'p1' });
 
     expect(first.citedTrainings).toEqual([
       { _id: 't1', name: 'window16', status: 'completed' },
-      { _id: 't2', name: 'window8', status: 'completed' },
+      { _id: 't2', name: 'window8', status: 'completed' }
     ]);
     expect(second.citedTrainings).toEqual([{ _id: 't2', name: 'window8', status: 'completed' }]);
     // One lookup for both rows, not one per row.
@@ -172,9 +195,11 @@ describe('naming the runs a finding cites', () => {
     listReturns([row({ trainingIds: ['mine', 'hidden'] })]);
     citedRunsAre([
       { _id: { toString: () => 'mine' }, name: 'window16', projectId: 'p1' },
-      { _id: { toString: () => 'hidden' }, name: 'secret-run', projectId: 'private' },
+      { _id: { toString: () => 'hidden' }, name: 'secret-run', projectId: 'private' }
     ]);
-    accessChecker.mockImplementation(() => async (p: string) => p === 'p1');
+    accessChecker.mockImplementation(function () {
+      return async (p: string) => p === 'p1';
+    });
 
     const [only] = await listFindings(OWNER, { project: 'p1' });
 
@@ -194,18 +219,17 @@ describe('naming the runs a finding cites', () => {
     expect(read.citedTrainings).toEqual([{ _id: 't1', name: 'window16', status: 'completed' }]);
 
     training.countDocuments.mockResolvedValue(1);
-    finding.create.mockImplementation(async (doc: Record<string, unknown>) => asDoc(doc));
+    finding.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return asDoc(doc);
+    });
 
-    const created = await createFinding(
-      { project: 'p1', title: 'T', body: 'B', trainingIds: ['t1'] },
-      author
-    );
+    const created = await createFinding({ project: 'p1', title: 'T', body: 'B', trainingIds: ['t1'] }, author);
     expect(created.citedTrainings).toEqual([{ _id: 't1', name: 'window16', status: 'completed' }]);
   });
 });
 
 describe('exporting a finding as LaTeX', () => {
-  it('builds the table from recorded epochs, not from the prose', () => 
+  it('builds the table from recorded epochs, not from the prose', () =>
     Promise.resolve().then(async () => {
       // The point of generating this server-side: an assistant asked for a
       // results table retypes numbers it read earlier, and a slipped digit
@@ -216,12 +240,12 @@ describe('exporting a finding as LaTeX', () => {
       citedRunsAre([{ _id: { toString: () => 't1' }, name: 'window16' }]);
       epochsAre([
         { trainingId: 't1', epoch: 1, results: { val: { mean_iou: 0.2 } } },
-        { trainingId: 't1', epoch: 2, results: { val: { mean_iou: 0.45 } } },
+        { trainingId: 't1', epoch: 2, results: { val: { mean_iou: 0.45 } } }
       ]);
 
       const { filename, tex } = await exportFindingAsLatex('f1', OWNER, {
         selectBy: 'val.mean_iou',
-        direction: 'max',
+        direction: 'max'
       });
 
       expect(filename).toBe('window-ablation.tex');
@@ -235,9 +259,11 @@ describe('exporting a finding as LaTeX', () => {
     finding.findOne.mockResolvedValue(row({ trainingIds: ['t1', 'hidden'] }));
     citedRunsAre([
       { _id: { toString: () => 't1' }, name: 'window16', projectId: 'p1' },
-      { _id: { toString: () => 'hidden' }, name: 'secret', projectId: 'private' },
+      { _id: { toString: () => 'hidden' }, name: 'secret', projectId: 'private' }
     ]);
-    accessChecker.mockImplementation(() => async (p: string) => p === 'p1');
+    accessChecker.mockImplementation(function () {
+      return async (p: string) => p === 'p1';
+    });
 
     const { tex } = await exportFindingAsLatex('f1', OWNER, {});
 
@@ -294,25 +320,28 @@ describe('resolving a project', () => {
 describe('createFinding', () => {
   it('records who wrote it and what it draws on', async () => {
     training.countDocuments.mockResolvedValue(2);
-    finding.create.mockImplementation(async (doc: Record<string, unknown>) => asDoc(doc));
+    finding.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return asDoc(doc);
+    });
 
-    const created = await createFinding(
-      { project: 'p1', title: 'T', body: 'B', trainingIds: ['t1', 't2'] },
-      author
-    );
+    const created = await createFinding({ project: 'p1', title: 'T', body: 'B', trainingIds: ['t1', 't2'] }, author);
 
     expect(created).toMatchObject({
       projectId: 'p1',
       authorKind: 'assistant',
       authorLabel: 'Claude',
       authorUserId: OWNER,
-      trainingIds: ['t1', 't2'],
+      trainingIds: ['t1', 't2']
     });
   });
 
   it('refuses to annotate a project the caller does not own', async () => {
     // Findings are the owner's record, not a comment section on public work.
-    project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, owner: { kind: 'user', id: 'someone-else' }, visibility: 'private' });
+    project.findById.mockResolvedValue({
+      _id: { toString: () => 'p1' },
+      owner: { kind: 'user', id: 'someone-else' },
+      visibility: 'private'
+    });
 
     await expect(createFinding({ project: 'p1', title: 'T', body: 'B' }, author)).rejects.toThrow(
       /Project edit permission/
@@ -331,7 +360,9 @@ describe('createFinding', () => {
 
   it('treats a repeated citation as one run', async () => {
     training.countDocuments.mockResolvedValue(1);
-    finding.create.mockImplementation(async (doc: Record<string, unknown>) => asDoc(doc));
+    finding.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return asDoc(doc);
+    });
 
     await expect(
       createFinding({ project: 'p1', title: 'T', body: 'B', trainingIds: ['t1', 't1'] }, author)
@@ -340,7 +371,9 @@ describe('createFinding', () => {
 
   it('cites the subject run when only that is given', async () => {
     training.countDocuments.mockResolvedValue(1);
-    finding.create.mockImplementation(async (doc: Record<string, unknown>) => asDoc(doc));
+    finding.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return asDoc(doc);
+    });
 
     const created = await createFinding({ project: 'p1', training: 't1', title: 'T', body: 'B' }, author);
 
@@ -352,7 +385,9 @@ describe('createFinding', () => {
     // subject: a finding about t1 comparing it with t2 and t3 listed the two it
     // was measured against and not the one it was about.
     training.countDocuments.mockResolvedValue(3);
-    finding.create.mockImplementation(async (doc: Record<string, unknown>) => asDoc(doc));
+    finding.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return asDoc(doc);
+    });
 
     const created = await createFinding(
       { project: 'p1', training: 't1', title: 'T', body: 'B', trainingIds: ['t2', 't3'] },
@@ -364,7 +399,9 @@ describe('createFinding', () => {
 
   it('does not cite the subject twice when it is also listed', async () => {
     training.countDocuments.mockResolvedValue(2);
-    finding.create.mockImplementation(async (doc: Record<string, unknown>) => asDoc(doc));
+    finding.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return asDoc(doc);
+    });
 
     const created = await createFinding(
       { project: 'p1', training: 't1', title: 'T', body: 'B', trainingIds: ['t1', 't2'] },

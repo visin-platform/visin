@@ -1,37 +1,72 @@
+import { vi, type Mock } from 'vitest';
+const { job } = vi.hoisted(() => {
+  const job = {
+    _id: 'j1',
+    datasetId: 'd1',
+    toObject: () => ({ _id: 'j1', datasetId: 'd1', createdBy: { email: 'owner@x.com' } })
+  };
+  return { job };
+});
 import type { Request, Response } from 'express';
 
-jest.mock('../../services/jobService', () => ({
-  createJob: jest.fn(),
-  listJobsForUser: jest.fn(),
-  listPublicJobs: jest.fn(),
-  withoutCreatorIdentity: jest.fn((job: { toObject: () => Record<string, unknown> }) => {
-    const { createdBy: _createdBy, ...rest } = job.toObject();
-    return rest;
-  }),
-  getJob: jest.fn(),
-  jobDataset: jest.fn(),
-  deleteJob: jest.fn(),
-  getJobProgress: jest.fn(),
-  transitionJob: jest.fn(),
-  setJobVisibility: jest.fn(),
-  setModelClassMapping: jest.fn(),
-}));
-jest.mock('../../services/materializationService', () => ({
-  materializeTasks: jest.fn(),
-}));
-jest.mock('../../services/exportService', () => ({
-  exportManifest: jest.fn(),
-  jobStats: jest.fn(),
-}));
-jest.mock('../../services/bundleService', () => ({ streamExport: jest.fn() }));
-jest.mock('../../services/importService', () => ({ importLabels: jest.fn() }));
+vi.mock('../../services/jobService', async () => {
+  const module = await (() => ({
+    createJob: vi.fn(),
+    listJobsForUser: vi.fn(),
+    listPublicJobs: vi.fn(),
+    withoutCreatorIdentity: vi.fn(function (job: { toObject: () => Record<string, unknown> }) {
+      const { createdBy: _createdBy, ...rest } = job.toObject();
+      return rest;
+    }),
+    getJob: vi.fn(),
+    jobDataset: vi.fn(),
+    deleteJob: vi.fn(),
+    getJobProgress: vi.fn(),
+    transitionJob: vi.fn(),
+    setJobVisibility: vi.fn(),
+    setModelClassMapping: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/materializationService', async () => {
+  const module = await (() => ({
+    materializeTasks: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/exportService', async () => {
+  const module = await (() => ({
+    exportManifest: vi.fn(),
+    jobStats: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/bundleService', async () => {
+  const module = await (() => ({ streamExport: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/importService', async () => {
+  const module = await (() => ({ importLabels: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 // Small enough to cross in a test; the real limit is a gigabyte.
-jest.mock('../../limits', () => ({ IMPORT_MAX_BYTES: 1024, TASK_LEASE_MINUTES: 5 }));
-jest.mock('../../services/groupAccessService', () => ({
-  requireUser: jest.fn((req: Request) => req.user),
-}));
+vi.mock('../../limits', async () => {
+  const module = await (() => ({ IMPORT_MAX_BYTES: 1024, TASK_LEASE_MINUTES: 5 }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/groupAccessService', async () => {
+  const module = await (() => ({
+    requireUser: vi.fn(function (req: Request) {
+      return req.user;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-jest.mock('../../services/jobAccessService', () => ({ getJobReadAccess: jest.fn(), assertJobAdmin: jest.fn() }));
+vi.mock('../../services/jobAccessService', async () => {
+  const module = await (() => ({ getJobReadAccess: vi.fn(), assertJobAdmin: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 import { assertJobAdmin, getJobReadAccess } from '../../services/jobAccessService';
 
 import * as ctrl from '../../controllers/jobController';
@@ -43,43 +78,47 @@ import * as importer from '../../services/importService';
 import { Readable } from 'node:stream';
 import { existsSync, readFileSync } from 'node:fs';
 
-const mockedBundles = bundles as unknown as Record<string, jest.Mock>;
-const mockedImporter = importer as unknown as Record<string, jest.Mock>;
-const mockedSvc = svc as unknown as Record<string, jest.Mock>;
-const mockedMat = materialization as unknown as Record<string, jest.Mock>;
-const mockedExport = exportSvc as unknown as Record<string, jest.Mock>;
-const mockedAdmin = assertJobAdmin as jest.Mock;
+const mockedBundles = bundles as unknown as Record<string, Mock>;
+const mockedImporter = importer as unknown as Record<string, Mock>;
+const mockedSvc = svc as unknown as Record<string, Mock>;
+const mockedMat = materialization as unknown as Record<string, Mock>;
+const mockedExport = exportSvc as unknown as Record<string, Mock>;
+const mockedAdmin = assertJobAdmin as Mock;
 
 type MockRes = Response & {
-  json: jest.Mock;
-  status: jest.Mock;
-  send: jest.Mock;
-  setHeader: jest.Mock;
-  end: jest.Mock;
-  destroy: jest.Mock;
+  json: Mock;
+  status: Mock;
+  send: Mock;
+  setHeader: Mock;
+  end: Mock;
+  destroy: Mock;
   headersSent: boolean;
 };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn(), send: jest.fn(), setHeader: jest.fn(), end: jest.fn(), destroy: jest.fn(), headersSent: false };
+  const res = {
+    json: vi.fn(),
+    status: vi.fn(),
+    send: vi.fn(),
+    setHeader: vi.fn(),
+    end: vi.fn(),
+    destroy: vi.fn(),
+    headersSent: false
+  };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ body: {}, query: {}, params: {}, user: { id: 'u1', email: 'user@x.com' }, ...overrides } as unknown as Request);
-
-const job = {
-  _id: 'j1',
-  datasetId: 'd1',
-  toObject: () => ({ _id: 'j1', datasetId: 'd1', createdBy: { email: 'owner@x.com' } }),
-};
+  ({ body: {}, query: {}, params: {}, user: { id: 'u1', email: 'user@x.com' }, ...overrides }) as unknown as Request;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedSvc.getJob.mockResolvedValue(job);
   mockedSvc.jobDataset.mockResolvedValue({ _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' } });
-  (getJobReadAccess as jest.Mock).mockImplementation(async (_job, userId) => ({ member: Boolean(userId), isAdmin: false, canWork: false }));
+  (getJobReadAccess as Mock).mockImplementation(async function (_job, userId) {
+    return { member: Boolean(userId), isAdmin: false, canWork: false };
+  });
 });
 
 describe('setModelClassMapping', () => {
@@ -89,7 +128,9 @@ describe('setModelClassMapping', () => {
     const res = makeRes();
     await ctrl.setModelClassMapping(req, res);
     expect(mockedAdmin).toHaveBeenCalledWith(job, 'u1');
-    expect(mockedAdmin.mock.invocationCallOrder[0]).toBeLessThan(mockedSvc.setModelClassMapping.mock.invocationCallOrder[0]);
+    expect(mockedAdmin.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedSvc.setModelClassMapping.mock.invocationCallOrder[0]
+    );
     expect(mockedSvc.setModelClassMapping).toHaveBeenCalledWith(job, { vehicle: 'car' });
     expect(res.json).toHaveBeenCalledWith({ success: true, data: job });
   });
@@ -171,8 +212,8 @@ describe('getJob', () => {
         datasetId: 'd1',
         dataset: { _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' } },
         createdBy: { email: 'owner@x.com' },
-        progress: { tasks: 3 },
-      },
+        progress: { tasks: 3 }
+      }
     });
   });
 
@@ -189,7 +230,7 @@ describe('getJob', () => {
     expect(mockedSvc.jobDataset).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { canLabel: false, canManage: false, _id: 'j1', datasetId: 'd1', progress: { tasks: 3, myDone: 0 } },
+      data: { canLabel: false, canManage: false, _id: 'j1', datasetId: 'd1', progress: { tasks: 3, myDone: 0 } }
     });
   });
 });
@@ -219,7 +260,7 @@ describe('transitions', () => {
     ['activateJob', 'activate'],
     ['pauseJob', 'pause'],
     ['resumeJob', 'resume'],
-    ['archiveJob', 'archive'],
+    ['archiveJob', 'archive']
   ] as const)('%s requires admin and delegates', async (handler, action) => {
     mockedSvc.transitionJob.mockResolvedValue({ ...job, status: 'x' });
     const req = makeReq({ params: { id: 'j1' } });
@@ -260,9 +301,9 @@ describe('exportJob', () => {
   it('answers a failure before anything was sent with the error', async () => {
     mockedBundles.streamExport.mockRejectedValue(new Error('file-service down'));
 
-    await expect(ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'coco', include: 'done' } }), makeRes())).rejects.toThrow(
-      'file-service down'
-    );
+    await expect(
+      ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'coco', include: 'done' } }), makeRes())
+    ).rejects.toThrow('file-service down');
   });
 
   it('cuts the connection when the failure comes after bytes went out', async () => {
@@ -284,10 +325,7 @@ describe('exportJob', () => {
     await ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'manifest' } }), res);
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
-    expect(res.setHeader).toHaveBeenCalledWith(
-      'Content-Disposition',
-      'attachment; filename="job-j1.manifest.json"'
-    );
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="job-j1.manifest.json"');
     expect(res.send).toHaveBeenCalledWith(JSON.stringify({ job: { id: 'j1' } }, null, 2));
     expect(mockedBundles.streamExport).not.toHaveBeenCalled();
   });
@@ -295,7 +333,9 @@ describe('exportJob', () => {
   it('refuses a caller who does not manage the dataset, before reading any label', async () => {
     mockedAdmin.mockRejectedValueOnce(new Error('forbidden'));
 
-    await expect(ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'yolo' } }), makeRes())).rejects.toThrow('forbidden');
+    await expect(
+      ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'yolo' } }), makeRes())
+    ).rejects.toThrow('forbidden');
     expect(mockedBundles.streamExport).not.toHaveBeenCalled();
   });
 });
@@ -319,7 +359,7 @@ describe('importLabels', () => {
       query: { as: 'suggestions', dryRun: 'false', classMap: {} },
       headers: {},
       user: { id: 'u1', email: 'user@x.com' },
-      ...overrides,
+      ...overrides
     }) as unknown as Request;
 
   beforeEach(() => {
@@ -328,7 +368,7 @@ describe('importLabels', () => {
 
   it('spools the body to a temporary file, imports from it and always removes it', async () => {
     let seen: { path: string; bytes: string } | undefined;
-    mockedImporter.importLabels.mockImplementation(async (_job: unknown, _user: unknown, path: string) => {
+    mockedImporter.importLabels.mockImplementation(async function (_job: unknown, _user: unknown, path: string) {
       seen = { path, bytes: readFileSync(path).toString() };
       return { format: 'yolo' };
     });
@@ -345,7 +385,7 @@ describe('importLabels', () => {
 
   it('removes the file when the import fails', async () => {
     let path = '';
-    mockedImporter.importLabels.mockImplementation(async (_job: unknown, _user: unknown, file: string) => {
+    mockedImporter.importLabels.mockImplementation(async function (_job: unknown, _user: unknown, file: string) {
       path = file;
       throw new Error('Could not recognise these labels');
     });
@@ -388,7 +428,7 @@ describe('importLabels', () => {
 
 describe('jobStats', () => {
   it('gives an authorized group administrator the per-labeler breakdown', async () => {
-    (getJobReadAccess as jest.Mock).mockResolvedValue({ member: true, isAdmin: true });
+    (getJobReadAccess as Mock).mockResolvedValue({ member: true, isAdmin: true });
     mockedExport.jobStats.mockResolvedValue({ tasks: 1, perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }] });
     const res = makeRes();
 
@@ -396,7 +436,7 @@ describe('jobStats', () => {
 
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { tasks: 1, perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }] },
+      data: { tasks: 1, perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }] }
     });
   });
 
@@ -405,7 +445,7 @@ describe('jobStats', () => {
     mockedExport.jobStats.mockResolvedValue({
       tasks: 1,
       perStratum: [],
-      perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }],
+      perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }]
     });
     const res = makeRes();
 

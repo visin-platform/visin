@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
@@ -13,12 +14,21 @@ import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 import { fetchDatasetCovers } from '../../clients/datasetCoversClient';
 import { getSignedUrl } from '../../clients/fileServiceClient';
 
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn() }));
-jest.mock('../../clients/datasetCoversClient', () => ({ fetchDatasetCovers: jest.fn() }));
-jest.mock('../../clients/fileServiceClient', () => ({
-  ...jest.requireActual('../../clients/fileServiceClient'),
-  getSignedUrl: jest.fn()
-}));
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({ lookupOwnerIdentities: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetCoversClient', async () => {
+  const module = await (() => ({ fetchDatasetCovers: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../clients/fileServiceClient')>('../../clients/fileServiceClient')),
+    getSignedUrl: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 const ANN = '000000000000000000000001';
 const HIDDEN = '000000000000000000000002';
@@ -98,23 +108,20 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
 
   beforeEach(async () => {
     await Promise.all([Project, Training, Finding, Suite].map((model) => model.deleteMany({})));
-    jest.mocked(fetchDatasetCovers).mockReset().mockResolvedValue({});
-    jest.mocked(getSignedUrl).mockReset().mockResolvedValue(null);
-    jest.mocked(lookupOwnerIdentities).mockReset();
-    jest
-      .mocked(lookupOwnerIdentities)
-      .mockImplementation(
-        async (owners) =>
-          new Map(
-            [
-              { id: ANN, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' },
-              { id: HIDDEN },
-              { id: GROUP, handle: 'road-lab', name: 'Road lab' }
-            ]
-              .filter((identity) => owners.some((owner) => owner.id === identity.id))
-              .map((identity) => [identity.id, identity])
-          )
+    vi.mocked(fetchDatasetCovers).mockReset().mockResolvedValue({});
+    vi.mocked(getSignedUrl).mockReset().mockResolvedValue(null);
+    vi.mocked(lookupOwnerIdentities).mockReset();
+    vi.mocked(lookupOwnerIdentities).mockImplementation(async function (owners) {
+      return new Map(
+        [
+          { id: ANN, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' },
+          { id: HIDDEN },
+          { id: GROUP, handle: 'road-lab', name: 'Road lab' }
+        ]
+          .filter((identity) => owners.some((owner) => owner.id === identity.id))
+          .map((identity) => [identity.id, identity])
       );
+    });
     await project('Window ablations', {
       description: 'Swin window size study',
       updatedAt: at('2026-09-05'),
@@ -197,13 +204,19 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   });
 
   it('gives a card the picture its owner chose, else its dataset cover as anyone may see it', async () => {
-    jest.mocked(getSignedUrl).mockResolvedValue({ signedUrl: 'https://files.example.test/chosen.png', expiresAt: 'later', expiresInMinutes: 60 });
-    jest.mocked(fetchDatasetCovers).mockResolvedValue({ 'ds-public': 'https://files.example.test/dataset.jpg' });
+    vi.mocked(getSignedUrl).mockResolvedValue({
+      signedUrl: 'https://files.example.test/chosen.png',
+      expiresAt: 'later',
+      expiresInMinutes: 60
+    });
+    vi.mocked(fetchDatasetCovers).mockResolvedValue({ 'ds-public': 'https://files.example.test/dataset.jpg' });
     await Project.collection.updateOne(
       { _id: new mongoose.Types.ObjectId(ids['Window ablations']) },
       { $set: { cover: { visualizationUuid: 'viz-1', fileId: 'files/chosen.png' } } }
     );
-    await run('Team harbour', '2026-09-03T08:00:00.000Z', { dataset: { source: 'visin', id: 'ds-public', name: 'Harbour' } });
+    await run('Team harbour', '2026-09-03T08:00:00.000Z', {
+      dataset: { source: 'visin', id: 'ds-public', name: 'Harbour' }
+    });
 
     try {
       const cards = (await list()).body.data.projects;
@@ -225,7 +238,7 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   });
 
   it('uses legacy dataset references, while ignoring stale ids on external-source runs and trashed runs', async () => {
-    jest.mocked(fetchDatasetCovers).mockResolvedValue({ 'ds-legacy': 'https://files.example.test/legacy.jpg' });
+    vi.mocked(fetchDatasetCovers).mockResolvedValue({ 'ds-legacy': 'https://files.example.test/legacy.jpg' });
     await run('Team harbour', '2026-09-03T08:00:00.000Z', { datasetId: 'ds-legacy' });
     await run('Night driving', '2026-09-03T08:00:00.000Z', {
       datasetId: 'ds-stale',

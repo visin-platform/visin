@@ -1,32 +1,58 @@
-jest.mock('../../services/jobLifecycleService', () => ({
-  ...jest.requireActual('../../services/jobLifecycleService'),
-  finishJobCreation: jest.fn(), beginJobDeletion: jest.fn(),
-  finishJobDeletion: jest.fn(), releaseLifecycleLease: jest.fn()
-}));
-jest.mock('../../models/LabelJob', () => ({
-  MAX_CLASSES: 100,
-  LabelJob: { create: jest.fn(), find: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() },
-}));
-jest.mock('../../clients/datasetServiceClient', () => ({
-  getDataset: jest.fn(),
-  getPermission: jest.fn(),
-  datasetIdsFor: jest.fn(),
-  addHold: jest.fn(),
-  removeHold: jest.fn(),
-}));
-jest.mock('../../models/LabelTask', () => ({
-  LabelTask: { countDocuments: jest.fn(), deleteMany: jest.fn(), aggregate: jest.fn() },
-}));
-jest.mock('../../models/LabelAnnotation', () => ({
-  LabelAnnotation: { deleteMany: jest.fn(), aggregate: jest.fn() },
-}));
-jest.mock('../../models/LabelSuggestion', () => ({
-  LabelSuggestion: { deleteMany: jest.fn() },
-}));
-jest.mock('../../clients/fileServiceClient', () => ({
-  deleteFolder: jest.fn(),
-  jobFolder: (jobId: string) => `label/${jobId}/`,
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../services/jobLifecycleService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/jobLifecycleService')>(
+      '../../services/jobLifecycleService'
+    )),
+    finishJobCreation: vi.fn(),
+    beginJobDeletion: vi.fn(),
+    finishJobDeletion: vi.fn(),
+    releaseLifecycleLease: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelJob', async () => {
+  const module = await (() => ({
+    MAX_CLASSES: 100,
+    LabelJob: { create: vi.fn(), find: vi.fn(), findById: vi.fn(), deleteOne: vi.fn(), findOneAndUpdate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    getDataset: vi.fn(),
+    getPermission: vi.fn(),
+    datasetIdsFor: vi.fn(),
+    addHold: vi.fn(),
+    removeHold: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelTask', async () => {
+  const module = await (() => ({
+    LabelTask: { countDocuments: vi.fn(), deleteMany: vi.fn(), aggregate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelAnnotation', async () => {
+  const module = await (() => ({
+    LabelAnnotation: { deleteMany: vi.fn(), aggregate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelSuggestion', async () => {
+  const module = await (() => ({
+    LabelSuggestion: { deleteMany: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    deleteFolder: vi.fn(),
+    jobFolder: (jobId: string) => `label/${jobId}/`
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import * as svc from '../../services/jobService';
 import { LabelJob } from '../../models/LabelJob';
@@ -36,12 +62,12 @@ import { LabelAnnotation } from '../../models/LabelAnnotation';
 import * as lifecycle from '../../services/jobLifecycleService';
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 
-const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
-const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
-const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
-const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
+const mockedJob = LabelJob as unknown as Record<string, Mock>;
+const mockedDatasets = datasets as unknown as Record<string, Mock>;
+const mockedTask = LabelTask as unknown as Record<string, Mock>;
+const mockedAnnotation = LabelAnnotation as unknown as Record<string, Mock>;
 
-const mockedLifecycle = lifecycle as unknown as Record<string, jest.Mock>;
+const mockedLifecycle = lifecycle as unknown as Record<string, Mock>;
 
 const user = { id: 'u1', email: 'Admin@X.com', name: 'Admin' };
 const body = {
@@ -50,7 +76,7 @@ const body = {
   taskType: 'annotate' as const,
   sensors: [{ key: 'camera' as const, group: 'frames', kind: 'image' as const }],
   classes: [{ name: 'Car', tools: ['box', 'mask'] as ('box' | 'mask')[] }],
-  redundancy: 1,
+  redundancy: 1
 };
 
 const dataset = (extra: Record<string, unknown> = {}) => ({
@@ -58,22 +84,31 @@ const dataset = (extra: Record<string, unknown> = {}) => ({
   name: 'VLM',
   owner: { kind: 'group', id: 'g1' },
   visibility: 'private',
-  groups: [{ name: 'frames', images: 2, jsons: 0 }, { name: 'verify', images: 2, jsons: 1 }],
+  groups: [
+    { name: 'frames', images: 2, jsons: 0 },
+    { name: 'verify', images: 2, jsons: 1 }
+  ],
   imageCount: 4,
-  ...extra,
+  ...extra
 });
 
 beforeEach(() => {
-  jest.resetAllMocks();
-  mockedLifecycle.finishJobCreation.mockImplementation(async (job) => job);
+  vi.resetAllMocks();
+  mockedLifecycle.finishJobCreation.mockImplementation(async function (job) {
+    return job;
+  });
 });
 
 describe('setModelClassMapping', () => {
-  const job = () => ({ _id: 'j1', classes: [
-    { key: 'human', tools: ['box'], modelClass: 'person' },
-    { key: 'vehicle', tools: ['box', 'mask'] },
-    { key: 'road', tools: ['mask'] }
-  ] }) as unknown as Parameters<typeof svc.setModelClassMapping>[0];
+  const job = () =>
+    ({
+      _id: 'j1',
+      classes: [
+        { key: 'human', tools: ['box'], modelClass: 'person' },
+        { key: 'vehicle', tools: ['box', 'mask'] },
+        { key: 'road', tools: ['mask'] }
+      ]
+    }) as unknown as Parameters<typeof svc.setModelClassMapping>[0];
 
   it('changes and clears only explicit mappings on the existing classes', async () => {
     mockedJob.findOneAndUpdate.mockResolvedValue(job());
@@ -116,18 +151,24 @@ describe('createJob', () => {
 
     await svc.createJob(user, {
       ...body,
-      sensors: [...body.sensors, { key: 'lidar', group: 'verify', kind: 'image' }],
+      sensors: [...body.sensors, { key: 'lidar', group: 'verify', kind: 'image' }]
     });
 
     expect(mockedDatasets.getPermission).toHaveBeenCalledWith('d1', 'u1');
     expect(mockedJob.create).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'draft', datasetId: 'd1', createdBy: { userId: 'u1', email: 'admin@x.com', name: 'Admin' } })
+      expect.objectContaining({
+        status: 'draft',
+        datasetId: 'd1',
+        createdBy: { userId: 'u1', email: 'admin@x.com', name: 'Admin' }
+      })
     );
     expect(mockedJob.create.mock.calls[0][0].classes).toEqual([
-      { key: 'car', name: 'Car', color: '#2a78d6', hotkey: '1', tools: ['box', 'mask'], maskIndex: 1 },
+      { key: 'car', name: 'Car', color: '#2a78d6', hotkey: '1', tools: ['box', 'mask'], maskIndex: 1 }
     ]);
     expect(mockedJob.create.mock.calls[0][0]).not.toHaveProperty('groupId');
-    expect(mockedLifecycle.finishJobCreation).toHaveBeenCalledWith(expect.objectContaining({ _id: 'j1', datasetId: 'd1' }));
+    expect(mockedLifecycle.finishJobCreation).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'j1', datasetId: 'd1' })
+    );
   });
 
   it('builds a job only on a dataset the caller manages', async () => {
@@ -148,8 +189,8 @@ describe('createJob', () => {
         ...body,
         sensors: [
           { key: 'camera', group: 'nope', kind: 'image' },
-          { key: 'radar', group: 'gone', kind: 'points' },
-        ],
+          { key: 'radar', group: 'gone', kind: 'points' }
+        ]
       })
     ).rejects.toThrow('Not image groups of this dataset: nope, gone');
     expect(mockedJob.create).not.toHaveBeenCalled();
@@ -174,22 +215,26 @@ describe('listJobsForUser', () => {
 
   it('worker: active jobs on datasets I contribute to', async () => {
     mockedDatasets.datasetIdsFor.mockResolvedValue(['d1', 'd2']);
-    const sort = jest.fn().mockResolvedValue([]);
+    const sort = vi.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
     await svc.listJobsForUser('u1', 'worker');
 
     expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith('u1', 'contribute');
-    expect(mockedJob.find).toHaveBeenCalledWith({ ...lifecycle.READY_JOB, datasetId: { $in: ['d1', 'd2'] }, status: 'active' });
+    expect(mockedJob.find).toHaveBeenCalledWith({
+      ...lifecycle.READY_JOB,
+      datasetId: { $in: ['d1', 'd2'] },
+      status: 'active'
+    });
   });
 
   it('public: explicitly published active jobs, minus who set it up', async () => {
     const job = {
       _id: 'j1',
       redundancy: 1,
-      toObject: () => ({ _id: 'j1', createdBy: { email: 'owner@x.com' } }),
+      toObject: () => ({ _id: 'j1', createdBy: { email: 'owner@x.com' } })
     };
-    const sort = jest.fn().mockResolvedValue([job]);
+    const sort = vi.fn().mockResolvedValue([job]);
     mockedJob.find.mockReturnValue({ sort });
     mockedDatasets.datasetIdsFor.mockResolvedValue(['d-public']);
 
@@ -198,7 +243,12 @@ describe('listJobsForUser', () => {
     // Only on public datasets: a job made public on a dataset that later went
     // private is closed. Active only: a job is active because someone activated it.
     expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith(undefined, 'read');
-    expect(mockedJob.find).toHaveBeenCalledWith({ ...lifecycle.READY_JOB, status: 'active', isPublic: true, datasetId: { $in: ['d-public'] } });
+    expect(mockedJob.find).toHaveBeenCalledWith({
+      ...lifecycle.READY_JOB,
+      status: 'active',
+      isPublic: true,
+      datasetId: { $in: ['d-public'] }
+    });
     // Nobody's own labels, since there is nobody.
     expect(jobs[0].progress.myDone).toBe(0);
     // `createdBy` is an email address; the progress is what is being shared.
@@ -207,7 +257,7 @@ describe('listJobsForUser', () => {
 
   it('admin: every job on datasets I manage, and my own drafts from before datasets were required', async () => {
     mockedDatasets.datasetIdsFor.mockResolvedValue(['d1']);
-    const sort = jest.fn().mockResolvedValue([]);
+    const sort = vi.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
     await svc.listJobsForUser('u1', 'admin');
@@ -223,19 +273,23 @@ describe('listJobsForUser', () => {
     mockedDatasets.datasetIdsFor.mockResolvedValue(['d1']);
     const jobs = [
       { _id: 'j1', redundancy: 1, toObject: () => ({ _id: 'j1', name: 'A' }) },
-      { _id: 'j2', redundancy: 1, toObject: () => ({ _id: 'j2', name: 'B' }) },
+      { _id: 'j2', redundancy: 1, toObject: () => ({ _id: 'j2', name: 'B' }) }
     ];
-    mockedJob.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(jobs) });
+    mockedJob.find.mockReturnValue({ sort: vi.fn().mockResolvedValue(jobs) });
     mockedTask.aggregate.mockResolvedValue([
       { _id: { jobId: 'j1', answersCount: 0 }, count: 3 },
       { _id: { jobId: 'j1', answersCount: 1 }, count: 7 },
-      { _id: { jobId: 'j2', answersCount: 2 }, count: 5 },
+      { _id: { jobId: 'j2', answersCount: 2 }, count: 5 }
     ]);
     mockedAnnotation.aggregate.mockResolvedValue([{ _id: 'j1', done: 7, skipped: 1, myDone: 2 }]);
 
     const listed = await svc.listJobsForUser('u1', 'worker');
 
-    expect(listed[0]).toEqual({ _id: 'j1', name: 'A', progress: { tasks: 10, completed: 7, done: 7, skipped: 1, myDone: 2 } });
+    expect(listed[0]).toEqual({
+      _id: 'j1',
+      name: 'A',
+      progress: { tasks: 10, completed: 7, done: 7, skipped: 1, myDone: 2 }
+    });
     // A job with no labels still gets a zeroed progress rather than none.
     expect(listed[1].progress).toEqual({ tasks: 5, completed: 5, done: 0, skipped: 0, myDone: 0 });
   });
@@ -245,7 +299,7 @@ describe('progress', () => {
   it('counts a task as done only once it reaches the job redundancy', async () => {
     mockedTask.aggregate.mockResolvedValue([
       { _id: { jobId: 'j1', answersCount: 1 }, count: 6 }, // answered once — not done at K=2
-      { _id: { jobId: 'j1', answersCount: 2 }, count: 4 },
+      { _id: { jobId: 'j1', answersCount: 2 }, count: 4 }
     ]);
     mockedAnnotation.aggregate.mockResolvedValue([{ _id: 'j1', done: 14, skipped: 0, myDone: 6 }]);
     const job = { _id: 'j1', redundancy: 2 } as never;
@@ -270,14 +324,18 @@ describe('progress', () => {
 });
 
 describe('transitionJob', () => {
-  beforeEach(() => mockedJob.findOneAndUpdate.mockImplementation(async (filter, update) => ({ ...filter, status: update.$set.status })));
+  beforeEach(() => {
+    mockedJob.findOneAndUpdate.mockImplementation(async function (filter, update) {
+      return { ...filter, status: update.$set.status };
+    });
+  });
   const makeJob = (status: string, extra: Record<string, unknown> = {}) => ({
     _id: 'j1',
     status,
     datasetId: 'd1',
     tasksCount: 5,
-    save: jest.fn(),
-    ...extra,
+    save: vi.fn(),
+    ...extra
   });
 
   it('activates a draft with a dataset and materialized tasks', async () => {
@@ -352,11 +410,21 @@ describe('deleteJob', () => {
 
 describe('buildClasses', () => {
   it('derives a key, a colour, a hotkey and the mask value from the name and position', () => {
-    const built = svc.buildClasses([{ name: 'Traffic Light', tools: ['box', 'mask'] }, { name: 'Café Bär', tools: ['mask'] }]);
+    const built = svc.buildClasses([
+      { name: 'Traffic Light', tools: ['box', 'mask'] },
+      { name: 'Café Bär', tools: ['mask'] }
+    ]);
 
     expect(built).toEqual([
-      { key: 'traffic-light', name: 'Traffic Light', color: '#2a78d6', hotkey: '1', tools: ['box', 'mask'], maskIndex: 1 },
-      { key: 'cafe-bar', name: 'Café Bär', color: '#eb6834', hotkey: '2', tools: ['mask'], maskIndex: 2 },
+      {
+        key: 'traffic-light',
+        name: 'Traffic Light',
+        color: '#2a78d6',
+        hotkey: '1',
+        tools: ['box', 'mask'],
+        maskIndex: 1
+      },
+      { key: 'cafe-bar', name: 'Café Bär', color: '#eb6834', hotkey: '2', tools: ['mask'], maskIndex: 2 }
     ]);
   });
 
@@ -369,14 +437,14 @@ describe('buildClasses', () => {
     );
 
     expect(added).toEqual([
-      { key: 'big-bus', name: 'Bus', color: '#123456', hotkey: 'b', tools: ['box'], maskIndex: 2, modelClass: 'bus' },
+      { key: 'big-bus', name: 'Bus', color: '#123456', hotkey: 'b', tools: ['box'], maskIndex: 2, modelClass: 'bus' }
     ]);
   });
 
   it('gives a name that makes no key, and one that repeats a key, a unique one', () => {
     const built = svc.buildClasses([
       { name: '???', tools: ['box'] },
-      { name: 'Car', tools: ['box'] },
+      { name: 'Car', tools: ['box'] }
     ]);
     expect(built.map((entry) => entry.key)).toEqual(['class', 'car']);
 
@@ -385,10 +453,27 @@ describe('buildClasses', () => {
   });
 
   it('gives only the first nine classes a digit hotkey, and never one that is taken', () => {
-    const many = svc.buildClasses(Array.from({ length: 11 }, (_, i) => ({ name: `Class ${i}`, tools: ['box' as const] })));
-    expect(many.map((entry) => entry.hotkey)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', undefined, undefined]);
+    const many = svc.buildClasses(
+      Array.from({ length: 11 }, (_, i) => ({ name: `Class ${i}`, tools: ['box' as const] }))
+    );
+    expect(many.map((entry) => entry.hotkey)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      undefined,
+      undefined
+    ]);
 
-    const taken = svc.buildClasses([{ name: 'A', hotkey: '2', tools: ['box'] }, { name: 'B', tools: ['box'] }]);
+    const taken = svc.buildClasses([
+      { name: 'A', hotkey: '2', tools: ['box'] },
+      { name: 'B', tools: ['box'] }
+    ]);
     expect(taken.map((entry) => entry.hotkey)).toEqual(['2', undefined]);
   });
 
@@ -396,18 +481,18 @@ describe('buildClasses', () => {
     expect(() =>
       svc.buildClasses([
         { name: 'A', key: 'x', tools: ['box'] },
-        { name: 'B', key: 'x', tools: ['box'] },
+        { name: 'B', key: 'x', tools: ['box'] }
       ])
     ).toThrow('Two classes use the key "x"');
     expect(() =>
       svc.buildClasses([
         { name: 'Car', tools: ['box'] },
-        { name: 'car', tools: ['box'] },
+        { name: 'car', tools: ['box'] }
       ])
     ).toThrow('same name');
-    expect(() => svc.buildClasses(Array.from({ length: 101 }, (_, i) => ({ name: `c${i}`, tools: ['box' as const] })))).toThrow(
-      'at most 100 classes'
-    );
+    expect(() =>
+      svc.buildClasses(Array.from({ length: 101 }, (_, i) => ({ name: `c${i}`, tools: ['box' as const] })))
+    ).toThrow('at most 100 classes');
   });
 
   it('cycles colours rather than running out', () => {
@@ -419,7 +504,11 @@ describe('buildClasses', () => {
 describe('jobDataset', () => {
   it("names the job's dataset and its owner, and nothing for a dataset that is gone", async () => {
     mockedDatasets.getDataset.mockResolvedValueOnce(dataset());
-    expect(await svc.jobDataset({ datasetId: 'd1' } as never)).toEqual({ _id: 'd1', name: 'VLM', owner: { kind: 'group', id: 'g1' } });
+    expect(await svc.jobDataset({ datasetId: 'd1' } as never)).toEqual({
+      _id: 'd1',
+      name: 'VLM',
+      owner: { kind: 'group', id: 'g1' }
+    });
 
     mockedDatasets.getDataset.mockRejectedValueOnce(new NotFoundError('gone'));
     expect(await svc.jobDataset({ datasetId: 'd1' } as never)).toBeUndefined();

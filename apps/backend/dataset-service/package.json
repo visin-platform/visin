@@ -11,41 +11,37 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "start": "node --env-file-if-exists=.env dist/index.js",
-    "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
+    "dev": "node --watch --env-file-if-exists=.env -r ts-node/register src/index.ts",
     "build": "tsc",
-    "test": "NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest",
-    "test:coverage": "NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --coverage",
-    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "oxlint . --deny-warnings",
     "typecheck": "tsc --noEmit",
-    "docs:generate": "NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" UPDATE_OPENAPI_SCHEMAS=1 jest src/__tests__/openapi"
+    "docs:generate": "UPDATE_OPENAPI_SCHEMAS=1 vitest run src/__tests__/openapi"
   },
   "dependencies": {
     "@visin/backend-core": "1.17.0",
-    "bullmq": "^6.3.9",
-    "express": "^5.2.1",
+    "bullmq": "^6.5.4",
+    "express": "^5.3.0",
     "ioredis": "^6.0.0",
-    "mongoose": "~9.10.2",
+    "mongoose": "~9.10.4",
     "sharp": "^0.35.5",
     "unzipper": "^0.12.5",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
-    "@types/jest": "^30.0.0",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.6",
     "@types/unzipper": "^0.10.11",
     "@types/yauzl": "^3.4.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "eslint": "^10.11.0",
-    "jest": "^30.5.2",
     "mongodb-memory-server": "11.3.0",
-    "nodemon": "^3.1.14",
-    "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.0",
-    "yaml": "^2.9.1"
+    "yaml": "^2.9.1",
+    "oxlint": "^1.91.0",
+    "vitest": "^5.1.0",
+    "@vitest/coverage-istanbul": "^5.1.0"
   }
 }

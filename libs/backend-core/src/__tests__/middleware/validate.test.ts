@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../../middleware/validate';
@@ -24,10 +25,10 @@ const makeReq = (overrides: { body?: unknown; query?: unknown; params?: unknown 
 };
 
 const res = {} as Response;
-const next = jest.fn() as unknown as NextFunction;
+const next = vi.fn() as unknown as NextFunction;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('validateRequest', () => {
@@ -88,7 +89,7 @@ describe('validateRequest', () => {
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = (next as Mock).mock.calls[0][0];
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err.message).toContain('name');
     expect(err.message).toContain('Name is required');
@@ -103,7 +104,7 @@ describe('validateRequest', () => {
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect((next as jest.Mock).mock.calls[0][0]).toBeInstanceOf(BadRequestError);
+    expect((next as Mock).mock.calls[0][0]).toBeInstanceOf(BadRequestError);
   });
 
   it('rejects invalid params the same way', () => {
@@ -115,7 +116,7 @@ describe('validateRequest', () => {
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect((next as jest.Mock).mock.calls[0][0]).toBeInstanceOf(BadRequestError);
+    expect((next as Mock).mock.calls[0][0]).toBeInstanceOf(BadRequestError);
   });
 
   it('validates body, query, and params together and only calls next() once on success', () => {

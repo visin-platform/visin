@@ -1,6 +1,10 @@
-jest.mock('../../datasets', () => ({
-  datasets: { list: jest.fn(), get: jest.fn() }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../datasets', async () => {
+  const module = await (() => ({
+    datasets: { list: vi.fn(), get: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { datasets } from '../../datasets';
@@ -12,7 +16,7 @@ type Handler = (args: Record<string, unknown>) => Promise<{
   content: Array<{ text: string }>;
 }>;
 
-const mocked = datasets as unknown as Record<string, jest.Mock>;
+const mocked = datasets as unknown as Record<string, Mock>;
 
 const call = async (name: string, args: Record<string, unknown> = {}) => {
   const found: Record<string, Handler> = {};
@@ -27,13 +31,20 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
   return { text: result.content[0].text, isError: result.isError === true };
 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe('list_datasets', () => {
   it('names each dataset with its size, image count and id', async () => {
     mocked.list.mockResolvedValue({
       datasets: [
-        { _id: 'd1', name: 'Highway', description: 'Night runs\nmore detail', imageCount: 1200, groups: [], archive: { filename: 'h.zip', size: 3.6 * 1024 ** 3 } },
+        {
+          _id: 'd1',
+          name: 'Highway',
+          description: 'Night runs\nmore detail',
+          imageCount: 1200,
+          groups: [],
+          archive: { filename: 'h.zip', size: 3.6 * 1024 ** 3 }
+        },
         { _id: 'd2', name: 'Urban', imageCount: 0, groups: [] }
       ],
       pagination: { total: 2 }
@@ -47,7 +58,10 @@ describe('list_datasets', () => {
   });
 
   it('says how many more there are when the page is not everything', async () => {
-    mocked.list.mockResolvedValue({ datasets: [{ _id: 'd1', name: 'Highway', imageCount: 1, groups: [] }], pagination: { total: 40 } });
+    mocked.list.mockResolvedValue({
+      datasets: [{ _id: 'd1', name: 'Highway', imageCount: 1, groups: [] }],
+      pagination: { total: 40 }
+    });
     expect((await call('list_datasets', { limit: 1 })).text).toContain('1 of 40 datasets');
   });
 
@@ -75,7 +89,10 @@ describe('get_dataset', () => {
       contents: {
         entries: 16440,
         totalBytes: 512,
-        extensions: [{ ext: '.png', files: 8220, bytes: 1 }, { ext: '.json', files: 4110, bytes: 1 }],
+        extensions: [
+          { ext: '.png', files: 8220, bytes: 1 },
+          { ext: '.json', files: 4110, bytes: 1 }
+        ],
         folders: [
           { path: '', depth: 0, files: 16440, images: 12330 },
           { path: 'frames', depth: 1, files: 4110, images: 4110 },
@@ -87,7 +104,9 @@ describe('get_dataset', () => {
     const { text } = await call('get_dataset', { dataset: 'd1' });
 
     expect(mocked.get).toHaveBeenCalledWith('vsn_live_abc', 'd1');
-    expect(text).toContain('VLM\nMask review set\nLicence: not stated by the publisher (that is not permission to use it).\nvlm.zip, 2.0 KB; 8,220 images imported; last import failed.');
+    expect(text).toContain(
+      'VLM\nMask review set\nLicence: not stated by the publisher (that is not permission to use it).\nvlm.zip, 2.0 KB; 8,220 images imported; last import failed.'
+    );
     expect(text).toContain('  verify: 8,220 images, 4,110 JSON sidecars');
     expect(text).toContain('  frames: 4,110 images\n');
     expect(text).toContain('Zip contents: 16,440 files, 512 B uncompressed.');
@@ -103,8 +122,17 @@ describe('get_dataset', () => {
     );
 
     mocked.get.mockResolvedValueOnce({
-      _id: 'd2', name: 'Sequences', imageCount: 0, groups: [], import: { status: 'done' },
-      contents: { entries: 25, totalBytes: 25, extensions: [], folders: Array.from({ length: 25 }, (_, i) => ({ path: `s${i}`, depth: 1, files: 1, images: 0 })) }
+      _id: 'd2',
+      name: 'Sequences',
+      imageCount: 0,
+      groups: [],
+      import: { status: 'done' },
+      contents: {
+        entries: 25,
+        totalBytes: 25,
+        extensions: [],
+        folders: Array.from({ length: 25 }, (_, i) => ({ path: `s${i}`, depth: 1, files: 1, images: 0 }))
+      }
     });
     const { text } = await call('get_dataset', { dataset: 'd2' });
     expect(text).toContain('…and 5 more folders');
@@ -114,12 +142,23 @@ describe('get_dataset', () => {
 
   it('states the declared licence, its limits and the credit, and that a Hub dataset is a pointer', async () => {
     mocked.get.mockResolvedValue({
-      _id: 'd3', name: 'Pets', imageCount: 0, groups: [], credit: 'Parkhi et al., 2012',
-      license: { id: 'cc-by-nc-4.0', name: 'CC BY-NC 4.0', url: 'https://creativecommons.org/licenses/by-nc/4.0/', commercial: false },
+      _id: 'd3',
+      name: 'Pets',
+      imageCount: 0,
+      groups: [],
+      credit: 'Parkhi et al., 2012',
+      license: {
+        id: 'cc-by-nc-4.0',
+        name: 'CC BY-NC 4.0',
+        url: 'https://creativecommons.org/licenses/by-nc/4.0/',
+        commercial: false
+      },
       source: { provider: 'hf', repo: 'acme/pets', revision: '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433' }
     });
     const { text } = await call('get_dataset', { dataset: 'd3' });
-    expect(text).toContain('Licence: CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/; no commercial use; credit: Parkhi et al., 2012).');
+    expect(text).toContain(
+      'Licence: CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/; no commercial use; credit: Parkhi et al., 2012).'
+    );
     expect(text).toContain('Kept on Hugging Face: acme/pets at commit 3f2a1c9d8e7b (a pointer; Visin holds no copy).');
   });
 

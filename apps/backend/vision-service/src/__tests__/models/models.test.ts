@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
 import Config from '../../models/Config';
@@ -28,7 +29,9 @@ describe('Project', () => {
     expect(error?.errors.name).toBeDefined();
     expect(error?.errors.owner).toBeDefined();
     expect(error?.errors.createdBy).toBeDefined();
-    expect(new Project({ name: 'P', owner: { kind: 'team', id: 'x' }, createdBy: 'u1' }).validateSync()?.errors['owner.kind']).toBeDefined();
+    expect(
+      new Project({ name: 'P', owner: { kind: 'team', id: 'x' }, createdBy: 'u1' }).validateSync()?.errors['owner.kind']
+    ).toBeDefined();
   });
 
   it('lowercases slugs', () => {
@@ -57,7 +60,7 @@ describe('Benchmark', () => {
   const valid = {
     timestamp: new Date(),
     system_info: { cpu_count: 8, cpu_count_logical: 16, memory_total_gb: 32 },
-    results: [{ model_name: 'm', fps: 30 }],
+    results: [{ model_name: 'm', fps: 30 }]
   };
 
   it('validates a complete benchmark', () => {
@@ -68,7 +71,7 @@ describe('Benchmark', () => {
     const doc = new Benchmark({
       ...valid,
       system_info: { ...valid.system_info, torch_version: '2.5.1', os: 'linux' },
-      results: [{ fps: 30, batch_size: 4, latency_p95_ms: 12.5 }],
+      results: [{ fps: 30, batch_size: 4, latency_p95_ms: 12.5 }]
     }).toObject();
 
     expect(doc.system_info).toMatchObject({ torch_version: '2.5.1', os: 'linux' });
@@ -88,7 +91,7 @@ describe('Benchmark', () => {
 
   it('softDelete stamps deletedAt and saves', async () => {
     const doc = new Benchmark(valid);
-    const save = jest.spyOn(doc, 'save').mockResolvedValue(doc as never);
+    const save = vi.spyOn(doc, 'save').mockResolvedValue(doc as never);
 
     await (doc as unknown as { softDelete: () => Promise<unknown> }).softDelete();
 
@@ -102,10 +105,10 @@ describe('Benchmark', () => {
   });
 
   it('findActive filters out soft-deleted docs', () => {
-    const find = jest.spyOn(Benchmark, 'find').mockReturnValue('query' as never);
+    const find = vi.spyOn(Benchmark, 'find').mockReturnValue('query' as never);
 
     const result = (Benchmark as unknown as { findActive: (q?: object) => unknown }).findActive({
-      epoch: 1,
+      epoch: 1
     });
 
     expect(find).toHaveBeenCalledWith({ epoch: 1, deletedAt: null });
@@ -121,12 +124,8 @@ describe('Comparison', () => {
     expect(error?.errors.name).toBeDefined();
     expect(error?.errors.type).toBeDefined();
 
-    expect(
-      new Comparison({ uuid: 'c1', name: 'C', type: 'nonsense' }).validateSync()?.errors.type
-    ).toBeDefined();
-    expect(
-      new Comparison({ uuid: 'c1', name: 'C', type: 'trainings', itemIds: ['a'] }).validateSync()
-    ).toBeUndefined();
+    expect(new Comparison({ uuid: 'c1', name: 'C', type: 'nonsense' }).validateSync()?.errors.type).toBeDefined();
+    expect(new Comparison({ uuid: 'c1', name: 'C', type: 'trainings', itemIds: ['a'] }).validateSync()).toBeUndefined();
   });
 });
 
@@ -137,7 +136,7 @@ describe('EpochVisualization', () => {
       visualization_uuid: 'v',
       filename: 'f.png',
       type: 'segment',
-      fileId: 'visualizations/e/segment/v.png',
+      fileId: 'visualizations/e/segment/v.png'
     });
 
     for (const doc of [viz.toJSON(), viz.toObject()]) {

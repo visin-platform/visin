@@ -1,61 +1,105 @@
-jest.mock('../../services/uploadReservationService', () => ({
-  ...jest.requireActual('../../services/uploadReservationService'),
-  reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
-  claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
-    const files = jest.requireMock('../../clients/fileServiceClient');
-    const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
-    return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
-  }),
-  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../clients/fileServiceClient').deleteFile(fileId))
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../services/uploadReservationService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/uploadReservationService')>(
+      '../../services/uploadReservationService'
+    )),
+    reserveUpload: vi.fn(async function () {
+      return { allocationId: 'reserved-id' };
+    }),
+    claimUpload: vi.fn(async function (
+      _fileId: string,
+      _kind: string,
+      _parent: string,
+      _resource: string,
+      _user: string,
+      resourceId?: string
+    ) {
+      const files = await import('../../clients/fileServiceClient');
+      const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
+      return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
+    }),
+    deleteReservedFile: vi.fn(async function (fileId: string) {
+      return (await import('../../clients/fileServiceClient')).deleteFile(fileId);
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
-jest.mock('../../services/writeAccessService', () => ({
-  ...jest.requireActual('../../services/writeAccessService'),
-  assertResourceWrite: jest.fn(async (resource: unknown) => {
-    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-  }),
-  assertLibraryWrite: jest.fn(),
-  assertDatasetWrite: jest.fn(),
-  assertEpochWrite: jest.fn(async (uuid: string) => {
-    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
-    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-    return epoch;
-  })
-}));
-jest.mock('../../models/EpochVisualization', () => {
-  const ctor = Object.assign(jest.fn(), {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    deleteOne: jest.fn(),
-    countDocuments: jest.fn(),
-    distinct: jest.fn(),
-  });
-  return { __esModule: true, default: ctor };
+vi.mock('../../services/writeAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/writeAccessService')>('../../services/writeAccessService')),
+    assertResourceWrite: vi.fn(async function (resource: unknown) {
+      if (!resource)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+    }),
+    assertLibraryWrite: vi.fn(),
+    assertDatasetWrite: vi.fn(),
+    assertEpochWrite: vi.fn(async function (uuid: string) {
+      const epoch = await (await import('../../models/Epoch')).default.findOne({ epoch_uuid: uuid });
+      if (!epoch)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+      return epoch;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
 });
-jest.mock('../../models/Epoch', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn() },
-}));
-jest.mock('../../models/Training', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() },
-}));
-jest.mock('../../clients/fileServiceClient', () => ({
-  getSignedUrl: jest.fn(),
-  getUploadSignedUrl: jest.fn(),
-}));
-jest.mock('../../services/projectAccessService', () => ({
-  ...jest.requireActual('../../services/projectAccessService'),
-  checkProjectAccess: jest.fn(),
-  getVisibleTrainingIds: jest.fn(),
-  isWithinTokenScope: jest.fn(),
-  resolveProject: jest.fn(),
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../models/EpochVisualization', async () => {
+  const module = await (() => {
+    const ctor = Object.assign(vi.fn(), {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      deleteOne: vi.fn(),
+      countDocuments: vi.fn(),
+      distinct: vi.fn()
+    });
+    return { __esModule: true, default: ctor };
+  })();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Epoch', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), findOne: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Training', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), findOne: vi.fn(), findById: vi.fn(), countDocuments: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    getSignedUrl: vi.fn(),
+    getFileMetadata: vi.fn(),
+    deleteFile: vi.fn(),
+    getUploadSignedUrl: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/projectAccessService')>(
+      '../../services/projectAccessService'
+    )),
+    checkProjectAccess: vi.fn(),
+    getVisibleTrainingIds: vi.fn(),
+    isWithinTokenScope: vi.fn(),
+    resolveProject: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   getVisualizationUploadUrl,
@@ -64,7 +108,7 @@ import {
   deleteVisualization,
   getVisualizationsByEpoch,
   getVisualizationsByTraining,
-  getVisualizationTypes,
+  getVisualizationTypes
 } from '../../services/visualizationService';
 import EpochVisualization from '../../models/EpochVisualization';
 import Epoch from '../../models/Epoch';
@@ -74,21 +118,21 @@ import {
   checkProjectAccess,
   getVisibleTrainingIds,
   isWithinTokenScope,
-  resolveProject,
+  resolveProject
 } from '../../services/projectAccessService';
 
-const mockedViz = EpochVisualization as unknown as jest.Mock & Record<string, jest.Mock>;
-const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
-const mockedTraining = Training as unknown as Record<string, jest.Mock>;
-const mockedFileService = fileService as unknown as Record<string, jest.Mock>;
-const mockedCheckAccess = checkProjectAccess as jest.Mock;
-const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
-const mockedTokenScope = isWithinTokenScope as jest.Mock;
-const mockedResolveProject = resolveProject as jest.Mock;
+const mockedViz = EpochVisualization as unknown as Mock & Record<string, Mock>;
+const mockedEpoch = Epoch as unknown as Record<string, Mock>;
+const mockedTraining = Training as unknown as Record<string, Mock>;
+const mockedFileService = fileService as unknown as Record<string, Mock>;
+const mockedCheckAccess = checkProjectAccess as Mock;
+const mockedVisibleTrainings = getVisibleTrainingIds as Mock;
+const mockedTokenScope = isWithinTokenScope as Mock;
+const mockedResolveProject = resolveProject as Mock;
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 const vizDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
@@ -99,8 +143,8 @@ const vizDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
   toObject() {
     return { visualization_uuid: this.visualization_uuid, epoch_uuid: this.epoch_uuid };
   },
-  save: jest.fn().mockResolvedValue(undefined),
-  ...overrides,
+  save: vi.fn().mockResolvedValue(undefined),
+  ...overrides
 });
 
 const epochDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
@@ -109,7 +153,7 @@ const epochDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
   epoch: 4,
   trainingId: 't1',
   training_uuid: 'uuid-t1',
-  ...overrides,
+  ...overrides
 });
 
 const signed = { signedUrl: 'http://signed', expiresAt: 'later', expiresInMinutes: 60 };
@@ -117,24 +161,24 @@ const signed = { signedUrl: 'http://signed', expiresAt: 'later', expiresInMinute
 const mockVizFindChain = (docs: unknown[]) => {
   const chain: AnyDoc = {};
   Object.assign(chain, {
-    sort: jest.fn().mockReturnValue(chain),
-    skip: jest.fn().mockReturnValue(chain),
-    limit: jest.fn().mockResolvedValue(docs),
+    sort: vi.fn().mockReturnValue(chain),
+    skip: vi.fn().mockReturnValue(chain),
+    limit: vi.fn().mockResolvedValue(docs),
     then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
-      Promise.resolve(docs).then(resolve, reject),
+      Promise.resolve(docs).then(resolve, reject)
   });
   mockedViz.find.mockReturnValue(chain);
   return chain;
 };
 
 const mockEpochSelect = (docs: unknown[]) => {
-  const select = jest.fn().mockResolvedValue(docs);
+  const select = vi.fn().mockResolvedValue(docs);
   mockedEpoch.find.mockReturnValue({ select });
   return select;
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p1' } });
   mockedTraining.findById.mockResolvedValue({ _id: 't1', projectId: 'p1' });
   mockedCheckAccess.mockResolvedValue(true);
@@ -180,7 +224,7 @@ describe('createVisualization', () => {
     type: 'loss',
     fileId: 'viz/v1.png',
     mimetype: 'image/png',
-    size: 10,
+    size: 10
   };
 
   it('404s for an unknown epoch and 403s without access', async () => {
@@ -205,8 +249,10 @@ describe('createVisualization', () => {
     mockedEpoch.findOne.mockResolvedValue(epochDoc('e1'));
     mockedTraining.findById.mockResolvedValue({ projectId: 'p1' });
     mockedViz.findOne.mockResolvedValue(null);
-    const save = jest.fn().mockResolvedValue(undefined);
-    mockedViz.mockImplementation((d: AnyDoc) => ({ ...d, save }));
+    const save = vi.fn().mockResolvedValue(undefined);
+    mockedViz.mockImplementation(function (d: AnyDoc) {
+      return { ...d, save };
+    });
 
     await createVisualization({ ...data, metadata: { note: 'x' } }, 'u1', undefined);
 
@@ -321,14 +367,14 @@ describe('getVisualizationsByTraining', () => {
   });
 
   it('groups by training when only projectId is given', async () => {
-    const sort = jest.fn().mockResolvedValue([
+    const sort = vi.fn().mockResolvedValue([
       { _id: 't1', uuid: 'uuid-t1', name: 'T1' },
-      { _id: 't2', uuid: 'uuid-t2', name: 'T2' },
+      { _id: 't2', uuid: 'uuid-t2', name: 'T2' }
     ]);
-    const select = jest.fn().mockReturnValue({ sort });
+    const select = vi.fn().mockReturnValue({ sort });
     mockedTraining.find.mockReturnValue({ select });
     // epochs for t1, none for t2
-    const epochSelect = jest
+    const epochSelect = vi
       .fn()
       .mockResolvedValueOnce([epochDoc('e1')])
       .mockResolvedValueOnce([]);
@@ -349,14 +395,18 @@ describe('getVisualizationsByTraining', () => {
     expect(result.total).toBe(1);
   });
 
-  it('shows a few frames per run, a page of runs at a time, keeping each run\'s own counts by type whatever the filter', async () => {
-    const limit = jest.fn().mockResolvedValue([{ _id: 't1', uuid: 'uuid-t1', name: 'T1' }]);
-    const skip = jest.fn().mockReturnValue({ limit });
-    const sort = jest.fn().mockReturnValue({ skip });
-    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+  it("shows a few frames per run, a page of runs at a time, keeping each run's own counts by type whatever the filter", async () => {
+    const limit = vi.fn().mockResolvedValue([{ _id: 't1', uuid: 'uuid-t1', name: 'T1' }]);
+    const skip = vi.fn().mockReturnValue({ limit });
+    const sort = vi.fn().mockReturnValue({ skip });
+    mockedTraining.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
     mockedTraining.countDocuments.mockResolvedValue(25);
-    mockedEpoch.find.mockReturnValue({ select: jest.fn().mockResolvedValue([epochDoc('e1')]) });
-    const frame = (id: string, type: string) => ({ ...vizDoc(id), type, toObject: () => ({ _id: id, type, fileId: 'f', epoch_uuid: 'e1' }) });
+    mockedEpoch.find.mockReturnValue({ select: vi.fn().mockResolvedValue([epochDoc('e1')]) });
+    const frame = (id: string, type: string) => ({
+      ...vizDoc(id),
+      type,
+      toObject: () => ({ _id: id, type, fileId: 'f', epoch_uuid: 'e1' })
+    });
     mockVizFindChain([frame('v1', 'overlay'), frame('v2', 'overlay'), frame('v3', 'mask'), frame('v4', 'overlay')]);
 
     const result = (await getVisualizationsByTraining(
@@ -376,8 +426,8 @@ describe('getVisualizationsByTraining', () => {
   });
 
   it('counts visualization types whose names overlap object properties', async () => {
-    const sort = jest.fn().mockResolvedValue([{ _id: 't1', uuid: 'uuid-t1', name: 'T1' }]);
-    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+    const sort = vi.fn().mockResolvedValue([{ _id: 't1', uuid: 'uuid-t1', name: 'T1' }]);
+    mockedTraining.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
     mockEpochSelect([epochDoc('e1')]);
     mockVizFindChain([
       vizDoc('v1', { type: '__proto__' }),
@@ -385,16 +435,19 @@ describe('getVisualizationsByTraining', () => {
       vizDoc('v3', { type: '__proto__' })
     ]);
 
-    const result = await getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1') as AnyDoc;
+    const result = (await getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1')) as AnyDoc;
 
     expect(JSON.parse(JSON.stringify(result.trainings[0].type_counts))).toEqual(
-      Object.fromEntries([['__proto__', 2], ['constructor', 1]])
+      Object.fromEntries([
+        ['__proto__', 2],
+        ['constructor', 1]
+      ])
     );
   });
 
   it('answers every run, unpaged, when no gallery asked', async () => {
-    const sort = jest.fn().mockResolvedValue([]);
-    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+    const sort = vi.fn().mockResolvedValue([]);
+    mockedTraining.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
 
     const result = (await getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1')) as AnyDoc;
 
@@ -403,8 +456,8 @@ describe('getVisualizationsByTraining', () => {
 
   it('resolves a slug filter to the project id trainings are stored under', async () => {
     mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p-canonical' } });
-    const sort = jest.fn().mockResolvedValue([]);
-    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+    const sort = vi.fn().mockResolvedValue([]);
+    mockedTraining.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
 
     await getVisualizationsByTraining(undefined, { ...filters, projectId: 'my-slug' }, 'u1');
 
@@ -414,26 +467,20 @@ describe('getVisualizationsByTraining', () => {
 
   it('403s for an inaccessible project and empties for a project without trainings', async () => {
     mockedCheckAccess.mockResolvedValueOnce(false);
-    await expect(
-      getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1')
-    ).rejects.toThrow();
+    await expect(getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1')).rejects.toThrow();
 
     mockedCheckAccess.mockResolvedValue(true);
-    const sort = jest.fn().mockResolvedValue([]);
-    const select = jest.fn().mockReturnValue({ sort });
+    const sort = vi.fn().mockResolvedValue([]);
+    const select = vi.fn().mockReturnValue({ sort });
     mockedTraining.find.mockReturnValue({ select });
 
-    const result = (await getVisualizationsByTraining(
-      undefined,
-      { ...filters, projectId: 'p1' },
-      'u1'
-    )) as AnyDoc;
+    const result = (await getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1')) as AnyDoc;
     expect(result).toEqual({ trainings: [], total: 0 });
   });
 
   it('falls back to a privacy-scoped global list without filters', async () => {
     mockedVisibleTrainings.mockResolvedValue(['t1']);
-    const epochSelect = jest
+    const epochSelect = vi
       .fn()
       .mockResolvedValueOnce([epochDoc('e1')]) // visible epochs
       .mockResolvedValueOnce([epochDoc('e1')]); // enrichment lookup

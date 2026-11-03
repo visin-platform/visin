@@ -1,16 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  Alert,
-  IconButton,
-  Tooltip,
-  MenuItem,
-  TextField,
-  Tabs,
-  Tab
-} from '@mui/material';
+import { Box, Button, Alert, IconButton, Tooltip, MenuItem, TextField, Tabs, Tab } from '@mui/material';
 import {
   Scoreboard as LeaderboardIcon,
   Refresh as RefreshIcon,
@@ -155,7 +145,7 @@ const ProjectsPage: React.FC = () => {
       { replace: true }
     );
     // openCreate only resets form state; running this once per ?new=1 is the point.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user, groups.isLoading, groups.data]);
 
   // `?create=1`, from the menu's New: the form, for the viewer as the owner. Unlike `?new=1`
@@ -172,7 +162,7 @@ const ProjectsPage: React.FC = () => {
       { replace: true }
     );
     // openCreate only resets form state; running this once per ?create=1 is the point.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
 
   const openCreate = () => {
@@ -215,9 +205,7 @@ const ProjectsPage: React.FC = () => {
             <ListRow
               key={project._id}
               to={`/projects/${project._id}`}
-              leading={
-                <ProjectThumb project={project} />
-              }
+              leading={<ProjectThumb project={project} />}
               title={
                 <>
                   {project.name}{' '}
@@ -272,7 +260,15 @@ const ProjectsPage: React.FC = () => {
         }
         primaryAction={user ? { label: 'New project', icon: <AddIcon />, onClick: openCreate } : undefined}
       />
-      <Button component={RouterLink} to="/leaderboards" variant="outlined" startIcon={<LeaderboardIcon />} sx={{ mb: 2 }}>Leaderboards</Button>
+      <Button
+        component={RouterLink}
+        to="/leaderboards"
+        variant="outlined"
+        startIcon={<LeaderboardIcon />}
+        sx={{ mb: 2 }}
+      >
+        Leaderboards
+      </Button>
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error instanceof Error ? error.message : 'Failed to load projects'}
@@ -304,7 +300,16 @@ const ProjectsPage: React.FC = () => {
           Projects matching “{search}”
         </Alert>
       )}
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 2,
+          mb: 2,
+          flexWrap: 'wrap'
+        }}
+      >
         {user ? (
           <Tabs value={showTrash ? 1 : 0} onChange={(_event, value) => setShowTrash(value === 1)}>
             <Tab label="Projects" />

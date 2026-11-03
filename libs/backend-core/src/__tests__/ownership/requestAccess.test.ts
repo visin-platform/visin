@@ -1,3 +1,4 @@
+import { vi, type Mocked } from 'vitest';
 import { createOwnershipAccess, readableOwnerFilter, type OwnedResource } from '../../ownership';
 import type { GroupServiceClient, MyGroup } from '../../clients/groupService';
 
@@ -21,10 +22,16 @@ describe('readableOwnerFilter', () => {
 
   it('narrows the groups by the role a level needs, and leaves public out of anything past reading', () => {
     expect(readableOwnerFilter(ME, groups, 'manage')).toEqual({
-      $or: [{ 'owner.kind': 'user', 'owner.id': ME }, { 'owner.kind': 'group', 'owner.id': { $in: ['g-owner', 'g-admin'] } }]
+      $or: [
+        { 'owner.kind': 'user', 'owner.id': ME },
+        { 'owner.kind': 'group', 'owner.id': { $in: ['g-owner', 'g-admin'] } }
+      ]
     });
     expect(readableOwnerFilter(ME, groups, 'own')).toEqual({
-      $or: [{ 'owner.kind': 'user', 'owner.id': ME }, { 'owner.kind': 'group', 'owner.id': { $in: ['g-owner'] } }]
+      $or: [
+        { 'owner.kind': 'user', 'owner.id': ME },
+        { 'owner.kind': 'group', 'owner.id': { $in: ['g-owner'] } }
+      ]
     });
     expect(readableOwnerFilter(ME, [], 'contribute')).toEqual({ $or: [{ 'owner.kind': 'user', 'owner.id': ME }] });
   });
@@ -36,11 +43,13 @@ describe('readableOwnerFilter', () => {
 });
 
 describe('createOwnershipAccess', () => {
-  const client = (): jest.Mocked<GroupServiceClient> => ({
-    checkMembership: jest.fn(async (groupId: string) =>
-      groupId === 'g-admin' ? { member: true, role: 'admin' as const } : { member: false, role: null }
-    ),
-    getMyGroups: jest.fn(async () => groups)
+  const client = (): Mocked<GroupServiceClient> => ({
+    checkMembership: vi.fn(async function (groupId: string) {
+      return groupId === 'g-admin' ? { member: true, role: 'admin' as const } : { member: false, role: null };
+    }),
+    getMyGroups: vi.fn(async function () {
+      return groups;
+    })
   });
   const teams = (id: string): OwnedResource => ({ owner: { kind: 'group', id }, visibility: 'private' });
 
@@ -60,7 +69,12 @@ describe('createOwnershipAccess', () => {
 
   it('needs no lookups for a user-owned resource, or for a visitor', async () => {
     const groupService = client();
-    expect(await createOwnershipAccess(ME, groupService).permission({ owner: { kind: 'user', id: ME }, visibility: 'private' })).toBe('own');
+    expect(
+      await createOwnershipAccess(ME, groupService).permission({
+        owner: { kind: 'user', id: ME },
+        visibility: 'private'
+      })
+    ).toBe('own');
 
     const visitor = createOwnershipAccess(undefined, groupService);
     expect(await visitor.permission(teams('g-admin'))).toBe('none');

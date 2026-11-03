@@ -1,23 +1,63 @@
-jest.mock('../../clients/projectServiceClient', () => ({
-  projectDatasetOwner: jest.fn(async () => ({ kind: 'user', id: '000000000000000000000001' }))
-}));
-jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
-jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn(async () => new Map()) }));
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
-jest.mock('../../queue/importQueue', () => ({
-  enqueueImport: jest.fn(),
-  enqueueScan: jest.fn(),
-  enqueueDelete: jest.fn(),
-  enqueueRemoveGroup: jest.fn(),
-  removeQueuedImport: jest.fn()
-}));
+import { vi } from 'vitest';
+vi.mock('../../clients/projectServiceClient', async () => {
+  const module = await (() => ({
+    projectDatasetOwner: vi.fn(async function () {
+      return { kind: 'user', id: '000000000000000000000001' };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () =>
+    (await vi.importActual<typeof import('../fixtures/fileStore')>('../fixtures/fileStore')).fileStore.client)();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/hubClient', async () => {
+  const module = await (() => ({ fetchDatasetInfo: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({
+    lookupOwnerIdentities: vi.fn(async function () {
+      return new Map();
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/groupServiceClient', async () => {
+  const module = await (() => ({ checkMembership: vi.fn(), getMyGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../queue/importQueue', async () => {
+  const module = await (() => ({
+    enqueueImport: vi.fn(),
+    enqueueScan: vi.fn(),
+    enqueueDelete: vi.fn(),
+    enqueueRemoveGroup: vi.fn(),
+    removeQueuedImport: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { createApiKey } from '@visin/backend-core';
 import { projectDatasetOwner } from '../../clients/projectServiceClient';
 import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 import { Dataset } from '../../models/Dataset';
-import { ADMIN, GROUP, GROUP_OWNER, MEMBER, OWNER, STRANGER, baseUrl, call, createDataset, groupDataset, roles, useDatasetApi, type Body } from '../fixtures/datasetApi';
+import {
+  ADMIN,
+  GROUP,
+  GROUP_OWNER,
+  MEMBER,
+  OWNER,
+  STRANGER,
+  baseUrl,
+  call,
+  createDataset,
+  groupDataset,
+  roles,
+  useDatasetApi,
+  type Body
+} from '../fixtures/datasetApi';
 
 useDatasetApi();
 
@@ -142,7 +182,7 @@ describe('a pipeline key limited to one project', () => {
       { _id: id },
       { $set: { archive: { fileId: 'archive', filename: 'set.zip', size: 42, uploadedAt: new Date() } } }
     );
-    jest.mocked(projectDatasetOwner).mockResolvedValue({ kind: 'group', id: GROUP });
+    vi.mocked(projectDatasetOwner).mockResolvedValue({ kind: 'group', id: GROUP });
     const token = await pipelineKey(['vision:write']);
     expect((await withKey(`/api/datasets/${id}/download`, token)).body.data).toMatchObject({
       downloadUrl: 'signed:archive'
@@ -151,9 +191,11 @@ describe('a pipeline key limited to one project', () => {
     expect((await withKey('/api/datasets/trash', token)).status).toBe(403);
     const ownId = await createDataset({ name: 'Personal private' });
     expect((await withKey(`/api/datasets/${ownId}`, token)).status).toBe(403);
-    jest
-      .mocked(projectDatasetOwner)
-      .mockRejectedValueOnce(new (jest.requireActual('@visin/backend-core').ForbiddenError)('No live contribution'));
+    vi.mocked(projectDatasetOwner).mockRejectedValueOnce(
+      new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError(
+        'No live contribution'
+      )
+    );
     expect((await withKey(`/api/datasets/${id}/download`, token)).status).toBe(403);
   });
 
@@ -180,19 +222,17 @@ describe('who owns a dataset', () => {
     );
 
   beforeEach(() => {
-    jest.mocked(lookupOwnerIdentities).mockReset();
-    jest
-      .mocked(lookupOwnerIdentities)
-      .mockImplementation(
-        async (owners) => new Map([...identities].filter(([id]) => owners.some((owner) => owner.id === id)))
-      );
+    vi.mocked(lookupOwnerIdentities).mockReset();
+    vi.mocked(lookupOwnerIdentities).mockImplementation(async function (owners) {
+      return new Map([...identities].filter(([id]) => owners.some((owner) => owner.id === id)));
+    });
   });
 
   it('names each person who owns a listed dataset, asking once for the list, and shows a hidden profile as an id', async () => {
     await createDataset({ name: 'Ann set', visibility: 'public' }, OWNER);
     await createDataset({ name: 'Quiet set', visibility: 'public' }, MEMBER);
     // Creating answers with the dataset too, which asks for its own owner.
-    jest.mocked(lookupOwnerIdentities).mockClear();
+    vi.mocked(lookupOwnerIdentities).mockClear();
 
     const listed = await owners('/api/datasets');
 
@@ -236,7 +276,7 @@ describe('who owns a dataset', () => {
 
     expect((await call(`/api/datasets/${id}`)).body.data.owner).toMatchObject({ handle: 'ann-lee', name: 'Ann Lee' });
 
-    jest.mocked(lookupOwnerIdentities).mockResolvedValue(new Map());
+    vi.mocked(lookupOwnerIdentities).mockResolvedValue(new Map());
     expect((await owners('/api/datasets'))['Ann set']).toEqual({ kind: 'user', id: OWNER });
   });
 

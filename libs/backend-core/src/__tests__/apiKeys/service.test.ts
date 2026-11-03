@@ -1,12 +1,16 @@
-jest.mock('../../apiKeys/ApiKey', () => ({
-  ApiKey: {
-    create: jest.fn(),
-    find: jest.fn(),
-    findOne: jest.fn(),
-    updateOne: jest.fn(),
-    deleteOne: jest.fn()
-  }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../apiKeys/ApiKey', async () => {
+  const module = await (() => ({
+    ApiKey: {
+      create: vi.fn(),
+      find: vi.fn(),
+      findOne: vi.fn(),
+      updateOne: vi.fn(),
+      deleteOne: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { ApiKey } from '../../apiKeys/ApiKey';
 import {
@@ -19,11 +23,11 @@ import {
 } from '../../apiKeys/service';
 import { encryptSecret, generateKey, resetEncryptionKeyCache, sha256 } from '../../apiKeys/crypto';
 
-const create = ApiKey.create as unknown as jest.Mock;
-const find = ApiKey.find as unknown as jest.Mock;
-const findOne = ApiKey.findOne as unknown as jest.Mock;
-const updateOne = ApiKey.updateOne as unknown as jest.Mock;
-const deleteOne = ApiKey.deleteOne as unknown as jest.Mock;
+const create = ApiKey.create as unknown as Mock;
+const find = ApiKey.find as unknown as Mock;
+const findOne = ApiKey.findOne as unknown as Mock;
+const updateOne = ApiKey.updateOne as unknown as Mock;
+const deleteOne = ApiKey.deleteOne as unknown as Mock;
 
 const CREATED_AT = new Date('2026-09-01T00:00:00.000Z');
 
@@ -48,13 +52,13 @@ function storedKey(over: Record<string, unknown> = {}) {
     revokedAt: undefined as Date | undefined,
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
-    save: jest.fn().mockResolvedValue(undefined),
+    save: vi.fn().mockResolvedValue(undefined),
     ...over
   };
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.API_KEY_ENCRYPTION_SECRET = 'a-test-encryption-secret';
   resetEncryptionKeyCache();
   updateOne.mockReturnValue(Promise.resolve(undefined));
@@ -67,9 +71,9 @@ afterAll(() => {
 
 describe('createApiKey', () => {
   it('returns the token once and stores only a digest and a sealed copy of it', () => {
-    create.mockImplementation((doc: Record<string, unknown>) =>
-      Promise.resolve(storedKey(doc))
-    );
+    create.mockImplementation(function (doc: Record<string, unknown>) {
+      return Promise.resolve(storedKey(doc));
+    });
 
     return createApiKey({
       userId: 'u1',
@@ -154,7 +158,9 @@ describe('createApiKey — limited to a project', () => {
   };
 
   it('stores the project and shows it in the summary', async () => {
-    create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(storedKey(doc)));
+    create.mockImplementation(function (doc: Record<string, unknown>) {
+      return Promise.resolve(storedKey(doc));
+    });
 
     const { summary } = await createApiKey({ ...input, scopes: ['vision:read', 'vision:write'] });
 
@@ -170,7 +176,9 @@ describe('createApiKey — limited to a project', () => {
   });
 
   it('leaves an unlimited key without a project', async () => {
-    create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(storedKey(doc)));
+    create.mockImplementation(function (doc: Record<string, unknown>) {
+      return Promise.resolve(storedKey(doc));
+    });
 
     const { summary } = await createApiKey({ ...input, project: null, scopes: ['dataset:read'] });
 
@@ -181,7 +189,7 @@ describe('createApiKey — limited to a project', () => {
 
 describe('listApiKeys', () => {
   it("returns the owner's keys newest first, with no secret material", async () => {
-    const sort = jest.fn().mockResolvedValue([storedKey(), storedKey({ _id: 'doc-2' })]);
+    const sort = vi.fn().mockResolvedValue([storedKey(), storedKey({ _id: 'doc-2' })]);
     find.mockReturnValue({ sort });
 
     const keys = await listApiKeys('u1');
@@ -333,10 +341,7 @@ describe('verifyApiKey', () => {
 
     await verifyApiKey(token);
 
-    expect(updateOne).toHaveBeenCalledWith(
-      { _id: 'doc-1' },
-      { $set: { lastUsedAt: expect.any(Date) } }
-    );
+    expect(updateOne).toHaveBeenCalledWith({ _id: 'doc-1' }, { $set: { lastUsedAt: expect.any(Date) } });
   });
 
   it('skips the write when it was updated a moment ago', async () => {

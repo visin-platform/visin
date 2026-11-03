@@ -1,19 +1,31 @@
-const mockVerifyIdToken = jest.fn();
+import { vi } from 'vitest';
+const { mockVerifyIdToken } = vi.hoisted(() => {
+  const mockVerifyIdToken = vi.fn();
+  return { mockVerifyIdToken };
+});
 
-jest.mock('google-auth-library', () => ({
-  OAuth2Client: jest.fn().mockImplementation(() => ({
-    verifyIdToken: mockVerifyIdToken,
-  })),
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('google-auth-library', async () => {
+  const module = await (() => ({
+    OAuth2Client: vi.fn().mockImplementation(function () {
+      return {
+        verifyIdToken: mockVerifyIdToken
+      };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { verifyGoogleToken } from '../../services/googleAuthService';
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('verifyGoogleToken', () => {
@@ -22,9 +34,7 @@ describe('verifyGoogleToken', () => {
     mockVerifyIdToken.mockResolvedValue({ getPayload: () => payload });
 
     await expect(verifyGoogleToken('valid-token')).resolves.toEqual(payload);
-    expect(mockVerifyIdToken).toHaveBeenCalledWith(
-      expect.objectContaining({ idToken: 'valid-token' })
-    );
+    expect(mockVerifyIdToken).toHaveBeenCalledWith(expect.objectContaining({ idToken: 'valid-token' }));
   });
 
   it('wraps verification failures in an Invalid token error', async () => {

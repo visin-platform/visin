@@ -1,33 +1,58 @@
-jest.mock('../../models/Project', () => {
-  const ctor = Object.assign(jest.fn(), {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    findById: jest.fn(),
-  });
-  return { __esModule: true, default: ctor };
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/Project', async () => {
+  const module = await (() => {
+    const ctor = Object.assign(vi.fn(), {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      findById: vi.fn()
+    });
+    return { __esModule: true, default: ctor };
+  })();
+  return Object.assign({ default: module }, module);
 });
-jest.mock('../../models/Training', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), aggregate: jest.fn() },
-}));
-jest.mock('../../models/Evaluation', () => ({ __esModule: true, default: { updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }), countDocuments: jest.fn() } }));
-jest.mock('../../models/Epoch', () => ({ __esModule: true, default: { aggregate: jest.fn() } }));
-jest.mock('../../models/Benchmark', () => ({
-  __esModule: true,
-  default: { countDocuments: jest.fn() },
-}));
-jest.mock('../../services/projectCoverService', () => ({
-  __esModule: true,
-  coverUrlsFor: jest.fn().mockResolvedValue(new Map()),
-  chooseCover: jest.fn(),
-}));
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn().mockResolvedValue([]) }));
+vi.mock('../../models/Training', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), aggregate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Evaluation', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }), countDocuments: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Epoch', async () => {
+  const module = await (() => ({ __esModule: true, default: { aggregate: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Benchmark', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { countDocuments: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectCoverService', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    coverUrlsFor: vi.fn().mockResolvedValue(new Map()),
+    chooseCover: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn().mockResolvedValue([]) }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   getProjectByIdOrSlug,
   createProject,
   updateProject,
-  getProjectDashboardStats,
+  getProjectDashboardStats
 } from '../../services/projectService';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
@@ -36,11 +61,11 @@ import Evaluation from '../../models/Evaluation';
 import Benchmark from '../../models/Benchmark';
 import { chooseCover, coverUrlsFor } from '../../services/projectCoverService';
 
-const mockedProject = Project as unknown as jest.Mock & Record<string, jest.Mock>;
-const mockedEvaluation = Evaluation as unknown as Record<string, jest.Mock>;
-const mockedTraining = Training as unknown as Record<string, jest.Mock>;
-const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
-const mockedBenchmark = Benchmark as unknown as Record<string, jest.Mock>;
+const mockedProject = Project as unknown as Mock & Record<string, Mock>;
+const mockedEvaluation = Evaluation as unknown as Record<string, Mock>;
+const mockedTraining = Training as unknown as Record<string, Mock>;
+const mockedEpoch = Epoch as unknown as Record<string, Mock>;
+const mockedBenchmark = Benchmark as unknown as Record<string, Mock>;
 
 /**
  * `Training.find(...).select(...)` — a query, as the model really returns one.
@@ -49,12 +74,12 @@ const mockedBenchmark = Benchmark as unknown as Record<string, jest.Mock>;
  */
 const trainingIdsAre = (ids: string[]) =>
   mockedTraining.find.mockReturnValue({
-    select: jest.fn().mockResolvedValue(ids.map(id => ({ _id: id }))),
+    select: vi.fn().mockResolvedValue(ids.map((id) => ({ _id: id })))
   });
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 // Ownership, the trash and transfers are tested end to end in integration/projectOwnership.
@@ -68,17 +93,17 @@ const projectDoc = (overrides: AnyDoc = {}): AnyDoc => {
     owner: { kind: 'user', id: 'owner-1' },
     createdBy: 'owner-1',
     visibility: 'public',
-    save: jest.fn().mockImplementation(function (this: unknown) {
+    save: vi.fn().mockImplementation(function (this: unknown) {
       return Promise.resolve(this);
     }),
-    ...overrides,
+    ...overrides
   };
   doc.toObject = () => ({ ...doc });
   return doc;
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedEvaluation.countDocuments.mockResolvedValue(0);
 });
 
@@ -88,11 +113,14 @@ describe('project covers', () => {
     mockedProject.findById.mockResolvedValue(
       projectDoc({ cover: { visualizationUuid: 'viz-1', fileId: 'files/secret-path.png' } })
     );
-    jest.mocked(coverUrlsFor).mockResolvedValueOnce(new Map([[ID, 'https://files.example.test/cover.png']]));
+    vi.mocked(coverUrlsFor).mockResolvedValueOnce(new Map([[ID, 'https://files.example.test/cover.png']]));
 
     const view = await getProjectByIdOrSlug('p1', 'u1');
 
-    expect(view).toMatchObject({ coverUrl: 'https://files.example.test/cover.png', cover: { visualizationUuid: 'viz-1' } });
+    expect(view).toMatchObject({
+      coverUrl: 'https://files.example.test/cover.png',
+      cover: { visualizationUuid: 'viz-1' }
+    });
     expect(JSON.stringify(view)).not.toContain('secret-path');
   });
 
@@ -103,17 +131,17 @@ describe('project covers', () => {
     expect(await getProjectByIdOrSlug('p1', 'u1')).not.toHaveProperty('coverUrl');
   });
 
-  it('chooses a cover from the project\'s own visualizations, and clears it with null', async () => {
+  it("chooses a cover from the project's own visualizations, and clears it with null", async () => {
     const doc = projectDoc({ owner: { kind: 'user', id: 'u1' } });
     mockedProject.findOne.mockResolvedValue(null);
     mockedProject.findById.mockResolvedValue(doc);
-    jest.mocked(chooseCover).mockResolvedValueOnce({ visualizationUuid: 'viz-1', fileId: 'f1' });
+    vi.mocked(chooseCover).mockResolvedValueOnce({ visualizationUuid: 'viz-1', fileId: 'f1' });
 
     await updateProject('p1', 'u1', { cover: { visualizationUuid: 'viz-1' } });
     expect(chooseCover).toHaveBeenCalledWith(doc, 'viz-1');
     expect(doc.cover).toEqual({ visualizationUuid: 'viz-1', fileId: 'f1' });
 
-    jest.mocked(chooseCover).mockResolvedValueOnce(undefined);
+    vi.mocked(chooseCover).mockResolvedValueOnce(undefined);
     await updateProject('p1', 'u1', { cover: null });
     expect(chooseCover).toHaveBeenLastCalledWith(doc, null);
     expect(doc.cover).toBeUndefined();
@@ -138,7 +166,7 @@ describe('project lookups', () => {
 
     await expect(getProjectByIdOrSlug('p1', 'u1')).resolves.toMatchObject({
       name: 'P',
-      permissions: { read: true, contribute: false, manage: false, own: false },
+      permissions: { read: true, contribute: false, manage: false, own: false }
     });
     expect(mockedProject.findOne).toHaveBeenCalledWith({ slug: 'p1' });
     expect(mockedProject.findById).toHaveBeenCalledWith('p1');
@@ -147,10 +175,12 @@ describe('project lookups', () => {
 
 describe('createProject', () => {
   it('stamps the creator as owner', async () => {
-    mockedProject.mockImplementation((data: AnyDoc) => ({
-      ...data,
-      save: jest.fn().mockResolvedValue(projectDoc({ ...data, _id: 'new' })),
-    }));
+    mockedProject.mockImplementation(function (data: AnyDoc) {
+      return {
+        ...data,
+        save: vi.fn().mockResolvedValue(projectDoc({ ...data, _id: 'new' }))
+      };
+    });
 
     const result = (await createProject('u1', { name: 'New', visibility: 'public' })) as AnyDoc;
 
@@ -161,16 +191,18 @@ describe('createProject', () => {
       createdBy: 'u1',
       taxonomy: undefined,
       // Making it is the first thing that happens in it.
-      lastActivityAt: expect.any(Date),
+      lastActivityAt: expect.any(Date)
     });
     expect(result).toMatchObject({ _id: 'new', permissions: { own: true } });
   });
 
   it('seeds metric definitions from the chosen task type', async () => {
-    mockedProject.mockImplementation((data: AnyDoc) => ({
-      ...data,
-      save: jest.fn().mockResolvedValue(projectDoc(data)),
-    }));
+    mockedProject.mockImplementation(function (data: AnyDoc) {
+      return {
+        ...data,
+        save: vi.fn().mockResolvedValue(projectDoc(data))
+      };
+    });
 
     await createProject('u1', { name: 'New', taxonomy: { taskType: 'detection' } });
 
@@ -180,14 +212,16 @@ describe('createProject', () => {
   });
 
   it('never overwrites metrics the caller spelled out', async () => {
-    mockedProject.mockImplementation((data: AnyDoc) => ({
-      ...data,
-      save: jest.fn().mockResolvedValue(projectDoc(data)),
-    }));
+    mockedProject.mockImplementation(function (data: AnyDoc) {
+      return {
+        ...data,
+        save: vi.fn().mockResolvedValue(projectDoc(data))
+      };
+    });
 
     await createProject('u1', {
       name: 'New',
-      taxonomy: { taskType: 'segmentation', metrics: [{ key: 'custom' }] },
+      taxonomy: { taskType: 'segmentation', metrics: [{ key: 'custom' }] }
     });
 
     const taxonomy = (mockedProject.mock.calls[0][0] as AnyDoc).taxonomy;
@@ -195,10 +229,12 @@ describe('createProject', () => {
   });
 
   it('leaves a project with no task type on pure discovery', async () => {
-    mockedProject.mockImplementation((data: AnyDoc) => ({
-      ...data,
-      save: jest.fn().mockResolvedValue(projectDoc(data)),
-    }));
+    mockedProject.mockImplementation(function (data: AnyDoc) {
+      return {
+        ...data,
+        save: vi.fn().mockResolvedValue(projectDoc(data))
+      };
+    });
 
     await createProject('u1', { name: 'New', taxonomy: { conditionLabel: 'Site' } });
 
@@ -227,7 +263,10 @@ describe('updateProject', () => {
     expect(doc.visibility).toBe('private');
     expect(doc.save).toHaveBeenCalled();
     // Going private ends the publication of the project's results.
-    expect(mockedEvaluation.updateMany).toHaveBeenCalledWith({ projectId: doc._id.toString(), publishedAt: { $ne: null } }, expect.anything());
+    expect(mockedEvaluation.updateMany).toHaveBeenCalledWith(
+      { projectId: doc._id.toString(), publishedAt: { $ne: null } },
+      expect.anything()
+    );
   });
 
   it('enforces slug uniqueness', async () => {
@@ -235,9 +274,7 @@ describe('updateProject', () => {
     mockedProject.findById.mockResolvedValue(doc);
     mockedProject.findOne.mockResolvedValue(projectDoc({ _id: { toString: () => 'other' } }));
 
-    await expect(updateProject(ID, 'owner-1', { slug: 'taken' })).rejects.toThrow(
-      'Slug already exists'
-    );
+    await expect(updateProject(ID, 'owner-1', { slug: 'taken' })).rejects.toThrow('Slug already exists');
   });
 
   it('refuses a slug shaped like a project id', async () => {
@@ -301,8 +338,8 @@ describe('getProjectDashboardStats', () => {
         totalTrainings: 2,
         totalTime: 7200,
         totalEpochs: 4,
-        avgEpochTime: 1800,
-      },
+        avgEpochTime: 1800
+      }
     ]);
     mockedEvaluation.countDocuments.mockResolvedValue(9);
     mockedEpoch.aggregate.mockResolvedValue([{ count: 7 }]);
@@ -327,7 +364,7 @@ describe('getProjectDashboardStats', () => {
     mockedTraining.aggregate.mockResolvedValue([
       { totalTrainings: 2, totalTime: 7200, totalEpochs: 4, avgEpochTime: 1800 }
     ]);
-    mockedTraining.find.mockReturnValue({ select: jest.fn().mockResolvedValue([]) });
+    mockedTraining.find.mockReturnValue({ select: vi.fn().mockResolvedValue([]) });
     mockedEpoch.aggregate.mockResolvedValue([]);
     mockedBenchmark.countDocuments.mockResolvedValue(0);
 
@@ -349,8 +386,12 @@ describe('getProjectDashboardStats', () => {
 
     await getProjectDashboardStats('p-slug', 'owner-1');
 
-    expect(mockedEvaluation.countDocuments).toHaveBeenCalledWith({ projectId: ID, 'source.trainingId': { $in: ['t1', 't2'] }, deletedAt: null });
-    const [visualizations] = mockedEpoch.aggregate.mock.calls.map(c => c[0]);
+    expect(mockedEvaluation.countDocuments).toHaveBeenCalledWith({
+      projectId: ID,
+      'source.trainingId': { $in: ['t1', 't2'] },
+      deletedAt: null
+    });
+    const [visualizations] = mockedEpoch.aggregate.mock.calls.map((c) => c[0]);
     expect(visualizations[0].$match.trainingId).toEqual({ $in: ['t1', 't2'] });
     expect(visualizations[1].$lookup.from).toBe('epoch_visualizations');
     expect(JSON.stringify(visualizations)).not.toContain('$unwind');
@@ -362,10 +403,15 @@ describe('getProjectDashboardStats', () => {
     mockedEpoch.aggregate.mockResolvedValue([]);
     trainingIdsAre(['t1']);
     await getProjectDashboardStats('p-slug', undefined);
-    expect(mockedEvaluation.countDocuments).toHaveBeenCalledWith({ projectId: ID, 'source.trainingId': { $in: ['t1'] }, deletedAt: null, $or: [{ publishedAt: { $ne: null } }, { suite: { $exists: false } }] });
+    expect(mockedEvaluation.countDocuments).toHaveBeenCalledWith({
+      projectId: ID,
+      'source.trainingId': { $in: ['t1'] },
+      deletedAt: null,
+      $or: [{ publishedAt: { $ne: null } }, { suite: { $exists: false } }]
+    });
   });
 
-  it('reads the project\'s trainings once and reuses them for the benchmark count', async () => {
+  it("reads the project's trainings once and reuses them for the benchmark count", async () => {
     mockedProject.findOne.mockResolvedValue(projectDoc());
     mockedTraining.aggregate.mockResolvedValue([]);
     mockedEpoch.aggregate.mockResolvedValue([]);
@@ -386,7 +432,7 @@ describe('getProjectDashboardStats', () => {
     mockedProject.findOne.mockResolvedValue(projectDoc());
 
     let release!: () => void;
-    const blocked = new Promise(resolve => {
+    const blocked = new Promise((resolve) => {
       release = () => resolve([]);
     });
     mockedTraining.aggregate.mockReturnValueOnce(blocked);

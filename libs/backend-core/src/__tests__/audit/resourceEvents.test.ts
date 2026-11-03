@@ -1,25 +1,43 @@
-jest.mock('../../audit/ResourceEvent', () => ({
-  ...jest.requireActual('../../audit/ResourceEvent'),
-  ResourceEvent: { create: jest.fn(), find: jest.fn() }
-}));
-jest.mock('../../logging/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn() } }));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../audit/ResourceEvent', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../audit/ResourceEvent')>('../../audit/ResourceEvent')),
+    ResourceEvent: { create: vi.fn(), find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({ logger: { info: vi.fn(), warn: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { ResourceEvent } from '../../audit/ResourceEvent';
 import { listResourceEvents, recordResourceEvent } from '../../audit/resourceEvents';
 import { logger } from '../../logging/logger';
 
-const create = ResourceEvent.create as unknown as jest.Mock;
-const find = ResourceEvent.find as unknown as jest.Mock;
-const base = { service: 'dataset-service', resourceType: 'dataset', resourceId: 'd1', resourceName: 'Road scenes', actorId: 'u1' };
+const create = ResourceEvent.create as unknown as Mock;
+const find = ResourceEvent.find as unknown as Mock;
+const base = {
+  service: 'dataset-service',
+  resourceType: 'dataset',
+  resourceId: 'd1',
+  resourceName: 'Road scenes',
+  actorId: 'u1'
+};
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   create.mockResolvedValue({});
 });
 
 describe('recordResourceEvent', () => {
   it('records a transfer with both owners, filed under every group it touched', () => {
-    recordResourceEvent({ ...base, action: 'transfer', owner: { kind: 'group', id: 'g1' }, to: { kind: 'group', id: 'g2' } });
+    recordResourceEvent({
+      ...base,
+      action: 'transfer',
+      owner: { kind: 'group', id: 'g1' },
+      to: { kind: 'group', id: 'g2' }
+    });
 
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -49,9 +67,9 @@ describe('recordResourceEvent', () => {
 
 describe('listResourceEvents', () => {
   it("reads a group's history newest first", async () => {
-    const lean = jest.fn().mockResolvedValue([{ action: 'trash' }]);
-    const limit = jest.fn().mockReturnValue({ lean });
-    const sort = jest.fn().mockReturnValue({ limit });
+    const lean = vi.fn().mockResolvedValue([{ action: 'trash' }]);
+    const limit = vi.fn().mockReturnValue({ lean });
+    const sort = vi.fn().mockReturnValue({ limit });
     find.mockReturnValue({ sort });
 
     await expect(listResourceEvents({ groupId: 'g1' })).resolves.toEqual([{ action: 'trash' }]);

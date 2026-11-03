@@ -1,12 +1,22 @@
-jest.mock('../../models/LabelTask', () => ({
-  LabelTask: { find: jest.fn() },
-}));
-jest.mock('../../models/LabelAnnotation', () => ({
-  LabelAnnotation: { find: jest.fn() },
-}));
-jest.mock('../../clients/datasetServiceClient', () => ({
-  getDataset: jest.fn(),
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/LabelTask', async () => {
+  const module = await (() => ({
+    LabelTask: { find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelAnnotation', async () => {
+  const module = await (() => ({
+    LabelAnnotation: { find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    getDataset: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { exportManifest, jobStats } from '../../services/exportService';
 import { LabelTask } from '../../models/LabelTask';
@@ -14,9 +24,9 @@ import { LabelAnnotation } from '../../models/LabelAnnotation';
 import * as datasets from '../../clients/datasetServiceClient';
 import type { ILabelJob } from '../../models/LabelJob';
 
-const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
-const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
-const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
+const mockedTask = LabelTask as unknown as Record<string, Mock>;
+const mockedAnnotation = LabelAnnotation as unknown as Record<string, Mock>;
+const mockedDatasets = datasets as unknown as Record<string, Mock>;
 
 const job = {
   _id: 'j1',
@@ -31,14 +41,14 @@ const job = {
   sensors: [{ key: 'camera', group: 'camera', kind: 'image' }],
   classes: [
     { key: 'car', name: 'Car', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 },
-    { key: 'road', name: 'Road', color: '#00ff00', tools: ['mask'], maskIndex: 2 },
+    { key: 'road', name: 'Road', color: '#00ff00', tools: ['mask'], maskIndex: 2 }
   ],
-  selection: { kind: 'filter', spec: { sampleN: 3 } },
+  selection: { kind: 'filter', spec: { sampleN: 3 } }
 } as unknown as ILabelJob;
 
 const stub = (tasks: unknown[], annotations: unknown[]) => {
-  mockedTask.find.mockReturnValue({ lean: jest.fn().mockResolvedValue(tasks) });
-  mockedAnnotation.find.mockReturnValue({ lean: jest.fn().mockResolvedValue(annotations) });
+  mockedTask.find.mockReturnValue({ lean: vi.fn().mockResolvedValue(tasks) });
+  mockedAnnotation.find.mockReturnValue({ lean: vi.fn().mockResolvedValue(annotations) });
 };
 
 const annotation = (userId: string, overrides: Record<string, unknown> = {}) => ({
@@ -47,11 +57,11 @@ const annotation = (userId: string, overrides: Record<string, unknown> = {}) => 
   userName: userId.toUpperCase(),
   status: 'done',
   objects: [],
-  ...overrides,
+  ...overrides
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('jobStats', () => {
@@ -60,16 +70,16 @@ describe('jobStats', () => {
       [
         { _id: 't1', stratum: 'day', answersCount: 2 },
         { _id: 't2', stratum: 'day', answersCount: 1 },
-        { _id: 't3', answersCount: 0 },
+        { _id: 't3', answersCount: 0 }
       ],
       [
         annotation('u1', {
           objects: [{ classKey: 'car' }, { classKey: 'car' }, { classKey: 'ghost' }],
-          mask: { pixels: { '1': 100, '2': 400, '9': 5 } },
+          mask: { pixels: { '1': 100, '2': 400, '9': 5 } }
         }),
         annotation('u2', { objects: [{ classKey: 'car' }] }),
         annotation('u1', { objects: [{ classKey: 'car' }], mask: { pixels: { '2': 50 } } }),
-        annotation('u2', { status: 'skipped', objects: [{ classKey: 'car' }] }),
+        annotation('u2', { status: 'skipped', objects: [{ classKey: 'car' }] })
       ]
     );
 
@@ -84,16 +94,16 @@ describe('jobStats', () => {
       objects: 5,
       perUser: [
         { userEmail: 'u1@x.com', userName: 'U1', done: 2, skipped: 0 },
-        { userEmail: 'u2@x.com', userName: 'U2', done: 1, skipped: 1 },
+        { userEmail: 'u2@x.com', userName: 'U2', done: 1, skipped: 1 }
       ],
       perClass: [
         { classKey: 'car', name: 'Car', boxes: 4, pixels: 100 },
-        { classKey: 'road', name: 'Road', boxes: 0, pixels: 450 },
+        { classKey: 'road', name: 'Road', boxes: 0, pixels: 450 }
       ],
       perStratum: [
         { stratum: '(none)', tasks: 1, completed: 0 },
-        { stratum: 'day', tasks: 2, completed: 1 },
-      ],
+        { stratum: 'day', tasks: 2, completed: 1 }
+      ]
     });
   });
 
@@ -102,7 +112,11 @@ describe('jobStats', () => {
 
     await jobStats(job);
 
-    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', generation: null, status: { $in: ['done', 'skipped'] } });
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({
+      jobId: 'j1',
+      generation: null,
+      status: { $in: ['done', 'skipped'] }
+    });
   });
 
   it('is all zeros for a job nobody has started, and copes with an annotation that has no objects field', async () => {
@@ -121,7 +135,7 @@ describe('exportManifest', () => {
       _id: 'd1',
       name: 'Drive',
       description: 'City',
-      groups: [{ name: 'camera', images: 3, jsons: 0 }],
+      groups: [{ name: 'camera', images: 3, jsons: 0 }]
     });
 
     const manifest = await exportManifest(job);
@@ -133,10 +147,15 @@ describe('exportManifest', () => {
       sensors: job.sensors,
       redundancy: 2,
       createdBy: 'owner@x.com',
-      createdAt: '2026-10-01T00:00:00.000Z',
+      createdAt: '2026-10-01T00:00:00.000Z'
     });
     expect(manifest.job.classes).toEqual(job.classes);
-    expect(manifest.dataset).toEqual({ id: 'd1', name: 'Drive', description: 'City', groups: [{ name: 'camera', images: 3, jsons: 0 }] });
+    expect(manifest.dataset).toEqual({
+      id: 'd1',
+      name: 'Drive',
+      description: 'City',
+      groups: [{ name: 'camera', images: 3, jsons: 0 }]
+    });
     expect(manifest.selection).toEqual({ kind: 'filter', spec: { sampleN: 3 } });
     expect(manifest.progress).toEqual({ tasks: 1, completed: 1, done: 1, skipped: 1 });
   });
@@ -144,7 +163,12 @@ describe('exportManifest', () => {
   it('copes with a job that has no dataset and no selection', async () => {
     stub([], []);
 
-    const manifest = await exportManifest({ ...job, datasetId: undefined, selection: undefined, createdBy: undefined } as never);
+    const manifest = await exportManifest({
+      ...job,
+      datasetId: undefined,
+      selection: undefined,
+      createdBy: undefined
+    } as never);
 
     expect(mockedDatasets.getDataset).not.toHaveBeenCalled();
     expect(manifest.dataset).toBeNull();

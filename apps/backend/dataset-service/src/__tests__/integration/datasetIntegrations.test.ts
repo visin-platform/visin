@@ -1,17 +1,43 @@
-jest.mock('../../clients/projectServiceClient', () => ({
-  projectDatasetOwner: jest.fn(async () => ({ kind: 'user', id: '000000000000000000000001' }))
-}));
-jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
-jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn(async () => new Map()) }));
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
-jest.mock('../../queue/importQueue', () => ({
-  enqueueImport: jest.fn(),
-  enqueueScan: jest.fn(),
-  enqueueDelete: jest.fn(),
-  enqueueRemoveGroup: jest.fn(),
-  removeQueuedImport: jest.fn()
-}));
+import { vi } from 'vitest';
+vi.mock('../../clients/projectServiceClient', async () => {
+  const module = await (() => ({
+    projectDatasetOwner: vi.fn(async function () {
+      return { kind: 'user', id: '000000000000000000000001' };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () =>
+    (await vi.importActual<typeof import('../fixtures/fileStore')>('../fixtures/fileStore')).fileStore.client)();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/hubClient', async () => {
+  const module = await (() => ({ fetchDatasetInfo: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({
+    lookupOwnerIdentities: vi.fn(async function () {
+      return new Map();
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/groupServiceClient', async () => {
+  const module = await (() => ({ checkMembership: vi.fn(), getMyGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../queue/importQueue', async () => {
+  const module = await (() => ({
+    enqueueImport: vi.fn(),
+    enqueueScan: vi.fn(),
+    enqueueDelete: vi.fn(),
+    enqueueRemoveGroup: vi.fn(),
+    removeQueuedImport: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { enqueueDelete, removeQueuedImport } from '../../queue/importQueue';
 import { runDelete } from '../../services/deleteService';
@@ -21,7 +47,18 @@ import { clearHubCache } from '../../services/hubService';
 import { Dataset } from '../../models/Dataset';
 import { DatasetItem } from '../../models/DatasetItem';
 import { fileStore } from '../fixtures/fileStore';
-import { ADMIN, GROUP, MEMBER, OWNER, STRANGER, call, createDataset, groupDataset, uploadZip, useDatasetApi } from '../fixtures/datasetApi';
+import {
+  ADMIN,
+  GROUP,
+  MEMBER,
+  OWNER,
+  STRANGER,
+  call,
+  createDataset,
+  groupDataset,
+  uploadZip,
+  useDatasetApi
+} from '../fixtures/datasetApi';
 
 useDatasetApi();
 
@@ -62,23 +99,31 @@ describe('what label-service asks', () => {
 });
 
 describe('holds', () => {
-  it.each([
-    { 'import.status': 'queued' }, { 'import.status': 'running' }, { removingGroups: ['frames'] }
-  ])('refuses a new claim during image mutation: %j', async (state) => {
-    const id = await createDataset();
-    await Dataset.updateOne({ _id: id }, { $set: state });
-    expect((await call(`/internal/datasets/${id}/holds/label-service/job`, { method: 'PUT', internal: true })).status).toBe(409);
-    expect((await Dataset.findById(id))!.holds).toHaveLength(0);
-  });
+  it.each([{ 'import.status': 'queued' }, { 'import.status': 'running' }, { removingGroups: ['frames'] }])(
+    'refuses a new claim during image mutation: %j',
+    async (state) => {
+      const id = await createDataset();
+      await Dataset.updateOne({ _id: id }, { $set: state });
+      expect(
+        (await call(`/internal/datasets/${id}/holds/label-service/job`, { method: 'PUT', internal: true })).status
+      ).toBe(409);
+      expect((await Dataset.findById(id))!.holds).toHaveLength(0);
+    }
+  );
 
   it('never acknowledges a hold when purge wins before the atomic update', async () => {
     const id = await createDataset();
     const update = Dataset.updateOne.bind(Dataset);
-    const spy = jest.spyOn(Dataset, 'updateOne').mockImplementationOnce(((...args: Parameters<typeof Dataset.updateOne>) =>
-      update({ _id: id }, { $set: { deletingAt: new Date() } }).then(() => update(...args))
-    ) as unknown as typeof Dataset.updateOne);
+    const spy = vi
+      .spyOn(Dataset, 'updateOne')
+      .mockImplementationOnce(((...args: Parameters<typeof Dataset.updateOne>) =>
+        update({ _id: id }, { $set: { deletingAt: new Date() } }).then(() =>
+          update(...args)
+        )) as unknown as typeof Dataset.updateOne);
     try {
-      expect((await call(`/internal/datasets/${id}/holds/label-service/job`, { method: 'PUT', internal: true })).status).toBe(404);
+      expect(
+        (await call(`/internal/datasets/${id}/holds/label-service/job`, { method: 'PUT', internal: true })).status
+      ).toBe(404);
       expect((await Dataset.findById(id))!.holds).toHaveLength(0);
     } finally {
       spy.mockRestore();
@@ -92,8 +137,12 @@ describe('holds', () => {
     await Dataset.updateOne({ _id: id }, { $set: { trashedAt: new Date() } });
     expect((await call(path, { method: 'PUT', internal: true })).status).toBe(204);
     expect((await Dataset.findById(id))!.holds).toHaveLength(1);
-    expect((await call(`/internal/datasets/${id}/holds/label-service/other`, { method: 'PUT', internal: true })).status).toBe(404);
-    expect((await call('/internal/datasets/invalid/holds/label-service/job', { method: 'PUT', internal: true })).status).toBe(404);
+    expect(
+      (await call(`/internal/datasets/${id}/holds/label-service/other`, { method: 'PUT', internal: true })).status
+    ).toBe(404);
+    expect(
+      (await call('/internal/datasets/invalid/holds/label-service/job', { method: 'PUT', internal: true })).status
+    ).toBe(404);
   });
 
   it('keeps a dataset labeling uses from being deleted for good, though it can go in the trash', async () => {
@@ -165,9 +214,7 @@ describe('holds', () => {
     await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER });
     const findOne = Dataset.findOne.bind(Dataset);
     // The hold lands between reading the dataset and marking it.
-    const spy = jest.spyOn(Dataset, 'findOne').mockImplementationOnce(((
-      ...args: Parameters<typeof Dataset.findOne>
-    ) => {
+    const spy = vi.spyOn(Dataset, 'findOne').mockImplementationOnce(((...args: Parameters<typeof Dataset.findOne>) => {
       const read = findOne(...args).exec();
       return read.then(async (dataset) => {
         await Dataset.updateOne(
@@ -304,9 +351,10 @@ describe('datasets kept on the Hugging Face Hub', () => {
 
   it('shows what the Hub says about the repo to anyone who may read the dataset, and nothing for a private one', async () => {
     clearHubCache();
-    jest
-      .mocked(fetchDatasetInfo)
-      .mockResolvedValue({ cardData: { license: 'mit' }, siblings: [{ rfilename: 'train/a.png', size: 7 }] });
+    vi.mocked(fetchDatasetInfo).mockResolvedValue({
+      cardData: { license: 'mit' },
+      siblings: [{ rfilename: 'train/a.png', size: 7 }]
+    });
     const id = await createDataset({ name: 'Hub set', visibility: 'public', source });
     const info = (await call(`/api/datasets/${id}/hub`)).body.data;
     expect(info).toMatchObject({

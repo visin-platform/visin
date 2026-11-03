@@ -19,7 +19,7 @@ describe('usePageChatContext', () => {
     expect(heard).toHaveBeenCalledTimes(1);
     page.unmount();
     expect(published()).toBeUndefined();
-    expect((heard.mock.calls.at(-1)?.[0] as CustomEvent).detail).toBeNull();
+    expect((heard.mock.calls.at(-1)![0] as CustomEvent).detail).toBeNull();
     window.removeEventListener('visin:page-context', heard);
   });
 

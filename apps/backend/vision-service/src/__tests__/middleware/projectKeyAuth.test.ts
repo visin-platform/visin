@@ -1,14 +1,18 @@
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  apiKeyAuth: jest.fn()
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    apiKeyAuth: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { NextFunction, Request, Response } from 'express';
 import { apiKeyAuth } from '@visin/backend-core';
 import { projectKeyAuth } from '../../middleware/projectKeyAuth';
 import { tokenProjectId } from '../../middleware/projectTokenContext';
 
-const mockedApiKeyAuth = apiKeyAuth as jest.Mock;
+const mockedApiKeyAuth = apiKeyAuth as Mock;
 
 /** backend-core's guard, standing in: it authenticates as `outcome` says, then calls on. */
 const guardThat = (outcome: (req: Request) => unknown) =>
@@ -16,9 +20,15 @@ const guardThat = (outcome: (req: Request) => unknown) =>
 
 describe('projectKeyAuth', () => {
   it('runs the rest of a limited key’s request confined to its project', async () => {
-    guardThat(req => {
+    guardThat((req) => {
       req.user = { id: 'u1' };
-      req.apiKey = { keyId: 'k', scopes: ['vision:write'], label: 'pipeline', required: 'vision:write', projectId: 'p1' };
+      req.apiKey = {
+        keyId: 'k',
+        scopes: ['vision:write'],
+        label: 'pipeline',
+        required: 'vision:write',
+        projectId: 'p1'
+      };
     });
     const req = {} as Request;
     let seen: { project?: string } = {};
@@ -33,10 +43,12 @@ describe('projectKeyAuth', () => {
   });
 
   it('adds nothing for an unlimited key or a request without one', async () => {
-    guardThat(req => {
+    guardThat((req) => {
       req.user = { id: 'u1' };
     });
-    const next = jest.fn(() => expect(tokenProjectId()).toBeUndefined());
+    const next = vi.fn(function () {
+      return expect(tokenProjectId()).toBeUndefined();
+    });
 
     await projectKeyAuth('vision')({} as Request, {} as Response, next);
 
@@ -46,7 +58,7 @@ describe('projectKeyAuth', () => {
   it('passes a refusal straight on', async () => {
     const refusal = new Error('refused');
     guardThat(() => refusal);
-    const next = jest.fn();
+    const next = vi.fn();
 
     await projectKeyAuth('analysis', { readPaths: [] })({} as Request, {} as Response, next);
 

@@ -1,34 +1,33 @@
+import { vi, type Mock } from 'vitest';
 import type { Response } from 'express';
 
-jest.mock('../../services/findingService', () => ({
-  listFindings: jest.fn(),
-  getFinding: jest.fn(),
-  createFinding: jest.fn(),
-  deleteFinding: jest.fn(),
-}));
+vi.mock('../../services/findingService', async () => {
+  const module = await (() => ({
+    listFindings: vi.fn(),
+    getFinding: vi.fn(),
+    createFinding: vi.fn(),
+    deleteFinding: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import * as findingService from '../../services/findingService';
-import {
-  createFinding,
-  deleteFinding,
-  getFindingById,
-  getFindings,
-} from '../../controllers/findingController';
+import { createFinding, deleteFinding, getFindingById, getFindings } from '../../controllers/findingController';
 import type { AuthRequest } from '../../middleware/authMiddleware';
 
-const mocked = findingService as unknown as Record<string, jest.Mock>;
+const mocked = findingService as unknown as Record<string, Mock>;
 
 const makeRes = () => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
-  return res as unknown as Response & { json: jest.Mock; status: jest.Mock };
+  return res as unknown as Response & { json: Mock; status: Mock };
 };
 
 const makeReq = (over: Record<string, unknown> = {}): AuthRequest =>
   ({ query: {}, body: {}, params: {}, user: { id: 'u1' }, ...over }) as unknown as AuthRequest;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mocked.listFindings.mockResolvedValue([]);
   mocked.createFinding.mockResolvedValue({ _id: 'f1' });
 });
@@ -45,7 +44,7 @@ describe('who a finding is attributed to', () => {
     expect(mocked.createFinding.mock.calls[0][1]).toEqual({
       kind: 'assistant',
       label: 'Claude',
-      userId: 'u1',
+      userId: 'u1'
     });
   });
 
@@ -55,7 +54,7 @@ describe('who a finding is attributed to', () => {
     expect(mocked.createFinding.mock.calls[0][1]).toEqual({
       kind: 'person',
       label: 'Toomas',
-      userId: 'u1',
+      userId: 'u1'
     });
   });
 
@@ -63,16 +62,14 @@ describe('who a finding is attributed to', () => {
     await createFinding(makeReq({ user: { id: 'u1', email: 'a@b.com' } }), makeRes());
     expect(mocked.createFinding.mock.calls[0][1].label).toBe('a@b.com');
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mocked.createFinding.mockResolvedValue({ _id: 'f1' });
     await createFinding(makeReq({ user: { id: 'u1' } }), makeRes());
     expect(mocked.createFinding.mock.calls[0][1].label).toBe('You');
   });
 
   it('rejects an unauthenticated writer', async () => {
-    await expect(createFinding(makeReq({ user: undefined }), makeRes())).rejects.toThrow(
-      /Not authenticated/
-    );
+    await expect(createFinding(makeReq({ user: undefined }), makeRes())).rejects.toThrow(/Not authenticated/);
   });
 });
 

@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import crypto from 'crypto';
@@ -26,11 +27,20 @@ import Comparison from '../../models/Comparison';
 import Finding from '../../models/Finding';
 import Config from '../../models/Config';
 
-jest.mock('../../clients/fileServiceClient', () => ({
-  getSignedUrl: jest.fn(async (fileId: string) => ({ signedUrl: `https://files.invalid/${fileId}` })),
-  getUploadSignedUrl: jest.fn(async () => 'https://files.invalid/upload'),
-  getFileMetadata: jest.fn(async () => ({ size: 1 })),
-}));
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    getSignedUrl: vi.fn(async function (fileId: string) {
+      return { signedUrl: `https://files.invalid/${fileId}` };
+    }),
+    getUploadSignedUrl: vi.fn(async function () {
+      return 'https://files.invalid/upload';
+    }),
+    getFileMetadata: vi.fn(async function () {
+      return { size: 1 };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 /** A key limited to one project, confined to it on every route. */
 describe('project-limited key isolation through HTTP and in-memory MongoDB', () => {
@@ -41,20 +51,49 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
   let b: string;
   let trainingB: string;
   let trainingA: string;
-  let fixtures: Record<string, { project?: string; training: string; epoch: string; test: string; benchmark: string; comparison: string; finding?: string }>;
+  let fixtures: Record<
+    string,
+    {
+      project?: string;
+      training: string;
+      epoch: string;
+      test: string;
+      benchmark: string;
+      comparison: string;
+      finding?: string;
+    }
+  >;
   const owner = '000000000000000000000001';
   let rawToken: string;
   const secret = 'project-token-integration-secret';
   const oldSecret = process.env.JWT_SECRET;
   const oldEncryption = process.env.API_KEY_ENCRYPTION_SECRET;
   const keyFor = async (project: string) =>
-    (await createApiKey({
-      userId: owner, userEmail: 'owner@example.test', userName: 'Owner', name: 'ingestion',
-      scopes: ['vision:read', 'vision:write', 'analysis:read', 'analysis:write'], project: { id: project, name: 'limited' }
-    })).token;
+    (
+      await createApiKey({
+        userId: owner,
+        userEmail: 'owner@example.test',
+        userName: 'Owner',
+        name: 'ingestion',
+        scopes: ['vision:read', 'vision:write', 'analysis:read', 'analysis:write'],
+        project: { id: project, name: 'limited' }
+      })
+    ).token;
   const sessionToken = () => {
-    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, sid: owner, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 } ]
-      .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: owner,
+        email: 'owner@example.test',
+        tokenVersion: 1,
+        sid: owner,
+        typ: 'session',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
     return `${unsigned}.${crypto.createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
   };
 
@@ -69,37 +108,120 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     app.use('/api/projects', projectKeyAuth('vision'), projectRoutes);
     app.use('/api/trainings', projectKeyAuth('vision'), trainingRoutes);
     app.use('/api/findings', projectKeyAuth('analysis'), findingRoutes);
-    for (const [path, router] of Object.entries({ epochs: epochRoutes, evaluations: evaluationRoutes,
-      benchmarks: benchmarkRoutes, visualizations: visualizationRoutes, comparisons: comparisonRoutes,
-      configs: configRoutes })) app.use(`/api/${path}`, projectKeyAuth('vision'), router);
+    for (const [path, router] of Object.entries({
+      epochs: epochRoutes,
+      evaluations: evaluationRoutes,
+      benchmarks: benchmarkRoutes,
+      visualizations: visualizationRoutes,
+      comparisons: comparisonRoutes,
+      configs: configRoutes
+    }))
+      app.use(`/api/${path}`, projectKeyAuth('vision'), router);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 120_000);
 
   beforeEach(async () => {
-    await mongoose.connection.collection('users').insertOne({ _id: new mongoose.Types.ObjectId(owner), email: 'owner@example.test', tokenVersion: 1 });
+    await mongoose.connection
+      .collection('users')
+      .insertOne({ _id: new mongoose.Types.ObjectId(owner), email: 'owner@example.test', tokenVersion: 1 });
     // Each test token names a session whose id is its user's.
-    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
+    await mongoose.connection.collection('user_sessions').insertMany(
+      (
+        await mongoose.connection
+          .collection('users')
+          .find({}, { projection: { _id: 1 } })
+          .toArray()
+      ).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) }))
+    );
     const projects = await Project.create([
       { name: 'A', slug: 'a', owner: { kind: 'user', id: owner }, createdBy: owner },
-      { name: 'B', slug: 'b', owner: { kind: 'user', id: owner }, createdBy: owner },
+      { name: 'B', slug: 'b', owner: { kind: 'user', id: owner }, createdBy: owner }
     ]);
-    [a, b] = projects.map(project => String(project._id));
-    const other = await Project.create({ name: 'Other owner', slug: 'other', owner: { kind: 'user', id: 'other' }, createdBy: 'other' });
-    const publicProject = await Project.create({ name: 'Public', slug: 'public', owner: { kind: 'user', id: 'other' }, createdBy: 'other', visibility: 'public' });
+    [a, b] = projects.map((project) => String(project._id));
+    const other = await Project.create({
+      name: 'Other owner',
+      slug: 'other',
+      owner: { kind: 'user', id: 'other' },
+      createdBy: 'other'
+    });
+    const publicProject = await Project.create({
+      name: 'Public',
+      slug: 'public',
+      owner: { kind: 'user', id: 'other' },
+      createdBy: 'other',
+      visibility: 'public'
+    });
     fixtures = {};
-    for (const [key, project] of Object.entries({ a, b, other: String(other._id), public: String(publicProject._id), orphan: undefined })) {
+    for (const [key, project] of Object.entries({
+      a,
+      b,
+      other: String(other._id),
+      public: String(publicProject._id),
+      orphan: undefined
+    })) {
       const training = await Training.create({ name: `${key} training`, uuid: `training-${key}`, projectId: project });
-      const epoch = await Epoch.create({ trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: `epoch-${key}`, epoch: key === 'a' ? 1 : 99, results: { loss: 1 }, timestamp: new Date() });
-      const test = await recordTest({ epoch_uuid: epoch.epoch_uuid, trainingId: String(training._id), projectId: String(training.projectId), test_uuid: `test-${key}`, epoch: epoch.epoch, timestamp: new Date(), test_results: { clear: { overall: { pixel_accuracy: 0.9 } } } });
-      const benchmark = await Benchmark.create({ training_id: key === 'orphan' ? null : training._id, training_uuid: training.uuid,
-        timestamp: new Date(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [] });
-      await EpochVisualization.create({ epoch_uuid: epoch.epoch_uuid, visualization_uuid: `viz-${key}`, filename: `${key}.png`, type: key, fileId: `file-${key}`, uploadedAt: new Date() });
-      const comparison = await Comparison.create({ uuid: `comparison-${key}`, name: key, type: 'trainings', itemIds: [String(training._id)], projectId: project });
-      const finding = project ? await Finding.create({ projectId: project, title: key, body: key, trainingIds: [String(training._id)], authorKind: 'person', authorLabel: owner, authorUserId: owner }) : undefined;
-      fixtures[key] = { project, training: String(training._id), epoch: String(epoch._id), test: String(test._id), benchmark: String(benchmark._id), comparison: String(comparison._id), finding: finding ? String(finding._id) : undefined };
+      const epoch = await Epoch.create({
+        trainingId: String(training._id),
+        training_uuid: training.uuid,
+        epoch_uuid: `epoch-${key}`,
+        epoch: key === 'a' ? 1 : 99,
+        results: { loss: 1 },
+        timestamp: new Date()
+      });
+      const test = await recordTest({
+        epoch_uuid: epoch.epoch_uuid,
+        trainingId: String(training._id),
+        projectId: String(training.projectId),
+        test_uuid: `test-${key}`,
+        epoch: epoch.epoch,
+        timestamp: new Date(),
+        test_results: { clear: { overall: { pixel_accuracy: 0.9 } } }
+      });
+      const benchmark = await Benchmark.create({
+        training_id: key === 'orphan' ? null : training._id,
+        training_uuid: training.uuid,
+        timestamp: new Date(),
+        system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 },
+        results: []
+      });
+      await EpochVisualization.create({
+        epoch_uuid: epoch.epoch_uuid,
+        visualization_uuid: `viz-${key}`,
+        filename: `${key}.png`,
+        type: key,
+        fileId: `file-${key}`,
+        uploadedAt: new Date()
+      });
+      const comparison = await Comparison.create({
+        uuid: `comparison-${key}`,
+        name: key,
+        type: 'trainings',
+        itemIds: [String(training._id)],
+        projectId: project
+      });
+      const finding = project
+        ? await Finding.create({
+            projectId: project,
+            title: key,
+            body: key,
+            trainingIds: [String(training._id)],
+            authorKind: 'person',
+            authorLabel: owner,
+            authorUserId: owner
+          })
+        : undefined;
+      fixtures[key] = {
+        project,
+        training: String(training._id),
+        epoch: String(epoch._id),
+        test: String(test._id),
+        benchmark: String(benchmark._id),
+        comparison: String(comparison._id),
+        finding: finding ? String(finding._id) : undefined
+      };
     }
     trainingA = fixtures.a.training;
     trainingB = fixtures.b.training;
@@ -107,7 +229,7 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
   });
 
   afterEach(async () => {
-    await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
+    await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
 
   afterAll(async () => {
@@ -115,17 +237,25 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     else process.env.JWT_SECRET = oldSecret;
     if (oldEncryption === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
     else process.env.API_KEY_ENCRYPTION_SECRET = oldEncryption;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
   const request = async (path: string, method = 'GET', body?: unknown, credential = rawToken) => {
     const response = await fetch(`${url}/api/${path}`, {
-      method, headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      method,
+      headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     const text = await response.text();
-    return { status: response.status, body: text ? JSON.parse(text) as { data: Record<string, unknown> } : { data: {} } };
+    return {
+      status: response.status,
+      body: text ? (JSON.parse(text) as { data: Record<string, unknown> }) : { data: {} }
+    };
   };
 
   it('denies reading another private project owned by the same token creator', async () => {
@@ -142,55 +272,94 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     expect((await request('projects/a')).status).toBe(200);
   });
 
-  it.each(['b', 'other', 'public', 'orphan'])('denies reads and mutations of %s resources', async key => {
+  it.each(['b', 'other', 'public', 'orphan'])('denies reads and mutations of %s resources', async (key) => {
     const row = fixtures[key];
-    const paths = [`trainings/${row.training}`, `trainings/${row.training}/configs`, `epochs/${row.epoch}`,
-      `epochs/uuid/epoch-${key}`, `benchmarks/${row.benchmark}`, `visualizations/viz-${key}`,
-      `visualizations/epoch/epoch-${key}`, `visualizations/training/training-${key}`,
-      `visualizations/types?training_uuid=training-${key}`, `comparisons/${row.comparison}`, `comparisons/uuid/comparison-${key}`];
-    if (row.project) paths.push(`projects/${row.project}`, `projects/${row.project}/dashboard-stats`, `findings/${row.finding}`);
+    const paths = [
+      `trainings/${row.training}`,
+      `trainings/${row.training}/configs`,
+      `epochs/${row.epoch}`,
+      `epochs/uuid/epoch-${key}`,
+      `benchmarks/${row.benchmark}`,
+      `visualizations/viz-${key}`,
+      `visualizations/epoch/epoch-${key}`,
+      `visualizations/training/training-${key}`,
+      `visualizations/types?training_uuid=training-${key}`,
+      `comparisons/${row.comparison}`,
+      `comparisons/uuid/comparison-${key}`
+    ];
+    if (row.project)
+      paths.push(`projects/${row.project}`, `projects/${row.project}/dashboard-stats`, `findings/${row.finding}`);
     for (const path of paths) expect({ path, status: (await request(path)).status }).toEqual({ path, status: 403 });
     for (const [path, body] of [
-      [`trainings/${row.training}`, { name: 'tampered' }], [`epochs/${row.epoch}`, { epoch_time: 100 }],
+      [`trainings/${row.training}`, { name: 'tampered' }],
+      [`epochs/${row.epoch}`, { epoch_time: 100 }],
       [`benchmarks/${row.benchmark}`, { results: [] }],
-      [`comparisons/${row.comparison}`, { name: 'tampered' }],
-    ] as const) expect({ path, status: (await request(path, 'PUT', body)).status }).toEqual({ path, status: 403 });
-    const deletes = [`trainings/${row.training}`, `benchmarks/${row.benchmark}`,
-      `visualizations/viz-${key}`, `comparisons/${row.comparison}`];
+      [`comparisons/${row.comparison}`, { name: 'tampered' }]
+    ] as const)
+      expect({ path, status: (await request(path, 'PUT', body)).status }).toEqual({ path, status: 403 });
+    const deletes = [
+      `trainings/${row.training}`,
+      `benchmarks/${row.benchmark}`,
+      `visualizations/viz-${key}`,
+      `comparisons/${row.comparison}`
+    ];
     if (row.finding) deletes.push(`findings/${row.finding}`);
-    for (const path of deletes) expect({ path, status: (await request(path, 'DELETE')).status }).toEqual({ path, status: 403 });
+    for (const path of deletes)
+      expect({ path, status: (await request(path, 'DELETE')).status }).toEqual({ path, status: 403 });
     expect((await Training.findById(row.training))?.name).toBe(`${key} training`);
   });
 
-  it.each(['b', 'other', 'public', 'orphan'])('answers not found for what %s recorded, and changes nothing', async key => {
-    const row = fixtures[key];
-    for (const path of [`evaluations/${row.test}`, `evaluations/uuid/test-${key}?projectId=${row.project}`]) {
-      expect({ path, status: (await request(path)).status }).toEqual({ path, status: 404 });
+  it.each(['b', 'other', 'public', 'orphan'])(
+    'answers not found for what %s recorded, and changes nothing',
+    async (key) => {
+      const row = fixtures[key];
+      for (const path of [`evaluations/${row.test}`, `evaluations/uuid/test-${key}?projectId=${row.project}`]) {
+        expect({ path, status: (await request(path)).status }).toEqual({ path, status: 404 });
+      }
+      for (const [path, method, body] of [
+        [`evaluations/${row.test}`, 'DELETE', undefined],
+        [`evaluations/${row.test}/restore`, 'POST', undefined],
+        [`evaluations/${row.test}/publish`, 'POST', undefined],
+        [`evaluations/${row.test}/withdraw`, 'POST', undefined],
+        [`evaluations/${row.test}/approve`, 'POST', undefined],
+        [`evaluations/${row.test}/hide`, 'POST', { reason: 'no' }],
+        [`evaluations/${row.test}/unhide`, 'POST', undefined]
+      ] as const)
+        expect({ path, status: (await request(path, method, body)).status }).toEqual({ path, status: 404 });
+      // Promoting writes to the project: refused where the caller could read it (the key's limit stops them), and not
+      // found where they could not.
+      const promoted = (
+        await request('evaluations/promote', 'POST', {
+          evaluationId: row.test,
+          suite: 'road-test@1',
+          checkpoint: { kind: 'local', sha256: 'a'.repeat(64), label: 'x' },
+          sampleCounts: { day: 1 }
+        })
+      ).status;
+      expect({ key, promoted }).toEqual({ key, promoted: key === 'b' || key === 'public' ? 403 : 404 });
+      expect((await Evaluation.findById(row.test))?.deletedAt).toBeUndefined();
     }
-    for (const [path, method, body] of [
-      [`evaluations/${row.test}`, 'DELETE', undefined], [`evaluations/${row.test}/restore`, 'POST', undefined],
-      [`evaluations/${row.test}/publish`, 'POST', undefined], [`evaluations/${row.test}/withdraw`, 'POST', undefined],
-      [`evaluations/${row.test}/approve`, 'POST', undefined], [`evaluations/${row.test}/hide`, 'POST', { reason: 'no' }],
-      [`evaluations/${row.test}/unhide`, 'POST', undefined]
-    ] as const) expect({ path, status: (await request(path, method, body)).status }).toEqual({ path, status: 404 });
-    // Promoting writes to the project: refused where the caller could read it (the key's limit stops them), and not
-    // found where they could not.
-    const promoted = (await request('evaluations/promote', 'POST', { evaluationId: row.test, suite: 'road-test@1', checkpoint: { kind: 'local', sha256: 'a'.repeat(64), label: 'x' }, sampleCounts: { day: 1 } })).status;
-    expect({ key, promoted }).toEqual({ key, promoted: key === 'b' || key === 'public' ? 403 : 404 });
-    expect((await Evaluation.findById(row.test))?.deletedAt).toBeUndefined();
-  });
+  );
 
   it('restricts lists, filtered lists, statistics and distinct values to A', async () => {
     expect((await request('projects')).body.data).toEqual([expect.objectContaining({ _id: a })]);
     for (const [path, field, id] of [
-      ['trainings', 'trainings', trainingA], ['benchmarks', 'benchmarks', fixtures.a.benchmark],
-      ['comparisons', 'comparisons', fixtures.a.comparison], ['evaluations?epoch=1', 'evaluations', fixtures.a.test],
+      ['trainings', 'trainings', trainingA],
+      ['benchmarks', 'benchmarks', fixtures.a.benchmark],
+      ['comparisons', 'comparisons', fixtures.a.comparison],
+      ['evaluations?epoch=1', 'evaluations', fixtures.a.test]
     ]) {
       const result = await request(path);
       expect(result.status).toBe(200);
       expect(result.body.data[field]).toEqual([expect.objectContaining({ _id: id })]);
     }
-    for (const suffix of ['epoch=99', 'epochUuids=epoch-b', `projectId=${a}&epochUuids=epoch-b`, 'trainingUuid=training-a&epochUuids=epoch-b', 'trainingUuid=training-b']) {
+    for (const suffix of [
+      'epoch=99',
+      'epochUuids=epoch-b',
+      `projectId=${a}&epochUuids=epoch-b`,
+      'trainingUuid=training-a&epochUuids=epoch-b',
+      'trainingUuid=training-b'
+    ]) {
       const result = await request(`evaluations?${suffix}&page=1&limit=10`);
       expect(result.status).toBe(200);
       expect(result.body.data.evaluations).toEqual([]);
@@ -214,13 +383,25 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
 
   it('authorizes replacement parents and rejects missing parents', async () => {
     for (const key of ['b', 'other', 'public', 'orphan', 'missing']) {
-      expect((await request(`benchmarks/${fixtures.a.benchmark}`, 'PUT', { training_uuid: `training-${key}` })).status).toBe(403);
+      expect(
+        (await request(`benchmarks/${fixtures.a.benchmark}`, 'PUT', { training_uuid: `training-${key}` })).status
+      ).toBe(403);
       // Naming another project's epoch: refused where the caller could read that project (it is the key's limit that
       // stops them), and not found where they could not, which is also what an epoch nobody knows gets.
-      const refused = (await request('evaluations', 'POST', { source: { epochUuid: `epoch-${key}`, epoch: 1 }, results: {} })).status;
+      const refused = (
+        await request('evaluations', 'POST', { source: { epochUuid: `epoch-${key}`, epoch: 1 }, results: {} })
+      ).status;
       expect({ key, refused }).toEqual({ key, refused: key === 'b' || key === 'public' ? 403 : 404 });
-      expect((await request('benchmarks', 'POST', { training_uuid: `training-${key}`, timestamp: new Date(), results: [],
-        system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 } })).status).toBe(403);
+      expect(
+        (
+          await request('benchmarks', 'POST', {
+            training_uuid: `training-${key}`,
+            timestamp: new Date(),
+            results: [],
+            system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }
+          })
+        ).status
+      ).toBe(403);
     }
     expect((await request(`benchmarks/${fixtures.a.benchmark}`, 'PUT', { training_uuid: '' })).status).toBe(403);
     expect((await Evaluation.findById(fixtures.a.test))?.source?.epochUuid).toBe('epoch-a');
@@ -235,25 +416,34 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     expect((await request('epochs/batch', 'POST', { epochs: [{ ...body, epoch: 3 }] })).status).toBe(201);
     expect(await Epoch.countDocuments({ trainingId: trainingA, training_uuid: 'training-b' })).toBe(0);
     await Epoch.updateOne({ _id: fixtures.b.epoch }, { training_uuid: 'training-a' });
-    for (const path of ['visualizations/training/training-a?includeUrls=false', `visualizations/training?projectId=${a}&includeUrls=false`]) {
+    for (const path of [
+      'visualizations/training/training-a?includeUrls=false',
+      `visualizations/training?projectId=${a}&includeUrls=false`
+    ]) {
       expect((await request(path)).body.data).toMatchObject({ total: 1 });
     }
     expect((await request('visualizations/types?training_uuid=training-a')).body.data).toEqual({ types: ['a'] });
-    expect((await request('epochs/batch', 'POST', { epochs: [body, { ...body, trainingId: trainingB }] })).status).toBe(403);
+    expect((await request('epochs/batch', 'POST', { epochs: [body, { ...body, trainingId: trainingB }] })).status).toBe(
+      403
+    );
   });
 
-  it.each(['trainings', 'epochs', 'tests', 'benchmarks'] as const)('validates %s comparison references on create and update', async type => {
-    const field = { trainings: 'training', epochs: 'epoch', tests: 'test', benchmarks: 'benchmark' }[type] as 'training' | 'epoch' | 'test' | 'benchmark';
-    const ownIds = [fixtures.a[field], fixtures.a[field]];
-    const body = { name: 'Comparison', type, itemIds: ownIds };
-    const created = await request('comparisons', 'POST', body);
-    expect(created.status).toBe(201);
-    for (const key of ['b', 'other', 'public', 'orphan']) {
-      const itemIds = [fixtures.a[field], fixtures[key][field]];
-      expect((await request('comparisons', 'POST', { ...body, itemIds })).status).toBe(403);
-      expect((await request(`comparisons/${created.body.data._id}`, 'PUT', { itemIds })).status).toBe(403);
+  it.each(['trainings', 'epochs', 'tests', 'benchmarks'] as const)(
+    'validates %s comparison references on create and update',
+    async (type) => {
+      const field = { trainings: 'training', epochs: 'epoch', tests: 'test', benchmarks: 'benchmark' }[type] as
+        'training' | 'epoch' | 'test' | 'benchmark';
+      const ownIds = [fixtures.a[field], fixtures.a[field]];
+      const body = { name: 'Comparison', type, itemIds: ownIds };
+      const created = await request('comparisons', 'POST', body);
+      expect(created.status).toBe(201);
+      for (const key of ['b', 'other', 'public', 'orphan']) {
+        const itemIds = [fixtures.a[field], fixtures[key][field]];
+        expect((await request('comparisons', 'POST', { ...body, itemIds })).status).toBe(403);
+        expect((await request(`comparisons/${created.body.data._id}`, 'PUT', { itemIds })).status).toBe(403);
+      }
     }
-  });
+  );
 
   it('prevents cross-project finding citations while allowing own-project findings', async () => {
     const body = { project: a, title: 'Evidence', body: 'Observation', trainingIds: [trainingA] };
@@ -262,27 +452,66 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
   });
 
   it("reads its own project's configs and ingests into its own project", async () => {
-    const config = await Config.create({ config_uuid: 'shared', summary: 'Project config', config_data: {}, projectId: a });
+    const config = await Config.create({
+      config_uuid: 'shared',
+      summary: 'Project config',
+      config_data: {},
+      projectId: a
+    });
     await Training.updateMany({}, { configId: String(config._id) });
     expect((await request(`configs/${config._id}`)).status).toBe(200);
     expect((await request(`trainings/${trainingA}/configs`)).status).toBe(200);
-    expect((await request('evaluations', 'POST', { source: { epochUuid: 'epoch-a', epoch: 1 }, results: {} })).status).toBe(201);
-    expect((await request('benchmarks', 'POST', { training_uuid: 'training-a', timestamp: new Date(), results: [],
-      system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 } })).status).toBe(201);
-    const uploaded = await request('visualizations/upload-url', 'POST', { epoch_uuid: 'epoch-a', filename: 'curve.png', type: 'curve', mimetype: 'image/png' });
+    expect(
+      (await request('evaluations', 'POST', { source: { epochUuid: 'epoch-a', epoch: 1 }, results: {} })).status
+    ).toBe(201);
+    expect(
+      (
+        await request('benchmarks', 'POST', {
+          training_uuid: 'training-a',
+          timestamp: new Date(),
+          results: [],
+          system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }
+        })
+      ).status
+    ).toBe(201);
+    const uploaded = await request('visualizations/upload-url', 'POST', {
+      epoch_uuid: 'epoch-a',
+      filename: 'curve.png',
+      type: 'curve',
+      mimetype: 'image/png'
+    });
     expect(uploaded.status).toBe(200);
-    expect((await request('visualizations', 'POST', { ...uploaded.body.data, epoch_uuid: 'epoch-a', filename: 'curve.png', type: 'curve', mimetype: 'image/png', size: 1 })).status).toBe(201);
+    expect(
+      (
+        await request('visualizations', 'POST', {
+          ...uploaded.body.data,
+          epoch_uuid: 'epoch-a',
+          filename: 'curve.png',
+          type: 'curve',
+          mimetype: 'image/png',
+          size: 1
+        })
+      ).status
+    ).toBe(201);
   });
 
   it('allows own-project updates/deletes without altering cross-project comparisons', async () => {
     await Comparison.updateOne({ _id: fixtures.b.comparison }, { $push: { itemIds: trainingA } });
     for (const [path, body] of [
-      [`trainings/${trainingA}`, { name: 'Updated run' }], [`epochs/${fixtures.a.epoch}`, { epoch_time: 2 }],
+      [`trainings/${trainingA}`, { name: 'Updated run' }],
+      [`epochs/${fixtures.a.epoch}`, { epoch_time: 2 }],
       [`benchmarks/${fixtures.a.benchmark}`, { training_uuid: 'training-a' }],
-      [`comparisons/${fixtures.a.comparison}`, { itemIds: [trainingA] }],
-    ] as const) expect({ path, status: (await request(path, 'PUT', body)).status }).toEqual({ path, status: 200 });
-    for (const path of [`findings/${fixtures.a.finding}`, 'visualizations/viz-a', `benchmarks/${fixtures.a.benchmark}`,
-      `evaluations/${fixtures.a.test}`, `trainings/${trainingA}`, `comparisons/${fixtures.a.comparison}`]) {
+      [`comparisons/${fixtures.a.comparison}`, { itemIds: [trainingA] }]
+    ] as const)
+      expect({ path, status: (await request(path, 'PUT', body)).status }).toEqual({ path, status: 200 });
+    for (const path of [
+      `findings/${fixtures.a.finding}`,
+      'visualizations/viz-a',
+      `benchmarks/${fixtures.a.benchmark}`,
+      `evaluations/${fixtures.a.test}`,
+      `trainings/${trainingA}`,
+      `comparisons/${fixtures.a.comparison}`
+    ]) {
       expect([200, 204]).toContain((await request(path, 'DELETE')).status);
     }
     expect((await Comparison.findById(fixtures.b.comparison))?.itemIds).toContain(trainingA);
@@ -291,9 +520,15 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
   it('fails closed for missing comparison items, standalone benchmarks and a deleted token project', async () => {
     const missingId = new mongoose.Types.ObjectId().toString();
     for (const type of ['trainings', 'epochs', 'tests', 'benchmarks']) {
-      expect((await request('comparisons', 'POST', { type, name: 'Missing item', itemIds: [missingId] })).status).toBe(403);
+      expect((await request('comparisons', 'POST', { type, name: 'Missing item', itemIds: [missingId] })).status).toBe(
+        403
+      );
     }
-    const benchmark = { timestamp: new Date(), results: [], system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 } };
+    const benchmark = {
+      timestamp: new Date(),
+      results: [],
+      system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }
+    };
     expect((await request('benchmarks', 'POST', benchmark)).status).toBe(403);
     await Project.deleteOne({ _id: a });
     expect((await request('benchmarks', 'POST', { ...benchmark, training_uuid: 'training-a' })).status).toBe(403);
@@ -304,12 +539,14 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
   it('isolates concurrent A/B token and session requests', async () => {
     const otherToken = await keyFor(b);
     const session = sessionToken();
-    const results = await Promise.all(Array.from({ length: 12 }, async (_, i) => {
-      const credential = [rawToken, otherToken, session][i % 3];
-      const response = await request(`trainings/${trainingB}`, 'GET', undefined, credential);
-      return response.status;
-    }));
-    expect(results).toEqual(Array.from({ length: 12 }, (_, i) => i % 3 === 0 ? 403 : 200));
+    const results = await Promise.all(
+      Array.from({ length: 12 }, async (_, i) => {
+        const credential = [rawToken, otherToken, session][i % 3];
+        const response = await request(`trainings/${trainingB}`, 'GET', undefined, credential);
+        return response.status;
+      })
+    );
+    expect(results).toEqual(Array.from({ length: 12 }, (_, i) => (i % 3 === 0 ? 403 : 200)));
     expect((await request('projects/public', 'GET', undefined, 'invalid-token')).status).toBe(200);
   });
 
@@ -327,13 +564,19 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
   });
 
   it('checks benchmark epoch references on create, upload and update', async () => {
-    const body = { training_uuid: 'training-a', timestamp: new Date(), results: [],
-      system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 } };
+    const body = {
+      training_uuid: 'training-a',
+      timestamp: new Date(),
+      results: [],
+      system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }
+    };
     for (const key of ['b', 'public', 'orphan', 'missing']) {
       for (const path of ['benchmarks', 'benchmarks/upload']) {
         expect((await request(path, 'POST', { ...body, epoch_uuid: `epoch-${key}` })).status).toBe(403);
       }
-      expect((await request(`benchmarks/${fixtures.a.benchmark}`, 'PUT', { epoch_uuid: `epoch-${key}` })).status).toBe(403);
+      expect((await request(`benchmarks/${fixtures.a.benchmark}`, 'PUT', { epoch_uuid: `epoch-${key}` })).status).toBe(
+        403
+      );
     }
     expect((await request('benchmarks', 'POST', { ...body, epoch_uuid: 'epoch-a' })).status).toBe(201);
     expect((await request(`benchmarks/${fixtures.a.benchmark}`, 'PUT', { epoch_uuid: 'epoch-a' })).status).toBe(200);

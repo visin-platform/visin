@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { Request, Response } from 'express';
 import { requestLogger } from '../../middleware/requestLogger';
@@ -5,10 +6,14 @@ import { errorHandler } from '../../middleware/errorHandler';
 import { ForbiddenError } from '../../errors/HttpError';
 import { redactRequestDiagnostic, safeRequestPath } from '../../logging/requestDiagnostics';
 
-jest.mock('../../logging/logger', () => ({ logger: { http: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
-const { logger } = jest.requireMock('../../logging/logger');
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({ logger: { http: vi.fn(), warn: vi.fn(), error: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
+const { logger: rawLogger } = await import('../../logging/logger');
+const logger = rawLogger as unknown as { http: Mock; warn: Mock; error: Mock };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe('credential-free request diagnostics', () => {
   it.each([
@@ -21,10 +26,14 @@ describe('credential-free request diagnostics', () => {
     ['/api/files#TOKEN_SECRET', '/api/files'],
     ['/api/files', '/api/files']
   ])('logs a safe path on successful requests: %s', (originalUrl, path) => {
-    const req = { originalUrl, method: 'GET', headers: { authorization: 'Bearer HEADER_SECRET' },
-      cookies: { access_token: 'COOKIE_SECRET' } } as unknown as Request;
-    const res = Object.assign(new EventEmitter(), { statusCode: 200, setHeader: jest.fn() });
-    const next = jest.fn();
+    const req = {
+      originalUrl,
+      method: 'GET',
+      headers: { authorization: 'Bearer HEADER_SECRET' },
+      cookies: { access_token: 'COOKIE_SECRET' }
+    } as unknown as Request;
+    const res = Object.assign(new EventEmitter(), { statusCode: 200, setHeader: vi.fn() });
+    const next = vi.fn();
     requestLogger(req, res as unknown as Response, next);
     expect(next).toHaveBeenCalledTimes(1);
     res.emit('finish');
@@ -36,11 +45,12 @@ describe('credential-free request diagnostics', () => {
   });
 
   it.each([true, false])('removes URL and decoded value copies from errors (known=%s)', (known) => {
-    const originalUrl = '/mounted/files?%73ignature=SIGNED_SECRET&code=ENCODED%2FSECRET&token=SPACE+SECRET&token=LAST?SECRET';
+    const originalUrl =
+      '/mounted/files?%73ignature=SIGNED_SECRET&code=ENCODED%2FSECRET&token=SPACE+SECRET&token=LAST?SECRET';
     const message = `Failed ${originalUrl}; values SIGNED_SECRET ENCODED/SECRET SPACE SECRET LAST?SECRET`;
     const error = known ? new ForbiddenError(message) : new Error(message);
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    errorHandler(error, { originalUrl, method: 'GET' } as Request, res as unknown as Response, jest.fn());
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    errorHandler(error, { originalUrl, method: 'GET' } as Request, res as unknown as Response, vi.fn());
     const calls = [...logger.warn.mock.calls, ...logger.error.mock.calls];
     expect(JSON.stringify(calls)).not.toContain('SECRET');
     expect(calls[0][1]).toEqual(expect.objectContaining({ url: '/mounted/files', method: 'GET' }));

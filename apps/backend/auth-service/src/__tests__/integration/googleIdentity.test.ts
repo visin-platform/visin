@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import type { Server } from 'node:http';
@@ -14,8 +15,11 @@ import { signSessionToken } from '../helpers/sessionToken';
 import * as passwords from '../../services/passwordService';
 import { linkGoogleAccount } from '../../services/googleLinkService';
 
-jest.mock('../../services/googleAuthService', () => ({ verifyGoogleToken: jest.fn() }));
-const google = verifyGoogleToken as jest.Mock;
+vi.mock('../../services/googleAuthService', async () => {
+  const module = await (() => ({ verifyGoogleToken: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+const google = verifyGoogleToken as Mock;
 const password = 'test-current-password';
 
 describe('Google account authority with in-memory MongoDB', () => {
@@ -36,30 +40,41 @@ describe('Google account authority with in-memory MongoDB', () => {
     app.use(express.json(), cookieParser());
     app.use('/auth', authRoutes);
     app.use(errorHandler);
-    server = await new Promise<Server>(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+    server = await new Promise<Server>((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}/auth`;
   }, 120_000);
   beforeEach(() => {
-    google.mockReset().mockResolvedValue({ sub: 'subject-1', email: 'victim@example.test', email_verified: true, name: 'Google User' });
+    google
+      .mockReset()
+      .mockResolvedValue({ sub: 'subject-1', email: 'victim@example.test', email_verified: true, name: 'Google User' });
   });
   afterEach(async () => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     await User.deleteMany({});
     process.env.GOOGLE_CLIENT_ID = 'test-client';
   });
   afterAll(async () => {
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     await mongoose.disconnect();
     await mongo.stop();
     process.env = oldEnv;
   });
 
-  const account = (email = 'victim@example.test', extra = {}) => User.create({ email, signupMethod: 'password', passwordHash, roles: ['admin'], ...extra });
+  const account = (email = 'victim@example.test', extra = {}) =>
+    User.create({ email, signupMethod: 'password', passwordHash, roles: ['admin'], ...extra });
   const token = (user: { id: string; email: string; tokenVersion: number }, extra = {}) =>
-    signSessionToken({ id: user.id, email: user.email, name: 'Account', tokenVersion: user.tokenVersion, ...extra }, user.id);
-  const post = (path: string, body: object, jwt?: string) => fetch(`${base}${path}`, {
-    method: 'POST', headers: { 'content-type': 'application/json', ...(jwt ? { authorization: `Bearer ${jwt}` } : {}) }, body: JSON.stringify(body)
-  });
+    signSessionToken(
+      { id: user.id, email: user.email, name: 'Account', tokenVersion: user.tokenVersion, ...extra },
+      user.id
+    );
+  const post = (path: string, body: object, jwt?: string) =>
+    fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(jwt ? { authorization: `Bearer ${jwt}` } : {}) },
+      body: JSON.stringify(body)
+    });
   const linkBody = { currentPassword: password, idToken: 'google-token' };
 
   it('does not grant Google the authority of a same-email password account', async () => {
@@ -87,21 +102,29 @@ describe('Google account authority with in-memory MongoDB', () => {
     expect((await post('/profile/google', linkBody, await token(stored))).status).toBe(409);
   });
 
-  it.each([undefined, {}, { sub: '' }, { sub: 123 }])('refuses Google identity without a valid subject: %j', async identity => {
-    const user = await account();
-    google.mockResolvedValue(identity);
-    expect((await post('/validate', { idToken: 'google-token' })).status).toBe(401);
-    expect((await post('/profile/google', linkBody, await token(user))).status).toBe(401);
-  });
+  it.each([undefined, {}, { sub: '' }, { sub: 123 }])(
+    'refuses Google identity without a valid subject: %j',
+    async (identity) => {
+      const user = await account();
+      google.mockResolvedValue(identity);
+      expect((await post('/validate', { idToken: 'google-token' })).status).toBe(401);
+      expect((await post('/profile/google', linkBody, await token(user))).status).toBe(401);
+    }
+  );
 
   it('requires a live matching session, password, and configured valid Google token', async () => {
     const user = await account();
     expect((await post('/profile/google', linkBody)).status).toBe(401);
     expect((await post('/profile/google', linkBody, await token(user, { id: '' }))).status).toBe(401);
-    expect((await post('/profile/google', linkBody, await token(user, { id: new mongoose.Types.ObjectId().toString() }))).status).toBe(401);
+    expect(
+      (await post('/profile/google', linkBody, await token(user, { id: new mongoose.Types.ObjectId().toString() })))
+        .status
+    ).toBe(401);
     expect((await post('/profile/google', linkBody, await token(user, { tokenVersion: 0 }))).status).toBe(401);
     expect((await post('/profile/google', { idToken: 'google-token' }, await token(user))).status).toBe(400);
-    expect((await post('/profile/google', { ...linkBody, currentPassword: 'wrong' }, await token(user))).status).toBe(401);
+    expect((await post('/profile/google', { ...linkBody, currentPassword: 'wrong' }, await token(user))).status).toBe(
+      401
+    );
     google.mockRejectedValue(new Error('Invalid signature'));
     expect((await post('/profile/google', linkBody, await token(user))).status).toBe(401);
     delete process.env.GOOGLE_CLIENT_ID;
@@ -118,25 +141,36 @@ describe('Google account authority with in-memory MongoDB', () => {
 
   it('allows only one of two accounts to bind the same Google subject', async () => {
     const users = await Promise.all([account(), account('second@example.test')]);
-    const results = await Promise.all(users.map(async user => post('/profile/google', linkBody, await token(user))));
-    expect(results.map(result => result.status).sort()).toEqual([200, 409]);
+    const results = await Promise.all(users.map(async (user) => post('/profile/google', linkBody, await token(user))));
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
     expect(await User.countDocuments({ googleSubject: 'subject-1' })).toBe(1);
   });
 
   it('allows only one of two Google subjects to bind one account', async () => {
     const user = await account();
-    google.mockImplementation(async idToken => ({ sub: idToken }));
-    const results = await Promise.all(['subject-1', 'subject-2'].map(idToken => linkGoogleAccount(user.id, user.tokenVersion, password, idToken).then(() => 200, error => error.statusCode)));
+    google.mockImplementation(async function (idToken) {
+      return { sub: idToken };
+    });
+    const results = await Promise.all(
+      ['subject-1', 'subject-2'].map((idToken) =>
+        linkGoogleAccount(user.id, user.tokenVersion, password, idToken).then(
+          () => 200,
+          (error) => error.statusCode
+        )
+      )
+    );
     expect(results.sort()).toEqual([200, 409]);
   });
 
-  it.each(['password', 'revocation'])('rejects a link when %s changes during password verification', async change => {
+  it.each(['password', 'revocation'])('rejects a link when %s changes during password verification', async (change) => {
     const user = await account();
     const verify = passwords.verifyPassword;
-    jest.spyOn(passwords, 'verifyPassword').mockImplementationOnce(async (...args) => {
+    vi.spyOn(passwords, 'verifyPassword').mockImplementationOnce(async function (...args) {
       const result = await verify(...args);
-      await User.updateOne({ _id: user.id }, change === 'password'
-        ? { $set: { passwordHash: 'new-hash' } } : { $inc: { tokenVersion: 1 } });
+      await User.updateOne(
+        { _id: user.id },
+        change === 'password' ? { $set: { passwordHash: 'new-hash' } } : { $inc: { tokenVersion: 1 } }
+      );
       return result;
     });
     expect((await post('/profile/google', linkBody, await token(user))).status).toBe(409);
@@ -145,14 +179,21 @@ describe('Google account authority with in-memory MongoDB', () => {
 
   it('fails closed for removed accounts, missing versions, and storage failures', async () => {
     const user = await account();
-    await expect(linkGoogleAccount(user.id, undefined, password, 'google-token')).rejects.toMatchObject({ statusCode: 401 });
-    jest.spyOn(User, 'findOneAndUpdate').mockRejectedValueOnce(new Error('database unavailable'));
-    await expect(linkGoogleAccount(user.id, user.tokenVersion, password, 'google-token')).rejects.toThrow('database unavailable');
+    await expect(linkGoogleAccount(user.id, undefined, password, 'google-token')).rejects.toMatchObject({
+      statusCode: 401
+    });
+    vi.spyOn(User, 'findOneAndUpdate').mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(linkGoogleAccount(user.id, user.tokenVersion, password, 'google-token')).rejects.toThrow(
+      'database unavailable'
+    );
     await User.deleteOne({ _id: user.id });
-    await expect(linkGoogleAccount(user.id, user.tokenVersion, password, 'google-token')).rejects.toMatchObject({ statusCode: 401 });
+    await expect(linkGoogleAccount(user.id, user.tokenVersion, password, 'google-token')).rejects.toMatchObject({
+      statusCode: 401
+    });
   });
 
-  const legacyGoogleAccount = (email = 'victim@example.test', extra = {}) => User.create({ email, signupMethod: 'google', roles: [], ...extra });
+  const legacyGoogleAccount = (email = 'victim@example.test', extra = {}) =>
+    User.create({ email, signupMethod: 'google', roles: [], ...extra });
   const signIn = async () => {
     const response = await post('/validate', { idToken: 'google-token' });
     return { status: response.status, body: (await response.json()) as { token: string } };
@@ -160,13 +201,29 @@ describe('Google account authority with in-memory MongoDB', () => {
 
   it('signs up a new Google user bound to its subject once setup is complete', async () => {
     await account('admin@example.test');
-    google.mockResolvedValue({ sub: 'subject-1', email: 'New.User@example.test', email_verified: true, given_name: 'New', family_name: 'User' });
+    google.mockResolvedValue({
+      sub: 'subject-1',
+      email: 'New.User@example.test',
+      email_verified: true,
+      given_name: 'New',
+      family_name: 'User'
+    });
     const first = await signIn();
     expect(first.status).toBe(200);
     const created = (await User.findOne({ email: 'new.user@example.test' }).select('+googleSubject +passwordHash'))!;
-    expect(created).toMatchObject({ signupMethod: 'google', googleSubject: 'subject-1', roles: [], firstName: 'New', lastName: 'User' });
+    expect(created).toMatchObject({
+      signupMethod: 'google',
+      googleSubject: 'subject-1',
+      roles: [],
+      firstName: 'New',
+      lastName: 'User'
+    });
     expect(created.passwordHash).toBeUndefined();
-    expect(verifyJWT(first.body.token)).toMatchObject({ id: created.id, email: 'new.user@example.test', tokenVersion: 1 });
+    expect(verifyJWT(first.body.token)).toMatchObject({
+      id: created.id,
+      email: 'new.user@example.test',
+      tokenVersion: 1
+    });
     // Later sign-ins find the account by subject, even after Google reports another email.
     google.mockResolvedValue({ sub: 'subject-1', email: 'renamed@example.test', email_verified: true });
     expect(verifyJWT((await signIn()).body.token).id).toBe(created.id);
@@ -212,8 +269,8 @@ describe('Google account authority with in-memory MongoDB', () => {
   it('creates a single account for concurrent first sign-ins', async () => {
     await account('admin@example.test');
     const results = await Promise.all([signIn(), signIn(), signIn()]);
-    expect(results.map(result => result.status)).toEqual([200, 200, 200]);
-    expect(new Set(results.map(result => verifyJWT(result.body.token).id)).size).toBe(1);
+    expect(results.map((result) => result.status)).toEqual([200, 200, 200]);
+    expect(new Set(results.map((result) => verifyJWT(result.body.token).id)).size).toBe(1);
     expect(await User.countDocuments({ googleSubject: 'subject-1' })).toBe(1);
   });
 });

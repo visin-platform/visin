@@ -1,14 +1,16 @@
+import { vi } from 'vitest';
 import * as datasets from '../../clients/datasetServiceClient';
 import { BadGatewayError, ConflictError, NotFoundError } from '@visin/backend-core';
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
-const jsonResponse = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => ({ data }) }) as Response;
+const jsonResponse = (data: unknown, status = 200) =>
+  ({ ok: status < 400, status, json: async () => ({ data }) }) as Response;
 const url = (index = 0) => String(fetchMock.mock.calls[index][0]);
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.DATASET_SERVICE_URL = 'http://dataset-service:5010/';
   process.env.INTERNAL_SERVICE_TOKEN = 'internal-token';
 });

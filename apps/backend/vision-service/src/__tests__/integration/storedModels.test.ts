@@ -1,3 +1,9 @@
+import { vi } from 'vitest';
+const { mockFiles, membership } = vi.hoisted(() => {
+  const mockFiles = new Map<string, Buffer>();
+  const membership = vi.fn();
+  return { mockFiles, membership };
+});
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHash, createHmac } from 'crypto';
@@ -20,38 +26,57 @@ import { purgeTrainings } from '../../services/purgeService';
 import { scheduleVerification, verifyPendingModels } from '../../services/modelVerificationService';
 import { modelLinkKey } from '../../services/sourceRegistry';
 
-const mockFiles = new Map<string, Buffer>();
-jest.mock('../../clients/fileServiceClient', () => {
-  const { Readable } = jest.requireActual('stream');
-  const { NotFoundError } = jest.requireActual('@visin/backend-core');
-  return {
-    getUploadSignedUrl: jest.fn(async (fileId: string) => `upload:${fileId}`),
-    getFileMetadata: jest.fn(async (fileId: string) => {
-      const file = mockFiles.get(fileId);
-      if (!file) throw new NotFoundError('File not found');
-      return {
-        size: file.length,
-        lastModified: '',
-        etag: fileId,
-        contentType: 'application/octet-stream',
-        metadata: {}
-      };
-    }),
-    getFileStream: jest.fn(async (fileId: string, range?: { start: number; end: number }) => {
-      const file = mockFiles.get(fileId);
-      if (!file) throw new NotFoundError('File not found');
-      return Readable.from([range ? file.subarray(range.start, range.end + 1) : file]);
-    }),
-    deleteFile: jest.fn(async (fileId: string) => mockFiles.delete(fileId)),
-    deleteFiles: jest.fn(async (fileIds: string[]) => fileIds.forEach((fileId) => mockFiles.delete(fileId)))
-  };
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () => {
+    const { Readable } = await vi.importActual<typeof import('stream')>('stream');
+    const { NotFoundError } = await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core');
+    return {
+      getUploadSignedUrl: vi.fn(async function (fileId: string) {
+        return `upload:${fileId}`;
+      }),
+      getFileMetadata: vi.fn(async function (fileId: string) {
+        const file = mockFiles.get(fileId);
+        if (!file) throw new NotFoundError('File not found');
+        return {
+          size: file.length,
+          lastModified: '',
+          etag: fileId,
+          contentType: 'application/octet-stream',
+          metadata: {}
+        };
+      }),
+      getFileStream: vi.fn(async function (fileId: string, range?: { start: number; end: number }) {
+        const file = mockFiles.get(fileId);
+        if (!file) throw new NotFoundError('File not found');
+        return Readable.from([range ? file.subarray(range.start, range.end + 1) : file]);
+      }),
+      deleteFile: vi.fn(async function (fileId: string) {
+        return mockFiles.delete(fileId);
+      }),
+      deleteFiles: vi.fn(async function (fileIds: string[]) {
+        return fileIds.forEach((fileId) => mockFiles.delete(fileId));
+      })
+    };
+  })();
+  return Object.assign({ default: module }, module);
 });
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
-const membership = jest.fn();
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  createGroupServiceClient: () => ({ checkMembership: membership, getMyGroups: jest.fn(async () => []) })
-}));
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    createGroupServiceClient: () => ({
+      checkMembership: membership,
+      getMyGroups: vi.fn(async function () {
+        return [];
+      })
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 const OWNER = '000000000000000000000001';
 const MEMBER = '000000000000000000000003';
@@ -92,26 +117,24 @@ describe('models kept on this deployment', () => {
     await mongoose.connection
       .collection('user_sessions')
       .insertMany(ids.map((_id) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    jest
-      .mocked(getUserGroups)
-      .mockImplementation(async (userId) =>
-        userId === MEMBER
-          ? [{ id: GROUP, name: 'Team', role: 'member' }]
-          : userId === OWNER
-            ? [{ id: GROUP, name: 'Team', role: 'owner' }]
-            : []
-      );
-    membership.mockImplementation(async (_group: string, userId: string) =>
-      userId === MEMBER
+    vi.mocked(getUserGroups).mockImplementation(async function (userId) {
+      return userId === MEMBER
+        ? [{ id: GROUP, name: 'Team', role: 'member' }]
+        : userId === OWNER
+          ? [{ id: GROUP, name: 'Team', role: 'owner' }]
+          : [];
+    });
+    membership.mockImplementation(async function (_group: string, userId: string) {
+      return userId === MEMBER
         ? { member: true, role: 'member' }
         : userId === OWNER
           ? { member: true, role: 'owner' }
-          : { member: false, role: null }
-    );
+          : { member: false, role: null };
+    });
   });
   afterEach(async () => {
     mockFiles.clear();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
   afterAll(async () => {
@@ -142,7 +165,7 @@ describe('models kept on this deployment', () => {
       .join('.');
     return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   type Body = { data: any; message?: string };
   const call = async (
     path: string,
@@ -441,7 +464,7 @@ describe('models kept on this deployment', () => {
         { $set: { 'models.$.status': 'verifying' } }
       );
 
-      jest.mocked(getFileStream).mockRejectedValueOnce(new Error('file-service restarting'));
+      vi.mocked(getFileStream).mockRejectedValueOnce(new Error('file-service restarting'));
       await verifyPendingModels();
       let model = (await Training.findById(trainingId).lean())!.models![0] as unknown as {
         status: string;
@@ -464,7 +487,7 @@ describe('models kept on this deployment', () => {
         { _id: trainingId, 'models._id': ready._id },
         { $set: { 'models.$.status': 'verifying', 'models.$.addedAt': new Date(Date.now() - 25 * 3_600_000) } }
       );
-      jest.mocked(getFileStream).mockRejectedValueOnce(new Error('file-service restarting'));
+      vi.mocked(getFileStream).mockRejectedValueOnce(new Error('file-service restarting'));
       await verifyPendingModels();
       expect(await settled(trainingId, 'failed')).toMatchObject({
         status: 'failed',
@@ -474,8 +497,10 @@ describe('models kept on this deployment', () => {
 
     it('logs, rather than throws, when a verification fails in a way nobody expected', async () => {
       const trainingId = await run(await project());
-      const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
-      jest.spyOn(Training, 'findOneAndUpdate').mockRejectedValueOnce(new Error('database went away'));
+      const error = vi.spyOn(logger, 'error').mockImplementation(function () {
+        return logger;
+      });
+      vi.spyOn(Training, 'findOneAndUpdate').mockRejectedValueOnce(new Error('database went away'));
       scheduleVerification(trainingId, String(new mongoose.Types.ObjectId()));
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(error).toHaveBeenCalledWith(
@@ -489,7 +514,7 @@ describe('models kept on this deployment', () => {
       const trainingId = await run(await project());
       await publish(trainingId, weights(6));
       const ready = await settled(trainingId);
-      jest.mocked(getFileStream).mockClear();
+      vi.mocked(getFileStream).mockClear();
       await scheduleVerificationNow(trainingId, String(ready._id)); // already ready
       await scheduleVerificationNow(trainingId, String(new mongoose.Types.ObjectId()));
       expect(getFileStream).not.toHaveBeenCalled();
@@ -520,7 +545,7 @@ describe('models kept on this deployment', () => {
         { _id: trainingId, 'models._id': ready._id },
         { $set: { 'models.$.status': 'verifying', 'models.$.verifyingUntil': new Date(Date.now() + 60_000) } }
       );
-      jest.mocked(getFileStream).mockClear();
+      vi.mocked(getFileStream).mockClear();
       expect(await verifyPendingModels()).toBe(0);
       expect(getFileStream).not.toHaveBeenCalled();
     });
@@ -557,7 +582,9 @@ describe('models kept on this deployment', () => {
       const trainingId = await run(await project('public'));
       await publish(trainingId, weights(9, 4096));
       const model = await settled(trainingId);
-      const info = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+      const info = vi.spyOn(logger, 'info').mockImplementation(function () {
+        return logger;
+      });
       const downloads = () => info.mock.calls.filter(([message]) => message === 'Model downloaded').length;
 
       await (await raw(url(trainingId, model._id), {}, { user: '' })).arrayBuffer();
@@ -647,7 +674,7 @@ describe('models kept on this deployment', () => {
       );
 
       await purgeTrainings([trainingId]);
-      expect(jest.mocked(deleteFiles).mock.calls.flat(2)).toEqual([fileId]);
+      expect(vi.mocked(deleteFiles).mock.calls.flat(2)).toEqual([fileId]);
       expect(mockFiles.has(fileId)).toBe(false);
       expect(await Training.countDocuments()).toBe(0);
     });
@@ -727,7 +754,8 @@ describe('models kept on this deployment', () => {
   });
 
   describe('the outputs', () => {
-    const outputs = (trainingId: string, modelId: unknown) => `/trainings/${trainingId}/models/${String(modelId)}/outputs`;
+    const outputs = (trainingId: string, modelId: unknown) =>
+      `/trainings/${trainingId}/models/${String(modelId)}/outputs`;
     const describeAs = async (trainingId: string, modelId: unknown, user = '') =>
       (await call(outputs(trainingId, modelId), { user })).body.data as Body['data'];
     const png = (fill: number) => Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(300, fill)]);
@@ -874,7 +902,7 @@ describe('models kept on this deployment', () => {
       const pth = weights(5);
       await publish(trainingId, pth, { modelInfo: { backbone: 'clft', transforms: { resize: 384 } } });
       const model = await settled(trainingId);
-      jest.mocked(getFileStream).mockClear();
+      vi.mocked(getFileStream).mockClear();
 
       const response = await call(outputs(trainingId, model._id), { user: '' });
       expect(response.status).toBe(200);
@@ -888,7 +916,13 @@ describe('models kept on this deployment', () => {
         sampleCounts: { day_fair: 150 }
       });
       expect(data).toMatchObject({
-        run: { id: trainingId, name: 'ISEAUTO CLFT Large', epoch: 99, epochUuid: 'epoch-99', project: { name: 'Team project' } },
+        run: {
+          id: trainingId,
+          name: 'ISEAUTO CLFT Large',
+          epoch: 99,
+          epochUuid: 'epoch-99',
+          project: { name: 'Team project' }
+        },
         model: {
           format: 'pth',
           sha256: sha256(pth),
@@ -908,7 +942,9 @@ describe('models kept on this deployment', () => {
       expect(data.files.map((file: { folder: string; filename: string }) => `${file.folder}/${file.filename}`)).toEqual(
         Object.keys(frames).sort()
       );
-      expect(data.files.find((file: { visualizationUuid: string }) => file.visualizationUuid === 'mask-sq14_000061.png')).toEqual({
+      expect(
+        data.files.find((file: { visualizationUuid: string }) => file.visualizationUuid === 'mask-sq14_000061.png')
+      ).toEqual({
         visualizationUuid: 'mask-sq14_000061.png',
         folder: 'mask',
         frame: 'sq14_000061',

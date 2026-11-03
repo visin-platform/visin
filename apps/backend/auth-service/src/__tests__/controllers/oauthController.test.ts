@@ -1,18 +1,22 @@
+import { vi, type Mock } from 'vitest';
 import { createHmac } from 'crypto';
 import type { Request, Response } from 'express';
 
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  findClient: jest.fn(),
-  registerClient: jest.fn(),
-  issueAuthorizationCode: jest.fn(),
-  redeemAuthorizationCode: jest.fn(),
-  issueRefreshToken: jest.fn(),
-  redeemRefreshToken: jest.fn(),
-  revokeRefreshTokensForUser: jest.fn(),
-  listConnections: jest.fn(),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    findClient: vi.fn(),
+    registerClient: vi.fn(),
+    issueAuthorizationCode: vi.fn(),
+    redeemAuthorizationCode: vi.fn(),
+    issueRefreshToken: vi.fn(),
+    redeemRefreshToken: vi.fn(),
+    revokeRefreshTokensForUser: vi.fn(),
+    listConnections: vi.fn(),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   findClient,
@@ -22,7 +26,7 @@ import {
   redeemAuthorizationCode,
   redeemRefreshToken,
   registerClient,
-  revokeRefreshTokensForUser,
+  revokeRefreshTokensForUser
 } from '@visin/backend-core';
 import {
   authorizationServerMetadata,
@@ -31,18 +35,18 @@ import {
   getConnections,
   registerOAuthClient,
   revokeConnection,
-  token,
+  token
 } from '../../controllers/oauthController';
 
 const mocked = {
-  findClient: findClient as unknown as jest.Mock,
-  registerClient: registerClient as unknown as jest.Mock,
-  issueCode: issueAuthorizationCode as unknown as jest.Mock,
-  redeemCode: redeemAuthorizationCode as unknown as jest.Mock,
-  issueRefresh: issueRefreshToken as unknown as jest.Mock,
-  redeemRefresh: redeemRefreshToken as unknown as jest.Mock,
-  revoke: revokeRefreshTokensForUser as unknown as jest.Mock,
-  connections: listConnections as unknown as jest.Mock,
+  findClient: findClient as unknown as Mock,
+  registerClient: registerClient as unknown as Mock,
+  issueCode: issueAuthorizationCode as unknown as Mock,
+  redeemCode: redeemAuthorizationCode as unknown as Mock,
+  issueRefresh: issueRefreshToken as unknown as Mock,
+  redeemRefresh: redeemRefreshToken as unknown as Mock,
+  revoke: revokeRefreshTokensForUser as unknown as Mock,
+  connections: listConnections as unknown as Mock
 };
 
 const SECRET = 'test-secret';
@@ -57,20 +61,20 @@ const consentToken = (userId = 'u1', clientId = CLIENT.clientId, challenge = CHA
   createHmac('sha256', SECRET).update(`consent:${userId}:${clientId}:${challenge}`).digest('hex');
 
 type MockRes = Response & {
-  json: jest.Mock;
-  status: jest.Mock;
-  redirect: jest.Mock;
-  send: jest.Mock;
-  type: jest.Mock;
+  json: Mock;
+  status: Mock;
+  redirect: Mock;
+  send: Mock;
+  type: Mock;
 };
 
 const makeRes = (): MockRes => {
   const res = {
-    json: jest.fn(),
-    status: jest.fn(),
-    redirect: jest.fn(),
-    send: jest.fn(),
-    type: jest.fn(),
+    json: vi.fn(),
+    status: vi.fn(),
+    redirect: vi.fn(),
+    send: vi.fn(),
+    type: vi.fn()
   };
   res.status.mockReturnValue(res);
   res.type.mockReturnValue(res);
@@ -88,7 +92,7 @@ const authorizeQuery = (over: Record<string, string | undefined> = {}) => ({
   code_challenge_method: 'S256',
   resource: RESOURCE,
   scope: 'vision:read dataset:read',
-  ...over,
+  ...over
 });
 
 const decisionBody = (over: Record<string, unknown> = {}) => ({
@@ -100,13 +104,13 @@ const decisionBody = (over: Record<string, unknown> = {}) => ({
   requested_scope: 'vision:read dataset:read',
   consent_token: consentToken(),
   scope: ['vision:read', 'dataset:read'],
-  ...over,
+  ...over
 });
 
 const user = { id: 'u1', email: 'a@b.com', name: 'A B' };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.JWT_SECRET = SECRET;
   process.env.AUTH_SERVICE_PUBLIC_URL = ISSUER;
   process.env.MCP_PUBLIC_URL = RESOURCE;
@@ -134,7 +138,7 @@ describe('authorizationServerMetadata', () => {
       token_endpoint: `${ISSUER}/oauth/token`,
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
-      authorization_response_iss_parameter_supported: true,
+      authorization_response_iss_parameter_supported: true
     });
   });
 });
@@ -149,17 +153,14 @@ describe('registerOAuthClient', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json.mock.calls[0][0]).toMatchObject({
       client_id: CLIENT.clientId,
-      token_endpoint_auth_method: 'none',
+      token_endpoint_auth_method: 'none'
     });
   });
 
   it('allows a loopback callback, which is how local MCP clients work', async () => {
     mocked.registerClient.mockResolvedValue({ ...CLIENT, redirectUris: ['http://127.0.0.1:6274/cb'] });
 
-    await registerOAuthClient(
-      makeReq({ body: { redirect_uris: ['http://127.0.0.1:6274/cb'] } }),
-      makeRes()
-    );
+    await registerOAuthClient(makeReq({ body: { redirect_uris: ['http://127.0.0.1:6274/cb'] } }), makeRes());
 
     expect(mocked.registerClient).toHaveBeenCalled();
   });
@@ -171,9 +172,9 @@ describe('registerOAuthClient', () => {
   });
 
   it('refuses a registration with no callback at all', async () => {
-    await expect(
-      registerOAuthClient(makeReq({ body: { client_name: 'X' } }), makeRes())
-    ).rejects.toThrow(/redirect_uris is required/);
+    await expect(registerOAuthClient(makeReq({ body: { client_name: 'X' } }), makeRes())).rejects.toThrow(
+      /redirect_uris is required/
+    );
   });
 });
 
@@ -240,11 +241,9 @@ describe('authorize', () => {
     ['plain PKCE', { code_challenge_method: 'plain' }, /must be S256/],
     ['no resource', { resource: undefined }, /resource is required/],
     ['a resource we do not issue for', { resource: 'https://evil.com' }, /Unknown resource/],
-    ['no recognisable scope', { scope: 'made:up' }, /At least one known scope/],
+    ['no recognisable scope', { scope: 'made:up' }, /At least one known scope/]
   ])('refuses a request with %s, shown to the user rather than redirected', async (_label, over, message) => {
-    await expect(authorize(makeReq({ query: authorizeQuery(over), user }), makeRes())).rejects.toThrow(
-      message
-    );
+    await expect(authorize(makeReq({ query: authorizeQuery(over), user }), makeRes())).rejects.toThrow(message);
   });
 
   it('refuses a redirect_uri the client never registered', async () => {
@@ -257,9 +256,7 @@ describe('authorize', () => {
   it('refuses an unknown client', async () => {
     mocked.findClient.mockResolvedValue(null);
 
-    await expect(authorize(makeReq({ query: authorizeQuery(), user }), makeRes())).rejects.toThrow(
-      /Unknown client_id/
-    );
+    await expect(authorize(makeReq({ query: authorizeQuery(), user }), makeRes())).rejects.toThrow(/Unknown client_id/);
   });
 
   it('phrases recording analysis as recording, not as changing', async () => {
@@ -267,10 +264,7 @@ describe('authorize', () => {
     // writing new ones, and a consent screen is where that has to be right.
     const res = makeRes();
 
-    await authorize(
-      makeReq({ query: authorizeQuery({ scope: 'analysis:write analysis:read' }), user }),
-      res
-    );
+    await authorize(makeReq({ query: authorizeQuery({ scope: 'analysis:write analysis:read' }), user }), res);
 
     const html = res.send.mock.calls[0][0];
     expect(html).toContain('Record analysis on your projects');
@@ -357,10 +351,7 @@ describe('authorizeDecision', () => {
   it('grants only what was ticked, so unticking a box really narrows the grant', async () => {
     mocked.issueCode.mockResolvedValue('the-code');
 
-    await authorizeDecision(
-      makeReq({ body: decisionBody({ scope: ['vision:read'] }), user }),
-      makeRes()
-    );
+    await authorizeDecision(makeReq({ body: decisionBody({ scope: ['vision:read'] }), user }), makeRes());
 
     expect(mocked.issueCode.mock.calls[0][0].scopes).toEqual(['vision:read']);
   });
@@ -380,7 +371,7 @@ describe('authorizeDecision', () => {
     await authorizeDecision(
       makeReq({
         body: decisionBody({ scope: ['vision:read', 'vision:write', 'label:write'] }),
-        user,
+        user
       }),
       makeRes()
     );
@@ -431,7 +422,7 @@ describe('authorizeDecision', () => {
       authorizeDecision(
         makeReq({
           body: decisionBody({ consent_token: consentToken('u1', CLIENT.clientId, 'another-challenge') }),
-          user,
+          user
         }),
         makeRes()
       )
@@ -440,10 +431,7 @@ describe('authorizeDecision', () => {
 
   it('refuses a decision for a redirect_uri the client never registered', async () => {
     await expect(
-      authorizeDecision(
-        makeReq({ body: decisionBody({ redirect_uri: 'https://evil.com/cb' }), user }),
-        makeRes()
-      )
+      authorizeDecision(makeReq({ body: decisionBody({ redirect_uri: 'https://evil.com/cb' }), user }), makeRes())
     ).rejects.toThrow(/Unknown client or redirect_uri/);
   });
 
@@ -466,10 +454,7 @@ describe('authorizeDecision', () => {
   it('redirects with invalid_request when the form is missing its bindings', async () => {
     const res = makeRes();
 
-    await authorizeDecision(
-      makeReq({ body: decisionBody({ code_challenge: undefined }), user }),
-      res
-    );
+    await authorizeDecision(makeReq({ body: decisionBody({ code_challenge: undefined }), user }), res);
 
     expect(new URL(res.redirect.mock.calls[0][0]).searchParams.get('error')).toBe('invalid_request');
   });
@@ -481,7 +466,7 @@ describe('token — authorization_code', () => {
     userEmail: 'a@b.com',
     userName: 'A B',
     scopes: ['vision:read'],
-    resource: RESOURCE,
+    resource: RESOURCE
   };
 
   it('exchanges a code for an access token and a refresh token', async () => {
@@ -496,8 +481,8 @@ describe('token — authorization_code', () => {
           code: 'the-code',
           redirect_uri: REDIRECT,
           client_id: CLIENT.clientId,
-          code_verifier: 'the-verifier',
-        },
+          code_verifier: 'the-verifier'
+        }
       }),
       res
     );
@@ -506,7 +491,7 @@ describe('token — authorization_code', () => {
       token_type: 'Bearer',
       expires_in: 3600,
       scope: 'vision:read',
-      refresh_token: 'refresh-1',
+      refresh_token: 'refresh-1'
     });
   });
 
@@ -521,8 +506,8 @@ describe('token — authorization_code', () => {
           code: 'the-code',
           redirect_uri: REDIRECT,
           client_id: CLIENT.clientId,
-          code_verifier: 'wrong',
-        },
+          code_verifier: 'wrong'
+        }
       }),
       res
     );
@@ -549,8 +534,8 @@ describe('token — authorization_code', () => {
           code: 'the-code',
           redirect_uri: REDIRECT,
           client_id: CLIENT.clientId,
-          code_verifier: 'the-verifier',
-        },
+          code_verifier: 'the-verifier'
+        }
       }),
       res
     );
@@ -563,7 +548,7 @@ describe('token — authorization_code', () => {
 
     await token(
       makeReq({
-        body: { grant_type: 'authorization_code', code: 'c', redirect_uri: REDIRECT, client_id: CLIENT.clientId },
+        body: { grant_type: 'authorization_code', code: 'c', redirect_uri: REDIRECT, client_id: CLIENT.clientId }
       }),
       res
     );
@@ -579,7 +564,7 @@ describe('token — refresh_token', () => {
       userId: 'u1',
       scopes: ['vision:read'],
       resource: RESOURCE,
-      rotatedToken: 'refresh-2',
+      rotatedToken: 'refresh-2'
     });
     const res = makeRes();
 
@@ -648,8 +633,8 @@ describe('connections', () => {
   it('404s when there was nothing live to disconnect', async () => {
     mocked.revoke.mockResolvedValue(0);
 
-    await expect(
-      revokeConnection(makeReq({ user, params: { clientId: 'nope' } }), makeRes())
-    ).rejects.toThrow(/No active connection/);
+    await expect(revokeConnection(makeReq({ user, params: { clientId: 'nope' } }), makeRes())).rejects.toThrow(
+      /No active connection/
+    );
   });
 });

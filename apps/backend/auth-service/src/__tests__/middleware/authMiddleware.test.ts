@@ -1,54 +1,72 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 
-jest.mock('../../services/jwtService', () => ({
-  verifyJWT: jest.fn(),
-}));
-jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
-jest.mock('../../models/User', () => ({
-  User: {
-    findOne: jest.fn(),
-    findOneAndUpdate: jest.fn(),
-  },
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../services/jwtService', async () => {
+  const module = await (() => ({
+    verifyJWT: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Session', async () => {
+  const module = await (async () =>
+    (
+      await vi.importActual<typeof import('../helpers/sessionModelMock')>('../helpers/sessionModelMock')
+    ).sessionModule())();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/User', async () => {
+  const module = await (() => ({
+    User: {
+      findOne: vi.fn(),
+      findOneAndUpdate: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-import {
-  authenticateToken,
-  optionalAuth,
-  requireRole,
-} from '../../middleware/authMiddleware';
+import { authenticateToken, optionalAuth, requireRole } from '../../middleware/authMiddleware';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
 import { Session } from '../../models/Session';
 import { makeSession } from '../helpers/sessionModelMock';
 
-const mockedVerifyJWT = verifyJWT as jest.Mock;
-const mockedUser = User as unknown as Record<string, jest.Mock>;
+const mockedVerifyJWT = verifyJWT as Mock;
+const mockedUser = User as unknown as Record<string, Mock>;
 
 // A live session token; its session document is found unless a test says otherwise.
 const iat = Math.floor(Date.now() / 1000);
 const liveSid = '64b7f1f77bcf86cd79943bbb';
 const decoded = {
-  id: 'db-id-1', email: 'Test@Example.com', name: 'Test User', tokenVersion: 3,
-  sid: liveSid, typ: 'session', iat, exp: iat + 90 * 86400
+  id: 'db-id-1',
+  email: 'Test@Example.com',
+  name: 'Test User',
+  tokenVersion: 3,
+  sid: liveSid,
+  typ: 'session',
+  iat,
+  exp: iat + 90 * 86400
 };
-const mockedSession = Session as unknown as Record<string, jest.Mock>;
+const mockedSession = Session as unknown as Record<string, Mock>;
 const dbUser = { email: 'test@example.com', tokenVersion: 3, roles: ['admin'] };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ cookies: {}, headers: {}, ...overrides } as unknown as Request);
+  ({ cookies: {}, headers: {}, ...overrides }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
-  return res as unknown as Response & Record<string, jest.Mock>;
+  return res as unknown as Response & Record<string, Mock>;
 };
 
-let next: jest.Mock;
+let next: Mock;
 
 // No database in these unit tests: stand in for the connection's state, which
 // the middleware checks before querying.
@@ -56,8 +74,8 @@ let connectionState = 1;
 Object.defineProperty(mongoose.connection, 'readyState', { configurable: true, get: () => connectionState });
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  next = jest.fn();
+  vi.clearAllMocks();
+  next = vi.fn();
   connectionState = 1;
   mockedSession.findOne.mockResolvedValue(makeSession({ _id: liveSid }));
 });
@@ -81,10 +99,10 @@ describe('authenticateToken', () => {
     await authenticateToken(req, makeRes(), next as unknown as NextFunction);
 
     expect(mockedVerifyJWT).toHaveBeenCalledWith('cookie-token');
-    expect(mockedUser.findOne).toHaveBeenCalledWith(
-      { _id: 'db-id-1', email: 'test@example.com' }, undefined,
-      { readPreference: 'primary', maxTimeMS: 3000 }
-    );
+    expect(mockedUser.findOne).toHaveBeenCalledWith({ _id: 'db-id-1', email: 'test@example.com' }, undefined, {
+      readPreference: 'primary',
+      maxTimeMS: 3000
+    });
     expect(req.user).toEqual(decoded);
     expect((req as unknown as { dbUser: unknown }).dbUser).toBe(dbUser);
     expect(next).toHaveBeenCalledTimes(1);
@@ -106,11 +124,7 @@ describe('authenticateToken', () => {
     mockedUser.findOne.mockResolvedValue(null);
     const res = makeRes();
 
-    await authenticateToken(
-      makeReq({ cookies: { access_token: 't' } }),
-      res,
-      next as unknown as NextFunction
-    );
+    await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'User not found' }));
@@ -122,11 +136,7 @@ describe('authenticateToken', () => {
     mockedUser.findOne.mockResolvedValue(dbUser);
     const res = makeRes();
 
-    await authenticateToken(
-      makeReq({ cookies: { access_token: 't' } }),
-      res,
-      next as unknown as NextFunction
-    );
+    await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Token has been invalidated' }));
@@ -138,27 +148,19 @@ describe('authenticateToken', () => {
     mockedUser.findOne.mockResolvedValue(dbUser);
     const res = makeRes();
 
-    await authenticateToken(
-      makeReq({ cookies: { access_token: 't' } }),
-      res,
-      next as unknown as NextFunction
-    );
+    await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 when JWT verification throws', async () => {
-    mockedVerifyJWT.mockImplementation(() => {
+    mockedVerifyJWT.mockImplementation(function () {
       throw new Error('Invalid or expired token');
     });
     const res = makeRes();
 
-    await authenticateToken(
-      makeReq({ cookies: { access_token: 'bad' } }),
-      res,
-      next as unknown as NextFunction
-    );
+    await authenticateToken(makeReq({ cookies: { access_token: 'bad' } }), res, next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Invalid or expired token' }));
@@ -299,7 +301,7 @@ describe('optionalAuth', () => {
   });
 
   it('swallows verification errors and continues anonymously', async () => {
-    mockedVerifyJWT.mockImplementation(() => {
+    mockedVerifyJWT.mockImplementation(function () {
       throw new Error('bad token');
     });
     const req = makeReq({ cookies: { access_token: 'bad' } });
@@ -411,11 +413,7 @@ describe('requireRole', () => {
   it('rejects when the role is missing', () => {
     const res = makeRes();
 
-    requireRole('admin')(
-      makeReq({ dbUser: { ...dbUser, roles: ['user'] } }),
-      res,
-      next as unknown as NextFunction
-    );
+    requireRole('admin')(makeReq({ dbUser: { ...dbUser, roles: ['user'] } }), res, next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
     expect(next).not.toHaveBeenCalledWith();
@@ -424,11 +422,7 @@ describe('requireRole', () => {
   it('rejects when the user has no roles array', () => {
     const res = makeRes();
 
-    requireRole('admin')(
-      makeReq({ dbUser: { ...dbUser, roles: undefined } }),
-      res,
-      next as unknown as NextFunction
-    );
+    requireRole('admin')(makeReq({ dbUser: { ...dbUser, roles: undefined } }), res, next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
     expect(next).not.toHaveBeenCalledWith();

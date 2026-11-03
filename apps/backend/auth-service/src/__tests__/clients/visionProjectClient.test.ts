@@ -1,8 +1,14 @@
+import { vi } from 'vitest';
 import { GatewayTimeoutError } from '@visin/backend-core';
 import { getKeyProject } from '../../clients/visionProjectClient';
 
-const fetchMock = jest.fn();
-const saved = { url: process.env.VISION_SERVICE_URL, internal: process.env.INTERNAL_SERVICE_TOKEN, env: process.env.NODE_ENV, fetch: global.fetch };
+const fetchMock = vi.fn();
+const saved = {
+  url: process.env.VISION_SERVICE_URL,
+  internal: process.env.INTERNAL_SERVICE_TOKEN,
+  env: process.env.NODE_ENV,
+  fetch: global.fetch
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -13,13 +19,18 @@ beforeEach(() => {
 
 afterAll(() => {
   global.fetch = saved.fetch;
-  for (const [key, value] of [['VISION_SERVICE_URL', saved.url], ['INTERNAL_SERVICE_TOKEN', saved.internal], ['NODE_ENV', saved.env]] as const) {
+  for (const [key, value] of [
+    ['VISION_SERVICE_URL', saved.url],
+    ['INTERNAL_SERVICE_TOKEN', saved.internal],
+    ['NODE_ENV', saved.env]
+  ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
 });
 
-const answer = (status: number, body: unknown = {}) => fetchMock.mockResolvedValue({ ok: status < 300, status, json: async () => body });
+const answer = (status: number, body: unknown = {}) =>
+  fetchMock.mockResolvedValue({ ok: status < 300, status, json: async () => body });
 
 it('asks vision-service as auth-service, for the account the key is for', async () => {
   answer(200, { data: { id: 'p1', name: 'Road scenes', canWrite: true } });
@@ -40,9 +51,15 @@ it("reports vision-service's failures as a bad gateway, keeping a timeout a time
   answer(500);
   await expect(getKeyProject('p1', 'u1')).rejects.toMatchObject({ statusCode: 502 });
   answer(200, { data: { id: 'p1' } });
-  await expect(getKeyProject('p1', 'u1')).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('unexpected') });
+  await expect(getKeyProject('p1', 'u1')).rejects.toMatchObject({
+    statusCode: 502,
+    message: expect.stringContaining('unexpected')
+  });
   fetchMock.mockRejectedValue(new TypeError('fetch failed'));
-  await expect(getKeyProject('p1', 'u1')).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('unreachable') });
+  await expect(getKeyProject('p1', 'u1')).rejects.toMatchObject({
+    statusCode: 502,
+    message: expect.stringContaining('unreachable')
+  });
   fetchMock.mockRejectedValue(new GatewayTimeoutError('vision-service did not answer'));
   await expect(getKeyProject('p1', 'u1')).rejects.toBeInstanceOf(GatewayTimeoutError);
 });

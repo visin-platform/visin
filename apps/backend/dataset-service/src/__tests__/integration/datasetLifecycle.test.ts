@@ -1,17 +1,43 @@
-jest.mock('../../clients/projectServiceClient', () => ({
-  projectDatasetOwner: jest.fn(async () => ({ kind: 'user', id: '000000000000000000000001' }))
-}));
-jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
-jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn(async () => new Map()) }));
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
-jest.mock('../../queue/importQueue', () => ({
-  enqueueImport: jest.fn(),
-  enqueueScan: jest.fn(),
-  enqueueDelete: jest.fn(),
-  enqueueRemoveGroup: jest.fn(),
-  removeQueuedImport: jest.fn()
-}));
+import { vi } from 'vitest';
+vi.mock('../../clients/projectServiceClient', async () => {
+  const module = await (() => ({
+    projectDatasetOwner: vi.fn(async function () {
+      return { kind: 'user', id: '000000000000000000000001' };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () =>
+    (await vi.importActual<typeof import('../fixtures/fileStore')>('../fixtures/fileStore')).fileStore.client)();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/hubClient', async () => {
+  const module = await (() => ({ fetchDatasetInfo: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({
+    lookupOwnerIdentities: vi.fn(async function () {
+      return new Map();
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/groupServiceClient', async () => {
+  const module = await (() => ({ checkMembership: vi.fn(), getMyGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../queue/importQueue', async () => {
+  const module = await (() => ({
+    enqueueImport: vi.fn(),
+    enqueueScan: vi.fn(),
+    enqueueDelete: vi.fn(),
+    enqueueRemoveGroup: vi.fn(),
+    removeQueuedImport: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import mongoose from 'mongoose';
 import { enqueueDelete } from '../../queue/importQueue';
@@ -19,7 +45,21 @@ import { fetchDatasetInfo } from '../../clients/hubClient';
 import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 import { Dataset } from '../../models/Dataset';
 import { purgeExpiredTrash } from '../../services/datasetService';
-import { ADMIN, GROUP, GROUP_OWNER, MEMBER, OTHER_GROUP, OWNER, STRANGER, baseUrl, call, createDataset, events, groupDataset, useDatasetApi } from '../fixtures/datasetApi';
+import {
+  ADMIN,
+  GROUP,
+  GROUP_OWNER,
+  MEMBER,
+  OTHER_GROUP,
+  OWNER,
+  STRANGER,
+  baseUrl,
+  call,
+  createDataset,
+  events,
+  groupDataset,
+  useDatasetApi
+} from '../fixtures/datasetApi';
 
 useDatasetApi();
 
@@ -211,8 +251,14 @@ describe('the licence a dataset declares', () => {
 
   it('takes a licence that is not listed by the name the publisher gives it', async () => {
     const id = await createDataset();
-    const response = await patch(id, { license: { id: 'other', name: 'Acme research terms', url: 'https://acme.test/terms' } });
-    expect(response.body.data.license).toEqual({ id: 'other', name: 'Acme research terms', url: 'https://acme.test/terms' });
+    const response = await patch(id, {
+      license: { id: 'other', name: 'Acme research terms', url: 'https://acme.test/terms' }
+    });
+    expect(response.body.data.license).toEqual({
+      id: 'other',
+      name: 'Acme research terms',
+      url: 'https://acme.test/terms'
+    });
     expect(response.body.data.license).not.toHaveProperty('commercial');
   });
 
@@ -242,7 +288,9 @@ describe('the licence a dataset declares', () => {
       { id: 'mit', name: 'Not MIT really' }
     ]) {
       expect((await patch(id, { license })).status).toBe(400);
-      expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'Bad', license } })).status).toBe(400);
+      expect(
+        (await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'Bad', license } })).status
+      ).toBe(400);
     }
   });
 
@@ -348,15 +396,12 @@ describe('the preview page', () => {
 
   beforeEach(() => {
     process.env.SHELL_FRONT_URL = 'https://app.example.test';
-    jest.mocked(lookupOwnerIdentities).mockReset();
-    jest
-      .mocked(lookupOwnerIdentities)
-      .mockImplementation(
-        async (owners) =>
-          new Map(
-            owners.filter((owner) => owner.id === OWNER).map((owner) => [owner.id, { id: owner.id, name: 'Ann Lee' }])
-          )
+    vi.mocked(lookupOwnerIdentities).mockReset();
+    vi.mocked(lookupOwnerIdentities).mockImplementation(async function (owners) {
+      return new Map(
+        owners.filter((owner) => owner.id === OWNER).map((owner) => [owner.id, { id: owner.id, name: 'Ann Lee' }])
       );
+    });
   });
   afterAll(() => {
     if (savedApp === undefined) delete process.env.SHELL_FRONT_URL;

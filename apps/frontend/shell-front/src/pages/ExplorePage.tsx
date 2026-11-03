@@ -154,7 +154,7 @@ export function ExplorePage({ now }: ExplorePageProps) {
     const timer = setTimeout(() => update({ q: typed.trim() || undefined }), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
     // `update` only reads and writes the address; typing is what restarts the wait.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [typed, search]);
 
   const projects = useInfiniteQuery({

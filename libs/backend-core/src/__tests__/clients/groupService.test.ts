@@ -1,15 +1,16 @@
+import { vi } from 'vitest';
 import { createGroupServiceClient } from '../../clients/groupService';
 
 const { checkMembership, getMyGroups } = createGroupServiceClient('test-service');
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
 const jsonResponse = (body: unknown, status = 200) =>
   ({ ok: status < 400, status, json: async () => body }) as Response;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.GROUP_SERVICE_URL = 'http://groups.test';
   process.env.INTERNAL_SERVICE_TOKEN = 'internal-token';
 });
@@ -25,7 +26,7 @@ describe('checkMembership', () => {
       expect.objectContaining({
         headers: { 'x-internal-token': 'internal-token', 'x-service-id': 'test-service' },
         // A stalled group-service must not hang the caller (fetchWithTimeout).
-        signal: expect.any(AbortSignal),
+        signal: expect.any(AbortSignal)
       })
     );
     expect(result).toEqual({ member: true, role: 'admin' });
@@ -57,15 +58,18 @@ describe('getMyGroups', () => {
           {
             _id: 'g2',
             name: 'Team B',
-            members: [{ userId: 'other@x.com', role: 'owner' }, { userId: 'user@x.com', role: 'member' }],
-          },
-        ],
+            members: [
+              { userId: 'other@x.com', role: 'owner' },
+              { userId: 'user@x.com', role: 'member' }
+            ]
+          }
+        ]
       })
     );
 
     expect(await getMyGroups('user@x.com')).toEqual([
       { groupId: 'g1', name: 'Team A', role: 'owner' },
-      { groupId: 'g2', name: 'Team B', role: 'member' },
+      { groupId: 'g2', name: 'Team B', role: 'member' }
     ]);
   });
 
@@ -109,7 +113,9 @@ describe('getMyGroups edge cases', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ success: true }));
     expect(await getMyGroups('user@x.com')).toEqual([]);
 
-    fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, data: [{ _id: 'g1', name: 'Team A', members: [] }] }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ success: true, data: [{ _id: 'g1', name: 'Team A', members: [] }] })
+    );
     expect(await getMyGroups('user@x.com')).toEqual([{ groupId: 'g1', name: 'Team A', role: 'member' }]);
   });
 });

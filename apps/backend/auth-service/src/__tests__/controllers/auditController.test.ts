@@ -1,23 +1,27 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  listToolCalls: jest.fn(),
-  summariseToolUsage: jest.fn(),
-}));
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    listToolCalls: vi.fn(),
+    summariseToolUsage: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { listToolCalls, summariseToolUsage } from '@visin/backend-core';
 import { getToolCalls, getToolUsage } from '../../controllers/auditController';
 
 const mocked = {
-  calls: listToolCalls as unknown as jest.Mock,
-  usage: summariseToolUsage as unknown as jest.Mock,
+  calls: listToolCalls as unknown as Mock,
+  usage: summariseToolUsage as unknown as Mock
 };
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
@@ -26,11 +30,10 @@ const makeReq = (over: Record<string, unknown> = {}): Request =>
   ({ query: {}, user: { id: 'u1' }, ...over }) as unknown as Request;
 
 /** Days between `since` and now, for asserting the window without pinning a clock. */
-const windowOf = (since: Date): number =>
-  Math.round((Date.now() - since.getTime()) / (24 * 60 * 60 * 1000));
+const windowOf = (since: Date): number => Math.round((Date.now() - since.getTime()) / (24 * 60 * 60 * 1000));
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mocked.usage.mockResolvedValue([]);
   mocked.calls.mockResolvedValue([]);
 });
@@ -58,16 +61,14 @@ describe('getToolUsage', () => {
     expect(windowOf(mocked.usage.mock.calls[0][1])).toBe(365);
   });
 
-  it.each([['nonsense'], ['0'], ['-5']])('falls back to the default for days=%s', async days => {
+  it.each([['nonsense'], ['0'], ['-5']])('falls back to the default for days=%s', async (days) => {
     await getToolUsage(makeReq({ query: { days } }), makeRes());
 
     expect(windowOf(mocked.usage.mock.calls[0][1])).toBe(30);
   });
 
   it('rejects an unauthenticated caller', async () => {
-    await expect(getToolUsage(makeReq({ user: undefined }), makeRes())).rejects.toThrow(
-      /Not authenticated/
-    );
+    await expect(getToolUsage(makeReq({ user: undefined }), makeRes())).rejects.toThrow(/Not authenticated/);
   });
 });
 
@@ -91,8 +92,6 @@ describe('getToolCalls', () => {
   });
 
   it('rejects an unauthenticated caller', async () => {
-    await expect(getToolCalls(makeReq({ user: undefined }), makeRes())).rejects.toThrow(
-      /Not authenticated/
-    );
+    await expect(getToolCalls(makeReq({ user: undefined }), makeRes())).rejects.toThrow(/Not authenticated/);
   });
 });

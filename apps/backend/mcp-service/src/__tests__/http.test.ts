@@ -1,12 +1,16 @@
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  fetchWithTimeout: jest.fn()
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    fetchWithTimeout: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { fetchWithTimeout } from '@visin/backend-core';
 import { VisinError, callService, serviceUrl } from '../http';
 
-const fetched = fetchWithTimeout as unknown as jest.Mock;
+const fetched = fetchWithTimeout as unknown as Mock;
 
 const respond = (status: number, body: unknown, raw?: string) =>
   fetched.mockResolvedValue({
@@ -16,7 +20,7 @@ const respond = (status: number, body: unknown, raw?: string) =>
   });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.VISION_SERVICE_URL = 'https://vision-api.example.test';
   delete process.env.VISION_INTERNAL_URL;
 });
@@ -65,9 +69,9 @@ describe('callService', () => {
   it('unwraps the { success, data } envelope every controller answers with', async () => {
     respond(200, { success: true, data: [{ _id: 'p1' }] });
 
-    await expect(
-      callService('https://vision-api.example.test', 'k', 'GET', '/projects')
-    ).resolves.toEqual([{ _id: 'p1' }]);
+    await expect(callService('https://vision-api.example.test', 'k', 'GET', '/projects')).resolves.toEqual([
+      { _id: 'p1' }
+    ]);
   });
 
   it('falls back to the whole body for a route that answers with the payload directly', async () => {
@@ -118,9 +122,7 @@ describe('callService', () => {
   it('falls back to the status when a proxy answered with something that is not JSON', async () => {
     respond(502, undefined, '<html>Bad Gateway</html>');
 
-    await expect(callService('https://v', 'k', 'GET', '/x')).rejects.toThrow(
-      'Request failed with status 502'
-    );
+    await expect(callService('https://v', 'k', 'GET', '/x')).rejects.toThrow('Request failed with status 502');
   });
 
   it('handles an empty body on an otherwise fine response', async () => {

@@ -1,7 +1,11 @@
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+import { vi } from 'vitest';
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   getSignedUrl,
@@ -9,17 +13,17 @@ import {
   deleteFile,
   deleteFiles,
   getFileMetadata,
-  getFileStream,
+  getFileStream
 } from '../../clients/fileServiceClient';
 import { BadGatewayError, GatewayTimeoutError, NotFoundError } from '@visin/backend-core';
 
-const mockFetch = jest.fn();
+const mockFetch = vi.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
 const okJson = (payload: unknown) => ({ ok: true, status: 200, json: async () => payload });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.FILE_SERVICE_URL = 'http://files:5002/';
   process.env.FILE_SERVICE_API_KEY = 'key';
 });
@@ -40,7 +44,7 @@ describe('getSignedUrl / getPhotoSignedUrl', () => {
     expect(result).toEqual({
       signedUrl: 'http://dl',
       expiresAt: new Date(1735689600000).toISOString(),
-      expiresInMinutes: 30,
+      expiresInMinutes: 30
     });
   });
 
@@ -54,7 +58,6 @@ describe('getSignedUrl / getPhotoSignedUrl', () => {
     mockFetch.mockRejectedValue(new Error('down'));
     await expect(getSignedUrl('f1')).resolves.toBeNull();
   });
-
 });
 
 describe('getUploadSignedUrl', () => {
@@ -68,7 +71,7 @@ describe('getUploadSignedUrl', () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
     await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toMatchObject({
       statusCode: 502,
-      message: expect.stringContaining('Failed to generate upload URL'),
+      message: expect.stringContaining('Failed to generate upload URL')
     });
 
     mockFetch.mockResolvedValue(okJson({ success: true }));
@@ -120,7 +123,6 @@ describe('deleteFile / deleteFolder', () => {
     mockFetch.mockRejectedValue(new Error('down'));
     await expect(deleteFile('f1')).resolves.toBe(false);
   });
-
 });
 
 describe('fileExists / getFileMetadata / listFiles / copyFile', () => {
@@ -132,7 +134,7 @@ describe('fileExists / getFileMetadata / listFiles / copyFile', () => {
       lastModified: 'yesterday',
       etag: 'f1',
       contentType: 'application/octet-stream',
-      metadata: {},
+      metadata: {}
     });
   });
 
@@ -146,7 +148,6 @@ describe('fileExists / getFileMetadata / listFiles / copyFile', () => {
     mockFetch.mockRejectedValue(new TypeError('fetch failed'));
     await expect(getFileMetadata('f1')).rejects.toMatchObject({ statusCode: 502 });
   });
-
 });
 
 describe('file-service address', () => {
@@ -202,7 +203,10 @@ describe('getFileStream', () => {
     await expect(getFileStream('f')).rejects.toBeInstanceOf(NotFoundError);
 
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
-    await expect(getFileStream('f')).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('500') });
+    await expect(getFileStream('f')).rejects.toMatchObject({
+      statusCode: 502,
+      message: expect.stringContaining('500')
+    });
 
     mockFetch.mockResolvedValue({ ok: true, status: 200, body: null });
     await expect(getFileStream('f')).rejects.toBeInstanceOf(BadGatewayError);

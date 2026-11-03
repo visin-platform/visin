@@ -1,13 +1,17 @@
-jest.mock('../http', () => ({
-  ...jest.requireActual('../http'),
-  callService: jest.fn()
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../http', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../http')>('../http')),
+    callService: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { callService } from '../http';
 import { ShapeError } from '../schemas';
 import { vision } from '../vision';
 
-const called = callService as unknown as jest.Mock;
+const called = callService as unknown as Mock;
 
 /** The last call's (method, path, body, query), for readable assertions. */
 const lastCall = () => {
@@ -16,7 +20,7 @@ const lastCall = () => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.VISION_INTERNAL_URL = 'http://vision-service:4010';
 });
 
@@ -149,7 +153,15 @@ describe('routing', () => {
       {
         epochCount: 3,
         lastEpoch: 3,
-        metrics: [{ path: 'val.loss', direction: 'lower', directionFrom: 'default', best: { value: 0.2, epoch: 3 }, last: { value: 0.2, epoch: 3 } }],
+        metrics: [
+          {
+            path: 'val.loss',
+            direction: 'lower',
+            directionFrom: 'default',
+            best: { value: 0.2, epoch: 3 },
+            last: { value: 0.2, epoch: 3 }
+          }
+        ],
         models: [{ repo: 'acme/m', revision: 'a'.repeat(40) }]
       },
       // One call for what get_training used to compute from every epoch.
@@ -254,11 +266,26 @@ describe('routing', () => {
 });
 
 describe('suites and rankings', () => {
-  const suite = { _id: 's1', slug: 'road-test', version: 1, name: 'Road', visibility: 'public', protocol: { conditions: [{ name: 'day' }], metrics: [{ key: 'm', direction: 'max', headline: true }] } };
+  const suite = {
+    _id: 's1',
+    slug: 'road-test',
+    version: 1,
+    name: 'Road',
+    visibility: 'public',
+    protocol: { conditions: [{ name: 'day' }], metrics: [{ key: 'm', direction: 'max', headline: true }] }
+  };
   const board = {
     suite: { slug: 'road-test', version: 1, name: 'Road', headline: { key: 'm', direction: 'max' } },
     scope: { candidates: 2 },
-    entries: [{ evaluationId: 'e1', rank: 1, attempts: 1, checkpoint: { kind: 'local', label: 'A' }, summary: { headline: { value: 0.7 }, worst: { condition: 'day', value: 0.6 }, gap: 0.1 } }],
+    entries: [
+      {
+        evaluationId: 'e1',
+        rank: 1,
+        attempts: 1,
+        checkpoint: { kind: 'local', label: 'A' },
+        summary: { headline: { value: 0.7 }, worst: { condition: 'day', value: 0.6 }, gap: 0.1 }
+      }
+    ],
     unranked: []
   };
 
@@ -282,11 +309,17 @@ describe('suites and rankings', () => {
     called.mockResolvedValue(board);
     const result = await vision.getLeaderboard('k', 'road-test', 1, { limit: 5, page: 2, evidence: 'observed' });
     expect(result.entries[0]).toMatchObject({ evaluationId: 'e1', rank: 1 });
-    expect(lastCall()).toMatchObject({ path: '/suites/road-test/1/leaderboard', query: { limit: 5, page: 2, evidence: 'observed' } });
+    expect(lastCall()).toMatchObject({
+      path: '/suites/road-test/1/leaderboard',
+      query: { limit: 5, page: 2, evidence: 'observed' }
+    });
   });
 
   it('reads one evaluation with its ranked scores, and refuses a ranking that has drifted from the contract', async () => {
-    called.mockResolvedValue({ _id: 'e1', validation: { state: 'eligible', scores: { conditions: { day: { m: 0.6 } }, overall: { m: 0.7 } } } });
+    called.mockResolvedValue({
+      _id: 'e1',
+      validation: { state: 'eligible', scores: { conditions: { day: { m: 0.6 } }, overall: { m: 0.7 } } }
+    });
     expect((await vision.getEvaluation('k', 'e1')).validation.scores?.overall.m).toBe(0.7);
     expect(lastCall().path).toBe('/evaluations/e1');
     called.mockResolvedValue({ ...board, entries: [{ evaluationId: 'e1' }] });

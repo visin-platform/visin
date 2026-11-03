@@ -20,7 +20,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { evaluationService, suiteService } from '../../services/evaluationService';
 import { trainingService } from '../../services/trainingService';
 import type { Checkpoint, Evaluation, Suite } from '../../types/evaluation';
-import { checkpointFormComplete, checkpointForms, linkCheckpoint, linkCheckpointAnswers, linkCheckpointKind } from './checkpointForms';
+import {
+  checkpointFormComplete,
+  checkpointForms,
+  linkCheckpoint,
+  linkCheckpointAnswers,
+  linkCheckpointKind
+} from './checkpointForms';
 import { checkpointLabel } from './sources';
 
 interface PromoteDialogProps {
@@ -56,31 +62,33 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
   });
   // Only the links the run made at this very epoch are evidence for this result's checkpoint: never the run's best
   // or its latest, and never one that names no epoch.
-  const evidenced = (run.data?.models ?? []).filter(link => link.epoch === source?.epoch);
+  const evidenced = (run.data?.models ?? []).filter((link) => link.epoch === source?.epoch);
 
   const choose = (link: (typeof evidenced)[number]) => {
     setLinkId(link._id);
     setKind(linkCheckpointKind(link));
-    setAnswers(previous => ({ ...previous, ...linkCheckpointAnswers(link) }));
+    setAnswers((previous) => ({ ...previous, ...linkCheckpointAnswers(link) }));
   };
   useEffect(() => {
     if (prefilled.current || evidenced.length !== 1) return;
     prefilled.current = true;
     choose(evidenced[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the run's links first arrive
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once, when the run's links first arrive
   }, [evidenced.length]);
 
   const suites = useQuery({ queryKey: ['suites', 'promote'], queryFn: () => suiteService.list({ limit: 100 }) });
-  const chosen = suites.data?.suites.find(item => suiteRef(item) === suite);
+  const chosen = suites.data?.suites.find((item) => suiteRef(item) === suite);
 
   const checkpoint: Checkpoint = checkpointForms[kind].build(answers);
   const sampleCounts = Object.fromEntries(
-    (chosen?.protocol.conditions ?? []).flatMap(condition => (counts[condition.name]?.trim() ? [[condition.name, Number(counts[condition.name])]] : []))
+    (chosen?.protocol.conditions ?? []).flatMap((condition) =>
+      counts[condition.name]?.trim() ? [[condition.name, Number(counts[condition.name])]] : []
+    )
   );
 
   const promote = useMutation({
     mutationFn: () => evaluationService.promote({ evaluationId, suite, checkpoint, sampleCounts }),
-    onSuccess: evaluation => {
+    onSuccess: (evaluation) => {
       queryClient.invalidateQueries({ queryKey: ['evaluations'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       onPromoted(evaluation);
@@ -97,14 +105,28 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
       <DialogTitle>Rank this result on a suite</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
-          This copies the result onto the suite and leaves the original as it is. It did not record which checkpoint it was
-          or how many samples each condition scored, so say here; what you enter is yours to vouch for.
+          This copies the result onto the suite and leaves the original as it is. It did not record which checkpoint it
+          was or how many samples each condition scored, so say here; what you enter is yours to vouch for.
         </DialogContentText>
         <Box sx={{ display: 'grid', gap: 2 }}>
-          <TextField select label="Suite" value={suite} onChange={event => { setSuite(event.target.value); setCounts({}); }} size="small" required>
-            {(suites.data?.suites ?? []).filter(item => !item.archivedAt).map(item => (
-              <MenuItem key={item._id} value={suiteRef(item)}>{suiteRef(item)} · {item.name}</MenuItem>
-            ))}
+          <TextField
+            select
+            label="Suite"
+            value={suite}
+            onChange={(event) => {
+              setSuite(event.target.value);
+              setCounts({});
+            }}
+            size="small"
+            required
+          >
+            {(suites.data?.suites ?? [])
+              .filter((item) => !item.archivedAt)
+              .map((item) => (
+                <MenuItem key={item._id} value={suiteRef(item)}>
+                  {suiteRef(item)} · {item.name}
+                </MenuItem>
+              ))}
           </TextField>
 
           {evidenced.length > 0 && (
@@ -114,24 +136,43 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
                   ? `This run linked this checkpoint at epoch ${source?.epoch}, so it is filled in below. Check it is the one that was tested.`
                   : `This run linked ${evidenced.length} checkpoints at epoch ${source?.epoch}. Choose the one that was tested.`}
               </Alert>
-              <RadioGroup value={linkId} onChange={(_event, id) => { const link = evidenced.find(item => item._id === id); if (link) choose(link); }}>
-                {evidenced.map(link => (
-                  <FormControlLabel key={link._id} value={link._id} control={<Radio size="small" />} label={checkpointLabel(linkCheckpoint(link))} />
+              <RadioGroup
+                value={linkId}
+                onChange={(_event, id) => {
+                  const link = evidenced.find((item) => item._id === id);
+                  if (link) choose(link);
+                }}
+              >
+                {evidenced.map((link) => (
+                  <FormControlLabel
+                    key={link._id}
+                    value={link._id}
+                    control={<Radio size="small" />}
+                    label={checkpointLabel(linkCheckpoint(link))}
+                  />
                 ))}
               </RadioGroup>
             </Box>
           )}
-          <ToggleButtonGroup exclusive size="small" value={kind} onChange={(_event, next) => next && setKind(next)} aria-label="Where the checkpoint is">
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={kind}
+            onChange={(_event, next) => next && setKind(next)}
+            aria-label="Where the checkpoint is"
+          >
             {Object.entries(checkpointForms).map(([value, form]) => (
-              <ToggleButton key={value} value={value}>{form.choice}</ToggleButton>
+              <ToggleButton key={value} value={value}>
+                {form.choice}
+              </ToggleButton>
             ))}
           </ToggleButtonGroup>
-          {checkpointForms[kind].fields.map(field => (
+          {checkpointForms[kind].fields.map((field) => (
             <TextField
               key={field.key}
               label={field.label}
               value={answers[field.key] ?? ''}
-              onChange={event => setAnswers(previous => ({ ...previous, [field.key]: event.target.value }))}
+              onChange={(event) => setAnswers((previous) => ({ ...previous, [field.key]: event.target.value }))}
               size="small"
               required={field.required}
               placeholder={field.placeholder}
@@ -139,7 +180,7 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
             />
           ))}
 
-          {chosen?.protocol.conditions.map(condition => (
+          {chosen?.protocol.conditions.map((condition) => (
             <TextField
               key={condition.name}
               label={`Samples scored in “${condition.name}”`}
@@ -147,16 +188,22 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
               size="small"
               required
               value={counts[condition.name] ?? ''}
-              onChange={event => setCounts(previous => ({ ...previous, [condition.name]: event.target.value }))}
+              onChange={(event) => setCounts((previous) => ({ ...previous, [condition.name]: event.target.value }))}
               helperText={`The suite expects ${condition.sampleCount}.`}
             />
           ))}
-          {promote.isError && <Alert severity="error">{promote.error instanceof Error ? promote.error.message : 'Failed to promote'}</Alert>}
+          {promote.isError && (
+            <Alert severity="error">
+              {promote.error instanceof Error ? promote.error.message : 'Failed to promote'}
+            </Alert>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => promote.mutate()} disabled={!complete || promote.isPending}>Rank it</Button>
+        <Button variant="contained" onClick={() => promote.mutate()} disabled={!complete || promote.isPending}>
+          Rank it
+        </Button>
       </DialogActions>
     </Dialog>
   );

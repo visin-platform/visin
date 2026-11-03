@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import crypto from 'crypto';
@@ -15,12 +16,28 @@ const { operationKey, responseProblems } = createResponseChecker(loadSpec(path.j
   specBase: '/api'
 });
 
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn(async () => []) }));
-jest.mock('../../clients/fileServiceClient', () => ({
-  getSignedUrl: jest.fn(async (fileId: string) => ({ signedUrl: `https://files.invalid/${fileId}` })),
-  getUploadSignedUrl: jest.fn(async () => 'https://files.invalid/upload'),
-  getFileMetadata: jest.fn(async () => ({ size: 1 }))
-}));
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({
+    getUserGroups: vi.fn(async function () {
+      return [];
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    getSignedUrl: vi.fn(async function (fileId: string) {
+      return { signedUrl: `https://files.invalid/${fileId}` };
+    }),
+    getUploadSignedUrl: vi.fn(async function () {
+      return 'https://files.invalid/upload';
+    }),
+    getFileMetadata: vi.fn(async function () {
+      return { size: 1 };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 /**
  * The integrator's path through the API, against the real routes and an
@@ -126,8 +143,12 @@ describe('vision-service responses match docs/openapi.yml', () => {
     // The pipeline's key comes from auth-service, limited to this project.
     token = (
       await createApiKey({
-        userId: owner, userEmail: 'owner@example.test', userName: 'Owner', name: 'pipeline',
-        scopes: ['vision:read', 'vision:write'], project: { id: projectId, name: 'Contract' }
+        userId: owner,
+        userEmail: 'owner@example.test',
+        userName: 'Owner',
+        name: 'pipeline',
+        scopes: ['vision:read', 'vision:write'],
+        project: { id: projectId, name: 'Contract' }
       })
     ).token;
 

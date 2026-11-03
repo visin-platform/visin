@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { HttpError } from '@visin/backend-core';
 import { requireApiKey, requireSignedToken } from '../../middleware/auth';
@@ -7,12 +8,12 @@ const API_KEY = 'test-api-key';
 const HMAC_SECRET = 'test-hmac-secret';
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ headers: {}, query: {}, params: {}, ...overrides } as unknown as Request);
+  ({ headers: {}, query: {}, params: {}, ...overrides }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
-  return res as unknown as Response & { status: jest.Mock; json: jest.Mock };
+  return res as unknown as Response & { status: Mock; json: Mock };
 };
 
 const statusOf = (fn: () => void): number => {
@@ -25,10 +26,10 @@ const statusOf = (fn: () => void): number => {
   throw new Error('expected middleware to throw');
 };
 
-let next: jest.Mock;
+let next: Mock;
 
 beforeEach(() => {
-  next = jest.fn();
+  next = vi.fn();
   process.env.FILE_SERVICE_API_KEY = API_KEY;
   process.env.FILE_SERVICE_HMAC_SECRET = HMAC_SECRET;
 });
@@ -40,9 +41,7 @@ afterAll(() => {
 
 describe('requireApiKey', () => {
   it('rejects a missing key', () => {
-    expect(
-      statusOf(() => requireApiKey(makeReq(), makeRes(), next as unknown as NextFunction))
-    ).toBe(401);
+    expect(statusOf(() => requireApiKey(makeReq(), makeRes(), next as unknown as NextFunction))).toBe(401);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -73,11 +72,7 @@ describe('requireApiKey', () => {
   });
 
   it('passes with the correct key', () => {
-    requireApiKey(
-      makeReq({ headers: { 'x-internal-api-key': API_KEY } }),
-      makeRes(),
-      next as unknown as NextFunction
-    );
+    requireApiKey(makeReq({ headers: { 'x-internal-api-key': API_KEY } }), makeRes(), next as unknown as NextFunction);
 
     expect(next).toHaveBeenCalledTimes(1);
   });
@@ -90,14 +85,16 @@ describe('requireSignedToken', () => {
   const signedReq = (expiresMs: number, token?: string) =>
     makeReq({
       params: { fileId: fileId.split('/') },
-      query: { token: token ?? signToken('upload', fileId, expiresMs, '00000000-0000-0000-0000-000000000000'), expires: String(expiresMs), reservation: '00000000-0000-0000-0000-000000000000' },
+      query: {
+        token: token ?? signToken('upload', fileId, expiresMs, '00000000-0000-0000-0000-000000000000'),
+        expires: String(expiresMs),
+        reservation: '00000000-0000-0000-0000-000000000000'
+      }
     });
 
   it('rejects when token or expires is missing', () => {
     expect(
-      statusOf(() =>
-        middleware(makeReq({ params: { fileId: ['a'] } }), makeRes(), next as unknown as NextFunction)
-      )
+      statusOf(() => middleware(makeReq({ params: { fileId: ['a'] } }), makeRes(), next as unknown as NextFunction))
     ).toBe(401);
     expect(next).not.toHaveBeenCalled();
   });
@@ -129,9 +126,7 @@ describe('requireSignedToken', () => {
   it('rejects an expired token', () => {
     const expiresMs = Date.now() - 1000;
 
-    expect(
-      statusOf(() => middleware(signedReq(expiresMs), makeRes(), next as unknown as NextFunction))
-    ).toBe(403);
+    expect(statusOf(() => middleware(signedReq(expiresMs), makeRes(), next as unknown as NextFunction))).toBe(403);
     expect(next).not.toHaveBeenCalled();
   });
 

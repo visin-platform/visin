@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
@@ -16,8 +17,11 @@ import Project from '../../models/Project';
 import Training from '../../models/Training';
 import { getUserGroups } from '../../clients/projectGroupsClient';
 
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
-const groupsOf = getUserGroups as jest.Mock;
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+const groupsOf = getUserGroups as Mock;
 
 /**
  * An API key limited to one project, end to end: confined like a legacy project
@@ -36,11 +40,20 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
   const group = '0000000000000000000000aa';
   const saved = { encryption: process.env.API_KEY_ENCRYPTION_SECRET };
 
-  const keyFor = async (project: string | null, scopes: ('vision:read' | 'vision:write')[] = ['vision:read', 'vision:write']) =>
-    (await createApiKey({
-      userId: owner, userEmail: 'owner@example.test', userName: 'Owner', name: 'pipeline', scopes,
-      project: project ? { id: project, name: 'limited' } : null
-    })).token;
+  const keyFor = async (
+    project: string | null,
+    scopes: ('vision:read' | 'vision:write')[] = ['vision:read', 'vision:write']
+  ) =>
+    (
+      await createApiKey({
+        userId: owner,
+        userEmail: 'owner@example.test',
+        userName: 'Owner',
+        name: 'pipeline',
+        scopes,
+        project: project ? { id: project, name: 'limited' } : null
+      })
+    ).token;
 
   beforeAll(async () => {
     process.env.API_KEY_ENCRYPTION_SECRET = 'project-key-integration-secret';
@@ -57,43 +70,67 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
     app.use('/api/.well-known', projectKeyAuth('vision'), discoveryRoutes);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 120_000);
 
   beforeEach(async () => {
     groupsOf.mockReset().mockResolvedValue([{ id: group, name: 'Team' }]);
-    await mongoose.connection.collection('users').insertOne({ _id: new mongoose.Types.ObjectId(owner), email: 'owner@example.test', tokenVersion: 1 });
-    [own, otherOwn, shared, publicProject, hidden] = (await Project.create([
-      { name: 'Own', slug: 'own', owner: { kind: 'user', id: owner }, createdBy: owner },
-      { name: 'Other own', slug: 'other-own', owner: { kind: 'user', id: owner }, createdBy: owner },
-      // Someone else's, which the owner edits through a group.
-      { name: 'Shared', slug: 'shared', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else', editorGroupIds: [group] },
-      { name: 'Public', slug: 'public', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else', visibility: 'public' },
-      // Private, and not the owner's at all: the owner cannot read it, so no key of theirs may learn it exists.
-      { name: 'Hidden', slug: 'hidden', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else' }
-    ])).map(project => String(project._id));
+    await mongoose.connection
+      .collection('users')
+      .insertOne({ _id: new mongoose.Types.ObjectId(owner), email: 'owner@example.test', tokenVersion: 1 });
+    [own, otherOwn, shared, publicProject, hidden] = (
+      await Project.create([
+        { name: 'Own', slug: 'own', owner: { kind: 'user', id: owner }, createdBy: owner },
+        { name: 'Other own', slug: 'other-own', owner: { kind: 'user', id: owner }, createdBy: owner },
+        // Someone else's, which the owner edits through a group.
+        {
+          name: 'Shared',
+          slug: 'shared',
+          owner: { kind: 'user', id: 'someone-else' },
+          createdBy: 'someone-else',
+          editorGroupIds: [group]
+        },
+        {
+          name: 'Public',
+          slug: 'public',
+          owner: { kind: 'user', id: 'someone-else' },
+          createdBy: 'someone-else',
+          visibility: 'public'
+        },
+        // Private, and not the owner's at all: the owner cannot read it, so no key of theirs may learn it exists.
+        { name: 'Hidden', slug: 'hidden', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else' }
+      ])
+    ).map((project) => String(project._id));
   });
 
   afterEach(async () => {
-    await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
+    await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
 
   afterAll(async () => {
     if (saved.encryption === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
     else process.env.API_KEY_ENCRYPTION_SECRET = saved.encryption;
     resetEncryptionKeyCache();
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
   const call = async (credential: string, path: string, method = 'GET', body?: unknown) => {
     const response = await fetch(`${url}/api/${path}`, {
-      method, headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' },
+      method,
+      headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     const text = await response.text();
-    return { status: response.status, body: text ? JSON.parse(text) as { data: Record<string, unknown> } : { data: {} } };
+    return {
+      status: response.status,
+      body: text ? (JSON.parse(text) as { data: Record<string, unknown> }) : { data: {} }
+    };
   };
 
   it('writes runs into its own project, whatever project the request names', async () => {
@@ -111,7 +148,7 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
     expect((await call(key, `projects/${otherOwn}`)).status).toBe(403);
     expect((await call(key, `projects/${publicProject}`)).status).toBe(403);
     const listed = (await call(key, 'projects')).body.data as unknown as { _id: string }[];
-    expect(listed.map(project => String(project._id))).toEqual([own]);
+    expect(listed.map((project) => String(project._id))).toEqual([own]);
   });
 
   it("lists only its own project's models, and is refused another project it names", async () => {
@@ -120,10 +157,16 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
     await Training.create([
       { uuid: 'own-run', name: 'own', ownerId: owner, projectId: own, models: model('acme/own') },
       { uuid: 'other-run', name: 'other', ownerId: owner, projectId: otherOwn, models: model('acme/other') },
-      { uuid: 'public-run', name: 'public', ownerId: 'someone-else', projectId: publicProject, models: model('acme/public') }
+      {
+        uuid: 'public-run',
+        name: 'public',
+        ownerId: 'someone-else',
+        projectId: publicProject,
+        models: model('acme/public')
+      }
     ]);
     const listed = (await call(key, 'models')).body.data as unknown as { models: { model: { repo: string } }[] };
-    expect(listed.models.map(row => row.model.repo)).toEqual(['acme/own']);
+    expect(listed.models.map((row) => row.model.repo)).toEqual(['acme/own']);
     expect((await call(key, `models?projectId=${otherOwn}`)).status).toBe(403);
     expect((await call(key, `models?projectId=${publicProject}`)).status).toBe(403);
   });
@@ -132,13 +175,21 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
     process.env.PUBLIC_DATASET_API_URL = 'https://datasets.example.test/';
     process.env.SHELL_FRONT_URL = 'https://app.example.test';
     try {
-      const pipeline = (await call(await keyFor(own, ['vision:read']), '.well-known/visin')).body.data as unknown as Record<string, unknown>;
+      const pipeline = (await call(await keyFor(own, ['vision:read']), '.well-known/visin')).body
+        .data as unknown as Record<string, unknown>;
       expect(pipeline).toEqual({
         datasetApiUrl: 'https://datasets.example.test',
         appUrl: 'https://app.example.test',
-        credential: { kind: 'pipeline-key', scopes: ['vision:read'], label: 'pipeline', project: { id: own, name: 'Own' } }
+        credential: {
+          kind: 'pipeline-key',
+          scopes: ['vision:read'],
+          label: 'pipeline',
+          project: { id: own, name: 'Own' }
+        }
       });
-      const user = (await call(await keyFor(null), '.well-known/visin')).body.data as unknown as { credential: Record<string, unknown> };
+      const user = (await call(await keyFor(null), '.well-known/visin')).body.data as unknown as {
+        credential: Record<string, unknown>;
+      };
       expect(user.credential).toEqual({ kind: 'api-key', scopes: ['vision:read', 'vision:write'], label: 'pipeline' });
     } finally {
       delete process.env.PUBLIC_DATASET_API_URL;
@@ -187,11 +238,18 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
   });
   describe('suites', () => {
     const suite = (projectId: string, slug = 'road-test') => ({
-      slug, version: 1, name: 'Road test', projectId,
+      slug,
+      version: 1,
+      name: 'Road test',
+      projectId,
       protocol: {
-        task: 'segmentation', data: { kind: 'external', label: 'x', manifestSha256: 'a'.repeat(64) }, split: 'test',
-        conditions: [{ name: 'day', sampleCount: 10 }], metrics: [{ key: 'm', direction: 'max', headline: true }],
-        aggregation: 'equal-mean-of-conditions', evaluator: { package: 'p' }
+        task: 'segmentation',
+        data: { kind: 'external', label: 'x', manifestSha256: 'a'.repeat(64) },
+        split: 'test',
+        conditions: [{ name: 'day', sampleCount: 10 }],
+        metrics: [{ key: 'm', direction: 'max', headline: true }],
+        aggregation: 'equal-mean-of-conditions',
+        evaluator: { package: 'p' }
       }
     });
 
@@ -207,9 +265,13 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
       const key = await keyFor(own);
       expect((await call(key, 'suites', 'POST', { ...suite(own), visibility: 'public' })).status).toBe(201);
       expect((await call(key, 'suites', 'POST', { ...suite(own), version: 2 })).body.data.visibility).toBe('public');
-      expect((await call(key, 'suites', 'POST', { ...suite(otherOwn, 'elsewhere'), visibility: 'public' })).status).toBe(403);
+      expect(
+        (await call(key, 'suites', 'POST', { ...suite(otherOwn, 'elsewhere'), visibility: 'public' })).status
+      ).toBe(403);
       const readOnly = await keyFor(own, ['vision:read']);
-      expect((await call(readOnly, 'suites', 'POST', { ...suite(own), version: 3, visibility: 'public' })).status).toBe(403);
+      expect((await call(readOnly, 'suites', 'POST', { ...suite(own), version: 3, visibility: 'public' })).status).toBe(
+        403
+      );
     });
 
     it('keeps an editor-group pipeline actor at contribute when explicitly or implicitly sharing a new protocol', async () => {
@@ -217,10 +279,14 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
       expect((await call(key, 'suites', 'POST', { ...suite(shared), visibility: 'public' })).status).toBe(403);
       expect((await call(key, 'suites', 'POST', suite(shared))).status).toBe(201);
       // A manager later makes the existing version public; contributor retries stay idempotent.
-      await mongoose.connection.collection('suites').updateOne({ slug: 'road-test', version: 1 }, { $set: { visibility: 'public' } });
+      await mongoose.connection
+        .collection('suites')
+        .updateOne({ slug: 'road-test', version: 1 }, { $set: { visibility: 'public' } });
       expect((await call(key, 'suites', 'POST', suite(shared))).status).toBe(200);
       expect((await call(key, 'suites', 'POST', { ...suite(shared), version: 2 })).status).toBe(403);
-      expect((await call(key, 'suites', 'POST', { ...suite(shared), version: 2, visibility: 'private' })).status).toBe(201);
+      expect((await call(key, 'suites', 'POST', { ...suite(shared), version: 2, visibility: 'private' })).status).toBe(
+        201
+      );
     });
 
     it('tells a project it cannot read apart from none at all only when its owner could read it', async () => {
@@ -233,14 +299,14 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
       expect((await call(key, 'suites', 'POST', suite(missing, 'missing'))).status).toBe(404);
     });
 
-    it('lists its own suites and public ones, never another project\'s private suite', async () => {
+    it("lists its own suites and public ones, never another project's private suite", async () => {
       const unlimited = await keyFor(null);
       await call(unlimited, 'suites', 'POST', suite(otherOwn, 'private-elsewhere'));
       await call(unlimited, 'suites', 'POST', { ...suite(otherOwn, 'public-elsewhere'), visibility: 'public' });
       const key = await keyFor(own);
       await call(key, 'suites', 'POST', suite(own, 'mine'));
       const listed = (await call(key, 'suites')).body.data as unknown as { suites: { slug: string }[] };
-      expect(listed.suites.map(item => item.slug).sort()).toEqual(['mine', 'public-elsewhere']);
+      expect(listed.suites.map((item) => item.slug).sort()).toEqual(['mine', 'public-elsewhere']);
       expect((await call(key, 'suites/private-elsewhere/1')).status).toBe(404);
       expect((await call(key, 'suites/public-elsewhere/1')).status).toBe(200);
     });
@@ -263,7 +329,7 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
   describe('evaluations', () => {
     const body = (projectId: string) => ({ projectId, results: { day: { overall: { m: 1 } } } });
 
-    it('records into its own project, is told its limit for the owner\'s others, and learns nothing of a project it cannot read', async () => {
+    it("records into its own project, is told its limit for the owner's others, and learns nothing of a project it cannot read", async () => {
       const key = await keyFor(own);
       expect((await call(key, 'evaluations', 'POST', body(own))).status).toBe(201);
       expect((await call(key, 'evaluations', 'POST', body(otherOwn))).status).toBe(403);

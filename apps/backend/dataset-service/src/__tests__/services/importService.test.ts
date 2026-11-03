@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import mongoose from 'mongoose';
 import sharp from 'sharp';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -8,7 +9,11 @@ import { NonRetryableImportError } from '../../utils/boundedZip';
 import { zip } from '../fixtures/zip';
 import { fileStore } from '../fixtures/fileStore';
 
-jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () =>
+    (await vi.importActual<typeof import('../fixtures/fileStore')>('../fixtures/fileStore')).fileStore.client)();
+  return Object.assign({ default: module }, module);
+});
 
 let mongo: MongoMemoryServer;
 let png: Buffer;
@@ -18,13 +23,17 @@ beforeAll(async () => {
   mongo = await MongoMemoryServer.create();
   await mongoose.connect(mongo.getUri());
   await DatasetItem.syncIndexes();
-  png = await sharp({ create: { width: 4, height: 2, channels: 3, background: 'white' } }).png().toBuffer();
+  png = await sharp({ create: { width: 4, height: 2, channels: 3, background: 'white' } })
+    .png()
+    .toBuffer();
   // Pixel values are mask ids — the bytes must survive import untouched.
-  idmap = await sharp(Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]), { raw: { width: 4, height: 2, channels: 1 } }).png().toBuffer();
+  idmap = await sharp(Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]), { raw: { width: 4, height: 2, channels: 1 } })
+    .png()
+    .toBuffer();
 }, 120_000);
 
 afterEach(async () => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
   fileStore.stored.clear();
   await Promise.all([Dataset.deleteMany({}), DatasetItem.deleteMany({})]);
 });
@@ -36,13 +45,16 @@ afterAll(async () => {
 
 const masks = [{ id: 1, class: 'car', quality: 'good' }];
 
-const createImport = async (entries: { path: string; data: Buffer }[], mapping: ImportMapping = {
-  groups: [
-    { folder: 'frames', group: 'frames' },
-    { folder: 'annotations/verify', group: 'verify' }
-  ],
-  manifest: 'manifest.csv'
-}) => {
+const createImport = async (
+  entries: { path: string; data: Buffer }[],
+  mapping: ImportMapping = {
+    groups: [
+      { folder: 'frames', group: 'frames' },
+      { folder: 'annotations/verify', group: 'verify' }
+    ],
+    manifest: 'manifest.csv'
+  }
+) => {
   const _id = new mongoose.Types.ObjectId();
   const archiveFileId = `datasets/${_id}/archives/a.zip`;
   fileStore.stored.set(archiveFileId, zip(entries));
@@ -84,13 +96,20 @@ it('stores mapped images and JSON, byte-identical, with groups, variants, manife
   expect(idmapItem.fileId).toBe(`${importFolder(dataset, importId)}annotations/verify/0001.ids.png`);
   expect(fileStore.stored.has(idmapItem.thumbnailFileId!)).toBe(true);
   expect(items.find((item) => item.kind === 'json')?.data).toEqual(masks);
-  expect(items.find((item) => item.path === 'frames/0001.png')).toMatchObject({ width: 4, height: 2, mimetype: 'image/png' });
+  expect(items.find((item) => item.path === 'frames/0001.png')).toMatchObject({
+    width: 4,
+    height: 2,
+    mimetype: 'image/png'
+  });
 
   const updated = await Dataset.findById(datasetId).select('+manifest').lean();
   expect(updated?.import).toMatchObject({ status: 'done', processed: 4, skipped: 0, total: 4, errors: [] });
   // The whole zip was copied to disk before extraction, and the page was told so.
   expect(updated?.import?.copiedBytes).toBe(fileStore.stored.get(dataset.archive!.fileId)!.length);
-  expect(updated?.groups).toEqual([{ name: 'frames', images: 1, jsons: 0 }, { name: 'verify', images: 2, jsons: 1 }]);
+  expect(updated?.groups).toEqual([
+    { name: 'frames', images: 1, jsons: 0 },
+    { name: 'verify', images: 2, jsons: 1 }
+  ]);
   expect(updated?.imageCount).toBe(3);
   expect(updated?.coverFileId).toContain('.thumbs/frames/0001.png.jpg');
   expect(updated?.manifest).toEqual([{ stem: '0001', attributes: { stratum: 'day' } }]);
@@ -105,16 +124,31 @@ it('resumes a retried attempt without storing anything twice', async () => {
   await runImport(datasetId, importId);
   expect(fileStore.client.putFile).not.toHaveBeenCalled();
   expect(await DatasetItem.countDocuments({ datasetId })).toBe(4);
-  expect((await Dataset.findById(datasetId).lean())?.import).toMatchObject({ status: 'done', processed: 0, skipped: 4 });
+  expect((await Dataset.findById(datasetId).lean())?.import).toMatchObject({
+    status: 'done',
+    processed: 0,
+    skipped: 4
+  });
 });
 
 it('replaces what earlier imports left, folders and migrated files alike', async () => {
-  const { dataset, importId, datasetId } = await createImport(vlmEntries(), { groups: [{ folder: 'frames', group: 'camera' }] });
+  const { dataset, importId, datasetId } = await createImport(vlmEntries(), {
+    groups: [{ folder: 'frames', group: 'camera' }]
+  });
   const oldImport = 'old-import';
   fileStore.stored.set(`${importFolder(dataset, oldImport)}x.png`, png);
   fileStore.stored.set('label-bundles/b/frames/m.png', png);
   await DatasetItem.create([
-    { datasetId, importId: oldImport, group: 'g', path: 'x.png', stem: 'x', kind: 'image', size: 1, fileId: `${importFolder(dataset, oldImport)}x.png` },
+    {
+      datasetId,
+      importId: oldImport,
+      group: 'g',
+      path: 'x.png',
+      stem: 'x',
+      kind: 'image',
+      size: 1,
+      fileId: `${importFolder(dataset, oldImport)}x.png`
+    },
     { datasetId, group: 'g', path: 'm.png', stem: 'm', kind: 'image', size: 1, fileId: 'label-bundles/b/frames/m.png' }
   ]);
 
@@ -149,7 +183,11 @@ it('reports unreadable files per file, and fails an import that stored nothing',
   await runImport(datasetId, importId);
   const imported = (await Dataset.findById(datasetId).lean())?.import;
   expect(imported?.status).toBe('failed');
-  expect(imported?.errors.map((error) => error.reason).sort()).toEqual(['Not a readable image', 'Not valid JSON', 'Path escapes the archive (zip-slip)']);
+  expect(imported?.errors.map((error) => error.reason).sort()).toEqual([
+    'Not a readable image',
+    'Not valid JSON',
+    'Path escapes the archive (zip-slip)'
+  ]);
 });
 
 it('reports an oversized JSON sidecar and a broken manifest', async () => {
@@ -172,9 +210,11 @@ it('reports an oversized JSON sidecar and a broken manifest', async () => {
 it('stops a cancelled import at its next heartbeat, keeping and showing what it stored, and resumes past it', async () => {
   const { importId, datasetId } = await createImport(vlmEntries());
   let now = Date.now();
-  jest.spyOn(Date, 'now').mockImplementation(() => (now += 6000));
+  vi.spyOn(Date, 'now').mockImplementation(function () {
+    return (now += 6000);
+  });
   const putFile = fileStore.client.putFile.getMockImplementation()!;
-  fileStore.client.putFile.mockImplementation(async (fileId: string, data: Buffer) => {
+  fileStore.client.putFile.mockImplementation(async function (fileId: string, data: Buffer) {
     await putFile(fileId, data);
     await Dataset.updateOne({ _id: datasetId }, { $set: { 'import.status': 'cancelled' } });
   });
@@ -206,7 +246,9 @@ it('does nothing for an import cancelled before it started, and refuses one that
   expect(fileStore.client.getFileStream).not.toHaveBeenCalledWith(expect.stringContaining(datasetId));
 
   await expect(runImport(datasetId, 'another')).rejects.toBeInstanceOf(NonRetryableImportError);
-  await expect(runImport(new mongoose.Types.ObjectId().toString(), importId)).rejects.toBeInstanceOf(NonRetryableImportError);
+  await expect(runImport(new mongoose.Types.ObjectId().toString(), importId)).rejects.toBeInstanceOf(
+    NonRetryableImportError
+  );
 });
 
 it('keeps progress but not the status when an attempt fails transiently', async () => {
@@ -229,5 +271,9 @@ it('keeps progress but not the status when an attempt fails transiently', async 
 });
 
 it('summarizes an empty dataset', async () => {
-  expect(await summarizeItems(new mongoose.Types.ObjectId())).toEqual({ groups: [], imageCount: 0, coverFileId: undefined });
+  expect(await summarizeItems(new mongoose.Types.ObjectId())).toEqual({
+    groups: [],
+    imageCount: 0,
+    coverFileId: undefined
+  });
 });

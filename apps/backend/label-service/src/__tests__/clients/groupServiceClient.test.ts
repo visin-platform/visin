@@ -1,11 +1,12 @@
+import { vi } from 'vitest';
 import { checkMembership } from '../../clients/groupServiceClient';
 
 // The client itself is backend-core's, tested there; this checks the wiring.
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.GROUP_SERVICE_URL = 'http://groups.test';
   process.env.INTERNAL_SERVICE_TOKEN = 'internal-token';
 });

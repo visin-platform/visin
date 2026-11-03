@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { useMongo } from '../helpers/mongo';
 useMongo();
 import fs from 'node:fs';
@@ -8,12 +9,12 @@ import { generateUploadUrl, generateDownloadUrl, generateDownloadUrls } from '..
 import { verifyToken } from '../../utils/hmac';
 
 const makeRes = () => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
-  return res as unknown as Response & { json: jest.Mock };
+  return res as unknown as Response & { json: Mock };
 };
 
-const makeReq = (body: Record<string, unknown>): Request => ({ body } as unknown as Request);
+const makeReq = (body: Record<string, unknown>): Request => ({ body }) as unknown as Request;
 
 let directory: string;
 beforeEach(() => {
@@ -23,7 +24,10 @@ beforeEach(() => {
   process.env.FILE_SERVICE_URL = 'https://files.example.com/';
 });
 
-afterEach(() => { fs.rmSync(directory, { recursive: true, force: true }); delete process.env.FILE_SERVICE_DATA_DIR; });
+afterEach(() => {
+  fs.rmSync(directory, { recursive: true, force: true });
+  delete process.env.FILE_SERVICE_DATA_DIR;
+});
 
 afterAll(() => {
   delete process.env.FILE_SERVICE_HMAC_SECRET;
@@ -34,7 +38,7 @@ describe('generateUploadUrl', () => {
   it('returns a signed upload URL with a verifiable token', async () => {
     const res = makeRes();
 
-    (await generateUploadUrl(makeReq({ fileId: 'grp/alb/file.jpg', expiresInMinutes: 15 }), res));
+    await generateUploadUrl(makeReq({ fileId: 'grp/alb/file.jpg', expiresInMinutes: 15 }), res);
 
     const { data } = res.json.mock.calls[0][0];
     expect(data.uploadUrl).toMatch(
@@ -44,14 +48,22 @@ describe('generateUploadUrl', () => {
     expect(data.expiresMs).toBeGreaterThan(Date.now());
 
     const token = new URL(data.uploadUrl).searchParams.get('token')!;
-    expect(verifyToken('upload', 'grp/alb/file.jpg', data.expiresMs, token, new URL(data.uploadUrl).searchParams.get('reservation')!)).toBe(true);
+    expect(
+      verifyToken(
+        'upload',
+        'grp/alb/file.jpg',
+        data.expiresMs,
+        token,
+        new URL(data.uploadUrl).searchParams.get('reservation')!
+      )
+    ).toBe(true);
   });
 
   it('falls back to localhost when FILE_SERVICE_URL is unset', async () => {
     delete process.env.FILE_SERVICE_URL;
     const res = makeRes();
 
-    (await generateUploadUrl(makeReq({ fileId: 'f.jpg', expiresInMinutes: 5 }), res));
+    await generateUploadUrl(makeReq({ fileId: 'f.jpg', expiresInMinutes: 5 }), res);
 
     expect(res.json.mock.calls[0][0].data.uploadUrl).toMatch(/^http:\/\/localhost:5002\//);
   });
@@ -87,6 +99,8 @@ describe('generateDownloadUrls', () => {
   });
 
   it('refuses a path that escapes the data directory', () => {
-    expect(() => generateDownloadUrls(makeReq({ fileIds: ['ok.jpg', '../../etc/passwd'], expiresInMinutes: 1 }), makeRes())).toThrow();
+    expect(() =>
+      generateDownloadUrls(makeReq({ fileIds: ['ok.jpg', '../../etc/passwd'], expiresInMinutes: 1 }), makeRes())
+    ).toThrow();
   });
 });

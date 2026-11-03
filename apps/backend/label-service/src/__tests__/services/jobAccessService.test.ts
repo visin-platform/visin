@@ -1,16 +1,26 @@
-jest.mock('../../clients/datasetServiceClient', () => ({ getPermission: jest.fn() }));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({ getPermission: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { Permission } from '@visin/backend-core';
 import { getPermission } from '../../clients/datasetServiceClient';
 import { assertCanWork, assertJobAdmin, getJobReadAccess, jobPermission } from '../../services/jobAccessService';
 import type { ILabelJob } from '../../models/LabelJob';
 
-const permission = getPermission as jest.Mock;
+const permission = getPermission as Mock;
 const job = (over: Partial<ILabelJob> = {}) =>
-  ({ datasetId: 'd1', status: 'active', isPublic: false, createdBy: { userId: 'creator', email: 'c@example.test' }, ...over }) as ILabelJob;
+  ({
+    datasetId: 'd1',
+    status: 'active',
+    isPublic: false,
+    createdBy: { userId: 'creator', email: 'c@example.test' },
+    ...over
+  }) as ILabelJob;
 const as = (level: Permission) => permission.mockResolvedValue(level);
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe('jobPermission', () => {
   it('is whatever the caller may do with the job’s dataset', async () => {
@@ -35,7 +45,12 @@ describe('getJobReadAccess', () => {
   });
   it('lets the dataset’s contributors see and work a job, and its managers run it', async () => {
     as('contribute');
-    expect(await getJobReadAccess(job(), 'u1')).toEqual({ permission: 'contribute', member: true, isAdmin: false, canWork: true });
+    expect(await getJobReadAccess(job(), 'u1')).toEqual({
+      permission: 'contribute',
+      member: true,
+      isAdmin: false,
+      canWork: true
+    });
     as('manage');
     expect(await getJobReadAccess(job({ status: 'completed' }), 'u1')).toMatchObject({ isAdmin: true, canWork: true });
     expect(await getJobReadAccess(job({ status: 'paused' }), 'u1')).toMatchObject({ member: true, canWork: false });
@@ -45,7 +60,9 @@ describe('getJobReadAccess', () => {
     as('read');
     expect(await getJobReadAccess(job({ isPublic: true }), 'u1')).toMatchObject({ member: false, canWork: true });
     expect(await getJobReadAccess(job({ isPublic: true }))).toMatchObject({ member: false, canWork: false });
-    await expect(getJobReadAccess(job({ isPublic: true, status: 'paused' }), 'u1')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(getJobReadAccess(job({ isPublic: true, status: 'paused' }), 'u1')).rejects.toMatchObject({
+      statusCode: 403
+    });
     await expect(getJobReadAccess(job(), 'u1')).rejects.toMatchObject({ statusCode: 403 });
     // Its dataset made private (or trashed): closed to outsiders.
     as('none');

@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { createHmac } from 'crypto';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
@@ -11,8 +12,11 @@ import { Group } from '../../models/Group';
 import * as service from '../../services/groupService';
 import { searchUsers } from '../../clients/authUsersClient';
 
-jest.mock('../../clients/authUsersClient', () => ({ searchUsers: jest.fn() }));
-const search = searchUsers as jest.Mock;
+vi.mock('../../clients/authUsersClient', async () => {
+  const module = await (() => ({ searchUsers: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+const search = searchUsers as Mock;
 
 const OWNER = '000000000000000000000001';
 const ADMIN = '000000000000000000000002';
@@ -37,11 +41,15 @@ describe('"Add member": search and invitations addressed to an account', () => {
     app.use('/groups', authenticateToken, router);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/groups`;
-    const ids = [OWNER, ADMIN, MEMBER, MARI, JAAN].map(id => new mongoose.Types.ObjectId(id));
-    await mongoose.connection.collection('users').insertMany(ids.map(_id => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
-    await mongoose.connection.collection('user_sessions').insertMany(ids.map(_id => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
+    const ids = [OWNER, ADMIN, MEMBER, MARI, JAAN].map((id) => new mongoose.Types.ObjectId(id));
+    await mongoose.connection
+      .collection('users')
+      .insertMany(ids.map((_id) => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
+    await mongoose.connection
+      .collection('user_sessions')
+      .insertMany(ids.map((_id) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
   }, 120_000);
 
   beforeEach(async () => {
@@ -64,14 +72,30 @@ describe('"Add member": search and invitations addressed to an account', () => {
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
   const call = async (path: string, userId: string, method = 'GET', body?: unknown) => {
     const now = Math.floor(Date.now() / 1000);
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, tokenVersion: 1, sid: userId, typ: 'session', email: `${userId}@example.test`, iat: now, exp: now + 60 }]
-      .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: userId,
+        tokenVersion: 1,
+        sid: userId,
+        typ: 'session',
+        email: `${userId}@example.test`,
+        iat: now,
+        exp: now + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${url}${path}`, {
       method,
@@ -81,7 +105,8 @@ describe('"Add member": search and invitations addressed to an account', () => {
     const text = await response.text();
     return { status: response.status, body: text ? JSON.parse(text) : {} };
   };
-  const invite = (userId: string, role = 'member', as = ADMIN) => call(`/${groupId}/invitations`, as, 'POST', { userId, role });
+  const invite = (userId: string, role = 'member', as = ADMIN) =>
+    call(`/${groupId}/invitations`, as, 'POST', { userId, role });
 
   describe('search', () => {
     it('is for owners and admins, with at least three characters', async () => {
@@ -110,7 +135,7 @@ describe('"Add member": search and invitations addressed to an account', () => {
       // 30 a minute; an earlier test's search by the same account counts too.
       const firstRefused = statuses.indexOf(429);
       expect(firstRefused).toBeGreaterThanOrEqual(29);
-      expect(statuses.slice(0, firstRefused).every(status => status === 200)).toBe(true);
+      expect(statuses.slice(0, firstRefused).every((status) => status === 200)).toBe(true);
     });
   });
 
@@ -124,14 +149,18 @@ describe('"Add member": search and invitations addressed to an account', () => {
       expect((await invite(JAAN, 'owner')).status).toBe(403);
       expect((await invite(JAAN, 'member', MEMBER)).status).toBe(403);
       // A link invitation still works as before.
-      expect((await call(`/${groupId}/invitations`, ADMIN, 'POST', { role: 'member' })).body.data.token).toMatch(/^[0-9a-f]{64}$/);
+      expect((await call(`/${groupId}/invitations`, ADMIN, 'POST', { role: 'member' })).body.data.token).toMatch(
+        /^[0-9a-f]{64}$/
+      );
     });
 
     it('shows the invitation to its account only, who accepts it into the group', async () => {
       await invite(MARI, 'admin');
       expect((await call('/invitations/mine', JAAN)).body.data).toEqual([]);
       const mine = (await call('/invitations/mine', MARI)).body.data;
-      expect(mine).toEqual([expect.objectContaining({ groupId, groupName: 'Road team', role: 'admin', invitedBy: 'admin@example.test' })]);
+      expect(mine).toEqual([
+        expect.objectContaining({ groupId, groupName: 'Road team', role: 'admin', invitedBy: 'admin@example.test' })
+      ]);
 
       expect((await call(`/invitations/${mine[0].id}/accept`, JAAN, 'POST')).status).toBe(404);
       const accepted = await call(`/invitations/${mine[0].id}/accept`, MARI, 'POST');
@@ -165,19 +194,35 @@ describe('"Add member": search and invitations addressed to an account', () => {
       await expect(service.inviteAccount(missing, OWNER, MARI)).rejects.toMatchObject({ statusCode: 404 });
 
       const far = new Date(Date.now() + 86_400_000);
-      await Group.updateOne({ _id: groupId }, {
-        $set: { invitations: Array.from({ length: 100 }, (_, i) => ({ tokenHash: `h${i}`, role: 'member', createdBy: OWNER, expiresAt: far })) }
-      });
+      await Group.updateOne(
+        { _id: groupId },
+        {
+          $set: {
+            invitations: Array.from({ length: 100 }, (_, i) => ({
+              tokenHash: `h${i}`,
+              role: 'member',
+              createdBy: OWNER,
+              expiresAt: far
+            }))
+          }
+        }
+      );
       expect((await invite(MARI)).status).toBe(409);
       // Link invitations sit beside account ones without hiding anyone from search.
       // Searched as the admin: the owner's searches this minute went on the rate-limit test.
-      expect((await call(`/${groupId}/candidates?q=mari`, ADMIN)).body.data.map((c: { id: string }) => c.id)).toEqual([MARI, JAAN]);
+      expect((await call(`/${groupId}/candidates?q=mari`, ADMIN)).body.data.map((c: { id: string }) => c.id)).toEqual([
+        MARI,
+        JAAN
+      ]);
     });
 
     it('refuses to accept for someone who joined another way meanwhile', async () => {
       await invite(MARI);
       const [invitation] = (await call('/invitations/mine', MARI)).body.data;
-      await Group.updateOne({ _id: groupId }, { $push: { members: { userId: MARI, role: 'member', joinedAt: new Date() } } });
+      await Group.updateOne(
+        { _id: groupId },
+        { $push: { members: { userId: MARI, role: 'member', joinedAt: new Date() } } }
+      );
       await expect(service.acceptAccountInvitation(invitation.id, MARI)).rejects.toMatchObject({ statusCode: 409 });
     });
 
@@ -187,12 +232,15 @@ describe('"Add member": search and invitations addressed to an account', () => {
       try {
         await invite(MARI);
         const internal = (path: string, method = 'GET') =>
-          fetch(`${url}${path}`, { method, headers: { 'x-internal-token': 'internal-test-token', 'x-service-id': 'test' } });
+          fetch(`${url}${path}`, {
+            method,
+            headers: { 'x-internal-token': 'internal-test-token', 'x-service-id': 'test' }
+          });
         const mine = (await (await internal(`/invitations/mine?userId=${MARI}`)).json()) as { data: { id: string }[] };
         expect(mine.data).toHaveLength(1);
         expect((await internal(`/${groupId}/candidates?q=jaan&userId=${OWNER}`)).status).toBe(200);
         expect((await internal(`/invitations/${mine.data[0].id}/accept?userId=${MARI}`, 'POST')).status).toBe(200);
-        const joined = (await Group.findById(groupId))!.members.find(member => member.userId === MARI);
+        const joined = (await Group.findById(groupId))!.members.find((member) => member.userId === MARI);
         expect(joined?.email).toBeUndefined();
       } finally {
         if (previous === undefined) delete process.env.INTERNAL_SERVICE_TOKEN;

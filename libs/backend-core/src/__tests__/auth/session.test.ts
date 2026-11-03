@@ -1,23 +1,38 @@
-jest.mock('mongoose', () => ({ ...jest.requireActual('mongoose'), connection: { readyState: 1, collection: jest.fn() } }));
+import { vi } from 'vitest';
+vi.mock('mongoose', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('mongoose')>('mongoose')),
+    connection: { readyState: 1, collection: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import mongoose from 'mongoose';
 import { isCurrentSession, SESSION_TOKEN_TYPE, USER_SESSIONS_COLLECTION } from '../../auth/session';
 
 const connection = mongoose.connection as unknown as { readyState: number };
 const iat = 1_700_000_000;
 const sid = '64b7f1f77bcf86cd79943aaa';
-const claims = { id: '507f1f77bcf86cd799439011', email: 'User@Example.test', tokenVersion: 3, sid, typ: SESSION_TOKEN_TYPE, iat, exp: iat + 90 * 86400 };
-const users = { findOne: jest.fn() };
-const sessions = { findOne: jest.fn() };
+const claims = {
+  id: '507f1f77bcf86cd799439011',
+  email: 'User@Example.test',
+  tokenVersion: 3,
+  sid,
+  typ: SESSION_TOKEN_TYPE,
+  iat,
+  exp: iat + 90 * 86400
+};
+const users = { findOne: vi.fn() };
+const sessions = { findOne: vi.fn() };
 const options = { projection: { _id: 1 }, readPreference: 'primary', maxTimeMS: 3000 };
 beforeEach(() => {
   connection.readyState = 1;
-  jest.spyOn(mongoose.connection, 'collection').mockImplementation(
-    (name: string) => (name === 'users' ? users : sessions) as unknown as mongoose.Collection
-  );
+  vi.spyOn(mongoose.connection, 'collection').mockImplementation(function (name: string) {
+    return (name === 'users' ? users : sessions) as unknown as mongoose.Collection;
+  });
   users.findOne.mockReset().mockResolvedValue({ _id: new mongoose.Types.ObjectId(claims.id) });
   sessions.findOne.mockReset().mockResolvedValue({ _id: new mongoose.Types.ObjectId(sid) });
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => vi.restoreAllMocks());
 
 it('checks the account identity/version and the unexpired session on the primary, reading ids only', async () => {
   expect(await isCurrentSession(claims)).toBe(true);
@@ -27,7 +42,11 @@ it('checks the account identity/version and the unexpired session on the primary
   );
   expect(mongoose.connection.collection).toHaveBeenCalledWith(USER_SESSIONS_COLLECTION);
   expect(sessions.findOne).toHaveBeenCalledWith(
-    { _id: new mongoose.Types.ObjectId(sid), userId: new mongoose.Types.ObjectId(claims.id), expiresAt: { $gt: expect.any(Date) } },
+    {
+      _id: new mongoose.Types.ObjectId(sid),
+      userId: new mongoose.Types.ObjectId(claims.id),
+      expiresAt: { $gt: expect.any(Date) }
+    },
     options
   );
 });
@@ -42,13 +61,28 @@ it('rejects a live session on an account whose version moved on', async () => {
   expect(await isCurrentSession(claims)).toBe(false);
 });
 
-it.each([null, undefined, 'jwt-string', {}, { ...claims, id: '' }, { ...claims, id: 'wrong' },
-  { ...claims, email: '' }, { ...claims, email: undefined },
-  { ...claims, sid: '' }, { ...claims, sid: 'not-an-id' }, { ...claims, sid: 42 }, { ...claims, sid: undefined },
+it.each([
+  null,
+  undefined,
+  'jwt-string',
+  {},
+  { ...claims, id: '' },
+  { ...claims, id: 'wrong' },
+  { ...claims, email: '' },
+  { ...claims, email: undefined },
+  { ...claims, sid: '' },
+  { ...claims, sid: 'not-an-id' },
+  { ...claims, sid: 42 },
+  { ...claims, sid: undefined },
   // Untyped (signed before session tokens carried a type) or typed as something else.
-  { ...claims, typ: undefined }, { ...claims, typ: 'mcp_access' }, { ...claims, typ: 'something-new' },
-  ...[undefined, null, '3', 0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1].map(tokenVersion => ({ ...claims, tokenVersion }))
-])('rejects malformed, versionless or session-less claims before any query: %j', async value => {
+  { ...claims, typ: undefined },
+  { ...claims, typ: 'mcp_access' },
+  { ...claims, typ: 'something-new' },
+  ...[undefined, null, '3', 0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1].map((tokenVersion) => ({
+    ...claims,
+    tokenVersion
+  }))
+])('rejects malformed, versionless or session-less claims before any query: %j', async (value) => {
   expect(await isCurrentSession(value)).toBe(false);
   expect(users.findOne).not.toHaveBeenCalled();
   expect(sessions.findOne).not.toHaveBeenCalled();

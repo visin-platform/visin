@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { useMongo } from '../helpers/mongo';
 useMongo();
 import fs from 'fs';
@@ -5,10 +6,13 @@ import os from 'os';
 import path from 'path';
 import { BadRequestError } from '@visin/backend-core';
 
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   resolvePath,
@@ -21,7 +25,7 @@ import {
   getMetadata,
   deleteFile,
   deleteByPrefix,
-  listFiles,
+  listFiles
 } from '../../utils/storage';
 
 let dataDir: string;
@@ -86,7 +90,7 @@ describe('write / read round-trip', () => {
       ws.end('streamed');
     });
 
-    const rs = (await createReadStream('stream/out.txt'));
+    const rs = await createReadStream('stream/out.txt');
     const chunks: Buffer[] = [];
     await new Promise<void>((resolve, reject) => {
       rs.on('data', (c) => chunks.push(c as Buffer));
@@ -102,20 +106,20 @@ describe('fileExists / getMetadata', () => {
   it('reports existence correctly', async () => {
     writeFile('exists.txt', Buffer.from('x'));
 
-    expect((await fileExists('exists.txt'))).toBe(true);
-    expect((await fileExists('missing.txt'))).toBe(false);
+    expect(await fileExists('exists.txt')).toBe(true);
+    expect(await fileExists('missing.txt')).toBe(false);
   });
 
   it('returns false for a directory', async () => {
     writeFile('dir/file.txt', Buffer.from('x'));
 
-    expect((await fileExists('dir'))).toBe(false);
+    expect(await fileExists('dir')).toBe(false);
   });
 
   it('returns size and mtime', async () => {
     writeFile('meta.txt', Buffer.from('12345'));
 
-    const meta = (await getMetadata('meta.txt'));
+    const meta = await getMetadata('meta.txt');
     expect(meta.size).toBe(5);
     // fs.Stats dates come from Node's realm, not Jest's sandbox, so
     // instanceof Date fails — and fs mtime granularity can land a hair
@@ -128,9 +132,9 @@ describe('deleteFile', () => {
   it('deletes an existing file', async () => {
     writeFile('del.txt', Buffer.from('x'));
 
-    (await deleteFile('del.txt'));
+    await deleteFile('del.txt');
 
-    expect((await fileExists('del.txt'))).toBe(false);
+    expect(await fileExists('del.txt')).toBe(false);
   });
 
   it('is a no-op for a missing file', async () => {
@@ -143,7 +147,7 @@ describe('deleteByPrefix', () => {
     writeFile('grp/alb/one.txt', Buffer.from('1'));
     writeFile('grp/alb/nested/two.txt', Buffer.from('2'));
 
-    const count = (await deleteByPrefix('grp/alb'));
+    const count = await deleteByPrefix('grp/alb');
 
     expect(count).toBe(2);
     expect(fs.existsSync(path.join(dataDir, 'grp/alb'))).toBe(false);
@@ -154,14 +158,14 @@ describe('deleteByPrefix', () => {
     writeFile('grp/photo_2.jpg', Buffer.from('2'));
     writeFile('grp/other.jpg', Buffer.from('3'));
 
-    const count = (await deleteByPrefix('grp/photo_'));
+    const count = await deleteByPrefix('grp/photo_');
 
     expect(count).toBe(2);
-    expect((await fileExists('grp/other.jpg'))).toBe(true);
+    expect(await fileExists('grp/other.jpg')).toBe(true);
   });
 
   it('returns 0 when the parent directory does not exist', async () => {
-    expect((await deleteByPrefix('nowhere/file_'))).toBe(0);
+    expect(await deleteByPrefix('nowhere/file_')).toBe(0);
   });
 });
 
@@ -170,7 +174,7 @@ describe('listFiles', () => {
     writeFile('a/one.txt', Buffer.from('1'));
     writeFile('a/b/two.txt', Buffer.from('22'));
 
-    const files = (await listFiles());
+    const files = await listFiles();
 
     expect(files).toHaveLength(2);
     expect(files.map((f) => f.name).sort()).toEqual([path.join('a', 'b', 'two.txt'), path.join('a', 'one.txt')]);
@@ -181,7 +185,7 @@ describe('listFiles', () => {
     writeFile('a/one.txt', Buffer.from('1'));
     writeFile('b/two.txt', Buffer.from('2'));
 
-    const files = (await listFiles('b'));
+    const files = await listFiles('b');
 
     expect(files).toHaveLength(1);
     expect(files[0].name).toBe(path.join('b', 'two.txt'));
@@ -192,10 +196,10 @@ describe('listFiles', () => {
     writeFile('c/2.txt', Buffer.from('2'));
     writeFile('c/3.txt', Buffer.from('3'));
 
-    expect((await listFiles('c', 2))).toHaveLength(2);
+    expect(await listFiles('c', 2)).toHaveLength(2);
   });
 
   it('returns an empty list for a missing prefix directory', async () => {
-    expect((await listFiles('missing-dir'))).toEqual([]);
+    expect(await listFiles('missing-dir')).toEqual([]);
   });
 });

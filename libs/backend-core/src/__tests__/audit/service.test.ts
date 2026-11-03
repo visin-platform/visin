@@ -1,16 +1,23 @@
-jest.mock('../../audit/AuditEvent', () => ({
-  AuditEvent: { create: jest.fn(), find: jest.fn(), aggregate: jest.fn() }
-}));
-jest.mock('../../logging/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../audit/AuditEvent', async () => {
+  const module = await (() => ({
+    AuditEvent: { create: vi.fn(), find: vi.fn(), aggregate: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { AuditEvent } from '../../audit/AuditEvent';
 import { logger } from '../../logging/logger';
 import { listToolCalls, recordToolCall, summariseToolUsage } from '../../audit/service';
 
-const audit = AuditEvent as unknown as Record<string, jest.Mock>;
-const log = logger as unknown as Record<string, jest.Mock>;
+const audit = AuditEvent as unknown as Record<string, Mock>;
+const log = logger as unknown as Record<string, Mock>;
 
 const input = {
   service: 'mcp-service',
@@ -22,7 +29,7 @@ const input = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   audit.create.mockResolvedValue({});
 });
 
@@ -55,9 +62,11 @@ describe('recordToolCall', () => {
     // Instrumentation that can slow the thing it instruments is nearly as bad
     // as one that can break it.
     let settle: () => void = () => undefined;
-    audit.create.mockReturnValue(new Promise<void>(resolve => {
-      settle = resolve;
-    }));
+    audit.create.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      })
+    );
 
     expect(recordToolCall(input)).toBeUndefined();
     settle();
@@ -80,7 +89,7 @@ describe('recordToolCall', () => {
 
 describe('listToolCalls', () => {
   it("returns one account's calls, newest first", async () => {
-    const limit = jest.fn().mockResolvedValue([
+    const limit = vi.fn().mockResolvedValue([
       {
         at: new Date('2026-09-05T12:00:00.000Z'),
         tool: { name: 'list_projects', ms: 90, chars: 400, tokens: 100, failed: true },
@@ -88,7 +97,7 @@ describe('listToolCalls', () => {
         actorKind: 'oauth'
       }
     ]);
-    const sort = jest.fn().mockReturnValue({ limit });
+    const sort = vi.fn().mockReturnValue({ limit });
     audit.find.mockReturnValue({ sort });
 
     const rows = await listToolCalls('u1', 50);
@@ -108,7 +117,7 @@ describe('listToolCalls', () => {
   });
 
   it('reports a call that did not fail as not failed, rather than undefined', async () => {
-    const limit = jest.fn().mockResolvedValue([
+    const limit = vi.fn().mockResolvedValue([
       {
         at: new Date('2026-09-05T12:00:00.000Z'),
         tool: { name: 'list_projects', ms: 90, chars: 400, tokens: 100 },
@@ -116,7 +125,7 @@ describe('listToolCalls', () => {
         actorKind: 'api_key'
       }
     ]);
-    audit.find.mockReturnValue({ sort: jest.fn().mockReturnValue({ limit }) });
+    audit.find.mockReturnValue({ sort: vi.fn().mockReturnValue({ limit }) });
 
     expect((await listToolCalls('u1'))[0].failed).toBe(false);
   });
@@ -127,7 +136,15 @@ describe('summariseToolUsage', () => {
     // Not by call count: a tool called twice that returns a whole epoch series
     // costs more than a hundred cheap lookups, and the two rank differently.
     audit.aggregate.mockResolvedValue([
-      { _id: 'get_training_curve', calls: 2, failed: 0, totalTokens: 9000, avgTokens: 4500.4, avgMs: 380.6, maxTokens: 6000 },
+      {
+        _id: 'get_training_curve',
+        calls: 2,
+        failed: 0,
+        totalTokens: 9000,
+        avgTokens: 4500.4,
+        avgMs: 380.6,
+        maxTokens: 6000
+      },
       { _id: 'list_projects', calls: 100, failed: 3, totalTokens: 1200, avgTokens: 12, avgMs: 40, maxTokens: 20 }
     ]);
 

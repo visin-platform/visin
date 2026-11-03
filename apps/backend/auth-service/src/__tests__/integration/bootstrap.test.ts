@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -12,11 +13,14 @@ import { setupBodySchema } from '../../validation/authSchemas';
 import { initializeBootstrap, recoverAdministrator } from '../../services/bootstrapService';
 
 const credentials = { email: 'owner@example.test', password: 'test-password-long-enough' };
-const request = (body = credentials) => ({
-  body: setupBodySchema.parse(body), cookies: {}, headers: {},
-}) as Request;
+const request = (body = credentials) =>
+  ({
+    body: setupBodySchema.parse(body),
+    cookies: {},
+    headers: {}
+  }) as Request;
 const response = () => {
-  const res = { status: jest.fn(), json: jest.fn(), cookie: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn(), cookie: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as Response & typeof res;
 };
@@ -35,7 +39,7 @@ describe('first-run setup with in-memory MongoDB', () => {
   }, 120_000);
 
   afterEach(async () => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     if (mongoose.connection.readyState === 1) await User.deleteMany({});
   });
 
@@ -44,15 +48,21 @@ describe('first-run setup with in-memory MongoDB', () => {
     else process.env.JWT_SECRET = oldSecret;
     if (oldGroupUrl === undefined) delete process.env.GROUP_SERVICE_URL;
     else process.env.GROUP_SERVICE_URL = oldGroupUrl;
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
   it('creates exactly one administrator when different setup requests overlap', async () => {
     let arrivals = 0;
     let release!: () => void;
-    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const hash = passwords.hashPassword;
-    jest.spyOn(passwords, 'hashPassword').mockImplementation(async password => {
+    vi.spyOn(passwords, 'hashPassword').mockImplementation(async function (password) {
       const result = await hash(password);
       if (++arrivals === 2) release();
       await barrier;
@@ -61,11 +71,11 @@ describe('first-run setup with in-memory MongoDB', () => {
 
     const outcomes = await Promise.allSettled([
       setupFirstUser(request(), response()),
-      setupFirstUser(request({ ...credentials, email: 'second@example.test' }), response()),
+      setupFirstUser(request({ ...credentials, email: 'second@example.test' }), response())
     ]);
 
-    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
-    expect(outcomes.find(outcome => outcome.status === 'rejected')).toMatchObject({ reason: { statusCode: 409 } });
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.find((outcome) => outcome.status === 'rejected')).toMatchObject({ reason: { statusCode: 409 } });
     expect(await User.countDocuments()).toBe(1);
     expect(await User.countDocuments({ roles: 'admin' })).toBe(1);
   });
@@ -76,10 +86,14 @@ describe('first-run setup with in-memory MongoDB', () => {
 
     let entered!: () => void;
     let release!: () => void;
-    const hashing = new Promise<void>(resolve => { entered = resolve; });
-    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const hashing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const hash = passwords.hashPassword;
-    jest.spyOn(passwords, 'hashPassword').mockImplementation(async password => {
+    vi.spyOn(passwords, 'hashPassword').mockImplementation(async function (password) {
       entered();
       await barrier;
       return hash(password);
@@ -87,24 +101,25 @@ describe('first-run setup with in-memory MongoDB', () => {
     const setup = setupFirstUser(request(), response());
     await hashing;
     try {
-      await expect(register(request({ ...credentials, email: 'member@example.test' }), response()))
-        .rejects.toMatchObject({ statusCode: 409 });
+      await expect(
+        register(request({ ...credentials, email: 'member@example.test' }), response())
+      ).rejects.toMatchObject({ statusCode: 409 });
       expect(await User.countDocuments()).toBe(0);
     } finally {
       release();
       await setup;
     }
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     await register(request({ ...credentials, email: 'member@example.test' }), response());
     expect(await User.countDocuments()).toBe(2);
     expect((await User.findOne({ email: 'member@example.test' }))!.roles).toEqual([]);
   });
 
   it('can retry an interruption before the user insert', async () => {
-    jest.spyOn(passwords, 'hashPassword').mockRejectedValueOnce(new Error('hash interrupted'));
+    vi.spyOn(passwords, 'hashPassword').mockRejectedValueOnce(new Error('hash interrupted'));
     await expect(setupFirstUser(request(), response())).rejects.toThrow('hash interrupted');
     expect(await User.countDocuments()).toBe(0);
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
 
     await setupFirstUser(request(), response());
     expect(await User.countDocuments({ roles: 'admin' })).toBe(1);
@@ -112,15 +127,16 @@ describe('first-run setup with in-memory MongoDB', () => {
 
   it('recovers through normal login when the insert commits but its acknowledgement is lost', async () => {
     const insert = User.collection.insertOne.bind(User.collection);
-    jest.spyOn(User.collection, 'insertOne').mockImplementationOnce(async (doc, options) => {
+    vi.spyOn(User.collection, 'insertOne').mockImplementationOnce(async function (doc, options) {
       await insert(doc, options);
       throw new Error('insert acknowledgement lost');
     });
     await expect(setupFirstUser(request(), response())).rejects.toThrow('insert acknowledgement lost');
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
 
-    await expect(setupFirstUser(request({ ...credentials, email: 'other@example.test' }), response()))
-      .rejects.toMatchObject({ statusCode: 409 });
+    await expect(
+      setupFirstUser(request({ ...credentials, email: 'other@example.test' }), response())
+    ).rejects.toMatchObject({ statusCode: 409 });
     const res = response();
     await login(request(), res);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, token: expect.any(String) }));
@@ -129,7 +145,9 @@ describe('first-run setup with in-memory MongoDB', () => {
 
   it('keeps the account usable when session issuance fails after creation', async () => {
     const failedResponse = response();
-    failedResponse.cookie.mockImplementation(() => { throw new Error('response interrupted'); });
+    failedResponse.cookie.mockImplementation(function () {
+      throw new Error('response interrupted');
+    });
     await expect(setupFirstUser(request(), failedResponse)).rejects.toThrow('response interrupted');
 
     const status = response();
@@ -141,8 +159,10 @@ describe('first-run setup with in-memory MongoDB', () => {
 
   it('keeps legacy non-admin instances closed to setup without breaking login or registration', async () => {
     const user = await User.create({
-      email: credentials.email, signupMethod: 'password',
-      passwordHash: await passwords.hashPassword(credentials.password), roles: [],
+      email: credentials.email,
+      signupMethod: 'password',
+      passwordHash: await passwords.hashPassword(credentials.password),
+      roles: []
     });
     await expect(setupFirstUser(request(), response())).rejects.toMatchObject({ statusCode: 409 });
     await login(request(), response());
@@ -151,9 +171,14 @@ describe('first-run setup with in-memory MongoDB', () => {
   });
 
   it('does not recreate a missing account from an old OAuth browser session', async () => {
-    const token = await signSessionToken({ id: new mongoose.Types.ObjectId().toString(), email: credentials.email, name: 'Old user', tokenVersion: 1 });
+    const token = await signSessionToken({
+      id: new mongoose.Types.ObjectId().toString(),
+      email: credentials.email,
+      name: 'Old user',
+      tokenVersion: 1
+    });
     const req = { cookies: { access_token: token }, headers: {} } as unknown as Request;
-    const next = jest.fn();
+    const next = vi.fn();
 
     await optionalAuth(req, response(), next);
 
@@ -168,10 +193,13 @@ describe('first-run setup with in-memory MongoDB', () => {
     for (const [payload, accepted] of [
       [claims, true],
       [{ ...claims, tokenVersion: 2 }, false],
-      [{ ...claims, id: new mongoose.Types.ObjectId().toString() }, false],
+      [{ ...claims, id: new mongoose.Types.ObjectId().toString() }, false]
     ] as const) {
-      const req = { cookies: {}, headers: { authorization: `Bearer ${await signSessionToken(payload, user._id.toString())}` } } as Request;
-      await optionalAuth(req, response(), jest.fn());
+      const req = {
+        cookies: {},
+        headers: { authorization: `Bearer ${await signSessionToken(payload, user._id.toString())}` }
+      } as Request;
+      await optionalAuth(req, response(), vi.fn());
       expect(Boolean(req.user)).toBe(accepted);
     }
     expect(await User.countDocuments()).toBe(1);
@@ -180,8 +208,10 @@ describe('first-run setup with in-memory MongoDB', () => {
 
   it('recovers a legacy administrator idempotently while preserving identity and credentials', async () => {
     const user = await User.create({
-      email: credentials.email, signupMethod: 'password', roles: ['reviewer'],
-      passwordHash: await passwords.hashPassword(credentials.password),
+      email: credentials.email,
+      signupMethod: 'password',
+      roles: ['reviewer'],
+      passwordHash: await passwords.hashPassword(credentials.password)
     });
     await recoverAdministrator(user._id.toString());
     await recoverAdministrator(user._id.toString());
@@ -196,13 +226,15 @@ describe('first-run setup with in-memory MongoDB', () => {
 
   it('refuses recovery for malformed or missing identities without creating an account', async () => {
     await expect(recoverAdministrator('not-an-id')).rejects.toMatchObject({ statusCode: 400 });
-    await expect(recoverAdministrator(new mongoose.Types.ObjectId().toString())).rejects.toMatchObject({ statusCode: 404 });
+    await expect(recoverAdministrator(new mongoose.Types.ObjectId().toString())).rejects.toMatchObject({
+      statusCode: 404
+    });
     expect(await User.countDocuments()).toBe(0);
   });
 
   it('propagates index initialization failure instead of declaring setup ready', async () => {
     const error = new Error('cannot create bootstrap index');
-    jest.spyOn(User, 'createIndexes').mockRejectedValueOnce(error);
+    vi.spyOn(User, 'createIndexes').mockRejectedValueOnce(error);
     await expect(initializeBootstrap()).rejects.toBe(error);
   });
 

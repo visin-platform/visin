@@ -6,8 +6,7 @@
     // TypeScript 6 no longer adds every @types package on its own.
     "types": ["node"],
     "module": "NodeNext",
-    // Implied by "module", but ts-jest falls back to Node10 when it is unset,
-    // and Node10 cannot see package "exports" subpaths.
+    // Keep Node resolution explicit so package exports resolve consistently.
     "moduleResolution": "NodeNext",
     "resolveJsonModule": true,
     "isolatedModules": true,

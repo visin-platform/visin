@@ -1,25 +1,38 @@
+import { vi, type Mock } from 'vitest';
 import { PassThrough } from 'stream';
 import type { Request, Response } from 'express';
 
-jest.mock('../../services/uploadService', () => ({ ...jest.requireActual('../../services/uploadService'), uploadFile: jest.fn() }));
+vi.mock('../../services/uploadService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/uploadService')>('../../services/uploadService')),
+    uploadFile: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import { uploadFile } from '../../services/uploadService';
 
-jest.mock('../../utils/storage', () => ({
-  createWriteStream: jest.fn(),
-  openRead: jest.fn(),
-  deleteFile: jest.fn(),
-  deleteByPrefix: jest.fn(),
-  deleteFiles: jest.fn(),
-  fileExists: jest.fn(),
-  getMetadata: jest.fn(),
-  listFiles: jest.fn(),
-  writeFile: jest.fn(),
-  readFile: jest.fn(),
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../utils/storage', async () => {
+  const module = await (() => ({
+    createWriteStream: vi.fn(),
+    openRead: vi.fn(),
+    deleteFile: vi.fn(),
+    deleteByPrefix: vi.fn(),
+    deleteFiles: vi.fn(),
+    fileExists: vi.fn(),
+    getMetadata: vi.fn(),
+    listFiles: vi.fn(),
+    writeFile: vi.fn(),
+    readFile: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   internalUpload,
@@ -29,33 +42,33 @@ import {
   internalDelete,
   internalDeleteFolder,
   internalDeleteFiles,
-  internalList,
+  internalList
 } from '../../controllers/internalController';
 import * as storage from '../../utils/storage';
 
-const mockedStorage = storage as unknown as Record<string, jest.Mock>;
+const mockedStorage = storage as unknown as Record<string, Mock>;
 
 type MockRes = Response & {
-  status: jest.Mock;
-  json: jest.Mock;
-  end: jest.Mock;
-  setHeader: jest.Mock;
-  destroy: jest.Mock;
+  status: Mock;
+  json: Mock;
+  end: Mock;
+  setHeader: Mock;
+  destroy: Mock;
   headersSent: boolean;
 };
 
 const makeRes = (): MockRes => {
   const res = {
-    status: jest.fn(),
-    json: jest.fn(),
-    end: jest.fn(),
-    setHeader: jest.fn(),
-    destroy: jest.fn(),
+    status: vi.fn(),
+    json: vi.fn(),
+    end: vi.fn(),
+    setHeader: vi.fn(),
+    destroy: vi.fn(),
     headersSent: false,
-    on: jest.fn(),
-    once: jest.fn(),
-    emit: jest.fn(),
-    write: jest.fn(),
+    on: vi.fn(),
+    once: vi.fn(),
+    emit: vi.fn(),
+    write: vi.fn()
   };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
@@ -70,23 +83,23 @@ const makeStreamReq = (fileId: string | string[]): Request & PassThrough => {
 };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ params: {}, body: {}, query: {}, headers: {}, ...overrides } as unknown as Request);
+  ({ params: {}, body: {}, query: {}, headers: {}, ...overrides }) as unknown as Request;
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('internalUpload', () => {
   it('delegates streaming and reports committed size', async () => {
-    (uploadFile as jest.Mock).mockResolvedValue({ size: 11, complete: true });
+    (uploadFile as Mock).mockResolvedValue({ size: 11, complete: true });
     const req = makeStreamReq(['grp', 'file.bin']);
     const res = makeRes();
     await internalUpload(req, res);
     expect(uploadFile).toHaveBeenCalledWith('grp/file.bin', req, { internal: true, contentLength: undefined });
     expect(res.json).toHaveBeenCalledWith({ success: true, fileId: 'grp/file.bin', size: 11 });
-    (res.once as jest.Mock).mock.calls[0][1]();
+    (res.once as Mock).mock.calls[0][1]();
     expect(req.destroyed).toBe(true);
   });
 });
@@ -104,10 +117,12 @@ describe('internalDownload', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 42, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream, size: 42, range: range?.(42) ?? null }));
+    mockedStorage.openRead.mockImplementation(function (_fileId, range) {
+      return { stream, size: 42, range: range?.(42) ?? null };
+    });
     const res = makeRes();
 
-    (await internalDownload(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res));
+    await internalDownload(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res);
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 42);
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
@@ -118,10 +133,12 @@ describe('internalDownload', () => {
   it('serves a byte range as 206 so a zip index can be read without the whole file', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 1000, lastModified: new Date() });
-    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream: new PassThrough(), size: 1000, range: range?.(1000) ?? null }));
+    mockedStorage.openRead.mockImplementation(function (_fileId, range) {
+      return { stream: new PassThrough(), size: 1000, range: range?.(1000) ?? null };
+    });
     const res = makeRes();
 
-    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=900-949' } }), res));
+    await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=900-949' } }), res);
 
     expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toEqual({ start: 900, end: 949 });
     expect(res.status).toHaveBeenCalledWith(206);
@@ -132,15 +149,20 @@ describe('internalDownload', () => {
   it('clamps an open-ended range and falls back to the whole file on a bad one', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 1000, lastModified: new Date() });
-    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream: new PassThrough(), size: 1000, range: range?.(1000) ?? null }));
+    mockedStorage.openRead.mockImplementation(function (_fileId, range) {
+      return { stream: new PassThrough(), size: 1000, range: range?.(1000) ?? null };
+    });
 
-    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=990-' } }), makeRes()));
+    await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=990-' } }), makeRes());
     expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toEqual({ start: 990, end: 999 });
 
-    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=2000-3000' } }), makeRes()));
+    await internalDownload(
+      makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=2000-3000' } }),
+      makeRes()
+    );
     expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toBeNull();
 
-    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'rubbish' } }), makeRes()));
+    await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'rubbish' } }), makeRes());
     expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toBeNull();
   });
 
@@ -148,10 +170,12 @@ describe('internalDownload', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 42, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream, size: 42, range: range?.(42) ?? null }));
+    mockedStorage.openRead.mockImplementation(function (_fileId, range) {
+      return { stream, size: 42, range: range?.(42) ?? null };
+    });
     const res = makeRes();
 
-    (await internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res));
+    await internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res);
     stream.emit('error', new Error('io error'));
     await flush();
 
@@ -163,11 +187,13 @@ describe('internalDownload', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 42, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream, size: 42, range: range?.(42) ?? null }));
+    mockedStorage.openRead.mockImplementation(function (_fileId, range) {
+      return { stream, size: 42, range: range?.(42) ?? null };
+    });
     const res = makeRes();
     res.headersSent = true;
 
-    (await internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res));
+    await internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res);
     const err = new Error('io error');
     stream.emit('error', err);
     await flush();
@@ -182,7 +208,7 @@ describe('internalExists', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     const res = makeRes();
 
-    (await internalExists(makeReq({ params: { fileId: 'yes.bin' } }), res));
+    await internalExists(makeReq({ params: { fileId: 'yes.bin' } }), res);
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.end).toHaveBeenCalled();
@@ -195,7 +221,7 @@ describe('internalExists', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     const res = makeRes();
 
-    (await internalExists(makeReq({ params: { fileId: 'a.zip' } }), res));
+    await internalExists(makeReq({ params: { fileId: 'a.zip' } }), res);
 
     expect(res.setHeader).not.toHaveBeenCalledWith('Content-Length', expect.anything());
     expect(res.end).toHaveBeenCalled();
@@ -205,7 +231,7 @@ describe('internalExists', () => {
     mockedStorage.fileExists.mockReturnValue(false);
     const res = makeRes();
 
-    (await internalExists(makeReq({ params: { fileId: 'no.bin' } }), res));
+    await internalExists(makeReq({ params: { fileId: 'no.bin' } }), res);
 
     expect(res.status).toHaveBeenCalledWith(404);
   });
@@ -226,17 +252,17 @@ describe('internalMetadata', () => {
     mockedStorage.getMetadata.mockReturnValue(meta);
     const res = makeRes();
 
-    (await internalMetadata(makeReq({ params: { fileId: 'yes.bin' } }), res));
+    await internalMetadata(makeReq({ params: { fileId: 'yes.bin' } }), res);
 
     expect(res.json).toHaveBeenCalledWith({ success: true, data: meta });
   });
 });
 
 describe('internalList shallow mode', () => {
-  it('passes recursive=false through, so a caller can list just a folder\'s own files', async () => {
+  it("passes recursive=false through, so a caller can list just a folder's own files", async () => {
     mockedStorage.listFiles.mockReturnValue([]);
 
-    (await internalList(makeReq({ query: { prefix: 'label-bundles/b1', maxKeys: 1000, recursive: false } }), makeRes()));
+    await internalList(makeReq({ query: { prefix: 'label-bundles/b1', maxKeys: 1000, recursive: false } }), makeRes());
 
     expect(mockedStorage.listFiles).toHaveBeenCalledWith('label-bundles/b1', 1000, false);
   });
@@ -246,7 +272,7 @@ describe('internalDelete', () => {
   it('deletes the file and confirms', async () => {
     const res = makeRes();
 
-    (await internalDelete(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res));
+    await internalDelete(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res);
 
     expect(mockedStorage.deleteFile).toHaveBeenCalledWith('grp/file.bin');
     expect(res.json).toHaveBeenCalledWith({ success: true, message: 'File deleted' });
@@ -258,7 +284,7 @@ describe('internalDeleteFolder', () => {
     mockedStorage.deleteByPrefix.mockReturnValue(3);
     const res = makeRes();
 
-    (await internalDeleteFolder(makeReq({ body: { prefix: 'grp/alb' } }), res));
+    await internalDeleteFolder(makeReq({ body: { prefix: 'grp/alb' } }), res);
 
     expect(mockedStorage.deleteByPrefix).toHaveBeenCalledWith('grp/alb');
     expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Deleted 3 file(s)', count: 3 });
@@ -280,7 +306,7 @@ describe('internalList', () => {
     mockedStorage.listFiles.mockReturnValue(files);
     const res = makeRes();
 
-    (await internalList(makeReq({ query: { prefix: 'grp', maxKeys: 10, recursive: true } }), res));
+    await internalList(makeReq({ query: { prefix: 'grp', maxKeys: 10, recursive: true } }), res);
 
     expect(mockedStorage.listFiles).toHaveBeenCalledWith('grp', 10, true);
     expect(res.json).toHaveBeenCalledWith({ success: true, data: files });

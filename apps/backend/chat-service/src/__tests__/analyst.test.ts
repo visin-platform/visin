@@ -1,14 +1,27 @@
-jest.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ Client: jest.fn() }));
-jest.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ StreamableHTTPClientTransport: jest.fn() }));
-jest.mock('@visin/backend-core', () => ({ ...jest.requireActual('@visin/backend-core'), fetchWithTimeout: jest.fn() }));
+import { vi, type Mock } from 'vitest';
+vi.mock('@modelcontextprotocol/sdk/client/index.js', async () => {
+  const module = await (() => ({ Client: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', async () => {
+  const module = await (() => ({ StreamableHTTPClientTransport: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    fetchWithTimeout: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { fetchWithTimeout } from '@visin/backend-core';
 import { analyze } from '../services/analyst';
-const call = jest.fn(),
-  close = jest.fn(),
-  activity = jest.fn();
-const transport = { connect: jest.fn(), listTools: jest.fn(), callTool: call, close };
-const provider = fetchWithTimeout as jest.Mock;
+const call = vi.fn(),
+  close = vi.fn(),
+  activity = vi.fn();
+const transport = { connect: vi.fn(), listTools: vi.fn(), callTool: call, close };
+const provider = fetchWithTimeout as Mock;
 const input = () => ({
   provider: 'anthropic' as const,
   model: 'configured-model',
@@ -23,10 +36,12 @@ const input = () => ({
 const answer = (content: unknown[], stop_reason = 'end_turn') =>
   new Response(JSON.stringify({ content, stop_reason, usage: { input_tokens: 100, output_tokens: 20 } }));
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   provider.mockReset();
   call.mockReset();
-  (Client as jest.Mock).mockImplementation(() => transport);
+  (Client as Mock).mockImplementation(function () {
+    return transport;
+  });
   call.mockResolvedValue({ content: [{ type: 'text', text: 'Measured result' }] });
   transport.listTools.mockResolvedValue({
     tools: [
@@ -70,9 +85,9 @@ it('never executes a write tool requested by the provider', async () => {
 });
 it('bounds continuation rounds and marks oversized tool results as truncated', async () => {
   call.mockResolvedValue({ content: [{ type: 'text', text: 'x'.repeat(15000) }] });
-  provider.mockImplementation(async () =>
-    answer([{ type: 'tool_use', id: 'loop', name: 'get_training', input: { training: 'run1' } }], 'tool_use')
-  );
+  provider.mockImplementation(async function () {
+    return answer([{ type: 'tool_use', id: 'loop', name: 'get_training', input: { training: 'run1' } }], 'tool_use');
+  });
   await expect(analyze(input())).rejects.toThrow(/limit|too large/);
   expect(provider.mock.calls.length).toBeLessThanOrEqual(4);
   expect(provider.mock.calls[1][1].body).toContain('TRUNCATED');
@@ -231,9 +246,9 @@ describe('with OpenAI', () => {
     await expect(analyze(openai())).rejects.toThrow('token limit');
     provider.mockReset();
     call.mockResolvedValue({ content: [{ type: 'text', text: 'x'.repeat(15000) }] });
-    provider.mockImplementation(async () =>
-      completion({ content: null, tool_calls: [toolCall('get_training', { training: 'run1' })] }, 'tool_calls')
-    );
+    provider.mockImplementation(async function () {
+      return completion({ content: null, tool_calls: [toolCall('get_training', { training: 'run1' })] }, 'tool_calls');
+    });
     await expect(analyze(openai())).rejects.toThrow(/limit|too large/);
     expect(provider.mock.calls.length).toBeLessThanOrEqual(4);
     expect(provider.mock.calls[1][1].body).toContain('TRUNCATED');

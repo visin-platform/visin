@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Readable } from 'stream';
 import {
   deleteFile,
@@ -11,12 +12,17 @@ import {
   putFile
 } from '../../clients/fileServiceClient';
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
-const jsonResponse = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body }) as Response;
+const jsonResponse = (body: unknown, status = 200) =>
+  ({ ok: status < 400, status, json: async () => body }) as Response;
 const streamResponse = (status: number, body: string | null) =>
-  ({ ok: status < 400, status, body: body === null ? null : (Readable.toWeb(Readable.from([Buffer.from(body)])) as unknown) }) as Response;
+  ({
+    ok: status < 400,
+    status,
+    body: body === null ? null : (Readable.toWeb(Readable.from([Buffer.from(body)])) as unknown)
+  }) as Response;
 const read = async (stream: Readable) => {
   const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(Buffer.from(chunk));
@@ -24,7 +30,7 @@ const read = async (stream: Readable) => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.FILE_SERVICE_URL = 'http://files.test/';
   process.env.FILE_SERVICE_API_KEY = 'api-key';
 });
@@ -32,7 +38,12 @@ beforeEach(() => {
 it('requests a long-lived zip upload URL with its byte allowance', async () => {
   fetchMock.mockResolvedValue(jsonResponse({ data: { uploadUrl: 'http://signed/put', expiresMs: 9 } }));
   expect(await getUploadUrl('datasets/d/archives/a.zip', 100)).toEqual({ url: 'http://signed/put', expiresMs: 9 });
-  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ fileId: 'datasets/d/archives/a.zip', expiresInMinutes: 240, mimetype: 'application/zip', maxBytes: 100 });
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+    fileId: 'datasets/d/archives/a.zip',
+    expiresInMinutes: 240,
+    mimetype: 'application/zip',
+    maxBytes: 100
+  });
   expect(fetchMock.mock.calls[0][0]).toBe('http://files.test/internal/upload-url');
   fetchMock.mockResolvedValue(jsonResponse({}, 500));
   await expect(getUploadUrl('x.zip', 1)).rejects.toThrow('upload-url failed (500)');
@@ -84,7 +95,7 @@ it('stores, streams, measures, ranges and deletes files', async () => {
   await expect(deleteFolder('datasets/d/')).rejects.toThrow('folder delete failed');
 });
 
-it('deletes named files in batches of file-service\'s limit', async () => {
+it("deletes named files in batches of file-service's limit", async () => {
   fetchMock.mockResolvedValue(jsonResponse({}));
   const fileIds = Array.from({ length: 1500 }, (_, index) => `f${index}`);
   await deleteFiles(fileIds);

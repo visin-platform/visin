@@ -1,13 +1,23 @@
+import { vi } from 'vitest';
 import { clearHubCache, hubSummary, summarize } from '../../services/hubService';
 import { fetchDatasetInfo } from '../../clients/hubClient';
 
-jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
+vi.mock('../../clients/hubClient', async () => {
+  const module = await (() => ({ fetchDatasetInfo: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 const source = { provider: 'hf' as const, repo: 'acme/zod-png', revision: 'a'.repeat(40) };
 const info = {
   gated: false,
   tags: ['task_categories:image-segmentation', 'modality:image', 'zod', 'lidar'],
-  cardData: { license: ['cc-by-sa-4.0'], pretty_name: 'ZOD PNG', task_categories: ['image-segmentation'], language: 'en', size_categories: ['10K<n<100K'] },
+  cardData: {
+    license: ['cc-by-sa-4.0'],
+    pretty_name: 'ZOD PNG',
+    task_categories: ['image-segmentation'],
+    language: 'en',
+    size_categories: ['10K<n<100K']
+  },
   siblings: [
     { rfilename: 'README.md', size: 10 },
     { rfilename: 'train/camera/1.png', size: 300 },
@@ -18,7 +28,7 @@ const info = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   clearHubCache();
 });
 
@@ -36,14 +46,24 @@ describe('summarize', () => {
       gated: false,
       fileCount: 5,
       totalBytes: 560,
-      folders: [{ path: 'train', files: 2, bytes: 500 }, { path: 'val', files: 1, bytes: 50 }],
-      files: info.siblings.map(file => ({ path: file.rfilename, size: file.size })),
+      folders: [
+        { path: 'train', files: 2, bytes: 500 },
+        { path: 'val', files: 1, bytes: 50 }
+      ],
+      files: info.siblings.map((file) => ({ path: file.rfilename, size: file.size })),
       truncated: false
     });
   });
 
   it('copes with a bare repo: no card, no files, a gated flag as text', () => {
-    expect(summarize(source, { gated: 'auto' })).toMatchObject({ license: undefined, tags: [], fileCount: 0, totalBytes: 0, folders: [], gated: true });
+    expect(summarize(source, { gated: 'auto' })).toMatchObject({
+      license: undefined,
+      tags: [],
+      fileCount: 0,
+      totalBytes: 0,
+      folders: [],
+      gated: true
+    });
   });
 
   it('shows the first hundred files and says there are more', () => {
@@ -56,7 +76,7 @@ describe('summarize', () => {
 
 describe('hubSummary', () => {
   it('asks the Hub once per commit and then answers from memory', async () => {
-    jest.mocked(fetchDatasetInfo).mockResolvedValue(info);
+    vi.mocked(fetchDatasetInfo).mockResolvedValue(info);
     await hubSummary(source);
     await hubSummary(source);
     expect(fetchDatasetInfo).toHaveBeenCalledTimes(1);
@@ -65,8 +85,8 @@ describe('hubSummary', () => {
   });
 
   it('forgets an answer after an hour, and the oldest once it holds too many', async () => {
-    jest.mocked(fetchDatasetInfo).mockResolvedValue(info);
-    const now = jest.spyOn(Date, 'now');
+    vi.mocked(fetchDatasetInfo).mockResolvedValue(info);
+    const now = vi.spyOn(Date, 'now');
     now.mockReturnValue(0);
     await hubSummary(source);
     now.mockReturnValue(61 * 60 * 1000);
@@ -79,7 +99,7 @@ describe('hubSummary', () => {
   });
 
   it('does not keep a failure', async () => {
-    jest.mocked(fetchDatasetInfo).mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce(info);
+    vi.mocked(fetchDatasetInfo).mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce(info);
     await expect(hubSummary(source)).rejects.toThrow('down');
     await expect(hubSummary(source)).resolves.toMatchObject({ fileCount: 5 });
   });

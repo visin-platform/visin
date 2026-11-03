@@ -1,66 +1,98 @@
+import { vi, type Mock } from 'vitest';
 import { assertResourceWrite } from '../../services/writeAccessService';
 import { ForbiddenError } from '@visin/backend-core';
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
-jest.mock('../../services/writeAccessService', () => ({
-  ...jest.requireActual('../../services/writeAccessService'),
-  assertResourceWrite: jest.fn(async (resource: unknown) => {
-    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-  }),
-  assertLibraryWrite: jest.fn(),
-  assertDatasetWrite: jest.fn(),
-  assertEpochWrite: jest.fn(async (uuid: string) => {
-    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
-    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-    return epoch;
-  })
-}));
-jest.mock('../../models/Training', () => {
-  const ctor = Object.assign(jest.fn(), {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    countDocuments: jest.fn(),
-    aggregate: jest.fn(),
-    distinct: jest.fn(),
-  });
-  return { __esModule: true, default: ctor };
+vi.mock('../../services/writeAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/writeAccessService')>('../../services/writeAccessService')),
+    assertResourceWrite: vi.fn(async function (resource: unknown) {
+      if (!resource)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+    }),
+    assertLibraryWrite: vi.fn(),
+    assertDatasetWrite: vi.fn(),
+    assertEpochWrite: vi.fn(async function (uuid: string) {
+      const epoch = await (await import('../../models/Epoch')).default.findOne({ epoch_uuid: uuid });
+      if (!epoch)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+      return epoch;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
 });
-jest.mock('../../models/Epoch', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), updateMany: jest.fn() },
-}));
-jest.mock('../../models/Evaluation', () => ({
-  __esModule: true,
-  default: { updateMany: jest.fn() },
-}));
-jest.mock('../../models/Benchmark', () => ({
-  __esModule: true,
-  default: { find: jest.fn() },
-}));
-jest.mock('../../models/Project', () => ({
-  __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn() },
-}));
-jest.mock('../../models/Comparison', () => ({
-  __esModule: true,
-  default: { updateMany: jest.fn() },
-}));
-jest.mock('../../services/resultAggregation', () => ({
-  latestResultsByRun: jest.fn(),
-}));
-jest.mock('../../services/projectAccessService', () => {
-  const checkProjectAccess = jest.fn();
-  return {
-    ...jest.requireActual('../../services/projectAccessService'),
-    getEditableProjectIds: jest.fn().mockResolvedValue(['p1']),
-    checkProjectAccess,
-    // Delegates straight through, so these tests keep asserting on
-    // checkProjectAccess per row; the memoization itself is covered in
-    // projectAccessService.test.ts against the real implementation.
-    createProjectAccessChecker: (userId?: string) => (projectId?: string | null) =>
-      checkProjectAccess(userId, projectId),
-    getVisibleProjectIds: jest.fn(),
-  };
+vi.mock('../../models/Training', async () => {
+  const module = await (() => {
+    const ctor = Object.assign(vi.fn(), {
+      find: vi.fn(),
+      findOne: vi.fn(),
+      countDocuments: vi.fn(),
+      aggregate: vi.fn(),
+      distinct: vi.fn()
+    });
+    return { __esModule: true, default: ctor };
+  })();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Epoch', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), updateMany: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Evaluation', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { updateMany: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Benchmark', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Project', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn(), findOne: vi.fn(), findById: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Comparison', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { updateMany: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/resultAggregation', async () => {
+  const module = await (() => ({
+    latestResultsByRun: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (async () => {
+    const checkProjectAccess = vi.fn();
+    return {
+      ...(await vi.importActual<typeof import('../../services/projectAccessService')>(
+        '../../services/projectAccessService'
+      )),
+      getEditableProjectIds: vi.fn().mockResolvedValue(['p1']),
+      checkProjectAccess,
+      // Delegates straight through, so these tests keep asserting on
+      // checkProjectAccess per row; the memoization itself is covered in
+      // projectAccessService.test.ts against the real implementation.
+      createProjectAccessChecker: (userId?: string) => (projectId?: string | null) =>
+        checkProjectAccess(userId, projectId),
+      getVisibleProjectIds: vi.fn()
+    };
+  })();
+  return Object.assign({ default: module }, module);
 });
 
 import { trainingService } from '../../services/trainingService';
@@ -75,15 +107,15 @@ import { Types } from 'mongoose';
 import { latestResultsByRun } from '../../services/resultAggregation';
 import { checkProjectAccess, getVisibleProjectIds } from '../../services/projectAccessService';
 
-const mockedTraining = Training as unknown as jest.Mock & Record<string, jest.Mock>;
-const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
-const mockedEvaluation = Evaluation as unknown as Record<string, jest.Mock>;
-const mockedBenchmark = Benchmark as unknown as Record<string, jest.Mock>;
-const mockedProject = Project as unknown as Record<string, jest.Mock>;
-const mockedComparison = Comparison as unknown as Record<string, jest.Mock>;
-const mockedCheckAccess = checkProjectAccess as jest.Mock;
-const mockedVisibleProjects = getVisibleProjectIds as jest.Mock;
-const mockedAggregated = latestResultsByRun as jest.Mock;
+const mockedTraining = Training as unknown as Mock & Record<string, Mock>;
+const mockedEpoch = Epoch as unknown as Record<string, Mock>;
+const mockedEvaluation = Evaluation as unknown as Record<string, Mock>;
+const mockedBenchmark = Benchmark as unknown as Record<string, Mock>;
+const mockedProject = Project as unknown as Record<string, Mock>;
+const mockedComparison = Comparison as unknown as Record<string, Mock>;
+const mockedCheckAccess = checkProjectAccess as Mock;
+const mockedVisibleProjects = getVisibleProjectIds as Mock;
+const mockedAggregated = latestResultsByRun as Mock;
 
 const VALID_ID = 'a'.repeat(24);
 
@@ -98,25 +130,25 @@ const trainingDoc = (id: string, overrides: AnyDoc = {}): AnyDoc => ({
   toObject() {
     return { _id: this._id, name: this.name, projectId: this.projectId };
   },
-  save: jest.fn().mockImplementation(function (this: unknown) {
+  save: vi.fn().mockImplementation(function (this: unknown) {
     return Promise.resolve(this);
   }),
-  ...overrides,
+  ...overrides
 });
 
 const mockFindChain = (docs: unknown[]) => {
   const chain = {
-    sort: jest.fn().mockReturnThis(),
-    collation: jest.fn().mockReturnThis(),
-    skip: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockResolvedValue(docs),
+    sort: vi.fn().mockReturnThis(),
+    collation: vi.fn().mockReturnThis(),
+    skip: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue(docs)
   };
   mockedTraining.find.mockReturnValue(chain);
   return chain;
 };
 
 const mockProjectSelect = (ids: string[]) => {
-  const select = jest.fn().mockResolvedValue(ids.map((id) => ({ _id: { toString: () => id } })));
+  const select = vi.fn().mockResolvedValue(ids.map((id) => ({ _id: { toString: () => id } })));
   mockedProject.find.mockReturnValue({ select });
   return select;
 };
@@ -127,15 +159,15 @@ const mockProjectSelect = (ids: string[]) => {
  * and awaits directly. This routes on the projection so one test can exercise both.
  */
 const mockProjectFind = (visibleIds: string[], costingDocs: AnyDoc[] = []) => {
-  mockedProject.find.mockImplementation((_filter: unknown, projection?: string) =>
-    projection === 'costing'
+  mockedProject.find.mockImplementation(function (_filter: unknown, projection?: string) {
+    return projection === 'costing'
       ? Promise.resolve(costingDocs)
-      : { select: jest.fn().mockResolvedValue(visibleIds.map((id) => ({ _id: { toString: () => id } }))) }
-  );
+      : { select: vi.fn().mockResolvedValue(visibleIds.map((id) => ({ _id: { toString: () => id } }))) };
+  });
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedCheckAccess.mockResolvedValue(true);
   mockedVisibleProjects.mockResolvedValue(['p1']);
   // Cost-rate lookup: no project overrides unless a test says otherwise, so
@@ -150,7 +182,7 @@ describe('getTrainings', () => {
     mockFindChain([doc]);
     mockedTraining.countDocuments.mockResolvedValue(1);
     mockedTraining.aggregate.mockResolvedValue([
-      { _id: { toString: () => 't1' }, metrics: { totalTime: 7200, epochCount: 2, maxEpoch: 2 } },
+      { _id: { toString: () => 't1' }, metrics: { totalTime: 7200, epochCount: 2, maxEpoch: 2 } }
     ]);
 
     const result = await trainingService.getTrainings('u1', {}, { page: 2, limit: 10 });
@@ -159,7 +191,7 @@ describe('getTrainings', () => {
     expect(mockedTraining.find).toHaveBeenCalledWith(
       expect.objectContaining({
         deletedAt: null,
-        projectId: { $in: ['p1'] },
+        projectId: { $in: ['p1'] }
       })
     );
     expect((result.trainings[0] as TrainingWithMetrics).metrics.totalTime).toBe(7200);
@@ -184,11 +216,7 @@ describe('getTrainings', () => {
     mockFindChain([]);
     mockedTraining.countDocuments.mockResolvedValue(0);
 
-    await trainingService.getTrainings(
-      'u1',
-      { search: 'resnet', status: 'running', datasetId: 'd1', tags: ['a'] },
-      {}
-    );
+    await trainingService.getTrainings('u1', { search: 'resnet', status: 'running', datasetId: 'd1', tags: ['a'] }, {});
 
     expect(mockedTraining.find).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -196,7 +224,7 @@ describe('getTrainings', () => {
         status: 'running',
         // a run names its dataset by id (older runs) or by reference (new ones)
         $and: expect.arrayContaining([{ $or: [{ datasetId: 'd1' }, { 'dataset.id': 'd1' }] }]),
-        tags: { $in: ['a'] },
+        tags: { $in: ['a'] }
       })
     );
   });
@@ -208,9 +236,7 @@ describe('getTrainings', () => {
 
     await trainingService.getTrainings('u1', { tags: ['a', 'b'] }, {});
 
-    expect(mockedTraining.find).toHaveBeenCalledWith(
-      expect.objectContaining({ tags: { $all: ['a', 'b'] } })
-    );
+    expect(mockedTraining.find).toHaveBeenCalledWith(expect.objectContaining({ tags: { $all: ['a', 'b'] } }));
   });
 
   it('leaves out runs carrying an excluded tag, alone or alongside wanted tags', async () => {
@@ -265,9 +291,7 @@ describe('getTrainings', () => {
     mockedProject.findOne.mockResolvedValue(null);
     mockedProject.findById.mockResolvedValue(null);
 
-    await expect(trainingService.getTrainings('u1', { projectId: 'ghost' }, {})).rejects.toThrow(
-      'Project not found'
-    );
+    await expect(trainingService.getTrainings('u1', { projectId: 'ghost' }, {})).rejects.toThrow('Project not found');
   });
 
   it('403s when the caller cannot see the project filter', async () => {
@@ -296,7 +320,7 @@ describe('getTrainings', () => {
       cpuCost: undefined,
       gpuCost: undefined,
       totalCost: undefined,
-      currency: undefined,
+      currency: undefined
     });
   });
 
@@ -306,11 +330,12 @@ describe('getTrainings', () => {
     mockFindChain([doc]);
     mockedTraining.countDocuments.mockResolvedValue(1);
     mockedTraining.aggregate.mockResolvedValue([
-      { _id: doc._id, metrics: { totalTime: 7200, epochCount: 2, maxEpoch: 2, lastEpochTimestamp: null } },
+      { _id: doc._id, metrics: { totalTime: 7200, epochCount: 2, maxEpoch: 2, lastEpochTimestamp: null } }
     ]);
-    mockProjectFind(['p1'], [
-      { _id: { toString: () => 'p1' }, costing: { cpuRatePerHour: 1, gpuRatePerHour: 10, currency: 'USD' } },
-    ]);
+    mockProjectFind(
+      ['p1'],
+      [{ _id: { toString: () => 'p1' }, costing: { cpuRatePerHour: 1, gpuRatePerHour: 10, currency: 'USD' } }]
+    );
 
     const result = await trainingService.getTrainings('u1', {}, {});
     const metrics = (result.trainings[0] as TrainingWithMetrics).metrics;
@@ -334,7 +359,7 @@ describe('getTrainingTags', () => {
       'tags',
       expect.objectContaining({
         deletedAt: null,
-        projectId: { $in: ['p1'] },
+        projectId: { $in: ['p1'] }
       })
     );
     expect(tags).toEqual(['alpha', 'zebra']);
@@ -350,7 +375,7 @@ describe('getTrainingTags', () => {
     expect(mockedTraining.distinct).toHaveBeenCalledWith(
       'tags',
       expect.objectContaining({
-        projectId: { $in: ['pub'] },
+        projectId: { $in: ['pub'] }
       })
     );
   });
@@ -377,9 +402,9 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
 
     await expect(trainingService.getTrainingById(VALID_ID, 'u1')).rejects.toThrow('Training not found');
     await expect(trainingService.getTrainingByUuid('uuid-x', 'u1')).rejects.toThrow('Training not found');
-    await expect(
-      trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1)
-    ).rejects.toThrow('Training not found');
+    await expect(trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1)).rejects.toThrow(
+      'Training not found'
+    );
   });
 
   it('403s when project access is denied', async () => {
@@ -399,7 +424,7 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
     await expect(trainingService.getTrainingByUuid('uuid-t1', 'u1')).resolves.toBe(doc);
 
     const epochs = [{ epoch: 1 }];
-    const sort = jest.fn().mockResolvedValue(epochs);
+    const sort = vi.fn().mockResolvedValue(epochs);
     mockedEpoch.find.mockReturnValue({ sort });
 
     const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1);
@@ -417,11 +442,9 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
     mockedCheckAccess.mockResolvedValue(true);
 
     const ids = Array.from({ length: 100 }, (_, i) => ({ _id: `e${i}` }));
-    const select = jest.fn().mockReturnValue({ sort: jest.fn().mockResolvedValue(ids) });
+    const select = vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue(ids) });
     const fetched = [{ epoch: 0 }, { epoch: 99 }];
-    mockedEpoch.find
-      .mockReturnValueOnce({ select })
-      .mockReturnValueOnce({ sort: jest.fn().mockResolvedValue(fetched) });
+    mockedEpoch.find.mockReturnValueOnce({ select }).mockReturnValueOnce({ sort: vi.fn().mockResolvedValue(fetched) });
 
     const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1, 5);
 
@@ -439,7 +462,7 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
     mockedCheckAccess.mockResolvedValue(true);
 
     const epochs = [{ epoch: 1 }, { epoch: 2 }];
-    mockedEpoch.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(epochs) });
+    mockedEpoch.find.mockReturnValue({ sort: vi.fn().mockResolvedValue(epochs) });
 
     const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1);
 
@@ -453,8 +476,8 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
 
     const ids = [{ _id: 'e0' }, { _id: 'e1' }];
     mockedEpoch.find
-      .mockReturnValueOnce({ select: jest.fn().mockReturnValue({ sort: jest.fn().mockResolvedValue(ids) }) })
-      .mockReturnValueOnce({ sort: jest.fn().mockResolvedValue(ids) });
+      .mockReturnValueOnce({ select: vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue(ids) }) })
+      .mockReturnValueOnce({ sort: vi.fn().mockResolvedValue(ids) });
 
     await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1, 12);
 
@@ -464,16 +487,16 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
 
 describe('createTraining', () => {
   beforeEach(() => {
-    mockedTraining.mockImplementation((data: Record<string, unknown>) => ({
-      ...data,
-      save: jest.fn().mockResolvedValue({ ...data, _id: 'new-id' }),
-    }));
+    mockedTraining.mockImplementation(function (data: Record<string, unknown>) {
+      return {
+        ...data,
+        save: vi.fn().mockResolvedValue({ ...data, _id: 'new-id' })
+      };
+    });
   });
 
   it('rejects a blank name', async () => {
-    await expect(trainingService.createTraining('u1', { name: '   ' })).rejects.toThrow(
-      'Training name is required'
-    );
+    await expect(trainingService.createTraining('u1', { name: '   ' })).rejects.toThrow('Training name is required');
   });
 
   it('refuses a training without a project', async () => {
@@ -484,7 +507,7 @@ describe('createTraining', () => {
     const result = await trainingService.createTraining('u1', {
       name: ' My Training ',
       tags: 'single-tag',
-      projectId: 'slug',
+      projectId: 'slug'
     });
 
     const ctorArg = mockedTraining.mock.calls[0][0];
@@ -507,16 +530,18 @@ describe('createTraining', () => {
     mockedProject.findOne.mockResolvedValue({ _id: 'p1' });
     mockedCheckAccess.mockResolvedValue(false);
 
-    await expect(
-      trainingService.createTraining('u1', { name: 'T', projectId: 'private' })
-    ).rejects.toThrow('Project "private" not found');
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'private' })).rejects.toThrow(
+      'Project "private" not found'
+    );
   });
 
   it('403s when the caller may read the project but not add to it', async () => {
     mockedProject.findOne.mockResolvedValue({ _id: 'p1' });
-    jest.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError('Write permission is required'));
+    vi.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError('Write permission is required'));
 
-    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'public' })).rejects.toThrow('Write permission');
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'public' })).rejects.toThrow(
+      'Write permission'
+    );
   });
 
   it('resolves a project slug to its id', async () => {
@@ -531,22 +556,20 @@ describe('createTraining', () => {
     mockedProject.findOne.mockResolvedValue(null);
     mockedProject.findById.mockResolvedValue(null);
 
-    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'raw-id' })).rejects.toThrow('Project "raw-id" not found');
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'raw-id' })).rejects.toThrow(
+      'Project "raw-id" not found'
+    );
   });
 });
 
 describe('updateTraining', () => {
   it('rejects malformed ids', async () => {
-    await expect(trainingService.updateTraining('nope', 'u1', {})).rejects.toThrow(
-      'Invalid training ID format'
-    );
+    await expect(trainingService.updateTraining('nope', 'u1', {})).rejects.toThrow('Invalid training ID format');
   });
 
   it('404s / 403s appropriately', async () => {
     mockedTraining.findOne.mockResolvedValue(null);
-    await expect(trainingService.updateTraining(VALID_ID, 'u1', {})).rejects.toThrow(
-      'Training not found'
-    );
+    await expect(trainingService.updateTraining(VALID_ID, 'u1', {})).rejects.toThrow('Training not found');
 
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedCheckAccess.mockResolvedValue(false);
@@ -561,7 +584,7 @@ describe('updateTraining', () => {
       name: '  New ',
       status: 'failed',
       tags: 'solo',
-      metadata: { k: 1 },
+      metadata: { k: 1 }
     });
 
     expect(doc.name).toBe('New');
@@ -575,9 +598,7 @@ describe('updateTraining', () => {
 
 describe('deleteTraining', () => {
   it('rejects malformed ids', async () => {
-    await expect(trainingService.deleteTraining('short', 'u1')).rejects.toThrow(
-      'Invalid training ID format'
-    );
+    await expect(trainingService.deleteTraining('short', 'u1')).rejects.toThrow('Invalid training ID format');
   });
 
   it('404s / 403s appropriately', async () => {
@@ -620,13 +641,13 @@ describe('getDeletedTrainings', () => {
   it("lists my deleted runs where I contribute and anyone's where I manage, most recent first", async () => {
     const chain = mockFindChain([trainingDoc('t1')]);
     mockedTraining.countDocuments.mockResolvedValue(41);
-    mockedProject.find.mockReturnValue({ select: jest.fn().mockResolvedValue([{ _id: { toString: () => 'p2' } }]) });
+    mockedProject.find.mockReturnValue({ select: vi.fn().mockResolvedValue([{ _id: { toString: () => 'p2' } }]) });
 
     const result = await trainingService.getDeletedTrainings('u1', { page: 2, limit: 20 });
 
     const query = {
       deletedAt: { $ne: null },
-      $or: [{ projectId: { $in: ['p1'] }, ownerId: 'u1' }, { projectId: { $in: ['p2'] } }],
+      $or: [{ projectId: { $in: ['p1'] }, ownerId: 'u1' }, { projectId: { $in: ['p2'] } }]
     };
     expect(mockedTraining.find).toHaveBeenCalledWith(query);
     expect(mockedTraining.countDocuments).toHaveBeenCalledWith(query);
@@ -648,7 +669,7 @@ describe('restoreTraining', () => {
   it('judges write access as if the run were live, and changes nothing when refused', async () => {
     const doc = trainingDoc('t1', { ownerId: 'owner', deletedAt: new Date('2026-09-01T00:00:00Z') });
     mockedTraining.findOne.mockResolvedValue(doc);
-    (assertResourceWrite as jest.Mock).mockRejectedValueOnce(new ForbiddenError());
+    (assertResourceWrite as Mock).mockRejectedValueOnce(new ForbiddenError());
 
     await expect(trainingService.restoreTraining(VALID_ID, 'u1')).rejects.toThrow(ForbiddenError);
 
@@ -657,7 +678,7 @@ describe('restoreTraining', () => {
     expect(mockedEpoch.updateMany).not.toHaveBeenCalled();
   });
 
-  it('brings back only the epochs and unranked results carrying that delete\'s stamp', async () => {
+  it("brings back only the epochs and unranked results carrying that delete's stamp", async () => {
     const stamp = new Date('2026-09-01T00:00:00Z');
     const doc = trainingDoc('t1', { deletedAt: stamp });
     mockedTraining.findOne.mockResolvedValue(doc);
@@ -682,30 +703,37 @@ describe('restoreTraining', () => {
 describe('getTrainingStats', () => {
   async function costStats(
     rows: Array<{ _id?: string; totalTime: number; totalTrainings: number }>,
-    projects: Array<{ _id: string; costing: { cpuRatePerHour: number; gpuRatePerHour: number; currency: string } }>,
+    projects: Array<{ _id: string; costing: { cpuRatePerHour: number; gpuRatePerHour: number; currency: string } }>
   ) {
-    mockedVisibleProjects.mockResolvedValue(rows.flatMap(row => row._id ? [row._id] : []));
-    mockedTraining.aggregate.mockResolvedValueOnce([{
-      totalTrainings: rows.reduce((sum, row) => sum + row.totalTrainings, 0),
-      totalTime: rows.reduce((sum, row) => sum + row.totalTime, 0),
-      totalEpochs: 1,
-      avgEpochTime: 1,
-    }]).mockResolvedValueOnce(rows);
+    mockedVisibleProjects.mockResolvedValue(rows.flatMap((row) => (row._id ? [row._id] : [])));
+    mockedTraining.aggregate
+      .mockResolvedValueOnce([
+        {
+          totalTrainings: rows.reduce((sum, row) => sum + row.totalTrainings, 0),
+          totalTime: rows.reduce((sum, row) => sum + row.totalTime, 0),
+          totalEpochs: 1,
+          avgEpochTime: 1
+        }
+      ])
+      .mockResolvedValueOnce(rows);
     mockedProject.find.mockResolvedValue(projects);
     return trainingService.getTrainingStats('u1', {});
   }
 
   it('keeps currencies separate and reports partial pricing coverage', async () => {
-    const stats = await costStats([
-      { _id: 'eur1', totalTime: 3600, totalTrainings: 1 },
-      { _id: 'usd', totalTime: 3600, totalTrainings: 2 },
-      { _id: 'eur2', totalTime: 7200, totalTrainings: 1 },
-      { totalTime: 1800, totalTrainings: 1 },
-    ], [
-      { _id: 'eur1', costing: { cpuRatePerHour: 1, gpuRatePerHour: 9, currency: 'EUR' } },
-      { _id: 'usd', costing: { cpuRatePerHour: 20, gpuRatePerHour: 80, currency: 'USD' } },
-      { _id: 'eur2', costing: { cpuRatePerHour: 2, gpuRatePerHour: 3, currency: 'EUR' } },
-    ]);
+    const stats = await costStats(
+      [
+        { _id: 'eur1', totalTime: 3600, totalTrainings: 1 },
+        { _id: 'usd', totalTime: 3600, totalTrainings: 2 },
+        { _id: 'eur2', totalTime: 7200, totalTrainings: 1 },
+        { totalTime: 1800, totalTrainings: 1 }
+      ],
+      [
+        { _id: 'eur1', costing: { cpuRatePerHour: 1, gpuRatePerHour: 9, currency: 'EUR' } },
+        { _id: 'usd', costing: { cpuRatePerHour: 20, gpuRatePerHour: 80, currency: 'USD' } },
+        { _id: 'eur2', costing: { cpuRatePerHour: 2, gpuRatePerHour: 3, currency: 'EUR' } }
+      ]
+    );
 
     expect(stats).not.toHaveProperty('totalCost');
     expect(stats).not.toHaveProperty('totalCpuCost');
@@ -714,22 +742,28 @@ describe('getTrainingStats', () => {
     expect(stats).toMatchObject({
       costTotalsByCurrency: [
         { currency: 'EUR', totalCpuCost: 5, totalGpuCost: 15, totalCost: 20 },
-        { currency: 'USD', totalCpuCost: 20, totalGpuCost: 80, totalCost: 100 },
+        { currency: 'USD', totalCpuCost: 20, totalGpuCost: 80, totalCost: 100 }
       ],
-      costCoverage: { pricedTrainings: 4, unpricedTrainings: 1, pricedTime: 14400, unpricedTime: 1800 },
+      costCoverage: { pricedTrainings: 4, unpricedTrainings: 1, pricedTime: 14400, unpricedTime: 1800 }
     });
   });
 
   it('keeps single-currency totals and distinguishes free from unpriced training', async () => {
-    const stats = await costStats([
-      { _id: 'free', totalTime: 3600, totalTrainings: 2 },
-      { _id: 'unpriced', totalTime: 7200, totalTrainings: 3 },
-    ], [{ _id: 'free', costing: { cpuRatePerHour: 0, gpuRatePerHour: 0, currency: 'EUR' } }]);
+    const stats = await costStats(
+      [
+        { _id: 'free', totalTime: 3600, totalTrainings: 2 },
+        { _id: 'unpriced', totalTime: 7200, totalTrainings: 3 }
+      ],
+      [{ _id: 'free', costing: { cpuRatePerHour: 0, gpuRatePerHour: 0, currency: 'EUR' } }]
+    );
 
     expect(stats).toMatchObject({
-      totalCost: 0, totalCpuCost: 0, totalGpuCost: 0, currency: 'EUR',
+      totalCost: 0,
+      totalCpuCost: 0,
+      totalGpuCost: 0,
+      currency: 'EUR',
       costTotalsByCurrency: [{ currency: 'EUR', totalCpuCost: 0, totalGpuCost: 0, totalCost: 0 }],
-      costCoverage: { pricedTrainings: 2, unpricedTrainings: 3, pricedTime: 3600, unpricedTime: 7200 },
+      costCoverage: { pricedTrainings: 2, unpricedTrainings: 3, pricedTime: 3600, unpricedTime: 7200 }
     });
   });
 
@@ -739,7 +773,7 @@ describe('getTrainingStats', () => {
     expect(stats).not.toHaveProperty('totalCost');
     expect(stats).toMatchObject({
       costTotalsByCurrency: [],
-      costCoverage: { pricedTrainings: 0, unpricedTrainings: 2, pricedTime: 0, unpricedTime: 3600 },
+      costCoverage: { pricedTrainings: 0, unpricedTrainings: 2, pricedTime: 0, unpricedTime: 3600 }
     });
   });
 
@@ -765,7 +799,7 @@ describe('getTrainingStats', () => {
         deletedAt: null,
         status: 'completed',
         tags: { $all: ['a', 'b'] },
-        projectId: { $in: ['p1'] },
+        projectId: { $in: ['p1'] }
       })
     );
     expect(stats.totalTrainings).toBe(3);
@@ -788,20 +822,22 @@ describe('getTrainingStats', () => {
 
 describe('compareTrainings', () => {
   it('rejects more than 30 ids', async () => {
-    await expect(
-      trainingService.compareTrainings('u1', Array(31).fill('id'))
-    ).rejects.toThrow('Maximum 30 trainings can be compared at once');
+    await expect(trainingService.compareTrainings('u1', Array(31).fill('id'))).rejects.toThrow(
+      'Maximum 30 trainings can be compared at once'
+    );
   });
 
   it('drops trainings in projects the caller cannot see', async () => {
     const visible = trainingDoc('t1');
     const hidden = trainingDoc('t2', { projectId: 'private' });
     mockedTraining.find.mockResolvedValue([visible, hidden]);
-    mockedCheckAccess.mockImplementation(async (_u: string, projectId: string) => projectId !== 'private');
-    const sort = jest.fn().mockResolvedValue([]);
+    mockedCheckAccess.mockImplementation(async function (_u: string, projectId: string) {
+      return projectId !== 'private';
+    });
+    const sort = vi.fn().mockResolvedValue([]);
     mockedEpoch.find.mockReturnValue({ sort });
     mockedAggregated.mockResolvedValue({ comparison: [] });
-    const populate = jest.fn().mockResolvedValue([]);
+    const populate = vi.fn().mockResolvedValue([]);
     mockedBenchmark.find.mockReturnValue({ populate });
 
     const result = await trainingService.compareTrainings('u1', ['t1', 't2']);
@@ -816,26 +852,26 @@ describe('compareTrainings', () => {
     mockedTraining.find.mockResolvedValue([doc]);
     const epochs = [
       { trainingId: { toString: () => 't1' }, epoch: 1, epoch_time: 3600, epoch_uuid: 'e1', results: {}, timestamp: 1 },
-      { trainingId: { toString: () => 't1' }, epoch: 2, epoch_time: 7200, epoch_uuid: 'e2', results: {}, timestamp: 2 },
+      { trainingId: { toString: () => 't1' }, epoch: 2, epoch_time: 7200, epoch_uuid: 'e2', results: {}, timestamp: 2 }
     ];
-    const sort = jest.fn().mockResolvedValue(epochs);
+    const sort = vi.fn().mockResolvedValue(epochs);
     mockedEpoch.find.mockReturnValue({ sort });
     mockedAggregated.mockResolvedValue({
       comparison: [
         {
           training: { _id: { toString: () => 't1' } },
           aggregatedResults: { mIoU: 0.7 },
-          testResultsCount: 4,
-        },
-      ],
+          testResultsCount: 4
+        }
+      ]
     });
     const benchmarks = [
       { training_id: { _id: { toString: () => 't1' } }, timestamp: '2026-01-01' },
       { training_id: 't1', timestamp: '2026-02-01' },
       { training_id: null, epoch_uuid: 'e1', timestamp: '2026-03-01' },
-      { training_id: null, epoch_uuid: 'unknown', timestamp: '2026-04-01' },
+      { training_id: null, epoch_uuid: 'unknown', timestamp: '2026-04-01' }
     ];
-    const populate = jest.fn().mockResolvedValue(benchmarks);
+    const populate = vi.fn().mockResolvedValue(benchmarks);
     mockedBenchmark.find.mockReturnValue({ populate });
 
     const result = await trainingService.compareTrainings('u1', ['t1']);
@@ -858,16 +894,16 @@ describe('compareTrainings', () => {
       totalTrainings: 1,
       trainingsWithEpochs: 1,
       trainingsWithTestResults: 1,
-      trainingsWithBenchmarks: 1,
+      trainingsWithBenchmarks: 1
     });
   });
 
   it('handles trainings with no epochs, results, or benchmarks', async () => {
     mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
-    const sort = jest.fn().mockResolvedValue([]);
+    const sort = vi.fn().mockResolvedValue([]);
     mockedEpoch.find.mockReturnValue({ sort });
     mockedAggregated.mockResolvedValue({ comparison: [] });
-    const populate = jest.fn().mockResolvedValue([]);
+    const populate = vi.fn().mockResolvedValue([]);
     mockedBenchmark.find.mockReturnValue({ populate });
 
     const result = await trainingService.compareTrainings(undefined, ['t1']);

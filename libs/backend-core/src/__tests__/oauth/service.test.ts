@@ -1,9 +1,13 @@
-jest.mock('../../oauth/models', () => ({
-  OAuthClient: { findOne: jest.fn(), find: jest.fn(), create: jest.fn() },
-  AuthorizationCode: { create: jest.fn(), findOneAndUpdate: jest.fn(), exists: jest.fn() },
-  RefreshToken: { findOne: jest.fn(), create: jest.fn() },
-  OAuthGrant: { findOne: jest.fn(), find: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn(), updateMany: jest.fn() }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../oauth/models', async () => {
+  const module = await (() => ({
+    OAuthClient: { findOne: vi.fn(), find: vi.fn(), create: vi.fn() },
+    AuthorizationCode: { create: vi.fn(), findOneAndUpdate: vi.fn(), exists: vi.fn() },
+    RefreshToken: { findOne: vi.fn(), create: vi.fn() },
+    OAuthGrant: { findOne: vi.fn(), find: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn(), updateMany: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { createHash } from 'crypto';
 import { AuthorizationCode, OAuthClient, OAuthGrant, RefreshToken } from '../../oauth/models';
@@ -19,10 +23,10 @@ import {
   revokeRefreshTokensForUser
 } from '../../oauth/service';
 
-const client = OAuthClient as unknown as Record<string, jest.Mock>;
-const code = AuthorizationCode as unknown as Record<string, jest.Mock>;
-const refresh = RefreshToken as unknown as Record<string, jest.Mock>;
-const grant = OAuthGrant as unknown as Record<string, jest.Mock>;
+const client = OAuthClient as unknown as Record<string, Mock>;
+const code = AuthorizationCode as unknown as Record<string, Mock>;
+const refresh = RefreshToken as unknown as Record<string, Mock>;
+const grant = OAuthGrant as unknown as Record<string, Mock>;
 
 const VERIFIER = 'a-code-verifier-long-enough-to-be-real';
 const CHALLENGE = createHash('sha256').update(VERIFIER).digest('base64url');
@@ -40,7 +44,7 @@ const storedCode = (over: Record<string, unknown> = {}) => ({
   ...over
 });
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => vi.resetAllMocks());
 
 describe('registerClient', () => {
   it('reuses the client already registered for the same callback URLs', async () => {
@@ -64,7 +68,9 @@ describe('registerClient', () => {
 
   it('matches on the exact set of URIs, in any order', async () => {
     client.findOne.mockResolvedValue(null);
-    client.create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(doc));
+    client.create.mockImplementation(function (doc: Record<string, unknown>) {
+      return Promise.resolve(doc);
+    });
 
     await registerClient({ clientName: 'X', redirectUris: ['https://b/cb', 'https://a/cb'] });
 
@@ -75,7 +81,9 @@ describe('registerClient', () => {
 
   it('mints a new client when nothing matches', async () => {
     client.findOne.mockResolvedValue(null);
-    client.create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(doc));
+    client.create.mockImplementation(function (doc: Record<string, unknown>) {
+      return Promise.resolve(doc);
+    });
 
     const registered = await registerClient({
       clientName: 'Claude',
@@ -87,7 +95,9 @@ describe('registerClient', () => {
 
   it('caps a client name rather than storing whatever was sent', async () => {
     client.findOne.mockResolvedValue(null);
-    client.create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(doc));
+    client.create.mockImplementation(function (doc: Record<string, unknown>) {
+      return Promise.resolve(doc);
+    });
 
     const registered = await registerClient({ clientName: 'x'.repeat(500), redirectUris: ['https://a/cb'] });
 
@@ -144,12 +154,7 @@ describe('redeemAuthorizationCode', () => {
   it('exchanges a valid code and returns what was approved', async () => {
     code.findOneAndUpdate.mockResolvedValue(storedCode());
 
-    const result = await redeemAuthorizationCode(
-      'the-code',
-      'vsn-client-abc',
-      'https://claude.ai/callback',
-      VERIFIER
-    );
+    const result = await redeemAuthorizationCode('the-code', 'vsn-client-abc', 'https://claude.ai/callback', VERIFIER);
 
     expect(result.ok).toBe(true);
     expect(result.code?.scopes).toEqual(['vision:read']);
@@ -193,12 +198,7 @@ describe('redeemAuthorizationCode', () => {
     code.findOneAndUpdate.mockResolvedValue(storedCode());
 
     await expect(
-      redeemAuthorizationCode(
-        'the-code',
-        'vsn-client-abc',
-        'https://claude.ai/callback',
-        'the-wrong-verifier-entirely'
-      )
+      redeemAuthorizationCode('the-code', 'vsn-client-abc', 'https://claude.ai/callback', 'the-wrong-verifier-entirely')
     ).resolves.toEqual({ ok: false, rejection: 'pkce-failed' });
   });
 
@@ -215,10 +215,18 @@ describe('redeemAuthorizationCode', () => {
   });
 });
 
-const input = { clientId: 'vsn-client-abc', userId: 'u1', scopes: ['vision:read'] as const, resource: 'https://mcp.example.test' };
+const input = {
+  clientId: 'vsn-client-abc',
+  userId: 'u1',
+  scopes: ['vision:read'] as const,
+  resource: 'https://mcp.example.test'
+};
 const activeGrant = () => ({
-  _id: 'grant', generation: 'generation', currentTokenHash: sha256('the-token'),
-  ...input, grantedAt: new Date('2026-03-01T00:00:00.000Z')
+  _id: 'grant',
+  generation: 'generation',
+  currentTokenHash: sha256('the-token'),
+  ...input,
+  grantedAt: new Date('2026-03-01T00:00:00.000Z')
 });
 
 describe('issueRefreshToken', () => {
@@ -230,7 +238,12 @@ describe('issueRefreshToken', () => {
     expect(grant.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: sha256(JSON.stringify([input.userId, input.clientId])) },
       {
-        $set: { ...input, generation: history.generation, currentTokenHash: sha256(token), grantedAt: expect.any(Date) },
+        $set: {
+          ...input,
+          generation: history.generation,
+          currentTokenHash: sha256(token),
+          grantedAt: expect.any(Date)
+        },
         $unset: { revokedAt: 1, lastUsedAt: 1 }
       },
       { upsert: true, returnDocument: 'after' }
@@ -247,17 +260,39 @@ describe('issueRefreshToken', () => {
 
 describe('redeemRefreshToken', () => {
   beforeEach(() => {
-    refresh.findOne.mockResolvedValue({ tokenHash: sha256('the-token'), clientId: input.clientId, grantId: 'grant', generation: 'generation' });
+    refresh.findOne.mockResolvedValue({
+      tokenHash: sha256('the-token'),
+      clientId: input.clientId,
+      grantId: 'grant',
+      generation: 'generation'
+    });
     grant.findOne.mockResolvedValue(activeGrant());
     grant.findOneAndUpdate.mockResolvedValue(activeGrant());
   });
 
   it('rotates once, preserving approved scopes/resource and the original grant date', async () => {
     const result = await redeemRefreshToken('the-token', input.clientId);
-    expect(result).toEqual({ ok: true, userId: input.userId, scopes: input.scopes, resource: input.resource, rotatedToken: expect.any(String) });
-    expect(refresh.findOne).toHaveBeenCalledWith({ tokenHash: sha256('the-token'), clientId: input.clientId }, undefined, { readPreference: 'primary' });
-    expect(grant.findOne).toHaveBeenCalledWith({ _id: 'grant', generation: 'generation' }, undefined, { readPreference: 'primary' });
-    expect(refresh.create).toHaveBeenCalledWith({ tokenHash: sha256(result.rotatedToken!), clientId: input.clientId, grantId: 'grant', generation: 'generation' });
+    expect(result).toEqual({
+      ok: true,
+      userId: input.userId,
+      scopes: input.scopes,
+      resource: input.resource,
+      rotatedToken: expect.any(String)
+    });
+    expect(refresh.findOne).toHaveBeenCalledWith(
+      { tokenHash: sha256('the-token'), clientId: input.clientId },
+      undefined,
+      { readPreference: 'primary' }
+    );
+    expect(grant.findOne).toHaveBeenCalledWith({ _id: 'grant', generation: 'generation' }, undefined, {
+      readPreference: 'primary'
+    });
+    expect(refresh.create).toHaveBeenCalledWith({
+      tokenHash: sha256(result.rotatedToken!),
+      clientId: input.clientId,
+      grantId: 'grant',
+      generation: 'generation'
+    });
     expect(grant.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: 'grant', generation: 'generation', currentTokenHash: sha256('the-token'), revokedAt: { $exists: false } },
       { $set: { currentTokenHash: sha256(result.rotatedToken!), lastUsedAt: expect.any(Date) } },
@@ -266,21 +301,27 @@ describe('redeemRefreshToken', () => {
     expect(refresh.create.mock.invocationCallOrder[0]).toBeLessThan(grant.findOneAndUpdate.mock.invocationCallOrder[0]);
   });
 
-  it.each([null, {}, { grantId: 'grant' }])('rejects unknown or legacy history without revoking anything (%j)', async record => {
-    refresh.findOne.mockResolvedValue(record);
-    await expect(redeemRefreshToken('the-token', 'other-client')).resolves.toEqual({ ok: false });
-    expect(grant.findOne).not.toHaveBeenCalled();
-    expect(grant.updateOne).not.toHaveBeenCalled();
-  });
+  it.each([null, {}, { grantId: 'grant' }])(
+    'rejects unknown or legacy history without revoking anything (%j)',
+    async (record) => {
+      refresh.findOne.mockResolvedValue(record);
+      await expect(redeemRefreshToken('the-token', 'other-client')).resolves.toEqual({ ok: false });
+      expect(grant.findOne).not.toHaveBeenCalled();
+      expect(grant.updateOne).not.toHaveBeenCalled();
+    }
+  );
 
-  it.each([null, { ...activeGrant(), revokedAt: new Date() }])('rejects missing, replaced or disconnected grants (%j)', async record => {
-    grant.findOne.mockResolvedValue(record);
-    await expect(redeemRefreshToken('the-token', input.clientId)).resolves.toEqual({ ok: false });
-    expect(refresh.create).not.toHaveBeenCalled();
-    expect(grant.updateOne).not.toHaveBeenCalled();
-  });
+  it.each([null, { ...activeGrant(), revokedAt: new Date() }])(
+    'rejects missing, replaced or disconnected grants (%j)',
+    async (record) => {
+      grant.findOne.mockResolvedValue(record);
+      await expect(redeemRefreshToken('the-token', input.clientId)).resolves.toEqual({ ok: false });
+      expect(refresh.create).not.toHaveBeenCalled();
+      expect(grant.updateOne).not.toHaveBeenCalled();
+    }
+  );
 
-  it.each(['retired', 'concurrent'])('revokes only the original generation for %s replay', async mode => {
+  it.each(['retired', 'concurrent'])('revokes only the original generation for %s replay', async (mode) => {
     if (mode === 'retired') grant.findOne.mockResolvedValue({ ...activeGrant(), currentTokenHash: 'successor' });
     else grant.findOneAndUpdate.mockResolvedValue(null);
     await expect(redeemRefreshToken('the-token', input.clientId)).resolves.toEqual({ ok: false, reused: true });
@@ -318,21 +359,28 @@ describe('revokeRefreshTokensForUser', () => {
 
 describe('listConnections', () => {
   it('lists authoritative connections, their approval date and last refresh', async () => {
-    grant.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([
-      { ...activeGrant(), lastUsedAt: new Date('2026-09-04T00:00:00.000Z') }
-    ]) });
+    grant.find.mockReturnValue({
+      sort: vi.fn().mockResolvedValue([{ ...activeGrant(), lastUsedAt: new Date('2026-09-04T00:00:00.000Z') }])
+    });
     client.find.mockResolvedValue([{ clientId: input.clientId, clientName: 'Claude' }]);
-    expect(await listConnections('u1')).toEqual([{
-      id: 'grant', clientId: input.clientId, clientName: 'Claude', scopes: input.scopes,
-      createdAt: '2026-03-01T00:00:00.000Z', lastRenewedAt: '2026-09-04T00:00:00.000Z', revokedAt: null
-    }]);
+    expect(await listConnections('u1')).toEqual([
+      {
+        id: 'grant',
+        clientId: input.clientId,
+        clientName: 'Claude',
+        scopes: input.scopes,
+        createdAt: '2026-03-01T00:00:00.000Z',
+        lastRenewedAt: '2026-09-04T00:00:00.000Z',
+        revokedAt: null
+      }
+    ]);
     expect(grant.find).toHaveBeenCalledWith({ userId: 'u1' });
   });
 
   it('still lists a disconnected grant whose client record has gone', async () => {
-    grant.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([
-      { ...activeGrant(), revokedAt: new Date('2026-09-05T00:00:00.000Z') }
-    ]) });
+    grant.find.mockReturnValue({
+      sort: vi.fn().mockResolvedValue([{ ...activeGrant(), revokedAt: new Date('2026-09-05T00:00:00.000Z') }])
+    });
     client.find.mockResolvedValue([]);
     const [connection] = await listConnections('u1');
     expect(connection.clientName).toBe('Unknown app');

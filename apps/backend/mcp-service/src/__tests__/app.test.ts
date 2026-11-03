@@ -1,17 +1,21 @@
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  verifyApiKey: jest.fn(),
-  verifyAccessToken: jest.fn(),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    verifyApiKey: vi.fn(),
+    verifyAccessToken: vi.fn(),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { verifyAccessToken, verifyApiKey } from '@visin/backend-core';
 import { createApp } from '../app';
 
-const verify = verifyApiKey as unknown as jest.Mock;
-const verifyToken = verifyAccessToken as unknown as jest.Mock;
+const verify = verifyApiKey as unknown as Mock;
+const verifyToken = verifyAccessToken as unknown as Mock;
 
 const KEY = 'vsn_live_0123456789ab_a-secret-value-long-enough';
 
@@ -27,7 +31,7 @@ beforeAll(async () => {
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.MCP_PUBLIC_URL = 'https://mcp.example.test';
   process.env.AUTH_SERVICE_URL = 'https://auth-api.example.test';
   verify.mockResolvedValue({
@@ -67,13 +71,14 @@ async function rpc(method: string, params: unknown = {}, token: string | null = 
   const text = await response.text();
   if (!text) return { response, body: undefined };
 
-  const payload = text.startsWith('event:') || text.startsWith('data:')
-    ? text
-        .split('\n')
-        .find((line) => line.startsWith('data:'))
-        ?.slice(5)
-        .trim()
-    : text;
+  const payload =
+    text.startsWith('event:') || text.startsWith('data:')
+      ? text
+          .split('\n')
+          .find((line) => line.startsWith('data:'))
+          ?.slice(5)
+          .trim()
+      : text;
 
   return { response, body: payload ? JSON.parse(payload) : undefined };
 }
@@ -109,9 +114,9 @@ describe('the pages that are not the protocol', () => {
   it('advertises only the scopes some module can actually serve', async () => {
     // A consent screen offering `label:read` when no label tools exist asks
     // someone to grant access that buys them nothing.
-    const body = (await (
-      await fetch(`${baseUrl}/.well-known/oauth-protected-resource`)
-    ).json()) as { scopes_supported: string[] };
+    const body = (await (await fetch(`${baseUrl}/.well-known/oauth-protected-resource`)).json()) as {
+      scopes_supported: string[];
+    };
 
     expect(body).toMatchObject({
       resource: 'https://mcp.example.test',
@@ -169,7 +174,7 @@ describe('authentication', () => {
     await rpc('tools/list', {}, 'header.payload.signature');
     expect(verify).not.toHaveBeenCalled();
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     verify.mockResolvedValue({ ok: true, userId: 'u1', scopes: ['vision:read'] });
     await rpc('tools/list');
     expect(verifyToken).not.toHaveBeenCalled();
@@ -262,10 +267,7 @@ describe('the protocol', () => {
 
     const { body } = await rpc('tools/list');
     const annotations = new Map(
-      body.result.tools.map((tool: { name: string; annotations?: unknown }) => [
-        tool.name,
-        tool.annotations
-      ])
+      body.result.tools.map((tool: { name: string; annotations?: unknown }) => [tool.name, tool.annotations])
     );
 
     expect(annotations.get('list_projects')).toMatchObject({

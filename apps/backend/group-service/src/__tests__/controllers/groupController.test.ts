@@ -1,41 +1,48 @@
+import { vi, type Mock } from 'vitest';
 import type { Response } from 'express';
 
-jest.mock('../../services/groupService', () => ({
-  createGroup: jest.fn(),
-  listMyGroups: jest.fn(),
-  listMyDeletedGroups: jest.fn(),
-  getGroupIfMember: jest.fn(),
-  updateGroup: jest.fn(),
-  deleteGroup: jest.fn(),
-  restoreGroup: jest.fn(),
-  permanentlyDeleteGroup: jest.fn(),
-  updateMemberRole: jest.fn(),
-  removeMember: jest.fn(),
-  checkMembership: jest.fn(),
-  updateMemberActivity: jest.fn(),
-  memberRole: jest.fn(),
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../services/groupService', async () => {
+  const module = await (() => ({
+    createGroup: vi.fn(),
+    listMyGroups: vi.fn(),
+    listMyDeletedGroups: vi.fn(),
+    getGroupIfMember: vi.fn(),
+    updateGroup: vi.fn(),
+    deleteGroup: vi.fn(),
+    restoreGroup: vi.fn(),
+    permanentlyDeleteGroup: vi.fn(),
+    updateMemberRole: vi.fn(),
+    removeMember: vi.fn(),
+    checkMembership: vi.fn(),
+    updateMemberActivity: vi.fn(),
+    memberRole: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import * as ctrl from '../../controllers/groupController';
 import * as svc from '../../services/groupService';
 import type { InternalServiceRequest } from '../../middleware/internalServiceAuth';
 
-const mockedSvc = svc as unknown as Record<string, jest.Mock>;
+const mockedSvc = svc as unknown as Record<string, Mock>;
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock; send: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock; send: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn(), send: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
 
 const makeReq = (overrides: Record<string, unknown> = {}): InternalServiceRequest =>
-  ({ body: {}, query: {}, params: {}, ...overrides } as unknown as InternalServiceRequest);
+  ({ body: {}, query: {}, params: {}, ...overrides }) as unknown as InternalServiceRequest;
 
 const userReq = (overrides: Record<string, unknown> = {}) =>
   makeReq({ user: { id: 'User-ID', email: 'User@X.com' }, ...overrides });
@@ -43,7 +50,7 @@ const userReq = (overrides: Record<string, unknown> = {}) =>
 const group = { _id: { toString: () => 'g1' }, name: 'Team' };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   delete process.env.AUTH_SERVICE_URL;
   delete process.env.INTERNAL_SERVICE_TOKEN;
 });
@@ -63,10 +70,7 @@ describe('userId resolution', () => {
     // unknown keys — a userId sent in the body never reaches the controller,
     // so it must not look like a working alternative to the query string.
     await expect(
-      ctrl.createGroup(
-        makeReq({ isInternalService: true, body: { name: 'Team', userId: 'svc@x.com' } }),
-        makeRes()
-      )
+      ctrl.createGroup(makeReq({ isInternalService: true, body: { name: 'Team', userId: 'svc@x.com' } }), makeRes())
     ).rejects.toThrow('User ID required');
   });
 
@@ -82,17 +86,14 @@ describe('userId resolution', () => {
   });
 
   it('rejects ambiguous repeated user IDs', async () => {
-    await expect(ctrl.listMine(makeReq({ isInternalService: true, query: { userId: ['a', 'b'] } }), makeRes()))
-      .rejects.toThrow('User ID required');
+    await expect(
+      ctrl.listMine(makeReq({ isInternalService: true, query: { userId: ['a', 'b'] } }), makeRes())
+    ).rejects.toThrow('User ID required');
   });
 
   it('throws BadRequest when no email can be resolved', async () => {
-    await expect(ctrl.createGroup(makeReq({ body: { name: 'T' } }), makeRes())).rejects.toThrow(
-      'User ID required'
-    );
-    await expect(ctrl.listMine(makeReq({ isInternalService: true }), makeRes())).rejects.toThrow(
-      'User ID required'
-    );
+    await expect(ctrl.createGroup(makeReq({ body: { name: 'T' } }), makeRes())).rejects.toThrow('User ID required');
+    await expect(ctrl.listMine(makeReq({ isInternalService: true }), makeRes())).rejects.toThrow('User ID required');
     await expect(ctrl.listMyDeleted(makeReq(), makeRes())).rejects.toThrow('User ID required');
     await expect(ctrl.getMyGroupRoles(makeReq(), makeRes())).rejects.toThrow('User ID required');
   });
@@ -216,7 +217,6 @@ describe('single-group handlers', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true, member: true, role: 'admin' });
   });
 });
-
 
 describe('membership mutations use account IDs', () => {
   it('updates the target role', async () => {

@@ -1,13 +1,26 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 
-jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
-jest.mock('../../services/handleService', () => ({ ensureHandle: jest.fn() }));
-jest.mock('../../models/User', () => ({
-  User: {
-    findById: jest.fn(),
-    findByIdAndUpdate: jest.fn(),
-  },
-}));
+vi.mock('../../models/Session', async () => {
+  const module = await (async () =>
+    (
+      await vi.importActual<typeof import('../helpers/sessionModelMock')>('../helpers/sessionModelMock')
+    ).sessionModule())();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/handleService', async () => {
+  const module = await (() => ({ ensureHandle: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/User', async () => {
+  const module = await (() => ({
+    User: {
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { getProfile, updateProfile, changePassword } from '../../controllers/profileController';
 import { hashPassword, verifyPassword } from '../../services/passwordService';
@@ -16,42 +29,42 @@ import { User } from '../../models/User';
 import { ensureHandle } from '../../services/handleService';
 import { makeSession } from '../helpers/sessionModelMock';
 
-const mockedUser = User as unknown as Record<string, jest.Mock>;
-const mockedEnsureHandle = ensureHandle as jest.Mock;
+const mockedUser = User as unknown as Record<string, Mock>;
+const mockedEnsureHandle = ensureHandle as Mock;
 
 /** getProfile and changePassword both do findById(...).select('+passwordHash'). */
 const findByIdReturns = (value: unknown) => {
-  mockedUser.findById.mockReturnValue({ select: jest.fn().mockResolvedValue(value) });
+  mockedUser.findById.mockReturnValue({ select: vi.fn().mockResolvedValue(value) });
 };
 
 const jwtUser = {
   id: 'db-id-1',
   email: 'test@example.com',
   name: 'Test User',
-  picture: 'pic.png',
+  picture: 'pic.png'
 };
 
 const dbUser = {
   _id: { toString: () => 'db-id-1' },
   email: 'test@example.com',
   firstName: 'Test',
-  lastName: 'User',
+  lastName: 'User'
 };
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock; cookie: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock; cookie: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn(), cookie: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn(), cookie: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
 
 // The live session authenticateToken attaches to every signed-in request.
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ body: {}, authSession: makeSession({ lastSeenAt: new Date() }), ...overrides } as unknown as Request);
+  ({ body: {}, authSession: makeSession({ lastSeenAt: new Date() }), ...overrides }) as unknown as Request;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('getProfile', () => {
@@ -86,15 +99,20 @@ describe('getProfile', () => {
         bio: undefined,
         links: [],
         profilePublic: false,
-        showActivity: true,
-      },
+        showActivity: true
+      }
     });
   });
 
   it('gives an account that predates handles its first one, and reports the public page it edits', async () => {
-    const legacy = { ...dbUser, bio: 'Segmentation', links: ['https://example.test'], profilePublic: false } as typeof dbUser & { handle?: string };
+    const legacy = {
+      ...dbUser,
+      bio: 'Segmentation',
+      links: ['https://example.test'],
+      profilePublic: false
+    } as typeof dbUser & { handle?: string };
     findByIdReturns(legacy);
-    mockedEnsureHandle.mockImplementation(async (user: { handle?: string }) => {
+    mockedEnsureHandle.mockImplementation(async function (user: { handle?: string }) {
       user.handle = 'test-user';
       return 'test-user';
     });
@@ -109,8 +127,8 @@ describe('getProfile', () => {
         handle: 'test-user',
         bio: 'Segmentation',
         links: ['https://example.test'],
-        profilePublic: false,
-      }),
+        profilePublic: false
+      })
     });
   });
 
@@ -134,19 +152,16 @@ describe('updateProfile', () => {
   it('throws when the user no longer exists', async () => {
     mockedUser.findByIdAndUpdate.mockResolvedValue(null);
 
-    await expect(
-      updateProfile(makeReq({ user: jwtUser, body: { firstName: 'New' } }), makeRes())
-    ).rejects.toThrow('User not found');
+    await expect(updateProfile(makeReq({ user: jwtUser, body: { firstName: 'New' } }), makeRes())).rejects.toThrow(
+      'User not found'
+    );
   });
 
   it('updates trimmed names and returns the merged profile', async () => {
     mockedUser.findByIdAndUpdate.mockResolvedValue({ ...dbUser, firstName: 'New', lastName: 'Name' });
     const res = makeRes();
 
-    await updateProfile(
-      makeReq({ user: jwtUser, body: { firstName: '  New ', lastName: ' Name ' } }),
-      res
-    );
+    await updateProfile(makeReq({ user: jwtUser, body: { firstName: '  New ', lastName: ' Name ' } }), res);
 
     expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
       'db-id-1',
@@ -160,8 +175,8 @@ describe('updateProfile', () => {
         firstName: 'New',
         lastName: 'Name',
         name: 'Test User',
-        picture: 'pic.png',
-      }),
+        picture: 'pic.png'
+      })
     });
   });
 
@@ -188,19 +203,32 @@ describe('updateProfile public page', () => {
     await updateProfile(
       makeReq({
         user: jwtUser,
-        body: { handle: 'ann', bio: '', links: ['https://ann.example.test'], profilePublic: false, showActivity: false },
+        body: { handle: 'ann', bio: '', links: ['https://ann.example.test'], profilePublic: false, showActivity: false }
       }),
       res
     );
 
     expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
       'db-id-1',
-      { $set: { handle: 'ann', bio: null, links: ['https://ann.example.test'], profilePublic: false, showActivity: false } },
+      {
+        $set: {
+          handle: 'ann',
+          bio: null,
+          links: ['https://ann.example.test'],
+          profilePublic: false,
+          showActivity: false
+        }
+      },
       { returnDocument: 'after' }
     );
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      user: expect.objectContaining({ handle: 'ann', links: ['https://ann.example.test'], profilePublic: false, showActivity: true }),
+      user: expect.objectContaining({
+        handle: 'ann',
+        links: ['https://ann.example.test'],
+        profilePublic: false,
+        showActivity: true
+      })
     });
   });
 
@@ -219,9 +247,9 @@ describe('updateProfile public page', () => {
   it('answers 409 when the handle is taken, however many asked at once', async () => {
     mockedUser.findByIdAndUpdate.mockRejectedValue(Object.assign(new Error('E11000'), { code: 11000 }));
 
-    await expect(
-      updateProfile(makeReq({ user: jwtUser, body: { handle: 'taken' } }), makeRes())
-    ).rejects.toMatchObject({ statusCode: 409, message: 'That handle is taken' });
+    await expect(updateProfile(makeReq({ user: jwtUser, body: { handle: 'taken' } }), makeRes())).rejects.toMatchObject(
+      { statusCode: 409, message: 'That handle is taken' }
+    );
   });
 
   it('does not hide other database failures as a taken handle', async () => {

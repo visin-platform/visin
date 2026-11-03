@@ -1,25 +1,47 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 
-jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
-jest.mock('../../services/googleAuthService', () => ({
-  verifyGoogleToken: jest.fn(),
-}));
-jest.mock('../../services/googleSignInService', () => ({
-  signInWithGoogle: jest.fn(),
-}));
-jest.mock('../../services/handleService', () => ({ ensureHandle: jest.fn() }));
-jest.mock('../../models/User', () => ({
-  User: {
-    findOne: jest.fn(),
-    updateOne: jest.fn(),
-    findOneAndUpdate: jest.fn(),
-    find: jest.fn(),
-  },
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('../../models/Session', async () => {
+  const module = await (async () =>
+    (
+      await vi.importActual<typeof import('../helpers/sessionModelMock')>('../helpers/sessionModelMock')
+    ).sessionModule())();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/googleAuthService', async () => {
+  const module = await (() => ({
+    verifyGoogleToken: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/googleSignInService', async () => {
+  const module = await (() => ({
+    signInWithGoogle: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/handleService', async () => {
+  const module = await (() => ({ ensureHandle: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/User', async () => {
+  const module = await (() => ({
+    User: {
+      findOne: vi.fn(),
+      updateOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   validateToken,
@@ -27,7 +49,7 @@ import {
   invalidateUserTokens,
   verifyAuth,
   refreshToken,
-  listUsers,
+  listUsers
 } from '../../controllers/authController';
 import { verifyGoogleToken } from '../../services/googleAuthService';
 import { signInWithGoogle } from '../../services/googleSignInService';
@@ -35,26 +57,26 @@ import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
 import { makeSession } from '../helpers/sessionModelMock';
 
-const mockedVerifyGoogleToken = verifyGoogleToken as jest.Mock;
-const mockedSignIn = signInWithGoogle as jest.Mock;
-const mockedUser = User as unknown as Record<string, jest.Mock>;
+const mockedVerifyGoogleToken = verifyGoogleToken as Mock;
+const mockedSignIn = signInWithGoogle as Mock;
+const mockedUser = User as unknown as Record<string, Mock>;
 
-type MockRes = Response & { json: jest.Mock; cookie: jest.Mock; clearCookie: jest.Mock };
+type MockRes = Response & { json: Mock; cookie: Mock; clearCookie: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), cookie: jest.fn(), clearCookie: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), cookie: vi.fn(), clearCookie: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
 
 // The live session authenticateToken attaches to every signed-in request.
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ body: {}, authSession: makeSession({ lastSeenAt: new Date() }), ...overrides } as unknown as Request);
+  ({ body: {}, authSession: makeSession({ lastSeenAt: new Date() }), ...overrides }) as unknown as Request;
 
 const dbUser = {
   _id: { toString: () => 'db-id-1' },
   email: 'test@example.com',
-  tokenVersion: 3,
+  tokenVersion: 3
 };
 
 const jwtUser = {
@@ -62,7 +84,7 @@ const jwtUser = {
   email: 'test@example.com',
   name: 'Test User',
   picture: 'pic.png',
-  tokenVersion: 3,
+  tokenVersion: 3
 };
 
 beforeAll(() => {
@@ -76,7 +98,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   delete process.env.GROUP_SERVICE_URL;
   delete process.env.INTERNAL_SERVICE_TOKEN;
 });
@@ -87,17 +109,13 @@ describe('validateToken', () => {
   it('rejects when Google verification throws', async () => {
     mockedVerifyGoogleToken.mockRejectedValue(new Error('bad token'));
 
-    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'Invalid Google token'
-    );
+    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow('Invalid Google token');
   });
 
   it('rejects when Google verification returns no payload', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(undefined);
 
-    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'Invalid Google token'
-    );
+    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow('Invalid Google token');
   });
 
   it('rejects when the Google payload has no subject', async () => {
@@ -137,9 +155,7 @@ describe('validateToken', () => {
     );
     const body = res.json.mock.calls[0][0];
     expect(body.success).toBe(true);
-    expect(body.user).toEqual(
-      expect.objectContaining({ id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 })
-    );
+    expect(body.user).toEqual(expect.objectContaining({ id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 }));
     expect(verifyJWT(body.token).email).toBe('test@example.com');
   });
 
@@ -180,9 +196,9 @@ describe('validateToken', () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
     mockedSignIn.mockResolvedValue(dbUser);
     mockedUser.updateOne.mockResolvedValue({});
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true, data: ['owner', 'member'] }),
+      json: async () => ({ success: true, data: ['owner', 'member'] })
     }) as unknown as typeof fetch;
     const res = makeRes();
 
@@ -205,7 +221,7 @@ describe('getUserGroupRoles edge cases (via verifyAuth)', () => {
   it('returns empty roles when the group service responds non-ok', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
-    global.fetch = jest.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
     const res = makeRes();
 
     await verifyAuth(reqWithUser(), res);
@@ -216,9 +232,9 @@ describe('getUserGroupRoles edge cases (via verifyAuth)', () => {
   it('returns empty roles when the group service reports failure', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: false }),
+      json: async () => ({ success: false })
     }) as unknown as typeof fetch;
     const res = makeRes();
 
@@ -230,9 +246,9 @@ describe('getUserGroupRoles edge cases (via verifyAuth)', () => {
   it('returns empty roles when they are missing from a successful response', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true }),
+      json: async () => ({ success: true })
     }) as unknown as typeof fetch;
     const res = makeRes();
 
@@ -244,7 +260,7 @@ describe('getUserGroupRoles edge cases (via verifyAuth)', () => {
   it('returns empty roles when fetch rejects', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
-    global.fetch = jest.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
     const res = makeRes();
 
     await verifyAuth(reqWithUser(), res);
@@ -253,7 +269,7 @@ describe('getUserGroupRoles edge cases (via verifyAuth)', () => {
   });
 
   it('skips the group service call when env vars are missing', async () => {
-    global.fetch = jest.fn() as unknown as typeof fetch;
+    global.fetch = vi.fn() as unknown as typeof fetch;
     const res = makeRes();
 
     await verifyAuth(reqWithUser(), res);
@@ -286,17 +302,15 @@ describe('invalidateUserTokens', () => {
       { $inc: { tokenVersion: 1 } },
       { returnDocument: 'after' }
     );
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: true, newTokenVersion: 4 })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, newTokenVersion: 4 }));
   });
 
   it('throws NotFound for an unknown user', async () => {
     mockedUser.findOneAndUpdate.mockResolvedValue(null);
 
-    await expect(
-      invalidateUserTokens(makeReq({ body: { email: 'missing@example.com' } }), makeRes())
-    ).rejects.toThrow('User not found');
+    await expect(invalidateUserTokens(makeReq({ body: { email: 'missing@example.com' } }), makeRes())).rejects.toThrow(
+      'User not found'
+    );
   });
 });
 
@@ -312,9 +326,7 @@ describe('verifyAuth', () => {
 
     expect(res.cookie).toHaveBeenCalledWith('access_token', expect.any(String), expect.any(Object));
     const body = res.json.mock.calls[0][0];
-    expect(body).toEqual(
-      expect.objectContaining({ success: true, authenticated: true, token: expect.any(String) })
-    );
+    expect(body).toEqual(expect.objectContaining({ success: true, authenticated: true, token: expect.any(String) }));
     expect(verifyJWT(body.token).id).toBe('db-id-1');
   });
 
@@ -355,8 +367,8 @@ describe('refreshToken', () => {
 describe('listUsers', () => {
   it('returns the latest users', async () => {
     const users = [dbUser];
-    const limit = jest.fn().mockResolvedValue(users);
-    const sort = jest.fn().mockReturnValue({ limit });
+    const limit = vi.fn().mockResolvedValue(users);
+    const sort = vi.fn().mockReturnValue({ limit });
     mockedUser.find.mockReturnValue({ sort });
     const res = makeRes();
 

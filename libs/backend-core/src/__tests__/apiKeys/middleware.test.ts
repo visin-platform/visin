@@ -1,4 +1,8 @@
-jest.mock('../../apiKeys/service', () => ({ verifyApiKey: jest.fn() }));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../apiKeys/service', async () => {
+  const module = await (() => ({ verifyApiKey: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { NextFunction, Request, Response } from 'express';
 import { apiKeyAuth } from '../../apiKeys/middleware';
@@ -7,7 +11,7 @@ import type { ApiKeyVerification } from '../../apiKeys/types';
 import jwt from 'jsonwebtoken';
 import { mintAccessToken } from '../../oauth/tokens';
 
-const verify = verifyApiKey as unknown as jest.Mock;
+const verify = verifyApiKey as unknown as Mock;
 
 const KEY = 'vsn_live_0123456789ab_a-secret-value-long-enough';
 
@@ -30,7 +34,7 @@ const makeReq = (over: Partial<Request> = {}): Request =>
   }) as unknown as Request;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response;
@@ -39,8 +43,8 @@ const makeRes = () => {
 let next: NextFunction;
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  next = jest.fn() as unknown as NextFunction;
+  vi.clearAllMocks();
+  next = vi.fn() as unknown as NextFunction;
   verify.mockResolvedValue(VALID);
 });
 
@@ -57,16 +61,12 @@ describe('apiKeyAuth — passing through', () => {
 
   it.each([
     ['a JWT', 'Bearer header.payload.signature'],
-    ["a vision-service project token", 'Bearer a1b2c3d4e5f6a1b2c3d4e5f6'],
+    ['a vision-service project token', 'Bearer a1b2c3d4e5f6a1b2c3d4e5f6'],
     ['no header at all', undefined]
   ])('leaves %s to whichever middleware owns it', async (_label, authorization) => {
     const res = makeRes();
 
-    await apiKeyAuth('vision')(
-      makeReq({ headers: authorization ? { authorization } : {} }),
-      res,
-      next
-    );
+    await apiKeyAuth('vision')(makeReq({ headers: authorization ? { authorization } : {} }), res, next);
 
     expect(verify).not.toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
@@ -136,7 +136,10 @@ describe('apiKeyAuth — a key limited to a project', () => {
     await apiKeyAuth(domain)(makeReq(), makeRes(), next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403, message: 'This key is limited to one project and cannot reach this API.' })
+      expect.objectContaining({
+        statusCode: 403,
+        message: 'This key is limited to one project and cannot reach this API.'
+      })
     );
   });
 });
@@ -157,7 +160,11 @@ describe('apiKeyAuth — a limited key on a service that serves public data', ()
   });
 
   it('still refuses a write', async () => {
-    await apiKeyAuth('dataset', { anonymousReadsWhenProjectLimited: true })(makeReq({ method: 'POST' }), makeRes(), next);
+    await apiKeyAuth('dataset', { anonymousReadsWhenProjectLimited: true })(
+      makeReq({ method: 'POST' }),
+      makeRes(),
+      next
+    );
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
@@ -210,7 +217,9 @@ describe('apiKeyAuth — scope gating', () => {
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
     // Named precisely: the fix is a new key, not a retry, and a caller told
     // only "forbidden" will retry.
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'This credential does not carry the "vision:write" scope.' }));
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'This credential does not carry the "vision:write" scope.' })
+    );
     expect(next).not.toHaveBeenCalledWith();
   });
 
@@ -227,11 +236,7 @@ describe('apiKeyAuth — scope gating', () => {
   it('still treats other POSTs in that group as writes', async () => {
     const res = makeRes();
 
-    await apiKeyAuth('vision', { readPaths: [/\/compare$/] })(
-      makeReq({ method: 'POST', path: '/' }),
-      res,
-      next
-    );
+    await apiKeyAuth('vision', { readPaths: [/\/compare$/] })(makeReq({ method: 'POST', path: '/' }), res, next);
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
@@ -246,7 +251,6 @@ describe('apiKeyAuth — scope gating', () => {
     expect(next).not.toHaveBeenCalledWith();
   });
 });
-
 
 /**
  * The bug this suite exists to prevent recurring.
@@ -305,7 +309,7 @@ describe('apiKeyAuth — OAuth access tokens', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('applies the grant\'s scopes, so a read-only connection cannot write', async () => {
+  it("applies the grant's scopes, so a read-only connection cannot write", async () => {
     const res = makeRes();
     const req = makeReq({
       method: 'DELETE',
@@ -373,7 +377,6 @@ describe('apiKeyAuth — OAuth access tokens', () => {
     expect(verify).not.toHaveBeenCalled();
   });
 });
-
 
 describe('project-limited dataset reads', () => {
   it.each(['GET', 'HEAD'])('authenticates %s with the pipeline read scope', async (method) => {

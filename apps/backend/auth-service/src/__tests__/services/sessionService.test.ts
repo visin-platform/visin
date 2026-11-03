@@ -1,19 +1,30 @@
-jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/Session', async () => {
+  const module = await (async () =>
+    (
+      await vi.importActual<typeof import('../helpers/sessionModelMock')>('../helpers/sessionModelMock')
+    ).sessionModule())();
+  return Object.assign({ default: module }, module);
+});
 import type { Request, Response } from 'express';
 import { Session } from '../../models/Session';
 import { continueSessionAlone, renewSession } from '../../services/sessionService';
 import type { IUser } from '../../models/User';
 import { makeSession } from '../helpers/sessionModelMock';
 
-const mockedSession = Session as unknown as Record<string, jest.Mock>;
+const mockedSession = Session as unknown as Record<string, Mock>;
 
-beforeAll(() => { process.env.JWT_SECRET = 'session-service-test-secret'; });
-afterAll(() => { delete process.env.JWT_SECRET; });
-beforeEach(() => jest.clearAllMocks());
+beforeAll(() => {
+  process.env.JWT_SECRET = 'session-service-test-secret';
+});
+afterAll(() => {
+  delete process.env.JWT_SECRET;
+});
+beforeEach(() => vi.clearAllMocks());
 
 describe('renewSession', () => {
   const user = { id: '507f1f77bcf86cd799439011', email: 'user@example.test', name: 'User', tokenVersion: 1 };
-  const res = () => ({ cookie: jest.fn() }) as unknown as Response & { cookie: jest.Mock };
+  const res = () => ({ cookie: vi.fn() }) as unknown as Response & { cookie: Mock };
 
   it('renews nothing when the session was revoked after the middleware checked it', async () => {
     mockedSession.findOneAndUpdate.mockResolvedValue(null);
@@ -40,7 +51,7 @@ describe('without a session attached', () => {
   const req = { user, headers: {} } as unknown as Request;
 
   it('renews nothing and creates no session', async () => {
-    const response = { cookie: jest.fn() } as unknown as Response & { cookie: jest.Mock };
+    const response = { cookie: vi.fn() } as unknown as Response & { cookie: Mock };
 
     await expect(renewSession(req, response)).rejects.toMatchObject({ statusCode: 401, message: 'Session has ended' });
     expect(mockedSession.create).not.toHaveBeenCalled();
@@ -48,7 +59,7 @@ describe('without a session attached', () => {
   });
 
   it('does not continue a session that is not there, nor revoke the others', async () => {
-    const response = { cookie: jest.fn() } as unknown as Response & { cookie: jest.Mock };
+    const response = { cookie: vi.fn() } as unknown as Response & { cookie: Mock };
     const updated = { _id: { toString: () => user.id }, email: user.email, tokenVersion: 2 } as unknown as IUser;
 
     await expect(continueSessionAlone(req, response, updated)).rejects.toMatchObject({ statusCode: 401 });

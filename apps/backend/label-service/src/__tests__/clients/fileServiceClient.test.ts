@@ -1,18 +1,27 @@
-import { deleteFile, deleteFolder, getDownloadUrls, getFile, jobFolder, putFile } from '../../clients/fileServiceClient';
+import { vi } from 'vitest';
+import {
+  deleteFile,
+  deleteFolder,
+  getDownloadUrls,
+  getFile,
+  jobFolder,
+  putFile
+} from '../../clients/fileServiceClient';
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
-const jsonResponse = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body }) as Response;
+const jsonResponse = (body: unknown, status = 200) =>
+  ({ ok: status < 400, status, json: async () => body }) as Response;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.FILE_SERVICE_URL = 'http://files.test/';
   process.env.FILE_SERVICE_API_KEY = 'api-key';
 });
 
 describe('getDownloadUrls', () => {
-  it('signs a task\'s images in one call, asking for each file once', async () => {
+  it("signs a task's images in one call, asking for each file once", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ data: { urls: { frame: 'u1', layer: 'u2' }, expiresMs: 1 } }));
 
     const urls = await getDownloadUrls(['frame', 'layer', 'frame'], 30);
@@ -55,7 +64,11 @@ describe('storing and reading label files', () => {
   });
 
   it('reads a whole file back', async () => {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, arrayBuffer: async () => new Uint8Array([9, 8]).buffer } as Response);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => new Uint8Array([9, 8]).buffer
+    } as Response);
 
     expect(Array.from(await getFile('label/j1/masks/m.png'))).toEqual([9, 8]);
     expect(fetchMock.mock.calls[0][0]).toBe('http://files.test/internal/files/label/j1/masks/m.png');
@@ -70,7 +83,7 @@ describe('storing and reading label files', () => {
     await expect(deleteFile('f')).rejects.toThrow('delete failed for f (500)');
   });
 
-  it('removes a job\'s files with one folder delete', async () => {
+  it("removes a job's files with one folder delete", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response);
 
     await deleteFolder(jobFolder('j1'));

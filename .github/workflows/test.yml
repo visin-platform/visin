@@ -37,8 +37,10 @@ jobs:
               - 'package-lock.json'
               - '.github/workflows/test.yml'
               - 'libs/backend-core/**'
-              - 'scripts/jest-*.cjs'
-              - 'scripts/jest-*.mjs'
+              - 'scripts/release*.mjs'
+              - 'scripts/vitest-*.mjs'
+              - 'scripts/oxlint-*.mjs'
+              - 'scripts/watch-mode.test.mjs'
             frontend-shared: &frontend-shared
               - 'package.json'
               - 'package-lock.json'
@@ -226,7 +228,7 @@ jobs:
 
       - name: Check shared MongoDB test setup
         if: matrix.workspace == 'group-service'
-        run: node --test scripts/jest-mongo-setup.test.mjs
+        run: node --test scripts/vitest-mongo-setup.test.mjs scripts/release.test.mjs scripts/oxlint-visin.test.mjs scripts/watch-mode.test.mjs
 
       - name: Install Redis for isolated queue integration tests
         if: matrix.workspace == 'dataset-service'

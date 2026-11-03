@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import type { Response } from 'express';
 import { appLink, escapeHtml, excerpt, shellFrontUrl, renderSharePage, sendSharePage } from '../../http/sharePage';
 
@@ -123,9 +124,13 @@ describe('renderSharePage', () => {
 
 describe('sendSharePage', () => {
   it('sends HTML that nothing keeps and nothing in it can load or run', () => {
-    const send = jest.fn();
-    const set = jest.fn(() => ({ send }));
-    const status = jest.fn(() => ({ set }));
+    const send = vi.fn();
+    const set = vi.fn(function () {
+      return { send };
+    });
+    const status = vi.fn(function () {
+      return { set };
+    });
 
     sendSharePage({ status } as unknown as Response, { title: 'T', url: 'https://app.example.test/x' });
 

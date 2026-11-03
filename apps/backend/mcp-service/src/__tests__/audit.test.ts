@@ -1,16 +1,20 @@
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  recordToolCall: jest.fn(),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    recordToolCall: vi.fn(),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { logger, recordToolCall } from '@visin/backend-core';
 import { auditTools } from '../audit';
 import type { Caller } from '../tools/module';
 
-const recorded = recordToolCall as unknown as jest.Mock;
-const log = logger as unknown as Record<string, jest.Mock>;
+const recorded = recordToolCall as unknown as Mock;
+const log = logger as unknown as Record<string, Mock>;
 
 const caller: Caller = {
   token: 'vsn_live_abc',
@@ -41,7 +45,7 @@ const answer = (text: string, isError = false) => ({
   content: [{ type: 'text', text }]
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe('auditTools', () => {
   it('measures a call without changing what the model gets back', async () => {
@@ -76,7 +80,7 @@ describe('auditTools', () => {
 
   it('times the handler end to end', async () => {
     const wrapped = wrap(async () => {
-      await new Promise(resolve => setTimeout(resolve, 20));
+      await new Promise((resolve) => setTimeout(resolve, 20));
       return answer('x');
     });
 
@@ -117,7 +121,7 @@ describe('auditTools', () => {
     // The worst possible bug to ship from a file whose entire job is to watch:
     // the throw would reach the model as a tool failure and it would retry the
     // expensive call it just paid for.
-    recorded.mockImplementation(() => {
+    recorded.mockImplementation(function () {
       throw new Error('audit exploded');
     });
     const result = answer('x');
@@ -139,7 +143,7 @@ describe('auditTools', () => {
   });
 
   it('passes every other property through untouched', async () => {
-    const server = { registerTool: jest.fn(), connect: jest.fn(), close: jest.fn() } as unknown as McpServer;
+    const server = { registerTool: vi.fn(), connect: vi.fn(), close: vi.fn() } as unknown as McpServer;
     const measured = auditTools(server, caller);
 
     expect(measured.close).toBe(server.close);

@@ -1,17 +1,34 @@
-jest.mock('../../models/Project', () => ({
-  __esModule: true,
-  default: { findOne: jest.fn(), findById: jest.fn(), find: jest.fn() },
-}));
-jest.mock('../../models/Training', () => ({
-  __esModule: true,
-  default: { find: jest.fn() },
-}));
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
-const checkMembership = jest.fn();
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  createGroupServiceClient: () => ({ checkMembership, getMyGroups: jest.fn() }),
-}));
+import { vi, type Mock } from 'vitest';
+const { checkMembership } = vi.hoisted(() => {
+  const checkMembership = vi.fn();
+  return { checkMembership };
+});
+vi.mock('../../models/Project', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { findOne: vi.fn(), findById: vi.fn(), find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Training', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    createGroupServiceClient: () => ({ checkMembership, getMyGroups: vi.fn() })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { Request } from 'express';
 import {
@@ -25,7 +42,7 @@ import {
   isWithinTokenScope,
   membershipOf,
   projectFilter,
-  projectPermission,
+  projectPermission
 } from '../../services/projectAccessService';
 import Project, { type IProject } from '../../models/Project';
 import Training from '../../models/Training';
@@ -33,14 +50,20 @@ import { getUserGroups } from '../../clients/projectGroupsClient';
 import { projectTokenContext } from '../../middleware/projectTokenContext';
 import { requestIdentityContext } from '../../middleware/requestIdentityContext';
 
-const mockedProject = Project as unknown as Record<string, jest.Mock>;
-const mockedTraining = Training as unknown as Record<string, jest.Mock>;
-const groups = jest.mocked(getUserGroups);
+const mockedProject = Project as unknown as Record<string, Mock>;
+const mockedTraining = Training as unknown as Record<string, Mock>;
+const groups = vi.mocked(getUserGroups);
 
 const GROUP = 'a'.repeat(24);
 const EDITORS = 'e'.repeat(24);
 const project = (fields: Record<string, unknown> = {}) =>
-  ({ _id: 'p1', owner: { kind: 'user', id: 'owner-1' }, visibility: 'private', editorGroupIds: [], ...fields }) as unknown as IProject;
+  ({
+    _id: 'p1',
+    owner: { kind: 'user', id: 'owner-1' },
+    visibility: 'private',
+    editorGroupIds: [],
+    ...fields
+  }) as unknown as IProject;
 const publicProject = project({ visibility: 'public' });
 const privateProject = project({ _id: 'p2' });
 const teamProject = project({ _id: 'p3', owner: { kind: 'group', id: GROUP } });
@@ -49,7 +72,7 @@ const asProjectKey = <T>(callback: () => Promise<T>) =>
   projectTokenContext.run({ projectId: 'p3', userId: 'u1' }, callback);
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   groups.mockResolvedValue([]);
 });
 
@@ -119,7 +142,9 @@ describe('checkProjectAccess', () => {
 
   it('falls back to ObjectId lookup, swallowing cast errors', async () => {
     mockedProject.findOne.mockResolvedValue(null);
-    mockedProject.findById.mockImplementation(() => Promise.reject(new Error('CastError')) as never);
+    mockedProject.findById.mockImplementation(function () {
+      return Promise.reject(new Error('CastError')) as never;
+    });
 
     await expect(checkProjectAccess('u1', 'not-an-object-id')).resolves.toBe(false);
   });
@@ -170,9 +195,9 @@ describe('createProjectAccessChecker', () => {
   });
 
   it('still resolves each distinct project separately', async () => {
-    mockedProject.findOne.mockImplementation((query: { slug: string }) =>
-      Promise.resolve(query.slug === 'p1' ? publicProject : privateProject)
-    );
+    mockedProject.findOne.mockImplementation(function (query: { slug: string }) {
+      return Promise.resolve(query.slug === 'p1' ? publicProject : privateProject);
+    });
     const hasAccess = createProjectAccessChecker('u1');
 
     await expect(hasAccess('p1')).resolves.toBe(true);
@@ -207,28 +232,34 @@ describe('projectFilter', () => {
             { visibility: 'public' },
             { 'owner.kind': 'user', 'owner.id': 'u1' },
             { 'owner.kind': 'group', 'owner.id': { $in: [GROUP] } },
-            { editorGroupIds: { $in: [GROUP] } },
-          ],
-        },
-      ],
+            { editorGroupIds: { $in: [GROUP] } }
+          ]
+        }
+      ]
     });
   });
 
   it('asks for the role a level needs, and leaves editor groups out of manage', async () => {
     groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'member' }]);
     await expect(projectFilter('u1', 'manage', { trashed: true })).resolves.toEqual({
-      $and: [{ trashedAt: { $ne: null } }, { $or: [{ 'owner.kind': 'user', 'owner.id': 'u1' }] }],
+      $and: [{ trashedAt: { $ne: null } }, { $or: [{ 'owner.kind': 'user', 'owner.id': 'u1' }] }]
     });
   });
 
   it('matches nothing for a level nobody signed out holds', async () => {
-    await expect(projectFilter(undefined, 'contribute')).resolves.toEqual({ $and: [{ trashedAt: null }, { _id: { $in: [] } }] });
+    await expect(projectFilter(undefined, 'contribute')).resolves.toEqual({
+      $and: [{ trashedAt: null }, { _id: { $in: [] } }]
+    });
   });
 
   it('confines a project key to its project', async () => {
     const filter = await asProjectKey(() => projectFilter('u1'));
     expect(filter).toEqual({
-      $and: [{ trashedAt: null }, { $or: [{ visibility: 'public' }, { 'owner.kind': 'user', 'owner.id': 'u1' }] }, { _id: 'p3' }],
+      $and: [
+        { trashedAt: null },
+        { $or: [{ visibility: 'public' }, { 'owner.kind': 'user', 'owner.id': 'u1' }] },
+        { _id: 'p3' }
+      ]
     });
   });
 });
@@ -237,7 +268,7 @@ describe('getVisibleProjectIds and getEditableProjectIds', () => {
   const projectDocs = [{ _id: { toString: () => 'p1' } }, { _id: { toString: () => 'p2' } }];
 
   it('returns the ids the filter finds', async () => {
-    const select = jest.fn().mockResolvedValue(projectDocs);
+    const select = vi.fn().mockResolvedValue(projectDocs);
     mockedProject.find.mockReturnValue({ select });
 
     await expect(getVisibleProjectIds('u1')).resolves.toEqual(['p1', 'p2']);
@@ -249,9 +280,9 @@ describe('getVisibleProjectIds and getEditableProjectIds', () => {
 
 describe('getVisibleTrainingIds', () => {
   it('includes live trainings in visible projects only', async () => {
-    const projectSelect = jest.fn().mockResolvedValue([{ _id: { toString: () => 'p1' } }]);
+    const projectSelect = vi.fn().mockResolvedValue([{ _id: { toString: () => 'p1' } }]);
     mockedProject.find.mockReturnValue({ select: projectSelect });
-    const trainingSelect = jest.fn().mockResolvedValue([{ _id: { toString: () => 't1' } }]);
+    const trainingSelect = vi.fn().mockResolvedValue([{ _id: { toString: () => 't1' } }]);
     mockedTraining.find.mockReturnValue({ select: trainingSelect });
 
     await expect(getVisibleTrainingIds('u1')).resolves.toEqual(['t1']);

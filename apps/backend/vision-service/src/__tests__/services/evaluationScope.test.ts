@@ -1,11 +1,15 @@
+import { vi } from 'vitest';
 import { evaluationScope, visibleToReader } from '../../services/evaluationScope';
 import { getEditableProjectIds, getVisibleProjectIds } from '../../services/projectAccessService';
 
-jest.mock('../../services/projectAccessService', () => ({ getEditableProjectIds: jest.fn(), getVisibleProjectIds: jest.fn() }));
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (() => ({ getEditableProjectIds: vi.fn(), getVisibleProjectIds: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 it('gives full evaluation access only to readable projects the caller can edit', async () => {
-  jest.mocked(getVisibleProjectIds).mockResolvedValue(['mine', 'public']);
-  jest.mocked(getEditableProjectIds).mockResolvedValue(['mine', 'unreadable']);
+  vi.mocked(getVisibleProjectIds).mockResolvedValue(['mine', 'public']);
+  vi.mocked(getEditableProjectIds).mockResolvedValue(['mine', 'unreadable']);
   const scope = await evaluationScope('actor');
   expect(scope).toEqual({ full: ['mine'], published: ['public'] });
   expect(getVisibleProjectIds).toHaveBeenCalledWith('actor');

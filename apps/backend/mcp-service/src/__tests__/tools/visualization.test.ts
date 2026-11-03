@@ -1,17 +1,24 @@
-jest.mock('../../vision', () => ({
-  vision: {
-    getTraining: jest.fn(),
-    listVisualizations: jest.fn(),
-    listVisualizationTypes: jest.fn(),
-    getVisualization: jest.fn(),
-    getTrainingSummary: jest.fn(),
-    getModelOutputs: jest.fn()
-  }
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  fetchWithTimeout: jest.fn()
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../vision', async () => {
+  const module = await (() => ({
+    vision: {
+      getTraining: vi.fn(),
+      listVisualizations: vi.fn(),
+      listVisualizationTypes: vi.fn(),
+      getVisualization: vi.fn(),
+      getTrainingSummary: vi.fn(),
+      getModelOutputs: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    fetchWithTimeout: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { png as pngFile, greyPng } from '../fixtures/png';
@@ -20,8 +27,8 @@ import { vision } from '../../vision';
 import { VisinError } from '../../http';
 import { visualizationRead } from '../../tools/visualization';
 
-const mocked = vision as unknown as Record<string, jest.Mock>;
-const fetched = fetchWithTimeout as unknown as jest.Mock;
+const mocked = vision as unknown as Record<string, Mock>;
+const fetched = fetchWithTimeout as unknown as Mock;
 
 type Content = { type: string; text?: string; data?: string; mimeType?: string };
 type Handler = (args: Record<string, unknown>) => Promise<{ isError?: boolean; content: Content[] }>;
@@ -38,7 +45,7 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
   const result = await found[name](args);
   return {
     text: result.content[0].text ?? '',
-    images: result.content.filter(c => c.type === 'image'),
+    images: result.content.filter((c) => c.type === 'image'),
     isError: result.isError === true
   };
 };
@@ -61,7 +68,7 @@ const png = (bytes = 1024) =>
   });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mocked.getTraining.mockResolvedValue({ uuid: 't-uuid' });
   mocked.listVisualizationTypes.mockResolvedValue({ types: ['overlay', 'compare'] });
 });
@@ -249,7 +256,12 @@ describe('view_visualizations', () => {
 
   it('reports a failed download by status', async () => {
     mocked.getVisualization.mockResolvedValue(frame());
-    fetched.mockResolvedValue({ ok: false, status: 404, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) });
+    fetched.mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+      arrayBuffer: async () => new ArrayBuffer(0)
+    });
 
     const { text } = await call('view_visualizations', { visualizations: ['v1'] });
 
@@ -259,9 +271,7 @@ describe('view_visualizations', () => {
   it('captions a frame that carries neither epoch nor filename', async () => {
     // The by-uuid endpoint returns less than the listing does; the caption has
     // to degrade rather than print "epoch undefined".
-    mocked.getVisualization.mockResolvedValue(
-      frame({ epoch: undefined, filename: undefined })
-    );
+    mocked.getVisualization.mockResolvedValue(frame({ epoch: undefined, filename: undefined }));
     png();
 
     const { text, images } = await call('view_visualizations', { visualizations: ['v1'] });
@@ -311,7 +321,12 @@ const storedModel = (over: Record<string, unknown> = {}) => ({
   status: 'ready',
   epoch: 99,
   license: { id: 'cc-by-4.0', name: 'CC BY 4.0' },
-  modelInfo: { train_classes: [{ name: 'road', index: 0 }, { name: 'car', index: 1 }] },
+  modelInfo: {
+    train_classes: [
+      { name: 'road', index: 0 },
+      { name: 'car', index: 1 }
+    ]
+  },
   ...over
 });
 
@@ -325,7 +340,9 @@ describe('view_visualizations — a model’s outputs', () => {
     const { text, images } = await call('view_visualizations', { visualizations: ['v1'], training: 't1' });
 
     expect(mocked.getTrainingSummary).toHaveBeenCalledWith('vsn_live_abc', 't1');
-    expect(text).toContain('image 1: [mask] epoch 99 — frame_0092.png: painted mask, orange = car (75%), blue = road (25%).');
+    expect(text).toContain(
+      'image 1: [mask] epoch 99 — frame_0092.png: painted mask, orange = car (75%), blue = road (25%).'
+    );
     expect(Buffer.from(images[0].data!, 'base64').equals(stored)).toBe(false);
   });
 
@@ -355,8 +372,19 @@ describe('view_visualizations — a model’s outputs', () => {
 
   it('shows a mask saved with its own colours as it is, and leaves other kinds unpainted', async () => {
     mocked.getVisualization.mockResolvedValue(frame({ type: 'mask' }));
-    serve(pngFile({ rows: [[0, 1]], colour: 3, palette: [[0, 0, 0], [200, 10, 10]] }));
-    expect((await call('view_visualizations', { visualizations: ['v1'] })).text).toContain('shown as stored (it carries its own colours)');
+    serve(
+      pngFile({
+        rows: [[0, 1]],
+        colour: 3,
+        palette: [
+          [0, 0, 0],
+          [200, 10, 10]
+        ]
+      })
+    );
+    expect((await call('view_visualizations', { visualizations: ['v1'] })).text).toContain(
+      'shown as stored (it carries its own colours)'
+    );
 
     mocked.getVisualization.mockResolvedValue(frame({ type: 'segment' }));
     serve(greyPng(1));
@@ -375,7 +403,13 @@ describe('get_model_outputs', () => {
       size: 1.2 * 1024 ** 3,
       license: { id: 'cc-by-4.0', name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' },
       credit: 'TalTech',
-      modelInfo: { train_classes: [{ name: 'road', index: 0 }, { name: 'car', index: 1 }], transforms: { resize: 384, image_mean: [0.485, 0.456] } },
+      modelInfo: {
+        train_classes: [
+          { name: 'road', index: 0 },
+          { name: 'car', index: 1 }
+        ],
+        transforms: { resize: 384, image_mean: [0.485, 0.456] }
+      },
       parity: { maxAbsDiff: 0.00012, argmaxMismatchFraction: 0.0005, frames: 8 },
       file: '/api/trainings/t1/models/m1/file'
     },
@@ -393,7 +427,15 @@ describe('get_model_outputs', () => {
     metrics: {
       epoch: 99,
       results: { val: { mean_iou: 0.81234567 } },
-      evaluations: [{ id: 'e1', suite: { slug: 'road-test', version: 2 }, executedAt: '2026-10-11T00:00:00Z', sampleCounts: { day: 100, night: 50 } }, { id: 'e2' }]
+      evaluations: [
+        {
+          id: 'e1',
+          suite: { slug: 'road-test', version: 2 },
+          executedAt: '2026-10-11T00:00:00Z',
+          sampleCounts: { day: 100, night: 50 }
+        },
+        { id: 'e2' }
+      ]
     },
     ...over
   });
@@ -413,8 +455,12 @@ describe('get_model_outputs', () => {
 
     expect(mocked.getModelOutputs).toHaveBeenCalledWith('vsn_live_abc', 't1', 'm1');
     expect(text).toContain('clft-epoch99.pth: the checkpoint from epoch 99 of "ISEAUTO CLFT" in Team project.');
-    expect(text).toContain('Format pth, 1.20 GB. Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/; credit: TalTech).');
-    expect(text).toContain('Weights: GET /api/trainings/t1/models/m1/file on this deployment\'s API. Also stored as onnx (600 MB), onnx (300 KB).');
+    expect(text).toContain(
+      'Format pth, 1.20 GB. Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/; credit: TalTech).'
+    );
+    expect(text).toContain(
+      "Weights: GET /api/trainings/t1/models/m1/file on this deployment's API. Also stored as onnx (600 MB), onnx (300 KB)."
+    );
     expect(text).toContain(`Checkpoint SHA-256: ${'a'.repeat(64)}.`);
     expect(text).toContain('0.05% of pixels change class, largest output difference 0.00012 (on 8 frames)');
     expect(text).toContain('Classes: 0 road, 1 car.');
@@ -431,7 +477,14 @@ describe('get_model_outputs', () => {
     mocked.getTrainingSummary.mockResolvedValue({ models: [storedModel(), storedModel({ _id: 'old', epoch: 50 })] });
     mocked.getModelOutputs.mockResolvedValue(
       outputs({
-        model: { ...outputs().model, license: undefined, credit: undefined, modelInfo: undefined, parity: undefined, size: undefined },
+        model: {
+          ...outputs().model,
+          license: undefined,
+          credit: undefined,
+          modelInfo: undefined,
+          parity: undefined,
+          size: undefined
+        },
         sameCheckpoint: [],
         trainedOn: undefined,
         checkpoint: { epoch: 50 },
@@ -455,13 +508,19 @@ describe('get_model_outputs', () => {
 
   it('says why no checkpoint is served, rather than failing on one', async () => {
     mocked.getTrainingSummary.mockResolvedValue({
-      models: [storedModel({ status: 'verifying' }), storedModel({ _id: 'm2', license: undefined, filename: undefined })]
+      models: [
+        storedModel({ status: 'verifying' }),
+        storedModel({ _id: 'm2', license: undefined, filename: undefined })
+      ]
     });
 
     const { text } = await call('get_model_outputs', { training: 't1' });
 
     expect(text).toBe(
-      'None of this run’s models is served yet, so their outputs are not either: clft-epoch99.pth is verifying; pth checkpoint has no licence stated.'.replace('’', "'")
+      'None of this run’s models is served yet, so their outputs are not either: clft-epoch99.pth is verifying; pth checkpoint has no licence stated.'.replace(
+        '’',
+        "'"
+      )
     );
     expect(mocked.getModelOutputs).not.toHaveBeenCalled();
   });

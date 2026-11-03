@@ -1,15 +1,17 @@
+import { vi } from 'vitest';
 import { createFileServiceClient } from '../../clients/fileService';
 import { BadGatewayError } from '../../errors/HttpError';
 
 const client = createFileServiceClient();
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
 
-const jsonResponse = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body }) as Response;
+const jsonResponse = (body: unknown, status = 200) =>
+  ({ ok: status < 400, status, json: async () => body }) as Response;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.FILE_SERVICE_URL = 'http://files.test/';
   process.env.FILE_SERVICE_API_KEY = 'api-key';
 });
@@ -55,7 +57,11 @@ describe('storing and reading files', () => {
   });
 
   it('reads a whole file back', async () => {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, arrayBuffer: async () => new Uint8Array([9, 8]).buffer } as Response);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => new Uint8Array([9, 8]).buffer
+    } as Response);
 
     expect(Array.from(await client.getFile('m.png'))).toEqual([9, 8]);
     expect(fetchMock.mock.calls[0][0]).toBe('http://files.test/internal/files/m.png');
@@ -79,7 +85,7 @@ describe('deleting files', () => {
     await expect(client.deleteFile('f')).rejects.toThrow('delete failed for f (500)');
   });
 
-  it('deletes named files in batches of file-service\'s limit', async () => {
+  it("deletes named files in batches of file-service's limit", async () => {
     fetchMock.mockResolvedValue(jsonResponse({}));
     await client.deleteFiles(Array.from({ length: 2500 }, (_, index) => `f${index}`));
 

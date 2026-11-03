@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS } from '../../http/fetchWithTimeout';
 import { GatewayTimeoutError } from '../../errors/HttpError';
 
@@ -5,25 +6,25 @@ const originalFetch = global.fetch;
 
 afterEach(() => {
   global.fetch = originalFetch;
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 /** Resolves only once its signal aborts, mimicking a peer that never answers. */
-const stalledFetch = jest.fn((_input: unknown, init?: RequestInit) =>
-  new Promise<Response>((_resolve, reject) => {
+const stalledFetch = vi.fn(function (_input: unknown, init?: RequestInit) {
+  return new Promise<Response>((_resolve, reject) => {
     init?.signal?.addEventListener('abort', () => reject((init.signal as AbortSignal).reason));
-  })
-);
+  });
+});
 
 describe('fetchWithTimeout', () => {
   it('passes the request through and returns the response', async () => {
     const response = new Response('ok');
-    global.fetch = jest.fn().mockResolvedValue(response) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue(response) as unknown as typeof fetch;
 
     const result = await fetchWithTimeout('http://file-service/internal/files/x', { method: 'HEAD' });
 
     expect(result).toBe(response);
-    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    const init = (global.fetch as Mock).mock.calls[0][1] as RequestInit;
     expect(init.method).toBe('HEAD');
     // timeoutMs/serviceName are ours, not fetch's — they must not leak into init.
     expect(init).not.toHaveProperty('timeoutMs');
@@ -31,11 +32,11 @@ describe('fetchWithTimeout', () => {
   });
 
   it('always supplies an abort signal, even when the caller gives none', async () => {
-    global.fetch = jest.fn().mockResolvedValue(new Response('ok')) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue(new Response('ok')) as unknown as typeof fetch;
 
     await fetchWithTimeout('http://file-service/health');
 
-    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    const init = (global.fetch as Mock).mock.calls[0][1] as RequestInit;
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -70,7 +71,7 @@ describe('fetchWithTimeout', () => {
   });
 
   it('propagates a non-abort network failure unchanged', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
 
     await expect(fetchWithTimeout('http://file-service/x')).rejects.toThrow('ECONNREFUSED');
   });
@@ -78,9 +79,9 @@ describe('fetchWithTimeout', () => {
 
 describe('fetchWithTimeout streamBody', () => {
   it('stops the clock once headers arrive, so a slowly-read body is not aborted', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const abortSignals: AbortSignal[] = [];
-    global.fetch = jest.fn(async (_input, init?: RequestInit) => {
+    global.fetch = vi.fn(async function (_input, init?: RequestInit) {
       abortSignals.push(init!.signal as AbortSignal);
       return { ok: true, status: 200 } as Response;
     }) as unknown as typeof fetch;
@@ -89,18 +90,17 @@ describe('fetchWithTimeout streamBody', () => {
 
     // Ingest reads the zip for minutes after this point; the deadline must be
     // disarmed or the abort lands as an 'error' on the body stream.
-    jest.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(10_000);
     expect(abortSignals[0].aborted).toBe(false);
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('still times out a peer that never sends headers', async () => {
-    global.fetch = jest.fn(
-      (_input, init?: RequestInit) =>
-        new Promise((_resolve, reject) => {
-          (init!.signal as AbortSignal).addEventListener('abort', () => reject(new Error('aborted')));
-        })
-    ) as unknown as typeof fetch;
+    global.fetch = vi.fn(function (_input, init?: RequestInit) {
+      return new Promise((_resolve, reject) => {
+        (init!.signal as AbortSignal).addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    }) as unknown as typeof fetch;
 
     await expect(
       fetchWithTimeout('http://peer/big.zip', { timeoutMs: 10, streamBody: true, serviceName: 'file-service' })

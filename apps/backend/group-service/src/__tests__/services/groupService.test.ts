@@ -1,16 +1,31 @@
-const ownedByGroup = jest.fn();
-jest.mock('../../clients/ownedResourcesClient', () => ({ ownedByGroup: (groupId: string) => ownedByGroup(groupId) }));
-const deleteAvatar = jest.fn();
-jest.mock('../../models/GroupAvatar', () => ({ GroupAvatar: { deleteOne: (filter: unknown) => deleteAvatar(filter) } }));
-jest.mock('../../models/Group', () => ({
-  Group: {
-    create: jest.fn(),
-    find: jest.fn(),
-    findOne: jest.fn(),
-    updateMany: jest.fn(),
-    findOneAndDelete: jest.fn(),
-  },
-}));
+import { vi, type Mock } from 'vitest';
+const { ownedByGroup, deleteAvatar } = vi.hoisted(() => {
+  const ownedByGroup = vi.fn();
+  const deleteAvatar = vi.fn();
+  return { ownedByGroup, deleteAvatar };
+});
+
+vi.mock('../../clients/ownedResourcesClient', async () => {
+  const module = await (() => ({ ownedByGroup: (groupId: string) => ownedByGroup(groupId) }))();
+  return Object.assign({ default: module }, module);
+});
+
+vi.mock('../../models/GroupAvatar', async () => {
+  const module = await (() => ({ GroupAvatar: { deleteOne: (filter: unknown) => deleteAvatar(filter) } }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/Group', async () => {
+  const module = await (() => ({
+    Group: {
+      create: vi.fn(),
+      find: vi.fn(),
+      findOne: vi.fn(),
+      updateMany: vi.fn(),
+      findOneAndDelete: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import {
   updateMemberActivity,
@@ -25,19 +40,19 @@ import {
   memberRole,
   updateMemberRole,
   removeMember,
-  checkMembership,
+  checkMembership
 } from '../../services/groupService';
 import { Group, IGroup, GroupRole } from '../../models/Group';
 import { Error as MongooseError } from 'mongoose';
 
-const mockedGroup = Group as unknown as Record<string, jest.Mock>;
+const mockedGroup = Group as unknown as Record<string, Mock>;
 
 type TestGroup = {
   __v?: number;
   name: string;
   members: { userId: string; role: GroupRole; joinedAt: Date }[];
   deletedAt?: Date;
-  save: jest.Mock;
+  save: Mock;
 };
 
 const makeGroup = (overrides: Partial<TestGroup> = {}): TestGroup => ({
@@ -46,14 +61,14 @@ const makeGroup = (overrides: Partial<TestGroup> = {}): TestGroup => ({
   members: [
     { userId: 'owner@x.com', role: 'owner', joinedAt: new Date() },
     { userId: 'admin@x.com', role: 'admin', joinedAt: new Date() },
-    { userId: 'member@x.com', role: 'member', joinedAt: new Date() },
+    { userId: 'member@x.com', role: 'member', joinedAt: new Date() }
   ],
-  save: jest.fn().mockResolvedValue(undefined),
-  ...overrides,
+  save: vi.fn().mockResolvedValue(undefined),
+  ...overrides
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('updateMemberActivity', () => {
@@ -85,7 +100,7 @@ describe('createGroup', () => {
     expect(mockedGroup.create).toHaveBeenCalledWith({
       name: 'Team',
       createdBy: 'owner@x.com',
-      members: [{ userId: 'owner@x.com', role: 'owner', joinedAt: expect.any(Date) }],
+      members: [{ userId: 'owner@x.com', role: 'owner', joinedAt: expect.any(Date) }]
     });
     expect(result).toBe(created);
   });
@@ -93,20 +108,20 @@ describe('createGroup', () => {
 
 describe('listMyGroups / listMyDeletedGroups', () => {
   it('lists non-deleted groups for a member, newest first', async () => {
-    const sort = jest.fn().mockResolvedValue([]);
+    const sort = vi.fn().mockResolvedValue([]);
     mockedGroup.find.mockReturnValue({ sort });
 
     await listMyGroups('member@x.com');
 
     expect(mockedGroup.find).toHaveBeenCalledWith({
       'members.userId': 'member@x.com',
-      deletedAt: null,
+      deletedAt: null
     });
     expect(sort).toHaveBeenCalledWith({ updatedAt: -1 });
   });
 
   it('lists deleted groups sorted by deletion time', async () => {
-    const sort = jest.fn().mockResolvedValue([]);
+    const sort = vi.fn().mockResolvedValue([]);
     mockedGroup.find.mockReturnValue({ sort });
 
     await listMyDeletedGroups('member@x.com');
@@ -115,7 +130,7 @@ describe('listMyGroups / listMyDeletedGroups', () => {
     // live groups too — deleted state has to be matched by value.
     expect(mockedGroup.find).toHaveBeenCalledWith({
       'members.userId': 'member@x.com',
-      deletedAt: { $ne: null },
+      deletedAt: { $ne: null }
     });
     expect(sort).toHaveBeenCalledWith({ deletedAt: -1 });
   });
@@ -146,19 +161,19 @@ describe('getGroupIfMember', () => {
 describe('updateGroup', () => {
   it('returns a retryable conflict for stale saves', async () => {
     const group = makeGroup();
-    const { Group: GroupModel } = jest.requireActual<typeof import('../../models/Group')>('../../models/Group');
+    const { Group: GroupModel } = await vi.importActual<typeof import('../../models/Group')>('../../models/Group');
     group.save.mockRejectedValue(new MongooseError.VersionError(new GroupModel(), 0, ['name']));
     mockedGroup.findOne.mockResolvedValue(group);
 
     await expect(updateGroup('g1', 'owner@x.com', { name: 'New' })).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Group changed concurrently; reload it and retry',
+      message: 'Group changed concurrently; reload it and retry'
     });
   });
 
   it('does not turn an unrelated persistence failure into a conflict', async () => {
     const error = new Error('Database unavailable');
-    mockedGroup.findOne.mockResolvedValue(makeGroup({ save: jest.fn().mockRejectedValue(error) }));
+    mockedGroup.findOne.mockResolvedValue(makeGroup({ save: vi.fn().mockRejectedValue(error) }));
 
     await expect(updateGroup('g1', 'owner@x.com', { name: 'New' })).rejects.toBe(error);
   });
@@ -269,7 +284,10 @@ describe('permanentlyDeleteGroup', () => {
 
   it('refuses while the group still owns projects or datasets, naming them', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup({ deletedAt: new Date() }));
-    ownedByGroup.mockResolvedValue({ projects: { count: 7, names: ['A', 'B', 'C', 'D', 'E'] }, datasets: { count: 1, names: ['Road'] } });
+    ownedByGroup.mockResolvedValue({
+      projects: { count: 7, names: ['A', 'B', 'C', 'D', 'E'] },
+      datasets: { count: 1, names: ['Road'] }
+    });
 
     await expect(permanentlyDeleteGroup('g1', 'owner@x.com')).rejects.toMatchObject({
       statusCode: 409,
@@ -287,7 +305,9 @@ describe('permanentlyDeleteGroup', () => {
     await permanentlyDeleteGroup('g1', 'owner@x.com');
 
     expect(mockedGroup.findOneAndDelete).toHaveBeenCalledWith({
-      _id: 'g1', deletedAt: { $ne: null }, __v: 0,
+      _id: 'g1',
+      deletedAt: { $ne: null },
+      __v: 0
     });
     // Only soft-deleted groups are eligible; a live group must not be hard-deleted.
     expect(mockedGroup.findOne).toHaveBeenCalledWith({ _id: 'g1', deletedAt: { $ne: null } });
@@ -311,7 +331,9 @@ describe('permanentlyDeleteGroup', () => {
     await permanentlyDeleteGroup('g1', 'owner@x.com');
 
     expect(mockedGroup.findOneAndDelete).toHaveBeenCalledWith({
-      _id: 'g1', deletedAt: { $ne: null }, __v: { $exists: false },
+      _id: 'g1',
+      deletedAt: { $ne: null },
+      __v: { $exists: false }
     });
   });
 });
@@ -329,25 +351,19 @@ describe('updateMemberRole', () => {
   it('throws NotFound for a missing group', async () => {
     mockedGroup.findOne.mockResolvedValue(null);
 
-    await expect(updateMemberRole('g1', 'owner@x.com', 'member@x.com', 'admin')).rejects.toThrow(
-      'Not found'
-    );
+    await expect(updateMemberRole('g1', 'owner@x.com', 'member@x.com', 'admin')).rejects.toThrow('Not found');
   });
 
   it('forbids plain members from changing roles', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup());
 
-    await expect(updateMemberRole('g1', 'member@x.com', 'admin@x.com', 'member')).rejects.toThrow(
-      'Access denied'
-    );
+    await expect(updateMemberRole('g1', 'member@x.com', 'admin@x.com', 'member')).rejects.toThrow('Access denied');
   });
 
   it('throws NotFound for an unknown target member', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup());
 
-    await expect(updateMemberRole('g1', 'owner@x.com', 'ghost@x.com', 'admin')).rejects.toThrow(
-      'Member not found'
-    );
+    await expect(updateMemberRole('g1', 'owner@x.com', 'ghost@x.com', 'admin')).rejects.toThrow('Member not found');
   });
 
   it('updates the target role', async () => {
@@ -363,17 +379,13 @@ describe('updateMemberRole', () => {
   it('forbids an admin from demoting an owner', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup());
 
-    await expect(updateMemberRole('g1', 'admin@x.com', 'owner@x.com', 'member')).rejects.toThrow(
-      'Access denied'
-    );
+    await expect(updateMemberRole('g1', 'admin@x.com', 'owner@x.com', 'member')).rejects.toThrow('Access denied');
   });
 
   it('forbids an admin from promoting itself to owner', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup());
 
-    await expect(updateMemberRole('g1', 'admin@x.com', 'admin@x.com', 'owner')).rejects.toThrow(
-      'Access denied'
-    );
+    await expect(updateMemberRole('g1', 'admin@x.com', 'admin@x.com', 'owner')).rejects.toThrow('Access denied');
   });
 
   it('refuses to demote the last owner', async () => {
@@ -476,7 +488,7 @@ describe('checkMembership', () => {
 
     await expect(checkMembership('g1', 'admin@x.com')).resolves.toEqual({
       member: true,
-      role: 'admin',
+      role: 'admin'
     });
   });
 
@@ -485,7 +497,7 @@ describe('checkMembership', () => {
 
     await expect(checkMembership('g1', 'nobody@x.com')).resolves.toEqual({
       member: false,
-      role: null,
+      role: null
     });
   });
 });

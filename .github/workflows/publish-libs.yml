@@ -100,8 +100,8 @@ jobs:
           npm run lint --workspace=@visin/${{ inputs.library }}
           npm test --workspace=@visin/${{ inputs.library }}
 
-      # standard-version here only rewrites package.json: each lib's own
-      # .versionrc.json skips changelog, commit and tag, so this cannot collide
+      # The local release script in library mode only rewrites package.json
+      # and its lockfile; it skips changelog, commit and tag, so this cannot collide
       # with the monorepo's vX.Y.Z tags.
       #
       # `auto` reads the conventional commits that touched this library since its
@@ -130,7 +130,7 @@ jobs:
             fi
             echo "Derived a $RELEASE_TYPE release from $COMMITS commit(s)"
           fi
-          npx standard-version --release-as "$RELEASE_TYPE"
+          node ../../scripts/release.mjs --library --release-as "$RELEASE_TYPE"
 
       - name: Refuse to republish an existing version
         id: version

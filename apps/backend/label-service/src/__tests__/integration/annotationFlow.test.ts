@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import express from 'express';
 import type { Server } from 'node:http';
 import jwt from 'jsonwebtoken';
@@ -26,32 +27,55 @@ import { join } from 'node:path';
  * cannot see is whether each update is one MongoDB accepts and does what the
  * service means by it.
  */
-jest.mock('../../clients/datasetServiceClient', () => ({
-  getPermission: jest.fn(),
-  datasetIdsFor: jest.fn(async () => []),
-  getDataset: jest.fn(async () => ({ _id: 'd1', name: 'Drive', owner: { kind: 'user', id: 'owner' }, groups: [] })),
-  addHold: jest.fn(),
-  removeHold: jest.fn()
-}));
-jest.mock('../../clients/fileServiceClient', () => {
-  const stored = new Map<string, Buffer>();
-  return {
-    stored,
-    jobFolder: (jobId: string) => `label/${jobId}/`,
-    getDownloadUrls: jest.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, `https://files.example.test/${id}`]))),
-    putFile: jest.fn(async (id: string, data: Buffer) => void stored.set(id, data)),
-    getFile: jest.fn(async (id: string) => {
-      const found = stored.get(id);
-      if (!found) throw new Error(`no ${id}`);
-      return found;
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    getPermission: vi.fn(),
+    datasetIdsFor: vi.fn(async function () {
+      return [];
     }),
-    deleteFile: jest.fn(async (id: string) => void stored.delete(id)),
-    deleteFolder: jest.fn(async () => undefined)
-  };
+    getDataset: vi.fn(async function () {
+      return { _id: 'd1', name: 'Drive', owner: { kind: 'user', id: 'owner' }, groups: [] };
+    }),
+    addHold: vi.fn(),
+    removeHold: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => {
+    const stored = new Map<string, Buffer>();
+    return {
+      stored,
+      jobFolder: (jobId: string) => `label/${jobId}/`,
+      getDownloadUrls: vi.fn(async function (ids: string[]) {
+        return Object.fromEntries(ids.map((id) => [id, `https://files.example.test/${id}`]));
+      }),
+      putFile: vi.fn(async function (id: string, data: Buffer) {
+        return void stored.set(id, data);
+      }),
+      getFile: vi.fn(async function (id: string) {
+        const found = stored.get(id);
+        if (!found) throw new Error(`no ${id}`);
+        return found;
+      }),
+      deleteFile: vi.fn(async function (id: string) {
+        return void stored.delete(id);
+      }),
+      deleteFolder: vi.fn(async function () {
+        return undefined;
+      })
+    };
+  })();
+  return Object.assign({ default: module }, module);
 });
 
 const stored = (files as unknown as { stored: Map<string, Buffer> }).stored;
-const actors: Record<string, string> = { owner: '000000000000000000000011', ann: '000000000000000000000012', bea: '000000000000000000000013' };
+
+const actors: Record<string, string> = {
+  owner: '000000000000000000000011',
+  ann: '000000000000000000000012',
+  bea: '000000000000000000000013'
+};
 
 describe('annotation lifecycle with in-memory MongoDB', () => {
   let mongo: MongoMemoryServer;
@@ -79,14 +103,22 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
   beforeEach(async () => {
     folder = await mkdtemp(join(tmpdir(), 'annotation-flow-'));
     await mongoose.connection.collection('users').insertMany(
-      Object.entries(actors).map(([name, id]) => ({ _id: new mongoose.Types.ObjectId(id), email: `${name}@example.test`, tokenVersion: 1 }))
+      Object.entries(actors).map(([name, id]) => ({
+        _id: new mongoose.Types.ObjectId(id),
+        email: `${name}@example.test`,
+        tokenVersion: 1
+      }))
     );
     await mongoose.connection.collection('user_sessions').insertMany(
-      Object.values(actors).map((id) => ({ _id: new mongoose.Types.ObjectId(id), userId: new mongoose.Types.ObjectId(id), expiresAt: new Date(Date.now() + 3_600_000) }))
+      Object.values(actors).map((id) => ({
+        _id: new mongoose.Types.ObjectId(id),
+        userId: new mongoose.Types.ObjectId(id),
+        expiresAt: new Date(Date.now() + 3_600_000)
+      }))
     );
-    (getPermission as jest.Mock).mockImplementation(async (_datasetId: string, userId?: string) =>
-      userId === actors.owner ? 'manage' : userId ? 'contribute' : 'none'
-    );
+    (getPermission as Mock).mockImplementation(async function (_datasetId: string, userId?: string) {
+      return userId === actors.owner ? 'manage' : userId ? 'contribute' : 'none';
+    });
     stored.clear();
   });
 
@@ -111,15 +143,27 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
   });
 
   const token = (who: string) =>
-    jwt.sign({ id: actors[who], tokenVersion: 1, email: `${who}@example.test`, name: who, sid: actors[who], typ: 'session' }, process.env.JWT_SECRET!, {
-      expiresIn: '1h'
-    });
+    jwt.sign(
+      { id: actors[who], tokenVersion: 1, email: `${who}@example.test`, name: who, sid: actors[who], typ: 'session' },
+      process.env.JWT_SECRET!,
+      {
+        expiresIn: '1h'
+      }
+    );
 
-  const request = async (path: string, who: string, method = 'GET', body?: unknown, contentType = 'application/json') => {
+  const request = async (
+    path: string,
+    who: string,
+    method = 'GET',
+    body?: unknown,
+    contentType = 'application/json'
+  ) => {
     const response = await fetch(`${base}${path}`, {
       method,
       headers: { 'content-type': contentType, authorization: `Bearer ${token(who)}` },
-      ...(body === undefined ? {} : { body: contentType === 'application/json' ? JSON.stringify(body) : (body as BodyInit) })
+      ...(body === undefined
+        ? {}
+        : { body: contentType === 'application/json' ? JSON.stringify(body) : (body as BodyInit) })
     });
     const text = Buffer.from(await response.arrayBuffer());
     let json: { data?: Record<string, unknown>; message?: string } | undefined;
@@ -172,69 +216,104 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     expect(updated.status).toBe(200);
     const storedJob = await LabelJob.findById(job._id);
     expect(storedJob!.classes[0].modelClass).toBe('bus');
-    expect(storedJob!.classes.map(({ key, maskIndex, tools }) => ({ key, maskIndex, tools })))
-      .toEqual(before!.classes.map(({ key, maskIndex, tools }) => ({ key, maskIndex, tools })));
+    expect(storedJob!.classes.map(({ key, maskIndex, tools }) => ({ key, maskIndex, tools }))).toEqual(
+      before!.classes.map(({ key, maskIndex, tools }) => ({ key, maskIndex, tools }))
+    );
     expect((await LabelAnnotation.findOne({ taskId: tasks[0]._id }))!.objects[0].id).toBe('a');
     expect((await request(path, 'owner', 'PUT', { mapping: { car: null } })).status).toBe(200);
     expect((await LabelJob.findById(job._id))!.classes[0].modelClass).toBeUndefined();
   });
 
   const realInferenceTest = process.env.VISIN_INFER_URL && process.env.VISIN_INFER_IMAGE ? it : it.skip;
-  realInferenceTest('stores a real inference mask through the annotation API as a class-index PNG', async () => {
-    const image = await readFile(process.env.VISIN_INFER_IMAGE!);
-    const modelBase = process.env.VISIN_INFER_URL!;
-    const detections = await fetch(`${modelBase}/detect?minScore=0.5`, { method: 'POST', body: image, signal: AbortSignal.timeout(60_000) });
-    expect(detections.status).toBe(200);
-    const detected = await detections.json() as { boxes: { class: string; bbox: number[] }[] };
-    const bus = detected.boxes.find((entry) => entry.class === 'bus')!;
-    expect(bus).toBeDefined();
-    const [x, y, w, h] = bus.bbox;
-    const segmented = await fetch(`${modelBase}/segment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageId: 'label-service-integration-bus', image: image.toString('base64'), points: [{ x: x + w / 2, y: y + h * 0.4, label: 1 }] }),
-      signal: AbortSignal.timeout(30_000)
-    });
-    expect(segmented.status).toBe(200);
-    const result = await segmented.json() as { rle: string; width: number; height: number };
-    const { tasks, job } = await fixture(1);
-    const id = tasks[0]._id;
-    await LabelTask.updateOne({ _id: id }, { $set: { 'frame.width': result.width, 'frame.height': result.height } });
-    // SAM returns binary value 1. The editor paints it as its chosen class;
-    // this job's first mask class has the same index.
-    const saved = await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', Buffer.from(result.rle, 'base64'), 'application/octet-stream');
-    expect(saved.status).toBe(200);
-    expect((await request(`/tasks/${id}/annotation/done`, 'ann', 'POST', {})).status).toBe(200);
-    const annotation = await LabelAnnotation.findOne({ taskId: id });
-    const png = decodePng(stored.get(annotation!.mask!.fileId)!);
-    expect([png.width, png.height]).toEqual([result.width, result.height]);
-    expect(Array.from(png.data).filter((value) => value === 1).length).toBeGreaterThan(100_000);
-    expect(new Set(png.data)).toEqual(new Set([0, 1]));
-    expect((await LabelJob.findById(job._id))!.status).toBe('completed');
-  }, 120_000);
+  realInferenceTest(
+    'stores a real inference mask through the annotation API as a class-index PNG',
+    async () => {
+      const image = await readFile(process.env.VISIN_INFER_IMAGE!);
+      const modelBase = process.env.VISIN_INFER_URL!;
+      const detections = await fetch(`${modelBase}/detect?minScore=0.5`, {
+        method: 'POST',
+        body: image,
+        signal: AbortSignal.timeout(60_000)
+      });
+      expect(detections.status).toBe(200);
+      const detected = (await detections.json()) as { boxes: { class: string; bbox: number[] }[] };
+      const bus = detected.boxes.find((entry) => entry.class === 'bus')!;
+      expect(bus).toBeDefined();
+      const [x, y, w, h] = bus.bbox;
+      const segmented = await fetch(`${modelBase}/segment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageId: 'label-service-integration-bus',
+          image: image.toString('base64'),
+          points: [{ x: x + w / 2, y: y + h * 0.4, label: 1 }]
+        }),
+        signal: AbortSignal.timeout(30_000)
+      });
+      expect(segmented.status).toBe(200);
+      const result = (await segmented.json()) as { rle: string; width: number; height: number };
+      const { tasks, job } = await fixture(1);
+      const id = tasks[0]._id;
+      await LabelTask.updateOne({ _id: id }, { $set: { 'frame.width': result.width, 'frame.height': result.height } });
+      // SAM returns binary value 1. The editor paints it as its chosen class;
+      // this job's first mask class has the same index.
+      const saved = await request(
+        `/tasks/${id}/annotation/mask`,
+        'ann',
+        'PUT',
+        Buffer.from(result.rle, 'base64'),
+        'application/octet-stream'
+      );
+      expect(saved.status).toBe(200);
+      expect((await request(`/tasks/${id}/annotation/done`, 'ann', 'POST', {})).status).toBe(200);
+      const annotation = await LabelAnnotation.findOne({ taskId: id });
+      const png = decodePng(stored.get(annotation!.mask!.fileId)!);
+      expect([png.width, png.height]).toEqual([result.width, result.height]);
+      expect(Array.from(png.data).filter((value) => value === 1).length).toBeGreaterThan(100_000);
+      expect(new Set(png.data)).toEqual(new Set([0, 1]));
+      expect((await LabelJob.findById(job._id))!.status).toBe('completed');
+    },
+    120_000
+  );
 
-  it.each(['yolo', 'coco', 'voc', 'semantic-png', 'visin'])('preserves finished empty frames through %s export and import', async (format) => {
-    const { tasks, job } = await fixture(1);
-    await request(`/tasks/${tasks[0]._id}/annotation/done`, 'ann', 'POST', {});
-    const exported = await request(`/jobs/${job.id}/export?format=${format}`, 'owner');
-    expect(exported.status).toBe(200);
-    // The new job has the same stems and no labels of its own.
-    const target = await fixture(1);
-    const imported = await request(`/jobs/${target.job.id}/import?as=done`, 'owner', 'POST', exported.raw, 'application/zip');
-    expect(imported.status).toBe(200);
-    expect(await LabelAnnotation.findOne({ taskId: target.tasks[0]._id })).toMatchObject({ status: 'done', objects: [] });
-    expect((await LabelTask.findById(target.tasks[0]._id))!.answersCount).toBe(1);
-    expect((await LabelJob.findById(target.job._id))!.status).toBe('completed');
-  });
+  it.each(['yolo', 'coco', 'voc', 'semantic-png', 'visin'])(
+    'preserves finished empty frames through %s export and import',
+    async (format) => {
+      const { tasks, job } = await fixture(1);
+      await request(`/tasks/${tasks[0]._id}/annotation/done`, 'ann', 'POST', {});
+      const exported = await request(`/jobs/${job.id}/export?format=${format}`, 'owner');
+      expect(exported.status).toBe(200);
+      // The new job has the same stems and no labels of its own.
+      const target = await fixture(1);
+      const imported = await request(
+        `/jobs/${target.job.id}/import?as=done`,
+        'owner',
+        'POST',
+        exported.raw,
+        'application/zip'
+      );
+      expect(imported.status).toBe(200);
+      expect(await LabelAnnotation.findOne({ taskId: target.tasks[0]._id })).toMatchObject({
+        status: 'done',
+        objects: []
+      });
+      expect((await LabelTask.findById(target.tasks[0]._id))!.answersCount).toBe(1);
+      expect((await LabelJob.findById(target.job._id))!.status).toBe('completed');
+    }
+  );
 
   it('counts concurrent completions by the same annotator once', async () => {
     const { tasks, job } = await fixture(1, 2);
     const user = { id: actors.ann, email: 'ann@example.test' };
     // Both requests saw no previous annotation before either wrote. The real
     // database still handles the upserts and counter updates below.
-    const prior = jest.spyOn(LabelAnnotation, 'findOne');
-    prior.mockImplementationOnce(() => Promise.resolve(null) as unknown as ReturnType<typeof LabelAnnotation.findOne>);
-    prior.mockImplementationOnce(() => Promise.resolve(null) as unknown as ReturnType<typeof LabelAnnotation.findOne>);
+    const prior = vi.spyOn(LabelAnnotation, 'findOne');
+    prior.mockImplementationOnce(function () {
+      return Promise.resolve(null) as unknown as ReturnType<typeof LabelAnnotation.findOne>;
+    });
+    prior.mockImplementationOnce(function () {
+      return Promise.resolve(null) as unknown as ReturnType<typeof LabelAnnotation.findOne>;
+    });
     try {
       await Promise.all([finishTask(tasks[0], job, user, 'done'), finishTask(tasks[0], job, user, 'done')]);
     } finally {
@@ -254,11 +333,14 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     const id = tasks[0]._id.toString();
 
     expect((await request(`/tasks/${id}/annotation`, 'ann', 'PUT', { objects: [box('a')] })).status).toBe(200);
-    const second = await request(`/tasks/${id}/annotation`, 'ann', 'PUT', { objects: [box('b', [-2, 0, 20, 2])], elapsedMs: 900 });
+    const second = await request(`/tasks/${id}/annotation`, 'ann', 'PUT', {
+      objects: [box('b', [-2, 0, 20, 2])],
+      elapsedMs: 900
+    });
     expect(second.json?.data).toMatchObject({ status: 'draft', objects: [{ id: 'b', bbox: [0, 0, 8, 2] }] });
 
     const item = await request(`/tasks/${id}`, 'ann');
-    const annotation = item.json?.data?.annotation as { mine: { objects: unknown[]; status: string }; count: number };
+    const annotation = item.json!.data!.annotation as { mine: { objects: unknown[]; status: string }; count: number };
     expect(annotation.mine.objects).toHaveLength(1);
     expect(annotation.count).toBe(0);
     expect(await LabelAnnotation.countDocuments()).toBe(1);
@@ -271,11 +353,19 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     pixels[0] = 1;
     pixels[9] = 2;
 
-    const first = await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', maskBytes(pixels), 'application/octet-stream');
+    const first = await request(
+      `/tasks/${id}/annotation/mask`,
+      'ann',
+      'PUT',
+      maskBytes(pixels),
+      'application/octet-stream'
+    );
     expect(first.status).toBe(200);
     const saved = await LabelAnnotation.findOne({ taskId: id });
     expect(saved!.mask).toMatchObject({ width: 8, height: 4, pixels: { '1': 1, '2': 1 } });
-    expect(Array.from(decodePng(stored.get(saved!.mask!.fileId)!).data.slice(0, 10))).toEqual([1, 0, 0, 0, 0, 0, 0, 0, 0, 2]);
+    expect(Array.from(decodePng(stored.get(saved!.mask!.fileId)!).data.slice(0, 10))).toEqual([
+      1, 0, 0, 0, 0, 0, 0, 0, 0, 2
+    ]);
 
     pixels[1] = 1;
     await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', maskBytes(pixels), 'application/octet-stream');
@@ -285,7 +375,9 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     expect(stored.has(saved!.mask!.fileId)).toBe(false);
 
     const item = await request(`/tasks/${id}`, 'ann');
-    expect((item.json?.data?.annotation as { mine: { mask: { url: string } } }).mine.mask.url).toContain(replaced!.mask!.fileId);
+    expect((item.json!.data!.annotation as { mine: { mask: { url: string } } }).mine.mask.url).toContain(
+      replaced!.mask!.fileId
+    );
 
     expect((await request(`/tasks/${id}/annotation/mask`, 'ann', 'DELETE')).status).toBe(200);
     expect((await LabelAnnotation.findOne({ taskId: id }))!.mask).toBeUndefined();
@@ -296,8 +388,20 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     const id = tasks[0]._id.toString();
 
     const wrong = encodeMaskRle({ width: 2, height: 2, data: new Uint8Array(4) });
-    expect((await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', wrong, 'application/octet-stream')).status).toBe(400);
-    expect((await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', maskBytes(new Array(32).fill(7)), 'application/octet-stream')).status).toBe(400);
+    expect(
+      (await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', wrong, 'application/octet-stream')).status
+    ).toBe(400);
+    expect(
+      (
+        await request(
+          `/tasks/${id}/annotation/mask`,
+          'ann',
+          'PUT',
+          maskBytes(new Array(32).fill(7)),
+          'application/octet-stream'
+        )
+      ).status
+    ).toBe(400);
   });
 
   it('skips a frame, reopens it when the annotator draws on it, and finishes it', async () => {
@@ -308,7 +412,9 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     expect((await LabelTask.findById(id))!.skippedBy).toEqual([actors.ann]);
     // Not handed to the annotator who skipped it, still handed to another.
     expect((await request(`/jobs/${job.id}/next`, 'ann', 'POST', {})).json?.data).toBeNull();
-    expect(((await request(`/jobs/${job.id}/next`, 'bea', 'POST', {})).json?.data as { task: { _id: string } }).task._id).toBe(id);
+    expect(
+      ((await request(`/jobs/${job.id}/next`, 'bea', 'POST', {})).json!.data as { task: { _id: string } }).task._id
+    ).toBe(id);
 
     const reopened = await request(`/tasks/${id}/annotation`, 'ann', 'PUT', { objects: [box('a')] });
     expect(reopened.status).toBe(200);
@@ -344,7 +450,13 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
     const { tasks, job } = await fixture(2);
     const id = tasks[0]._id.toString();
     await request(`/tasks/${id}/annotation`, 'ann', 'PUT', { objects: [box('a', [0, 0, 4, 2])] });
-    await request(`/tasks/${id}/annotation/mask`, 'ann', 'PUT', maskBytes(new Array(32).fill(2)), 'application/octet-stream');
+    await request(
+      `/tasks/${id}/annotation/mask`,
+      'ann',
+      'PUT',
+      maskBytes(new Array(32).fill(2)),
+      'application/octet-stream'
+    );
     await request(`/tasks/${id}/annotation/done`, 'ann', 'POST', {});
     // A draft on the other frame is not exported by default.
     await request(`/tasks/${tasks[1]._id}/annotation`, 'ann', 'PUT', { objects: [box('b')] });
@@ -388,11 +500,20 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
 
     const preview = await request(`/jobs/${job.id}/import?dryRun=true`, 'owner', 'POST', archive, 'application/zip');
     expect(preview.status).toBe(200);
-    expect(preview.json?.data).toMatchObject({ format: 'yolo', frames: { matched: 1, unmatched: 1, unmatchedSample: ['0009'] } });
+    expect(preview.json?.data).toMatchObject({
+      format: 'yolo',
+      frames: { matched: 1, unmatched: 1, unmatchedSample: ['0009'] }
+    });
     expect(await LabelSuggestion.countDocuments()).toBe(0);
 
     const classMap = encodeURIComponent(JSON.stringify({ bus: '+' }));
-    const done = await request(`/jobs/${job.id}/import?classMap=${classMap}`, 'owner', 'POST', archive, 'application/zip');
+    const done = await request(
+      `/jobs/${job.id}/import?classMap=${classMap}`,
+      'owner',
+      'POST',
+      archive,
+      'application/zip'
+    );
     expect(done.status).toBe(200);
     expect(done.json?.data).toMatchObject({ createdClasses: ['bus'], boxes: 2 });
     expect((await LabelJob.findById(job.id))!.classes.map((entry) => entry.key)).toEqual(['car', 'road', 'bus']);
@@ -408,7 +529,10 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
 
     const finished = await request(`/jobs/${job.id}/import?as=done`, 'owner', 'POST', archive, 'application/zip');
     expect(finished.status).toBe(200);
-    expect(await LabelAnnotation.findOne({ taskId: tasks[0]._id })).toMatchObject({ status: 'done', userId: actors.owner });
+    expect(await LabelAnnotation.findOne({ taskId: tasks[0]._id })).toMatchObject({
+      status: 'done',
+      userId: actors.owner
+    });
     expect((await LabelTask.findById(tasks[0]._id))!.answersCount).toBe(1);
 
     // An annotator may not import.
@@ -426,6 +550,9 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
 
     const stats = await request(`/jobs/${job.id}/stats`, 'owner');
     expect(stats.json?.data).toMatchObject({ done: 1, skipped: 1, objects: 2 });
-    expect((stats.json?.data?.perClass as { classKey: string; boxes: number }[])[0]).toMatchObject({ classKey: 'car', boxes: 2 });
+    expect((stats.json!.data!.perClass as { classKey: string; boxes: number }[])[0]).toMatchObject({
+      classKey: 'car',
+      boxes: 2
+    });
   });
 });

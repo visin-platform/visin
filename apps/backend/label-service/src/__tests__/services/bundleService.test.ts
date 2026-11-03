@@ -1,6 +1,16 @@
-jest.mock('../../models/LabelTask', () => ({ LabelTask: { find: jest.fn() } }));
-jest.mock('../../models/LabelAnnotation', () => ({ LabelAnnotation: { find: jest.fn() } }));
-jest.mock('../../clients/fileServiceClient', () => ({ getFile: jest.fn() }));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../models/LabelTask', async () => {
+  const module = await (() => ({ LabelTask: { find: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelAnnotation', async () => {
+  const module = await (() => ({ LabelAnnotation: { find: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({ getFile: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -14,39 +24,39 @@ import { openZip } from '../../utils/zip';
 import { encodeGrayscalePng } from '../../utils/png';
 import type { ILabelJob } from '../../models/LabelJob';
 
-const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
-const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
-const mockedFiles = files as unknown as Record<string, jest.Mock>;
+const mockedTask = LabelTask as unknown as Record<string, Mock>;
+const mockedAnnotation = LabelAnnotation as unknown as Record<string, Mock>;
+const mockedFiles = files as unknown as Record<string, Mock>;
 
 const job = {
   _id: 'j1',
   name: 'Street',
   classes: [
     { key: 'car', name: 'Car', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 },
-    { key: 'sign', name: 'Sign', color: '#0000ff', tools: ['box'], maskIndex: 2 },
-  ],
+    { key: 'sign', name: 'Sign', color: '#0000ff', tools: ['box'], maskIndex: 2 }
+  ]
 } as unknown as ILabelJob;
 
 const task = (id: string, stem: string, size: { width?: number; height?: number } = { width: 4, height: 2 }) => ({
   _id: id,
-  frame: { fileId: `f-${id}`, path: `camera/${stem}.jpg`, stem, ...size },
+  frame: { fileId: `f-${id}`, path: `camera/${stem}.jpg`, stem, ...size }
 });
 
 const annotation = (taskId: string, overrides: Record<string, unknown> = {}) => ({
   taskId,
   status: 'done',
   objects: [{ id: `o-${taskId}`, classKey: 'car', bbox: [0, 0, 2, 2], source: 'human' }],
-  ...overrides,
+  ...overrides
 });
 
 const stub = (tasks: unknown[], annotations: unknown[]) => {
-  mockedAnnotation.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(annotations) });
+  mockedAnnotation.find.mockReturnValue({ sort: vi.fn().mockResolvedValue(annotations) });
   mockedTask.find.mockReturnValue({
     sort: () => ({
       cursor: async function* () {
         yield* tasks;
-      },
-    }),
+      }
+    })
   });
 };
 
@@ -72,7 +82,7 @@ const run = async (format: Parameters<typeof streamExport>[1], include: 'done' |
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('streamExport', () => {
@@ -84,7 +94,11 @@ describe('streamExport', () => {
     expect(frames).toBe(2);
     expect(Object.keys(entries)).toEqual(['labels/a.txt', 'labels/c.txt', 'data.yaml']);
     expect(entries['labels/a.txt'].toString()).toBe('0 0.25 0.5 0.5 1\n');
-    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', generation: null, status: { $in: ['done'] } });
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({
+      jobId: 'j1',
+      generation: null,
+      status: { $in: ['done'] }
+    });
   });
 
   it('fetches a frame’s mask and hands the format its class indices', async () => {
@@ -114,7 +128,11 @@ describe('streamExport', () => {
 
     const { entries } = await run('yolo', 'all');
 
-    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', generation: null, status: { $in: ['done', 'draft'] } });
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({
+      jobId: 'j1',
+      generation: null,
+      status: { $in: ['done', 'draft'] }
+    });
     expect(Object.keys(entries)).toEqual(['labels/a.txt', 'labels/c.txt', 'data.yaml']);
   });
 
@@ -122,9 +140,15 @@ describe('streamExport', () => {
     stub(
       [task('t1', 'a')],
       [
-        annotation('t1', { status: 'draft', objects: [{ id: 'd', classKey: 'sign', bbox: [0, 0, 1, 1], source: 'human' }] }),
+        annotation('t1', {
+          status: 'draft',
+          objects: [{ id: 'd', classKey: 'sign', bbox: [0, 0, 1, 1], source: 'human' }]
+        }),
         annotation('t1', { objects: [{ id: 'x', classKey: 'car', bbox: [0, 0, 4, 2], source: 'human' }] }),
-        annotation('t1', { status: 'draft', objects: [{ id: 'e', classKey: 'sign', bbox: [0, 0, 1, 1], source: 'human' }] }),
+        annotation('t1', {
+          status: 'draft',
+          objects: [{ id: 'e', classKey: 'sign', bbox: [0, 0, 1, 1], source: 'human' }]
+        })
       ]
     );
 

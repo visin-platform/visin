@@ -1,29 +1,33 @@
+import { vi, type MockInstance } from 'vitest';
 import http from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
 import { serve } from '../../app/serve';
 
-jest.mock('../../logging/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
 
 describe('serve', () => {
   let handlers: Record<string, () => void>;
-  let exit: jest.SpyInstance;
+  let exit: MockInstance;
 
   beforeEach(() => {
     handlers = {};
-    jest.spyOn(process, 'on').mockImplementation(((event: string, handler: () => void) => {
+    vi.spyOn(process, 'on').mockImplementation(((event: string, handler: () => void) => {
       handlers[event] = handler;
       return process;
     }) as never);
-    exit = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   const exited = () => new Promise<void>((resolve) => exit.mockImplementation((() => resolve()) as never));
 
   it('drains the server and runs onShutdown before exiting on SIGTERM, once', async () => {
-    const onShutdown = jest.fn().mockResolvedValue(undefined);
+    const onShutdown = vi.fn().mockResolvedValue(undefined);
     const server = serve(express(), { port: 0, serviceName: 'test-service', onShutdown });
     await new Promise((resolve) => server.once('listening', resolve));
 
@@ -126,7 +130,7 @@ describe('serve', () => {
       process.env.NODE_ENV = environment;
       const server = serve(express(), { port: 0, serviceName: 'test-service' });
       await new Promise((resolve) => server.once('listening', resolve));
-      const delays = jest.spyOn(global, 'setTimeout');
+      const delays = vi.spyOn(global, 'setTimeout');
       const done = exited();
       handlers.SIGTERM();
       await done;

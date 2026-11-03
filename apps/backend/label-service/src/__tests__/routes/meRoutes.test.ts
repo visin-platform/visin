@@ -1,18 +1,25 @@
-jest.mock('../../clients/groupServiceClient', () => ({
-  getMyGroups: jest.fn(),
-  checkMembership: jest.fn(),
-}));
-jest.mock('../../clients/datasetServiceClient', () => ({
-  listDatasetsFor: jest.fn(),
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../clients/groupServiceClient', async () => {
+  const module = await (() => ({
+    getMyGroups: vi.fn(),
+    checkMembership: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    listDatasetsFor: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { Request, Response } from 'express';
 import router from '../../routes/meRoutes';
 import { getMyGroups } from '../../clients/groupServiceClient';
 import * as datasets from '../../clients/datasetServiceClient';
 
-const mockedGetMyGroups = getMyGroups as jest.Mock;
-const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
+const mockedGetMyGroups = getMyGroups as Mock;
+const mockedDatasets = datasets as unknown as Record<string, Mock>;
 
 type Layer = {
   route?: { path: string; methods: Record<string, boolean>; stack: { handle: unknown }[] };
@@ -29,8 +36,8 @@ const handlerFor = (path: string) =>
   ) => Promise<void>;
 
 const call = async (path: string, req: Partial<Request>) => {
-  const res = { json: jest.fn() } as unknown as Response & { json: jest.Mock };
-  const next = jest.fn();
+  const res = { json: vi.fn() } as unknown as Response & { json: Mock };
+  const next = vi.fn();
   handlerFor(path)({ user: { id: 'u1' }, params: {}, query: {}, ...req } as unknown as Request, res, next);
   // `asyncHandler` catches the handler's promise rather than returning it, so
   // the assertions have to wait for the pending work themselves.
@@ -39,7 +46,7 @@ const call = async (path: string, req: Partial<Request>) => {
 };
 
 describe('meRoutes', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it('registers GET /groups', () => {
     const route = layers.find((layer) => layer.route?.path === '/groups');
@@ -49,11 +56,14 @@ describe('meRoutes', () => {
 
   it('returns the caller’s groups', async () => {
     mockedGetMyGroups.mockResolvedValue([{ groupId: 'g1', name: 'Team', role: 'owner' }]);
-    const handler = layers.find((layer) => layer.route?.path === '/groups')!.route!.stack[0]
-      .handle as (req: Request, res: Response, next: (err?: unknown) => void) => void;
+    const handler = layers.find((layer) => layer.route?.path === '/groups')!.route!.stack[0].handle as (
+      req: Request,
+      res: Response,
+      next: (err?: unknown) => void
+    ) => void;
     const req = { user: { id: 'u1', email: 'User@X.com' } } as unknown as Request;
-    const res = { json: jest.fn() } as unknown as Response & { json: jest.Mock };
-    const next = jest.fn();
+    const res = { json: vi.fn() } as unknown as Response & { json: Mock };
+    const next = vi.fn();
 
     await handler(req, res, next);
 

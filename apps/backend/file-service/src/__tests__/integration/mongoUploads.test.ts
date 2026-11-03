@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,17 @@ import { useMongo } from '../helpers/mongo';
 import { FileUpload } from '../../models/FileUpload';
 import { openUploadStore, readUploadState, uploadLocation, UPLOAD_LEASE_MS } from '../../services/uploadStore';
 import { reserveFileUpload, uploadFile } from '../../services/uploadService';
-import { deleteByPrefix, deleteFile, deleteFiles, fileExists, getMetadata, listFiles, openRead, readFile, writeFile } from '../../utils/storage';
+import {
+  deleteByPrefix,
+  deleteFile,
+  deleteFiles,
+  fileExists,
+  getMetadata,
+  listFiles,
+  openRead,
+  readFile,
+  writeFile
+} from '../../utils/storage';
 
 useMongo();
 let directory: string;
@@ -20,7 +31,7 @@ beforeEach(() => {
   process.env.FILE_SERVICE_DATA_DIR = directory;
 });
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
   fs.rmSync(directory, { recursive: true, force: true });
   delete process.env.FILE_SERVICE_DATA_DIR;
 });
@@ -37,12 +48,14 @@ it('fences stale commits and releases without disturbing the next owner', async 
     await expect(openUploadStore('test.png')).rejects.toThrow('Another upload');
     await current.save({ ...original, expiresMs: 123 });
     expect((await readUploadState('test.png'))?.expiresMs).toBe(123);
-  } finally { await current.close(); }
+  } finally {
+    await current.close();
+  }
 });
 
 it('allows exactly one writer when a file record is created concurrently', async () => {
   const attempts = await Promise.allSettled(Array.from({ length: 8 }, () => openUploadStore('test.png')));
-  expect(attempts.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+  expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
   for (const result of attempts) if (result.status === 'fulfilled') await result.value.close();
   expect(await FileUpload.countDocuments()).toBe(1);
 });
@@ -53,7 +66,7 @@ it('cannot publish stale bytes after a competing writer completes', async () => 
   const old = uploadFile('test.png', body, { reservationId });
   const rejected = expect(old).rejects.toThrow();
   body.write(png.subarray(0, 8));
-  while (body.listenerCount('aborted') < 2) await new Promise<void>(resolve => setImmediate(resolve));
+  while (body.listenerCount('aborted') < 2) await new Promise<void>((resolve) => setImmediate(resolve));
   await expire();
   await uploadFile('test.png', send(), { reservationId });
   body.end(Buffer.from('attacker'));
@@ -62,10 +75,10 @@ it('cannot publish stale bytes after a competing writer completes', async () => 
   expect((await readUploadState('test.png'))?.status).toBe('complete');
 });
 
-it.each([false, true])('recovers publication when the database write fails (committed=%s)', async committed => {
+it.each([false, true])('recovers publication when the database write fails (committed=%s)', async (committed) => {
   const reservationId = await reserve();
   const update = FileUpload.collection.updateOne.bind(FileUpload.collection);
-  const failure = jest.spyOn(FileUpload.collection, 'updateOne').mockImplementation(async (...args) => {
+  const failure = vi.spyOn(FileUpload.collection, 'updateOne').mockImplementation(async function (...args) {
     if (!Array.isArray(args[1]) && args[1].$set?.state?.status === 'complete') {
       if (committed) await update(...args);
       throw new Error('Mongo acknowledgement lost');
@@ -82,24 +95,26 @@ it.each([false, true])('recovers publication when the database write fails (comm
 it('preserves the old file if an internal replacement cannot commit', async () => {
   await uploadFile('test.png', send(), { internal: true });
   const update = FileUpload.collection.updateOne.bind(FileUpload.collection);
-  jest.spyOn(FileUpload.collection, 'updateOne').mockImplementation(async (...args) => {
+  vi.spyOn(FileUpload.collection, 'updateOne').mockImplementation(async function (...args) {
     if (!Array.isArray(args[1]) && args[1].$set?.state?.status === 'complete') throw new Error('Mongo unavailable');
     return update(...args);
   });
-  await expect(uploadFile('test.png', send(Buffer.from('replacement')), { internal: true })).rejects.toThrow('unavailable');
+  await expect(uploadFile('test.png', send(Buffer.from('replacement')), { internal: true })).rejects.toThrow(
+    'unavailable'
+  );
   expect(await readFile('test.png')).toEqual(png);
 });
 
 it('fails reads and writes closed when Mongo is unavailable, including legacy files', async () => {
   writeFile('test.png', png);
-  jest.spyOn(FileUpload.collection, 'findOne').mockRejectedValue(new Error('Mongo unavailable'));
-  jest.spyOn(FileUpload.collection, 'updateOne').mockRejectedValue(new Error('Mongo unavailable'));
+  vi.spyOn(FileUpload.collection, 'findOne').mockRejectedValue(new Error('Mongo unavailable'));
+  vi.spyOn(FileUpload.collection, 'updateOne').mockRejectedValue(new Error('Mongo unavailable'));
   await expect(fileExists('test.png')).rejects.toThrow('Mongo unavailable');
   await expect(reserve()).rejects.toThrow('Mongo unavailable');
   await expect(uploadFile('test.png', send(), { internal: true })).rejects.toThrow('Mongo unavailable');
 });
 
-it.each(['error', 'aborted'])('captures a disconnect during asynchronous ownership acquisition (%s)', async event => {
+it.each(['error', 'aborted'])('captures a disconnect during asynchronous ownership acquisition (%s)', async (event) => {
   const reservationId = await reserve();
   const body = new PassThrough();
   const pending = uploadFile('test.png', body, { reservationId });
@@ -112,7 +127,8 @@ it.each(['error', 'aborted'])('captures a disconnect during asynchronous ownersh
 
 function fastHeartbeat() {
   const interval = global.setInterval;
-  jest.spyOn(global, 'setInterval').mockImplementation(((fn: () => void, delay?: number) => interval(fn, delay === UPLOAD_LEASE_MS / 3 ? 20 : delay)) as typeof setInterval);
+  vi.spyOn(global, 'setInterval').mockImplementation(((fn: () => void, delay?: number) =>
+    interval(fn, delay === UPLOAD_LEASE_MS / 3 ? 20 : delay)) as typeof setInterval);
 }
 it('renews active ownership using the database clock', async () => {
   await reserve();
@@ -120,29 +136,37 @@ it('renews active ownership using the database clock', async () => {
   const store = await openUploadStore('test.png');
   try {
     const before = (await FileUpload.findOne({ fileId: 'test.png' }).lean())!.leaseUntil!.getTime();
-    await new Promise(resolve => setTimeout(resolve, 60));
+    await new Promise((resolve) => setTimeout(resolve, 60));
     const after = (await FileUpload.findOne({ fileId: 'test.png' }).lean())!.leaseUntil!.getTime();
     expect(after).toBeGreaterThan(before);
     expect(store.signal.aborted).toBe(false);
-  } finally { await store.close(); }
+  } finally {
+    await store.close();
+  }
 });
 
-it.each(['expired', 'database failure'])('aborts work when the heartbeat fails (%s)', async reason => {
+it.each(['expired', 'database failure'])('aborts work when the heartbeat fails (%s)', async (reason) => {
   await reserve();
   fastHeartbeat();
   const store = await openUploadStore('test.png');
   try {
     if (reason === 'expired') await expire();
-    else jest.spyOn(FileUpload.collection, 'updateOne').mockRejectedValue(new Error('Mongo unavailable'));
+    else vi.spyOn(FileUpload.collection, 'updateOne').mockRejectedValue(new Error('Mongo unavailable'));
     await once(store.signal, 'abort', { signal: AbortSignal.timeout(2000) });
-    await expect(store.save(store.read()!)).rejects.toThrow(reason === 'expired' ? 'ownership expired' : 'Mongo unavailable');
-  } finally { await store.close(); }
+    await expect(store.save(store.read()!)).rejects.toThrow(
+      reason === 'expired' ? 'ownership expired' : 'Mongo unavailable'
+    );
+  } finally {
+    await store.close();
+  }
 });
 
 it('releases ownership if collection of abandoned files fails', async () => {
   const reservationId = await reserve();
   await expect(uploadFile('test.png', send(Buffer.from('invalid')), { reservationId })).rejects.toThrow('content');
-  jest.spyOn(fs, 'rmSync').mockImplementationOnce(() => { throw new Error('disk error'); });
+  vi.spyOn(fs, 'rmSync').mockImplementationOnce(function () {
+    throw new Error('disk error');
+  });
   await expect(openUploadStore('test.png')).rejects.toThrow('disk error');
   expect((await FileUpload.findOne({ fileId: 'test.png' }).lean())?.owner).toBeUndefined();
   expect((await uploadFile('test.png', send(), { reservationId })).complete).toBe(true);
@@ -153,16 +177,21 @@ it('rejects excessive chunk manifests and truncated committed parts', async () =
   await uploadFile('test.png', send(png.subarray(0, 8)), { reservationId, range: { start: 0, end: 7, total: 16 } });
   const state = (await readUploadState('test.png'))!;
   await FileUpload.updateOne({ fileId: 'test.png' }, { $set: { 'state.parts': Array(4096).fill(state.parts[0]) } });
-  await expect(uploadFile('test.png', send(png.subarray(8)), { reservationId, range: { start: 8, end: 15, total: 16 } })).rejects.toThrow('too many chunks');
+  await expect(
+    uploadFile('test.png', send(png.subarray(8)), { reservationId, range: { start: 8, end: 15, total: 16 } })
+  ).rejects.toThrow('too many chunks');
   await FileUpload.updateOne({ fileId: 'test.png' }, { $set: { 'state.parts': state.parts } });
   fs.truncateSync(path.join(uploadLocation('test.png').directory, state.parts[0].id), 3);
-  await expect(uploadFile('test.png', send(png.subarray(8)), { reservationId, range: { start: 8, end: 15, total: 16 } })).rejects.toThrow('incomplete');
+  await expect(
+    uploadFile('test.png', send(png.subarray(8)), { reservationId, range: { start: 8, end: 15, total: 16 } })
+  ).rejects.toThrow('incomplete');
   expect(await fileExists('test.png')).toBe(false);
 });
 
 it('writes later chunks into the file the first one started, so completing copies nothing', async () => {
   const reservationId = await reserve();
-  const chunk = (start: number, end: number) => uploadFile('test.png', send(png.subarray(start, end + 1)), { reservationId, range: { start, end, total: 16 } });
+  const chunk = (start: number, end: number) =>
+    uploadFile('test.png', send(png.subarray(start, end + 1)), { reservationId, range: { start, end, total: 16 } });
   await chunk(0, 3);
   const first = (await readUploadState('test.png'))!.parts;
   await chunk(4, 11);
@@ -179,7 +208,17 @@ it('still assembles an upload begun as separate parts', async () => {
   const [part] = (await readUploadState('test.png'))!.parts;
   fs.writeFileSync(path.join(control, 'aaaa.part'), png.subarray(4, 8));
   fs.truncateSync(path.join(control, part.id), 4);
-  await FileUpload.updateOne({ fileId: 'test.png' }, { $set: { 'state.parts': [{ id: part.id, size: 4 }, { id: 'aaaa.part', size: 4 }] } });
+  await FileUpload.updateOne(
+    { fileId: 'test.png' },
+    {
+      $set: {
+        'state.parts': [
+          { id: part.id, size: 4 },
+          { id: 'aaaa.part', size: 4 }
+        ]
+      }
+    }
+  );
   await uploadFile('test.png', send(png.subarray(8)), { reservationId, range: { start: 8, end: 15, total: 16 } });
   expect(await readFile('test.png')).toEqual(png);
 });
@@ -189,7 +228,9 @@ it('lists Mongo versions with directory boundaries and hides replaced legacy byt
   await uploadFile('a.b/legacy.png', send(), { internal: true });
   await uploadFile('a.b/nested/test.png', send(), { internal: true });
   await uploadFile('axb/other.png', send(), { internal: true });
-  expect((await listFiles('a.b', 10, false)).map(file => [file.name, file.size])).toEqual([['a.b/legacy.png', png.length]]);
+  expect((await listFiles('a.b', 10, false)).map((file) => [file.name, file.size])).toEqual([
+    ['a.b/legacy.png', png.length]
+  ]);
   expect(await listFiles('a.b', 1)).toHaveLength(1);
   expect(await getMetadata('a.b/legacy.png')).toMatchObject({ size: png.length });
   await deleteFile('a.b/legacy.png');
@@ -198,11 +239,18 @@ it('lists Mongo versions with directory boundaries and hides replaced legacy byt
 
 it('closes descriptors on range selection failure and retries a collected snapshot', async () => {
   await uploadFile('test.png', send(), { internal: true });
-  await expect(openRead('test.png', () => { throw new Error('invalid range'); })).rejects.toThrow('invalid range');
+  await expect(
+    openRead('test.png', () => {
+      throw new Error('invalid range');
+    })
+  ).rejects.toThrow('invalid range');
   const original = fs.openSync;
   let missing = true;
-  jest.spyOn(fs, 'openSync').mockImplementation((...args) => {
-    if (missing && String(args[0]).endsWith('.part')) { missing = false; throw Object.assign(new Error('collected'), { code: 'ENOENT' }); }
+  vi.spyOn(fs, 'openSync').mockImplementation(function (...args) {
+    if (missing && String(args[0]).endsWith('.part')) {
+      missing = false;
+      throw Object.assign(new Error('collected'), { code: 'ENOENT' });
+    }
     return original(...args);
   });
   expect(await readFile('test.png')).toEqual(png);

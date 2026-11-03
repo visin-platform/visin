@@ -1,21 +1,25 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 import { createHealthCheckHandler } from '../../health/createHealthCheckHandler';
 
-jest.mock('mongoose', () => ({ connection: { readyState: 0 } }));
+vi.mock('mongoose', async () => {
+  const module = await (() => ({ connection: { readyState: 0 } }))();
+  return Object.assign({ default: module }, module);
+});
 
-const mongooseMock = jest.requireMock('mongoose') as { connection: { readyState: number } };
+const mongooseMock = (await import('mongoose')).default as { connection: { readyState: number } };
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
-  return res as unknown as Response & { status: jest.Mock; json: jest.Mock };
+  return res as unknown as Response & { status: Mock; json: Mock };
 };
 
 const req = {} as Request;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mongooseMock.connection = { readyState: 0 };
 });
 
@@ -27,9 +31,7 @@ describe('createHealthCheckHandler', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'ok', service: 'auth-service' })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'ok', service: 'auth-service' }));
     expect(res.json.mock.calls[0][0]).not.toHaveProperty('dependencies');
   });
 
@@ -74,9 +76,7 @@ describe('createHealthCheckHandler', () => {
 
     await withDescription(req, res);
 
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ description: 'File storage service' })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ description: 'File storage service' }));
 
     const withoutDescription = createHealthCheckHandler({ serviceName: 'file-service', checkMongo: true });
     const res2 = makeRes();
@@ -99,8 +99,6 @@ describe('createHealthCheckHandler', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(503);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'error', error: 'Health check failed' })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'error', error: 'Health check failed' }));
   });
 });

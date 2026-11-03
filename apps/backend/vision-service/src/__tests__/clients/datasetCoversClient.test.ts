@@ -1,23 +1,35 @@
+import { vi } from 'vitest';
 import { fetchWithTimeout } from '@visin/backend-core';
 import { fetchDatasetCovers } from '../../clients/datasetCoversClient';
 
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  fetchWithTimeout: jest.fn(),
-  logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() }
-}));
-const fetchMock = jest.mocked(fetchWithTimeout);
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    fetchWithTimeout: vi.fn(),
+    logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+const fetchMock = vi.mocked(fetchWithTimeout);
 const reply = (body: unknown, ok = true, status = 200) => ({ ok, status, json: async () => body }) as Response;
-const previous = { token: process.env.INTERNAL_SERVICE_TOKEN, url: process.env.DATASET_SERVICE_URL, env: process.env.NODE_ENV };
+const previous = {
+  token: process.env.INTERNAL_SERVICE_TOKEN,
+  url: process.env.DATASET_SERVICE_URL,
+  env: process.env.NODE_ENV
+};
 
 beforeEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
   process.env.INTERNAL_SERVICE_TOKEN = 'internal-test-token';
   process.env.NODE_ENV = 'test';
   delete process.env.DATASET_SERVICE_URL;
 });
 afterAll(() => {
-  for (const [key, value] of [['INTERNAL_SERVICE_TOKEN', previous.token], ['DATASET_SERVICE_URL', previous.url], ['NODE_ENV', previous.env]] as const) {
+  for (const [key, value] of [
+    ['INTERNAL_SERVICE_TOKEN', previous.token],
+    ['DATASET_SERVICE_URL', previous.url],
+    ['NODE_ENV', previous.env]
+  ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
@@ -49,14 +61,16 @@ describe('fetchDatasetCovers', () => {
   it('loads every requested cover in batches of at most a hundred', async () => {
     const ids = Array.from({ length: 250 }, (_, index) => `d${index}`);
     const covers = Object.fromEntries(ids.map((id) => [id, `https://files.example.test/${id}.jpg`]));
-    fetchMock.mockImplementation(async (_url, options) => {
+    fetchMock.mockImplementation(async function (_url, options) {
       const body = JSON.parse(options!.body as string) as { ids: string[]; userId: string };
       expect(body.userId).toBe('u1');
       return reply({ data: Object.fromEntries(body.ids.map((id) => [id, covers[id]])) });
     });
 
     expect(await fetchDatasetCovers(ids, 'u1')).toEqual(covers);
-    expect(fetchMock.mock.calls.map(([, options]) => JSON.parse(options!.body as string).ids.length)).toEqual([100, 100, 50]);
+    expect(fetchMock.mock.calls.map(([, options]) => JSON.parse(options!.body as string).ids.length)).toEqual([
+      100, 100, 50
+    ]);
   });
 
   it('keeps successful batches when another batch fails', async () => {

@@ -1,17 +1,21 @@
+import { vi, type Mock } from 'vitest';
 import { costOf, resolveCosting } from '../../models/costing';
 
-jest.mock('../../models/Project', () => ({
-  __esModule: true,
-  default: { find: jest.fn() },
-}));
+vi.mock('../../models/Project', async () => {
+  const module = await (() => ({
+    __esModule: true,
+    default: { find: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import Project from '../../models/Project';
 import { costingByProject, costingFor } from '../../services/costingService';
 
-const mockedProject = Project as unknown as Record<string, jest.Mock>;
+const mockedProject = Project as unknown as Record<string, Mock>;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('resolveCosting', () => {
@@ -32,12 +36,12 @@ describe('resolveCosting', () => {
     expect(resolveCosting({ cpuRatePerHour: 0, gpuRatePerHour: 0 })).toEqual({
       cpuRatePerHour: 0,
       gpuRatePerHour: 0,
-      currency: 'EUR',
+      currency: 'EUR'
     });
   });
 
   it('denominates in EUR when rates are set but no currency is', () => {
-    expect(resolveCosting({ cpuRatePerHour: 1, gpuRatePerHour: 2 })?.currency).toBe("EUR");
+    expect(resolveCosting({ cpuRatePerHour: 1, gpuRatePerHour: 2 })?.currency).toBe('EUR');
   });
 });
 
@@ -50,7 +54,7 @@ describe('costOf', () => {
       cpuCost: 2,
       gpuCost: 20,
       totalCost: 22,
-      currency: 'USD',
+      currency: 'USD'
     });
   });
 
@@ -84,7 +88,7 @@ describe('costingByProject', () => {
     mockedProject.find.mockResolvedValue([
       { _id: { toString: () => 'p1' }, costing: { cpuRatePerHour: 1, gpuRatePerHour: 3, currency: 'USD' } },
       { _id: { toString: () => 'p2' }, costing: { currency: 'USD' } },
-      { _id: { toString: () => 'p3' } },
+      { _id: { toString: () => 'p3' } }
     ]);
 
     const map = await costingByProject(['p1', 'p1', 'p2', 'p3', undefined]);

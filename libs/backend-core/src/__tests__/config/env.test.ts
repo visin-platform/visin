@@ -1,7 +1,11 @@
+import { vi } from 'vitest';
 import { requireEnv, assertRequiredEnv } from '../../config/env';
 import { logger } from '../../logging/logger';
 
-jest.mock('../../logging/logger', () => ({ logger: { error: jest.fn() } }));
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({ logger: { error: vi.fn() } }))();
+  return Object.assign({ default: module }, module);
+});
 
 const NAME = 'REQUIRE_ENV_TEST_VAR';
 const OTHER = 'REQUIRE_ENV_TEST_VAR_2';
@@ -12,8 +16,8 @@ afterEach(() => {
   delete process.env[NAME];
   delete process.env[OTHER];
   process.env.NODE_ENV = originalNodeEnv;
-  jest.restoreAllMocks();
-  jest.clearAllMocks();
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('requireEnv', () => {
@@ -33,7 +37,7 @@ describe('requireEnv', () => {
 });
 
 describe('assertRequiredEnv', () => {
-  const mockExit = () => jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+  const mockExit = () => vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
 
   it('returns without exiting when every variable is set', () => {
     process.env[NAME] = 'a';
@@ -74,7 +78,7 @@ describe('assertRequiredEnv', () => {
 
   it.each(['dev-only-jwt-secret-change-before-exposing', '<change-me>'])(
     'exits in production when a variable still holds the placeholder %p',
-    placeholder => {
+    (placeholder) => {
       process.env.NODE_ENV = 'production';
       process.env[NAME] = placeholder;
       process.env[OTHER] = 'a-real-secret';

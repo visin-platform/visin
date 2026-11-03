@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import express from 'express';
 import type { Request, Response } from 'express';
 import { createServer } from 'http';
@@ -138,7 +139,7 @@ describe('metricsMiddleware', () => {
 
 describe('metricsHandler', () => {
   const response = () => {
-    const res = { set: jest.fn(), end: jest.fn(), status: jest.fn() };
+    const res = { set: vi.fn(), end: vi.fn(), status: vi.fn() };
     res.status.mockReturnValue(res);
     return res;
   };
@@ -154,7 +155,7 @@ describe('metricsHandler', () => {
 
   it('answers 500 rather than throwing when the registry cannot be read', async () => {
     const res = response();
-    jest.spyOn(register, 'metrics').mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(register, 'metrics').mockRejectedValueOnce(new Error('boom'));
 
     await metricsHandler({} as Request, res as unknown as Response);
 

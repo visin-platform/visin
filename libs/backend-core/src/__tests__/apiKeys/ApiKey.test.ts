@@ -7,20 +7,20 @@ import { ApiKey } from '../../apiKeys/ApiKey';
  * a key with no scopes must not quietly inherit one.
  */
 describe('ApiKey model', () => {
-  it('is registered once, so a second import does not overwrite it', () => {
+  it('is registered once, so a second import does not overwrite it', async () => {
     // Several services import this module; mongoose throws OverwriteModelError
     // on a re-registration, which would surface as a service that boots in
     // dev and dies under a test runner that resets modules.
     expect(mongoose.models.ApiKey).toBe(ApiKey);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    expect(require('../../apiKeys/ApiKey').ApiKey).toBe(ApiKey);
+    // oxlint-disable-next-line typescript/no-require-imports
+    expect((await import('../../apiKeys/ApiKey')).ApiKey).toBe(ApiKey);
   });
 
-  it('stores keys in the api_keys collection', () => {
+  it('stores keys in the api_keys collection', async () => {
     expect(ApiKey.collection.name).toBe('api_keys');
   });
 
-  it('defaults a key to no scopes rather than to something convenient', () => {
+  it('defaults a key to no scopes rather than to something convenient', async () => {
     const key = new ApiKey({
       userId: 'u1',
       userEmail: 'u1@example.com',

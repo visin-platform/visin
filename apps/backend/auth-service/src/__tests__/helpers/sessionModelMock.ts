@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Types } from 'mongoose';
 
 /**
@@ -5,18 +6,20 @@ import { Types } from 'mongoose';
  * controllers without a database. `create` echoes the document back with an id,
  * like Mongoose does; the rest default to "nothing matched".
  *
- * Use from a jest.mock factory (which cannot close over imports):
- *   jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
+ * Use from a vi.mock factory (which cannot close over imports):
+ *   vi.mock('../../models/Session', () => vi.requireActual('../helpers/sessionModelMock').sessionModule());
  */
 export const sessionModule = () => ({
   SIGN_IN_METHODS: ['password', 'google', 'unknown'],
   Session: {
-    create: jest.fn(async (doc: Record<string, unknown>) => ({ _id: new Types.ObjectId(), ...doc })),
-    findOne: jest.fn().mockResolvedValue(null),
-    findOneAndUpdate: jest.fn().mockResolvedValue(null),
-    find: jest.fn(),
-    deleteOne: jest.fn().mockResolvedValue({ deletedCount: 0 }),
-    deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 })
+    create: vi.fn(async function (doc: Record<string, unknown>) {
+      return { _id: new Types.ObjectId(), ...doc };
+    }),
+    findOne: vi.fn().mockResolvedValue(null),
+    findOneAndUpdate: vi.fn().mockResolvedValue(null),
+    find: vi.fn(),
+    deleteOne: vi.fn().mockResolvedValue({ deletedCount: 0 }),
+    deleteMany: vi.fn().mockResolvedValue({ deletedCount: 0 })
   }
 });
 

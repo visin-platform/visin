@@ -1,36 +1,34 @@
+import { exportFindingQuerySchema } from '../../validation/findingSchemas';
 import { MAX_PAGE_SIZE, paginationSchema, sortOrderSchema } from '../../validation/common';
-import {
-  createFindingBodySchema,
-  listFindingsQuerySchema,
-} from '../../validation/findingSchemas';
+import { createFindingBodySchema, listFindingsQuerySchema } from '../../validation/findingSchemas';
 import {
   getBenchmarksQuerySchema,
   getBenchmarkStatsQuerySchema,
   createBenchmarkBodySchema,
-  updateBenchmarkBodySchema,
+  updateBenchmarkBodySchema
 } from '../../validation/benchmarkSchemas';
 import {
   getComparisonsQuerySchema,
   getComparisonStatsQuerySchema,
   createComparisonBodySchema,
-  updateComparisonBodySchema,
+  updateComparisonBodySchema
 } from '../../validation/comparisonSchemas';
 import {
   getAllConfigsQuerySchema,
   createConfigBodySchema,
-  createConfigFromJsonBodySchema,
+  createConfigFromJsonBodySchema
 } from '../../validation/configSchemas';
 import {
   getEpochsByTrainingQuerySchema,
   createEpochBodySchema,
   updateEpochBodySchema,
   createEpochFromJsonBodySchema,
-  createEpochsBatchBodySchema,
+  createEpochsBatchBodySchema
 } from '../../validation/epochSchemas';
 import {
   getProjectsQuerySchema,
   createProjectBodySchema,
-  updateProjectBodySchema,
+  updateProjectBodySchema
 } from '../../validation/projectSchemas';
 import { evaluationBodySchema, listEvaluationsQuerySchema } from '../../validation/evaluationSchemas';
 import {
@@ -39,14 +37,14 @@ import {
   getTrainingWithEpochsQuerySchema,
   createTrainingBodySchema,
   updateTrainingBodySchema,
-  compareTrainingsBodySchema,
+  compareTrainingsBodySchema
 } from '../../validation/trainingSchemas';
 import {
   getVisualizationUploadUrlBodySchema,
   createVisualizationBodySchema,
   getVisualizationsByEpochQuerySchema,
   getVisualizationsByTrainingQuerySchema,
-  getVisualizationTypesQuerySchema,
+  getVisualizationTypesQuerySchema
 } from '../../validation/visualizationSchemas';
 import { z } from '@visin/backend-core';
 
@@ -79,15 +77,13 @@ describe('benchmarkSchemas', () => {
       timestamp: '2026-01-01T00:00:00Z',
       system_info: { cpu_count: 8, cpu_count_logical: 16, memory_total_gb: 64, gpu_name: 'A100' },
       results: [{ fps: 30 }],
-      epoch: '3',
+      epoch: '3'
     });
     expect(parsed.timestamp).toBeInstanceOf(Date);
     expect(parsed.epoch).toBe(3);
     expect((parsed.system_info as Record<string, unknown>).gpu_name).toBe('A100');
 
-    expect(
-      createBenchmarkBodySchema.safeParse({ timestamp: 'now', system_info: {}, results: [] }).success
-    ).toBe(false);
+    expect(createBenchmarkBodySchema.safeParse({ timestamp: 'now', system_info: {}, results: [] }).success).toBe(false);
     expect(updateBenchmarkBodySchema.parse({}).timestamp).toBeUndefined();
   });
 });
@@ -100,15 +96,9 @@ describe('comparisonSchemas', () => {
   });
 
   it('createComparisonBodySchema enforces type and 1..50 items', () => {
-    expect(
-      createComparisonBodySchema.safeParse({ name: 'C', type: 'trainings', itemIds: ['a'] }).success
-    ).toBe(true);
-    expect(
-      createComparisonBodySchema.safeParse({ name: 'C', type: 'trainings', itemIds: [] }).success
-    ).toBe(false);
-    expect(
-      createComparisonBodySchema.safeParse({ name: 'C', type: 'bogus', itemIds: ['a'] }).success
-    ).toBe(false);
+    expect(createComparisonBodySchema.safeParse({ name: 'C', type: 'trainings', itemIds: ['a'] }).success).toBe(true);
+    expect(createComparisonBodySchema.safeParse({ name: 'C', type: 'trainings', itemIds: [] }).success).toBe(false);
+    expect(createComparisonBodySchema.safeParse({ name: 'C', type: 'bogus', itemIds: ['a'] }).success).toBe(false);
     expect(updateComparisonBodySchema.parse({}).name).toBeUndefined();
     expect(updateComparisonBodySchema.safeParse({ itemIds: Array(50).fill('x') }).success).toBe(true);
     expect(updateComparisonBodySchema.safeParse({ itemIds: Array(51).fill('x') }).success).toBe(false);
@@ -144,22 +134,16 @@ describe('epochSchemas', () => {
         trainingId: 't',
         training_uuid: 'u',
         epoch: '1',
-        results: { loss: 0.1 },
+        results: { loss: 0.1 }
       }).success
     ).toBe(true);
-    expect(
-      createEpochBodySchema.safeParse({ trainingId: 't', training_uuid: 'u', epoch: 1 }).success
-    ).toBe(false);
+    expect(createEpochBodySchema.safeParse({ trainingId: 't', training_uuid: 'u', epoch: 1 }).success).toBe(false);
     expect(updateEpochBodySchema.parse({ learning_rate: '0.01' }).learning_rate).toBe(0.01);
   });
 
   it('createEpochFromJsonBodySchema accepts either trainingId or training_uuid', () => {
-    expect(
-      createEpochFromJsonBodySchema.safeParse({ training_uuid: 'u', epoch: 1, results: {} }).success
-    ).toBe(true);
-    expect(
-      createEpochFromJsonBodySchema.safeParse({ trainingId: 't', epoch: 1, results: {} }).success
-    ).toBe(true);
+    expect(createEpochFromJsonBodySchema.safeParse({ training_uuid: 'u', epoch: 1, results: {} }).success).toBe(true);
+    expect(createEpochFromJsonBodySchema.safeParse({ trainingId: 't', epoch: 1, results: {} }).success).toBe(true);
     expect(createEpochFromJsonBodySchema.safeParse({ epoch: 1, results: {} }).success).toBe(false);
   });
 
@@ -167,7 +151,7 @@ describe('epochSchemas', () => {
     expect(createEpochsBatchBodySchema.safeParse({ epochs: [] }).success).toBe(false);
     expect(
       createEpochsBatchBodySchema.safeParse({
-        epochs: [{ trainingId: 't', training_uuid: 'u', epoch: 1, results: {} }],
+        epochs: [{ trainingId: 't', training_uuid: 'u', epoch: 1, results: {} }]
       }).success
     ).toBe(true);
   });
@@ -182,8 +166,13 @@ describe('projectSchemas', () => {
     expect(createProjectBodySchema.parse({ name: 'P' }).visibility).toBe('private');
     expect(createProjectBodySchema.parse({ name: 'P', visibility: 'public' }).visibility).toBe('public');
     expect(createProjectBodySchema.safeParse({ name: 'P', visibility: 'group' }).success).toBe(false);
-    expect(createProjectBodySchema.parse({ name: 'P', owner: { kind: 'group', id: 'a'.repeat(24) } }).owner).toEqual({ kind: 'group', id: 'a'.repeat(24) });
-    expect(createProjectBodySchema.safeParse({ name: 'P', owner: { kind: 'team', id: 'a'.repeat(24) } }).success).toBe(false);
+    expect(createProjectBodySchema.parse({ name: 'P', owner: { kind: 'group', id: 'a'.repeat(24) } }).owner).toEqual({
+      kind: 'group',
+      id: 'a'.repeat(24)
+    });
+    expect(createProjectBodySchema.safeParse({ name: 'P', owner: { kind: 'team', id: 'a'.repeat(24) } }).success).toBe(
+      false
+    );
     expect(createProjectBodySchema.safeParse({}).success).toBe(false);
   });
 
@@ -201,13 +190,10 @@ describe('projectSchemas', () => {
     expect(ok.taxonomy?.metrics?.[0].direction).toBe('lower');
 
     // a term with no key would be unaddressable
-    expect(
-      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { conditions: [{ label: 'x' }] } })
-        .success
-    ).toBe(false);
-    expect(
-      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { taskType: 'sorcery' } }).success
-    ).toBe(false);
+    expect(createProjectBodySchema.safeParse({ name: 'P', taxonomy: { conditions: [{ label: 'x' }] } }).success).toBe(
+      false
+    );
+    expect(createProjectBodySchema.safeParse({ name: 'P', taxonomy: { taskType: 'sorcery' } }).success).toBe(false);
     expect(
       createProjectBodySchema.safeParse({
         name: 'P',
@@ -215,21 +201,28 @@ describe('projectSchemas', () => {
       }).success
     ).toBe(false);
     expect(
-      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { classes: [{ key: 'c', color: 'red' }] } })
-        .success
+      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { classes: [{ key: 'c', color: 'red' }] } }).success
     ).toBe(false);
   });
 
   it('a taxonomy carries a metric description and a headline result, and keeps both safe', () => {
     const ok = createProjectBodySchema.parse({
       name: 'P',
-      taxonomy: { primaryMetric: ' val.mean_iou ', metrics: [{ key: 'mean_iou', description: '  How well it overlaps.  ' }] }
+      taxonomy: {
+        primaryMetric: ' val.mean_iou ',
+        metrics: [{ key: 'mean_iou', description: '  How well it overlaps.  ' }]
+      }
     });
     expect(ok.taxonomy?.primaryMetric).toBe('val.mean_iou');
     expect(ok.taxonomy?.metrics?.[0].description).toBe('How well it overlaps.');
     // The headline is used as a field path in a query, so it cannot hold an operator.
     expect(createProjectBodySchema.safeParse({ name: 'P', taxonomy: { primaryMetric: '$where' } }).success).toBe(false);
-    expect(createProjectBodySchema.safeParse({ name: 'P', taxonomy: { metrics: [{ key: 'a', description: 'x'.repeat(301) }] } }).success).toBe(false);
+    expect(
+      createProjectBodySchema.safeParse({
+        name: 'P',
+        taxonomy: { metrics: [{ key: 'a', description: 'x'.repeat(301) }] }
+      }).success
+    ).toBe(false);
   });
 
   it('a taxonomy never constrains which conditions or classes may be reported', () => {
@@ -272,7 +265,13 @@ describe('listEvaluationsQuerySchema', () => {
   });
 
   it('takes the run, the epoch, the order and whether to carry the results', () => {
-    const parsed = listEvaluationsQuerySchema.parse({ trainingUuid: 'u1', epoch: '3', sortBy: 'executedAt', order: 'asc', include: 'results' });
+    const parsed = listEvaluationsQuerySchema.parse({
+      trainingUuid: 'u1',
+      epoch: '3',
+      sortBy: 'executedAt',
+      order: 'asc',
+      include: 'results'
+    });
     expect(parsed).toMatchObject({ trainingUuid: 'u1', epoch: 3, sortBy: 'executedAt', order: 1, include: 'results' });
     expect(listEvaluationsQuerySchema.safeParse({ sortBy: 'createdAt' }).success).toBe(false);
     expect(listEvaluationsQuerySchema.safeParse({ include: 'provenance' }).success).toBe(false);
@@ -328,9 +327,7 @@ describe('trainingSchemas', () => {
 
   it('compareTrainingsBodySchema bounds ids to 1..30', () => {
     expect(compareTrainingsBodySchema.safeParse({ trainingIds: [] }).success).toBe(false);
-    expect(
-      compareTrainingsBodySchema.safeParse({ trainingIds: Array(31).fill('x') }).success
-    ).toBe(false);
+    expect(compareTrainingsBodySchema.safeParse({ trainingIds: Array(31).fill('x') }).success).toBe(false);
   });
 });
 
@@ -341,12 +338,10 @@ describe('visualizationSchemas', () => {
         epoch_uuid: 'e',
         filename: 'f',
         type: 't',
-        mimetype: 'm',
+        mimetype: 'm'
       }).success
     ).toBe(true);
-    expect(
-      getVisualizationUploadUrlBodySchema.safeParse({ epoch_uuid: 'e', filename: 'f' }).success
-    ).toBe(false);
+    expect(getVisualizationUploadUrlBodySchema.safeParse({ epoch_uuid: 'e', filename: 'f' }).success).toBe(false);
   });
 
   it('createVisualizationBodySchema coerces size', () => {
@@ -357,7 +352,7 @@ describe('visualizationSchemas', () => {
       type: 't',
       fileId: 'm',
       mimetype: 'image/png',
-      size: '10',
+      size: '10'
     });
     expect(parsed.size).toBe(10);
   });
@@ -370,7 +365,7 @@ describe('visualizationSchemas', () => {
       type: 't',
       minioFileId: 'legacy',
       mimetype: 'image/png',
-      size: 10,
+      size: 10
     });
     expect(result.success).toBe(false);
   });
@@ -380,12 +375,11 @@ describe('visualizationSchemas', () => {
     expect(getVisualizationsByTrainingQuerySchema.parse({})).toEqual({
       limit: 50,
       page: 1,
-      includeUrls: 'true',
+      includeUrls: 'true'
     });
     expect(getVisualizationTypesQuerySchema.parse({ training_uuid: 'u' }).training_uuid).toBe('u');
   });
 });
-
 
 describe('findingSchemas', () => {
   it('coerces a limit arriving as a query string', () => {
@@ -399,9 +393,7 @@ describe('findingSchemas', () => {
   it('requires a project, a title and a body', () => {
     expect(createFindingBodySchema.safeParse({}).success).toBe(false);
     expect(createFindingBodySchema.safeParse({ project: 'p1', title: 'T' }).success).toBe(false);
-    expect(createFindingBodySchema.safeParse({ project: 'p1', title: 'T', body: 'B' }).success).toBe(
-      true
-    );
+    expect(createFindingBodySchema.safeParse({ project: 'p1', title: 'T', body: 'B' }).success).toBe(true);
   });
 
   it('refuses an empty title and one that is only whitespace', () => {
@@ -420,10 +412,20 @@ describe('findingSchemas', () => {
       project: 'p1',
       title: 'T',
       body: 'B',
-      trainingIds: Array.from({ length: n }, (_, i) => `t${i}`),
+      trainingIds: Array.from({ length: n }, (_, i) => `t${i}`)
     });
 
     expect(createFindingBodySchema.safeParse(cites(50)).success).toBe(true);
     expect(createFindingBodySchema.safeParse(cites(51)).success).toBe(false);
+  });
+});
+
+describe('finding export metric selection', () => {
+  it('trims comma-separated metrics and drops empty entries', () => {
+    expect(exportFindingQuerySchema.parse({ metrics: ' val.loss, ,val.iou ' }).metrics).toEqual([
+      'val.loss',
+      'val.iou'
+    ]);
+    expect(exportFindingQuerySchema.parse({}).metrics).toBeUndefined();
   });
 });

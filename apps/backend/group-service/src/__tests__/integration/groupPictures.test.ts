@@ -1,6 +1,10 @@
-jest.mock('../../clients/ownedResourcesClient', () => ({
-  ownedByGroup: jest.fn().mockResolvedValue({ projects: { count: 0, names: [] }, datasets: { count: 0, names: [] } })
-}));
+import { vi } from 'vitest';
+vi.mock('../../clients/ownedResourcesClient', async () => {
+  const module = await (() => ({
+    ownedByGroup: vi.fn().mockResolvedValue({ projects: { count: 0, names: [] }, datasets: { count: 0, names: [] } })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import express from 'express';
 import type { Server } from 'node:http';
 import mongoose from 'mongoose';

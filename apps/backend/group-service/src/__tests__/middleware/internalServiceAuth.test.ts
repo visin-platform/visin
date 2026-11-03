@@ -1,23 +1,24 @@
+import { vi } from 'vitest';
 import type { Response, NextFunction } from 'express';
 import type { InternalServiceRequest } from '../../middleware/internalServiceAuth';
 import { validateInternalServiceToken, allowUserOrInternalService } from '../../middleware/internalServiceAuth';
 
 const makeReq = (overrides: Partial<InternalServiceRequest> = {}): InternalServiceRequest =>
-  ({ headers: {}, ...overrides } as unknown as InternalServiceRequest);
+  ({ headers: {}, ...overrides }) as unknown as InternalServiceRequest;
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response;
 };
 
-const next = jest.fn() as unknown as NextFunction;
+const next = vi.fn() as unknown as NextFunction;
 
 const TOKEN = 'group-service-test-secret-token!!';
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.INTERNAL_SERVICE_TOKEN = TOKEN;
 });
 
@@ -81,7 +82,7 @@ describe('validateInternalServiceToken', () => {
 
   it('sets serviceIdentifier from x-service-id header', () => {
     const req = makeReq({
-      headers: { 'x-internal-token': TOKEN, 'x-service-id': 'vision-service' },
+      headers: { 'x-internal-token': TOKEN, 'x-service-id': 'vision-service' }
     });
     validateInternalServiceToken(req, makeRes(), next);
 

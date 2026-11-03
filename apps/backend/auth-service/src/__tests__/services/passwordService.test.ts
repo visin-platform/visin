@@ -60,6 +60,13 @@ describe('verifyPassword', () => {
     }
   });
 
+  it.each(['scrypt$3$8$1$deadbeef$c0ffee', 'scrypt$16384$-1$1$deadbeef$c0ffee'])(
+    'rejects an invalid scrypt parameter combination without exposing an error: %s',
+    async (record) => {
+      await expect(verifyPassword('anything', record)).resolves.toBe(false);
+    }
+  );
+
   it('handles a password at the policy minimum', async () => {
     const password = 'x'.repeat(MIN_PASSWORD_LENGTH);
     const hash = await hashPassword(password);

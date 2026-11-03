@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import type { Server } from 'node:http';
@@ -11,10 +12,16 @@ import { verifyGoogleToken } from '../../services/googleAuthService';
 import { verifyJWT } from '../../services/jwtService';
 import { signSessionToken } from '../helpers/sessionToken';
 
-jest.mock('../../services/googleAuthService', () => ({ verifyGoogleToken: jest.fn() }));
-const google = verifyGoogleToken as jest.Mock;
+vi.mock('../../services/googleAuthService', async () => {
+  const module = await (() => ({ verifyGoogleToken: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+const google = verifyGoogleToken as Mock;
 
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('pretend pixels')]);
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from('pretend pixels')
+]);
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('pretend pixels')]);
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([1, 2, 3, 4]), Buffer.from('WEBPVP8 pixels')]);
 const GIF = Buffer.from('GIF89a pretend pixels');
@@ -59,10 +66,21 @@ describe('profile pictures with in-memory MongoDB', () => {
   });
 
   const account = (extra: Record<string, unknown> = {}) =>
-    User.create({ email: `${new mongoose.Types.ObjectId()}@example.test`, signupMethod: 'password', roles: [], profilePublic: true, handle: `h${Math.random().toString(36).slice(2, 8)}`, ...extra });
+    User.create({
+      email: `${new mongoose.Types.ObjectId()}@example.test`,
+      signupMethod: 'password',
+      roles: [],
+      profilePublic: true,
+      handle: `h${Math.random().toString(36).slice(2, 8)}`,
+      ...extra
+    });
   const tokenFor = (user: { id: string; email: string; tokenVersion: number }) =>
     signSessionToken({ id: user.id, email: user.email, name: 'Ann', tokenVersion: user.tokenVersion }, user.id);
-  const put = async (user: { id: string; email: string; tokenVersion: number }, body: Buffer | string, type = 'application/octet-stream') =>
+  const put = async (
+    user: { id: string; email: string; tokenVersion: number },
+    body: Buffer | string,
+    type = 'application/octet-stream'
+  ) =>
     fetch(`${base}/profile/picture`, {
       method: 'PUT',
       headers: { 'content-type': type, authorization: `Bearer ${await tokenFor(user)}` },
@@ -124,7 +142,11 @@ describe('profile pictures with in-memory MongoDB', () => {
     });
 
     it('needs a signed-in session', async () => {
-      const response = await fetch(`${base}/profile/picture`, { method: 'PUT', headers: { 'content-type': 'image/png' }, body: PNG });
+      const response = await fetch(`${base}/profile/picture`, {
+        method: 'PUT',
+        headers: { 'content-type': 'image/png' },
+        body: PNG
+      });
 
       expect(response.status).toBe(401);
     });
@@ -191,11 +213,14 @@ describe('profile pictures with in-memory MongoDB', () => {
   });
 
   describe('DELETE /auth/profile/picture', () => {
-    it('removes the picture and the account\'s pointer to it', async () => {
+    it("removes the picture and the account's pointer to it", async () => {
       const user = await account();
       await put(user, PNG, 'image/png');
 
-      const response = await fetch(`${base}/profile/picture`, { method: 'DELETE', headers: { authorization: `Bearer ${await tokenFor(user)}` } });
+      const response = await fetch(`${base}/profile/picture`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${await tokenFor(user)}` }
+      });
 
       expect(response.status).toBe(200);
       expect(await Avatar.countDocuments()).toBe(0);
@@ -219,7 +244,13 @@ describe('profile pictures with in-memory MongoDB', () => {
       });
 
     it('lets Google show its picture until one is uploaded, and never over an uploaded one', async () => {
-      google.mockResolvedValue({ sub: 'subject-1', email: 'ann@example.test', email_verified: true, name: 'Ann', picture: 'https://google.example.test/ann.jpg' });
+      google.mockResolvedValue({
+        sub: 'subject-1',
+        email: 'ann@example.test',
+        email_verified: true,
+        name: 'Ann',
+        picture: 'https://google.example.test/ann.jpg'
+      });
       const user = await account({ email: 'ann@example.test', signupMethod: 'google', googleSubject: 'subject-1' });
       expect((await googleSignIn()).status).toBe(200);
       expect((await User.findById(user.id))!.picture).toBe('https://google.example.test/ann.jpg');

@@ -36,15 +36,21 @@
     "docs:check": "node scripts/check-docs.mjs",
     "diagrams": "node scripts/architecture-diagrams.mjs",
     "diagrams:check": "node scripts/architecture-diagrams.mjs --check",
-    "check:repo": "npm run sync:libs:check && npm run lockfiles:check && npm run docs:check && npm run diagrams:check && npm run openapi:lint && npm run openapi:bundle:check"
+    "check:repo": "npm run sync:libs:check && npm run lockfiles:check && npm run docs:check && npm run diagrams:check && npm run openapi:lint && npm run openapi:bundle:check",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
-    "@redocly/openapi-core": "^2.55.0",
+    "@redocly/openapi-core": "^2.73.0",
     "ajv": "^8.20.0",
-    "concurrently": "^10.0.5",
-    "prettier": "^3.9.9"
+    "concurrently": "^10.0.6",
+    "prettier": "^3.9.10",
+    "oxlint": "^1.91.0",
+    "conventional-changelog": "^8.1.3",
+    "conventional-recommended-bump": "^12.1.0",
+    "conventional-changelog-conventionalcommits": "^10.4.0",
+    "semver": "^7.8.5"
   },
-  "overrides": {
-    "@module-federation/dts-plugin": "2.9.2"
+  "optionalDependencies": {
+    "gcp-metadata": "^7.0.1"
   }
 }

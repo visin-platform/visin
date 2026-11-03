@@ -1,21 +1,25 @@
-jest.mock('../../vision', () => ({
-  vision: {
-    listProjects: jest.fn(),
-    getProject: jest.fn(),
-    getDashboardStats: jest.fn(),
-    getTraining: jest.fn(),
-    createProject: jest.fn(),
-    updateProject: jest.fn(),
-    listTrainings: jest.fn(),
-    getTrainingWithEpochs: jest.fn(),
-    getTrainingConfigs: jest.fn(),
-    getTrainingSummary: jest.fn(),
-    updateTraining: jest.fn(),
-    compareTrainings: jest.fn(),
-    listTestResults: jest.fn(),
-    listBenchmarks: jest.fn()
-  }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../vision', async () => {
+  const module = await (() => ({
+    vision: {
+      listProjects: vi.fn(),
+      getProject: vi.fn(),
+      getDashboardStats: vi.fn(),
+      getTraining: vi.fn(),
+      createProject: vi.fn(),
+      updateProject: vi.fn(),
+      listTrainings: vi.fn(),
+      getTrainingWithEpochs: vi.fn(),
+      getTrainingConfigs: vi.fn(),
+      getTrainingSummary: vi.fn(),
+      updateTraining: vi.fn(),
+      compareTrainings: vi.fn(),
+      listTestResults: vi.fn(),
+      listBenchmarks: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { vision } from '../../vision';
@@ -27,7 +31,7 @@ type Handler = (args: Record<string, unknown>) => Promise<{
   content: Array<{ text: string }>;
 }>;
 
-const mocked = vision as unknown as Record<string, jest.Mock>;
+const mocked = vision as unknown as Record<string, Mock>;
 
 /** Register both modules and hand back the handlers by tool name. */
 function handlers(): Record<string, Handler> {
@@ -66,7 +70,7 @@ const epochs = (n: number) =>
   }));
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   // Most tools take a training id and resolve it to the uuid the results
   // endpoints filter on, so a run has to be resolvable by default.
   mocked.getTraining.mockResolvedValue(training({ uuid: 'the-uuid' }));
@@ -214,8 +218,20 @@ describe('get_training with a summary', () => {
     epochCount: 10,
     lastEpoch: 10,
     metrics: [
-      { path: 'val.loss', direction: 'lower', directionFrom: 'default', best: { value: 0.2, epoch: 9 }, last: { value: 0.25, epoch: 10 } },
-      { path: 'val.mean_iou', direction: 'higher', directionFrom: 'taxonomy', best: { value: 0.7, epoch: 4 }, last: { value: 0.6, epoch: 10 } }
+      {
+        path: 'val.loss',
+        direction: 'lower',
+        directionFrom: 'default',
+        best: { value: 0.2, epoch: 9 },
+        last: { value: 0.25, epoch: 10 }
+      },
+      {
+        path: 'val.mean_iou',
+        direction: 'higher',
+        directionFrom: 'taxonomy',
+        best: { value: 0.7, epoch: 4 },
+        last: { value: 0.6, epoch: 10 }
+      }
     ],
     models: [],
     ...over
@@ -239,7 +255,10 @@ describe('get_training with a summary', () => {
   it('adds the model on the Hub, its demo, and what the run started from', async () => {
     mocked.getTrainingSummary.mockResolvedValue(
       summary({
-        models: [{ repo: 'acme/clft', revision: 'a1b2c3d4e5f6a7b8', space: 'acme/clft-demo' }, { repo: 'acme/other', revision: '1234567890abcdef' }],
+        models: [
+          { repo: 'acme/clft', revision: 'a1b2c3d4e5f6a7b8', space: 'acme/clft-demo' },
+          { repo: 'acme/other', revision: '1234567890abcdef' }
+        ],
         provenance: { git: { commit: 'abcdef0123456789', branch: 'main', dirty: true } }
       })
     );
@@ -253,7 +272,15 @@ describe('get_training with a summary', () => {
     mocked.getTrainingSummary.mockResolvedValue(
       summary({
         models: [
-          { provider: 'visin', format: 'pth', filename: 'run-epoch99.pth', size: 1_288_490_189, epoch: 99, status: 'ready', license: { id: 'cc-by-4.0', name: 'CC BY 4.0' } },
+          {
+            provider: 'visin',
+            format: 'pth',
+            filename: 'run-epoch99.pth',
+            size: 1_288_490_189,
+            epoch: 99,
+            status: 'ready',
+            license: { id: 'cc-by-4.0', name: 'CC BY 4.0' }
+          },
           { provider: 'visin', format: 'onnx', size: 644_245_094, status: 'verifying' },
           { repo: 'acme/other', revision: '1234567890abcdef' }
         ]
@@ -261,19 +288,25 @@ describe('get_training with a summary', () => {
     );
     const { text } = await call('get_training', { training: 't1' });
     expect(text).toContain('Model kept on Visin: run-epoch99.pth (pth, 1.20 GB, epoch 99), licence CC BY 4.0.');
-    expect(text).toContain('Model kept on Visin: onnx checkpoint (onnx, 0.60 GB, verifying), licence not stated, so it is not offered for download.');
+    expect(text).toContain(
+      'Model kept on Visin: onnx checkpoint (onnx, 0.60 GB, verifying), licence not stated, so it is not offered for download.'
+    );
     expect(text).toContain('Model on Hugging Face: acme/other @ 1234567.');
   });
 
   it('states a clean commit without a warning, and a run with no branch', async () => {
-    mocked.getTrainingSummary.mockResolvedValue(summary({ provenance: { git: { commit: 'abcdef0123456789', dirty: false } } }));
+    mocked.getTrainingSummary.mockResolvedValue(
+      summary({ provenance: { git: { commit: 'abcdef0123456789', dirty: false } } })
+    );
     const { text } = await call('get_training', { training: 't1' });
     expect(text).toContain('Started from commit abcdef0.');
   });
 
   it('falls back to both ends of each range when the summary has no metrics', async () => {
     mocked.getTrainingSummary.mockResolvedValue(summary({ metrics: [] }));
-    expect((await call('get_training', { training: 't1' })).text).toContain('loss: lowest 0.55 at epoch 10, highest 1 at epoch 1');
+    expect((await call('get_training', { training: 't1' })).text).toContain(
+      'loss: lowest 0.55 at epoch 10, highest 1 at epoch 1'
+    );
   });
 });
 
@@ -364,9 +397,7 @@ describe('the settings a run was launched with', () => {
     mocked.getTrainingConfigs.mockResolvedValue([
       {
         summary: '',
-        config_data: Object.fromEntries(
-          Array.from({ length: 50 }, (_, i) => [`k${String(i).padStart(2, '0')}`, i])
-        )
+        config_data: Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`k${String(i).padStart(2, '0')}`, i]))
       }
     ]);
 
@@ -497,7 +528,7 @@ describe('get_training_curve', () => {
     expect(mocked.getTrainingWithEpochs).toHaveBeenCalledWith('vsn_live_abc', 't1', 20);
   });
 
-  it('reports the run\'s real length, not the number of points it was sent', async () => {
+  it("reports the run's real length, not the number of points it was sent", async () => {
     mocked.getTrainingWithEpochs.mockResolvedValue({
       training: training(),
       epochs: epochs(12),
@@ -517,7 +548,12 @@ describe('get_training_curve', () => {
 
     const { text } = await call('get_training_curve', { training: 't1' });
 
-    expect(text.split('\n').find((l) => l.startsWith('epochs: '))!.split(', ')).toHaveLength(12);
+    expect(
+      text
+        .split('\n')
+        .find((l) => l.startsWith('epochs: '))!
+        .split(', ')
+    ).toHaveLength(12);
     expect(text).toContain('300 epochs, showing 12 of them');
   });
 
@@ -563,9 +599,7 @@ describe('get_training_curve', () => {
 
   it('says so when there is no curve yet', async () => {
     mocked.getTrainingWithEpochs.mockResolvedValue({ training: training(), epochs: [] });
-    expect((await call('get_training_curve', { training: 't1' })).text).toContain(
-      'recorded no epochs yet'
-    );
+    expect((await call('get_training_curve', { training: 't1' })).text).toContain('recorded no epochs yet');
   });
 });
 
@@ -882,9 +916,7 @@ describe('write tools', () => {
   it('confirms a project update, including its visibility', async () => {
     mocked.updateProject.mockResolvedValue({ _id: 'p1', name: 'Renamed', visibility: 'public' });
 
-    expect((await call('update_project', { project: 'p1', name: 'Renamed' })).text).toBe(
-      'Updated "Renamed" (public).'
-    );
+    expect((await call('update_project', { project: 'p1', name: 'Renamed' })).text).toBe('Updated "Renamed" (public).');
   });
 
   it('confirms a training update', async () => {

@@ -1,17 +1,43 @@
-jest.mock('../../clients/projectServiceClient', () => ({
-  projectDatasetOwner: jest.fn(async () => ({ kind: 'user', id: '000000000000000000000001' }))
-}));
-jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
-jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn(async () => new Map()) }));
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
-jest.mock('../../queue/importQueue', () => ({
-  enqueueImport: jest.fn(),
-  enqueueScan: jest.fn(),
-  enqueueDelete: jest.fn(),
-  enqueueRemoveGroup: jest.fn(),
-  removeQueuedImport: jest.fn()
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../clients/projectServiceClient', async () => {
+  const module = await (() => ({
+    projectDatasetOwner: vi.fn(async function () {
+      return { kind: 'user', id: '000000000000000000000001' };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () =>
+    (await vi.importActual<typeof import('../fixtures/fileStore')>('../fixtures/fileStore')).fileStore.client)();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/hubClient', async () => {
+  const module = await (() => ({ fetchDatasetInfo: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({
+    lookupOwnerIdentities: vi.fn(async function () {
+      return new Map();
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/groupServiceClient', async () => {
+  const module = await (() => ({ checkMembership: vi.fn(), getMyGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../queue/importQueue', async () => {
+  const module = await (() => ({
+    enqueueImport: vi.fn(),
+    enqueueScan: vi.fn(),
+    enqueueDelete: vi.fn(),
+    enqueueRemoveGroup: vi.fn(),
+    removeQueuedImport: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import mongoose from 'mongoose';
 import { enqueueRemoveGroup } from '../../queue/importQueue';
@@ -328,7 +354,7 @@ describe('cover pictures for another service', () => {
     expect((await covers([bare])).body.data).toEqual({});
 
     const unsigned = await withCover('unsigned', 'public');
-    const { getDownloadUrls } = jest.requireMock('../../clients/fileServiceClient') as { getDownloadUrls: jest.Mock };
+    const { getDownloadUrls } = (await import('../../clients/fileServiceClient')) as { getDownloadUrls: Mock };
     getDownloadUrls.mockResolvedValueOnce({ urls: {}, expiresMs: Date.now() + 60_000 });
     expect((await covers([unsigned])).body.data).toEqual({});
   });

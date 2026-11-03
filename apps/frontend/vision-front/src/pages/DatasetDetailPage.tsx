@@ -3,7 +3,13 @@ import { Alert, Button, CircularProgress, Container, Paper, Stack, Typography } 
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { TransferOwnershipDialog, useTrackVisit, type OwnerGroup, type OwnerRef, type OwnerRole } from '@visin/frontend-core';
+import {
+  TransferOwnershipDialog,
+  useTrackVisit,
+  type OwnerGroup,
+  type OwnerRef,
+  type OwnerRole
+} from '@visin/frontend-core';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetContentsCard from '../components/dataset/DatasetContentsCard';
 import DatasetModels from '../components/dataset/DatasetModels';
@@ -129,6 +135,7 @@ const DatasetDetailPage: React.FC = () => {
   // When an import finishes, the grid's pages are out of date.
   // Primitive deps: polling during an import hands back a new dataset object
   // every few seconds, which must not reset a half-edited form.
+  /* oxlint-disable react-hooks/exhaustive-deps */
   const formInitial = useMemo(
     () =>
       dataset
@@ -140,8 +147,17 @@ const DatasetDetailPage: React.FC = () => {
             credit: dataset.credit
           }
         : undefined,
-    [dataset?.name, dataset?.description, dataset?.visibility, dataset?.license?.id, dataset?.license?.name, dataset?.license?.url, dataset?.credit] // eslint-disable-line react-hooks/exhaustive-deps
+    [
+      dataset?.name,
+      dataset?.description,
+      dataset?.visibility,
+      dataset?.license?.id,
+      dataset?.license?.name,
+      dataset?.license?.url,
+      dataset?.credit
+    ]
   );
+  /* oxlint-enable react-hooks/exhaustive-deps */
 
   // Names the owning group on the chip, and lists where a transfer can go.
   const groups = useQuery({ queryKey: ['dataset-groups'], queryFn: listMyGroups, enabled: Boolean(user) });
@@ -191,7 +207,10 @@ const DatasetDetailPage: React.FC = () => {
     run(async () => refresh(await updateDataset(id, { source })), 'Failed to save the source');
 
   const handleEdit = ({ name, description, visibility, license, credit }: DatasetFormValues) =>
-    run(async () => refresh(await updateDataset(id, { name, description, visibility, license, credit })), 'Failed to save');
+    run(
+      async () => refresh(await updateDataset(id, { name, description, visibility, license, credit })),
+      'Failed to save'
+    );
 
   /** Take the Hub card's licence as this dataset's declaration, once someone who may edit it has chosen to. */
   const handleUseHubLicense = (licenseId: string) =>

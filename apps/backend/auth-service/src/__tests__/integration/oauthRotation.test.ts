@@ -1,19 +1,33 @@
+import { vi } from 'vitest';
 import express from 'express';
 import type { Server } from 'node:http';
 import { createHash } from 'node:crypto';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import {
-  OAuthClient, OAuthGrant, RefreshToken, issueRefreshToken, redeemRefreshToken,
-  revokeRefreshTokensForUser, listConnections, errorHandler
+  OAuthClient,
+  OAuthGrant,
+  RefreshToken,
+  issueRefreshToken,
+  redeemRefreshToken,
+  revokeRefreshTokensForUser,
+  listConnections,
+  errorHandler
 } from '@visin/backend-core';
 import { token } from '../../controllers/oauthController';
 
-const input = { userId: 'owner', clientId: 'client', scopes: ['vision:read' as const], resource: 'https://mcp.example.test' };
+const input = {
+  userId: 'owner',
+  clientId: 'client',
+  scopes: ['vision:read' as const],
+  resource: 'https://mcp.example.test'
+};
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const deferred = () => {
   let resolve!: () => void;
-  const promise = new Promise<void>(done => { resolve = done; });
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 };
 
@@ -23,7 +37,7 @@ const pausePreparation = (writers = 1) => {
   const release = deferred();
   const original = RefreshToken.create;
   let arrived = 0;
-  const spy = jest.spyOn(RefreshToken, 'create').mockImplementation((async (...args: unknown[]) => {
+  const spy = vi.spyOn(RefreshToken, 'create').mockImplementation((async (...args: unknown[]) => {
     const row = await Reflect.apply(original, RefreshToken, args);
     if (++arrived <= writers) {
       if (arrived === writers) ready.resolve();
@@ -52,36 +66,50 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     app.use(express.json());
     app.post('/oauth/token', token);
     app.use(errorHandler);
-    server = await new Promise<Server>(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+    server = await new Promise<Server>((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   }, 120_000);
   afterEach(async () => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     await Promise.all([OAuthGrant.deleteMany({}), RefreshToken.deleteMany({}), OAuthClient.deleteMany({})]);
   });
   afterAll(async () => {
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     await mongoose.disconnect();
     await mongo.stop();
     process.env = previous;
   });
-  const refresh = (value: string, clientId = input.clientId) => fetch(`${base}/oauth/token`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: value, client_id: clientId })
-  });
+  const refresh = (value: string, clientId = input.clientId) =>
+    fetch(`${base}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: value, client_id: clientId })
+    });
 
   it('preserves token response, approved permissions and one stable connection through rotations', async () => {
-    await OAuthClient.create({ clientId: input.clientId, clientName: 'Test app', redirectUris: ['https://app.test/cb'] });
+    await OAuthClient.create({
+      clientId: input.clientId,
+      clientName: 'Test app',
+      redirectUris: ['https://app.test/cb']
+    });
     const issued = await issueRefreshToken(input);
     const [before] = await listConnections(input.userId);
     const response = await refresh(issued.token);
     expect(response.status).toBe(200);
-    const body = await response.json() as { refresh_token: string; access_token: string };
+    const body = (await response.json()) as { refresh_token: string; access_token: string };
     expect(body).toMatchObject({ token_type: 'Bearer', scope: 'vision:read', expires_in: 3600 });
     expect(body.refresh_token).not.toBe(issued.token);
     expect(body.access_token).toEqual(expect.any(String));
     const [after] = await listConnections(input.userId);
-    expect(after).toMatchObject({ id: before.id, createdAt: before.createdAt, scopes: input.scopes, clientName: 'Test app', revokedAt: null });
+    expect(after).toMatchObject({
+      id: before.id,
+      createdAt: before.createdAt,
+      scopes: input.scopes,
+      clientName: 'Test app',
+      revokedAt: null
+    });
     expect(after.lastRenewedAt).not.toBeNull();
     expect(await listConnections(input.userId)).toHaveLength(1);
     expect((await refresh(body.refresh_token)).status).toBe(200);
@@ -94,13 +122,13 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     await pause.ready;
     pause.release();
     const responses = await Promise.all(requests);
-    expect(responses.map(response => response.status).sort()).toEqual([200, 400]);
-    const winner = await responses.find(response => response.status === 200)!.json() as { refresh_token: string };
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+    const winner = (await responses.find((response) => response.status === 200)!.json()) as { refresh_token: string };
     expect((await refresh(winner.refresh_token)).status).toBe(400);
     expect((await listConnections(input.userId))[0].revokedAt).not.toBeNull();
   });
 
-  it.each(['disconnect', 'reconnect'] as const)('cannot activate a prepared refresh after %s', async action => {
+  it.each(['disconnect', 'reconnect'] as const)('cannot activate a prepared refresh after %s', async (action) => {
     const issued = await issueRefreshToken(input);
     const pause = pausePreparation();
     const pending = redeemRefreshToken(issued.token, input.clientId);
@@ -112,7 +140,10 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     pause.release();
     expect((await pending).ok).toBe(false);
     if (replacement) {
-      expect(await redeemRefreshToken(replacement, input.clientId)).toMatchObject({ ok: true, scopes: ['dataset:read'] });
+      expect(await redeemRefreshToken(replacement, input.clientId)).toMatchObject({
+        ok: true,
+        scopes: ['dataset:read']
+      });
     } else {
       expect((await listConnections(input.userId))[0].revokedAt).not.toBeNull();
     }
@@ -133,7 +164,7 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     const original = OAuthGrant.updateOne;
     const ready = deferred();
     const release = deferred();
-    jest.spyOn(OAuthGrant, 'updateOne').mockImplementationOnce((async (...args: unknown[]) => {
+    vi.spyOn(OAuthGrant, 'updateOne').mockImplementationOnce((async (...args: unknown[]) => {
       ready.resolve();
       await release.promise;
       return Reflect.apply(original, OAuthGrant, args);
@@ -154,8 +185,8 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     await pause.ready;
     pause.release();
     const issued = await Promise.all(requests);
-    const results = await Promise.all(issued.map(value => redeemRefreshToken(value.token, input.clientId)));
-    expect(results.filter(result => result.ok)).toHaveLength(1);
+    const results = await Promise.all(issued.map((value) => redeemRefreshToken(value.token, input.clientId)));
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(await OAuthGrant.countDocuments({})).toBe(1);
     expect(await listConnections(input.userId)).toHaveLength(1);
   });
@@ -173,17 +204,18 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     expect((await listConnections(input.userId))[0].revokedAt).not.toBeNull();
   });
 
-  it.each(['refresh', 'reconnect'] as const)('preserves the existing token if %s preparation fails', async action => {
+  it.each(['refresh', 'reconnect'] as const)('preserves the existing token if %s preparation fails', async (action) => {
     const issued = await issueRefreshToken(input);
-    jest.spyOn(RefreshToken, 'create').mockRejectedValueOnce(new Error('write failed'));
-    const operation = action === 'refresh' ? redeemRefreshToken(issued.token, input.clientId) : issueRefreshToken(input);
+    vi.spyOn(RefreshToken, 'create').mockRejectedValueOnce(new Error('write failed'));
+    const operation =
+      action === 'refresh' ? redeemRefreshToken(issued.token, input.clientId) : issueRefreshToken(input);
     await expect(operation).rejects.toThrow('write failed');
     expect((await redeemRefreshToken(issued.token, input.clientId)).ok).toBe(true);
   });
 
   it('leaves prepared history inert when activation fails, and permits retry', async () => {
     const issued = await issueRefreshToken(input);
-    jest.spyOn(OAuthGrant, 'findOneAndUpdate').mockRejectedValueOnce(new Error('activation failed'));
+    vi.spyOn(OAuthGrant, 'findOneAndUpdate').mockRejectedValueOnce(new Error('activation failed'));
     await expect(redeemRefreshToken(issued.token, input.clientId)).rejects.toThrow('activation failed');
     expect(await RefreshToken.countDocuments({})).toBe(2);
     expect((await listConnections(input.userId))[0].lastRenewedAt).toBeNull();
@@ -193,7 +225,7 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
   it('fails closed after a committed rotation loses its acknowledgement and recovers by reconnecting', async () => {
     const issued = await issueRefreshToken(input);
     const original = OAuthGrant.findOneAndUpdate;
-    jest.spyOn(OAuthGrant, 'findOneAndUpdate').mockImplementationOnce((async (...args: unknown[]) => {
+    vi.spyOn(OAuthGrant, 'findOneAndUpdate').mockImplementationOnce((async (...args: unknown[]) => {
       await Reflect.apply(original, OAuthGrant, args);
       throw new Error('acknowledgement lost');
     }) as unknown as typeof OAuthGrant.findOneAndUpdate);
@@ -207,7 +239,11 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     const issued = await issueRefreshToken(input);
     expect((await refresh(issued.token, 'other-client')).status).toBe(400);
     expect((await refresh('unknown')).status).toBe(400);
-    await RefreshToken.collection.insertOne({ tokenHash: hash('legacy'), clientId: input.clientId, userId: input.userId });
+    await RefreshToken.collection.insertOne({
+      tokenHash: hash('legacy'),
+      clientId: input.clientId,
+      userId: input.userId
+    });
     expect((await refresh('legacy')).status).toBe(400);
     expect((await refresh(issued.token)).status).toBe(200);
   });

@@ -55,19 +55,22 @@ jobs:
       - name: Fetch all tags
         run: git fetch --tags
 
-      - name: Copy .versionrc.json from .github to workflow directory
-        run: |
-          cp .github/.versionrc.json $GITHUB_WORKSPACE/.versionrc.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
 
-      - name: Run standard-version
+      - name: Install release tooling
+        run: npm ci --ignore-scripts
+
+      - name: Generate changelog and tag
         id: release
         env:
           RELEASE_AS: ${{ inputs.release-as }}
         run: |
           if [ -n "$RELEASE_AS" ]; then
-            npx standard-version --release-as "$RELEASE_AS"
+            node scripts/release.mjs --release-as "$RELEASE_AS"
           else
-            npx standard-version
+            node scripts/release.mjs
           fi
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 

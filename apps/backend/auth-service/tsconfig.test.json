@@ -1,10 +1,9 @@
 {
   "extends": "./tsconfig.json",
-  // ts-jest compiles tests to CommonJS with Bundler resolution; typecheck them the same way.
   "compilerOptions": {
-    "module": "CommonJS",
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["jest", "node"]
+    "types": ["vitest/globals", "node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

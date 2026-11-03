@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import type { Server } from 'node:http';
@@ -24,14 +25,16 @@ describe('handles and public users with in-memory MongoDB', () => {
     app.use(express.json(), cookieParser());
     app.use('/auth', authRoutes);
     app.use(errorHandler);
-    server = await new Promise<Server>(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+    server = await new Promise<Server>((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}/auth`;
   }, 120_000);
 
   afterAll(async () => {
     if (saved === undefined) delete process.env.INTERNAL_SERVICE_TOKEN;
     else process.env.INTERNAL_SERVICE_TOKEN = saved;
-    await new Promise<void>(resolve => server.close(() => resolve()));
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     await mongoose.disconnect();
     await mongo.stop();
   });
@@ -61,7 +64,7 @@ describe('handles and public users with in-memory MongoDB', () => {
       expect(handle).not.toContain('secret');
     });
 
-    it('gives a second person of the same name a tail instead of the first one\'s handle', async () => {
+    it("gives a second person of the same name a tail instead of the first one's handle", async () => {
       const first = await account('a1@example.test', { firstName: 'Ann', lastName: 'Lee' });
       const second = await account('a2@example.test', { firstName: 'Ann', lastName: 'Lee' });
 
@@ -88,7 +91,9 @@ describe('handles and public users with in-memory MongoDB', () => {
 
     it('gives up, saying so, when every candidate is taken', async () => {
       const user = await account('x@example.test', { firstName: 'Xavier' });
-      const spy = jest.spyOn(User, 'findOneAndUpdate').mockRejectedValue(Object.assign(new Error('E11000'), { code: 11000 }));
+      const spy = vi
+        .spyOn(User, 'findOneAndUpdate')
+        .mockRejectedValue(Object.assign(new Error('E11000'), { code: 11000 }));
       try {
         await expect(ensureHandle(user)).rejects.toMatchObject({ statusCode: 409 });
       } finally {
@@ -98,7 +103,7 @@ describe('handles and public users with in-memory MongoDB', () => {
 
     it('lets any other database failure through', async () => {
       const user = await account('y@example.test', { firstName: 'Yan' });
-      const spy = jest.spyOn(User, 'findOneAndUpdate').mockRejectedValue(new Error('connection lost'));
+      const spy = vi.spyOn(User, 'findOneAndUpdate').mockRejectedValue(new Error('connection lost'));
       try {
         await expect(ensureHandle(user)).rejects.toThrow('connection lost');
       } finally {
@@ -117,19 +122,19 @@ describe('handles and public users with in-memory MongoDB', () => {
   });
 
   describe('what a handle may be', () => {
-    it.each(['ann', 'ann-lee', 'a1b', 'x'.repeat(30)])('accepts %s', handle => {
+    it.each(['ann', 'ann-lee', 'a1b', 'x'.repeat(30)])('accepts %s', (handle) => {
       expect(isValidHandle(handle)).toBe(true);
     });
 
     it.each(['ab', 'x'.repeat(31), '-ann', 'ann-', 'ann--lee', 'Ann', 'ann_lee', 'ann.lee', 'admin', 'explore', 'u'])(
       'refuses %s',
-      handle => {
+      (handle) => {
         expect(isValidHandle(handle)).toBe(false);
       }
     );
 
     it('slugifies any text to lowercase ASCII words', () => {
-      expect(slugify('  Zoë  O\'Neil-Ñuñez ')).toBe('zoe-o-neil-nunez');
+      expect(slugify("  Zoë  O'Neil-Ñuñez ")).toBe('zoe-o-neil-nunez');
       expect(slugify('日本語')).toBe('');
       expect(suggestHandle({ firstName: '日本語' })).toBe('user');
       expect(suggestHandle({ firstName: 'A'.repeat(40) })).toBe('a'.repeat(23));
@@ -158,7 +163,16 @@ describe('handles and public users with in-memory MongoDB', () => {
       const { status, body } = await get('ann-lee');
 
       expect(status).toBe(200);
-      expect(Object.keys(body.data!).sort()).toEqual(['bio', 'createdAt', 'handle', 'id', 'links', 'name', 'picture', 'showActivity']);
+      expect(Object.keys(body.data!).sort()).toEqual([
+        'bio',
+        'createdAt',
+        'handle',
+        'id',
+        'links',
+        'name',
+        'picture',
+        'showActivity'
+      ]);
       expect(body.data).toMatchObject({
         handle: 'ann-lee',
         name: 'Ann Lee',
@@ -218,7 +232,13 @@ describe('handles and public users with in-memory MongoDB', () => {
     });
 
     it('tells an unfurler who someone is, by their bio and picture, and sends people on to their page', async () => {
-      await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', bio: 'Segmentation under bad weather', picture: 'https://pics.example.test/ann.jpg' });
+      await account('ann@example.test', {
+        firstName: 'Ann',
+        lastName: 'Lee',
+        handle: 'ann-lee',
+        bio: 'Segmentation under bad weather',
+        picture: 'https://pics.example.test/ann.jpg'
+      });
 
       const { status, text, headers } = await share('ann-lee');
 
@@ -233,7 +253,7 @@ describe('handles and public users with in-memory MongoDB', () => {
       expect(text).not.toContain('ann@example.test');
     });
 
-    it('says who they are on Visin, and uses the app\'s own picture, when they wrote nothing and have none', async () => {
+    it("says who they are on Visin, and uses the app's own picture, when they wrote nothing and have none", async () => {
       await account('quiet@example.test', { handle: 'quiet' });
 
       const { text } = await share('quiet');
@@ -259,7 +279,11 @@ describe('handles and public users with in-memory MongoDB', () => {
     });
 
     it('escapes what a person writes about themselves', async () => {
-      await account('evil@example.test', { firstName: '"><script>alert(1)</script>', handle: 'evil', bio: '<img src=x onerror=alert(1)>' });
+      await account('evil@example.test', {
+        firstName: '"><script>alert(1)</script>',
+        handle: 'evil',
+        bio: '<img src=x onerror=alert(1)>'
+      });
 
       const { text } = await share('evil');
 
@@ -334,8 +358,18 @@ describe('handles and public users with in-memory MongoDB', () => {
     };
 
     it('lists the people with a public page in handle order, with only what a listing needs', async () => {
-      await account('bea@example.test', { firstName: 'Bea', handle: 'bea', bio: 'Private thoughts', links: ['https://bea.example.test/'] });
-      await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', picture: 'https://pics.example.test/ann.jpg' });
+      await account('bea@example.test', {
+        firstName: 'Bea',
+        handle: 'bea',
+        bio: 'Private thoughts',
+        links: ['https://bea.example.test/']
+      });
+      await account('ann@example.test', {
+        firstName: 'Ann',
+        lastName: 'Lee',
+        handle: 'ann-lee',
+        picture: 'https://pics.example.test/ann.jpg'
+      });
 
       const { status, body } = await list();
 
@@ -384,7 +418,14 @@ describe('handles and public users with in-memory MongoDB', () => {
     const handles = async (query: string) => ((await find(query)).body.data ?? []).map((user) => user.handle);
 
     beforeEach(async () => {
-      await account('a@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', picture: 'https://p.test/a.jpg', bio: 'Never listed', links: ['https://ann.example.test'] });
+      await account('a@example.test', {
+        firstName: 'Ann',
+        lastName: 'Lee',
+        handle: 'ann-lee',
+        picture: 'https://p.test/a.jpg',
+        bio: 'Never listed',
+        links: ['https://ann.example.test']
+      });
       await account('b@example.test', { firstName: 'Bob', lastName: 'Annan', handle: 'bob' });
       await account('c@example.test', { firstName: 'Cara', handle: 'road-cara' });
       await account('hidden@example.test', { firstName: 'Anna', handle: 'anna-hidden', profilePublic: false });
@@ -409,7 +450,9 @@ describe('handles and public users with in-memory MongoDB', () => {
     it('lists only what a search needs: no email, bio or links', async () => {
       const { body } = await find('q=ann-lee');
 
-      expect(body.data).toEqual([{ id: expect.any(String), handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/a.jpg' }]);
+      expect(body.data).toEqual([
+        { id: expect.any(String), handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/a.jpg' }
+      ]);
       expect(JSON.stringify(body)).not.toMatch(/example\.test|Never listed/);
     });
 
@@ -441,7 +484,12 @@ describe('handles and public users with in-memory MongoDB', () => {
     };
 
     it('names the owners it is asked about, and leaves out the ones that do not exist', async () => {
-      const ann = await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', picture: 'https://p.example.test/a.jpg' });
+      const ann = await account('ann@example.test', {
+        firstName: 'Ann',
+        lastName: 'Lee',
+        handle: 'ann-lee',
+        picture: 'https://p.example.test/a.jpg'
+      });
 
       const { status, body } = await lookup({ ids: [ann.id, new mongoose.Types.ObjectId().toString()] });
 
@@ -484,7 +532,13 @@ describe('handles and public users with in-memory MongoDB', () => {
   describe('an account that never chose', () => {
     // A new account takes the model's default; an older one has no field at all. Neither has agreed to be found.
     const unchosen = async () => {
-      const fresh = await User.create({ email: 'fresh@example.test', signupMethod: 'password', roles: [], firstName: 'Fresh', handle: 'fresh' });
+      const fresh = await User.create({
+        email: 'fresh@example.test',
+        signupMethod: 'password',
+        roles: [],
+        firstName: 'Fresh',
+        handle: 'fresh'
+      });
       await User.collection.insertOne({
         email: 'old@example.test',
         signupMethod: 'password',
@@ -509,7 +563,9 @@ describe('handles and public users with in-memory MongoDB', () => {
       await unchosen();
 
       const found = (await (await fetch(`${base}/users?q=fresh`)).json()) as { data: unknown[] };
-      const directory = (await (await fetch(`${base}/directory`)).json()) as { data: { people: unknown[]; pagination: { total: number } } };
+      const directory = (await (await fetch(`${base}/directory`)).json()) as {
+        data: { people: unknown[]; pagination: { total: number } };
+      };
       const sitemap = await (await fetch(`${base}/sitemap.xml`)).text();
 
       expect(found.data).toEqual([]);
@@ -533,7 +589,10 @@ describe('handles and public users with in-memory MongoDB', () => {
         headers: { 'content-type': 'application/json', 'x-internal-token': 'internal-test-token' },
         body: JSON.stringify({ ids: [fresh.id, old._id.toString()] })
       });
-      expect(((await lookup.json()) as { data: unknown[] }).data).toEqual([{ id: fresh.id }, { id: old._id.toString() }]);
+      expect(((await lookup.json()) as { data: unknown[] }).data).toEqual([
+        { id: fresh.id },
+        { id: old._id.toString() }
+      ]);
       delete process.env.SHELL_FRONT_URL;
     });
 

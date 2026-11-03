@@ -1,3 +1,8 @@
+import { vi } from 'vitest';
+const { membership } = vi.hoisted(() => {
+  const membership = vi.fn();
+  return { membership };
+});
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHash, createHmac } from 'crypto';
@@ -22,12 +27,23 @@ import { projectTokenContext } from '../../middleware/projectTokenContext';
 import { protocolDigest } from '../../services/suiteProtocol';
 import { suiteProtocolSchema } from '../../validation/suiteSchemas';
 
-jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
-const membership = jest.fn();
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  createGroupServiceClient: () => ({ checkMembership: membership, getMyGroups: jest.fn(async () => []) })
-}));
+vi.mock('../../clients/projectGroupsClient', async () => {
+  const module = await (() => ({ getUserGroups: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    createGroupServiceClient: () => ({
+      checkMembership: membership,
+      getMyGroups: vi.fn(async function () {
+        return [];
+      })
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 const OWNER = '000000000000000000000001';
 const ADMIN = '000000000000000000000002';
@@ -47,7 +63,10 @@ const protocol = (overrides: Record<string, unknown> = {}) => ({
   task: 'segmentation',
   data: { kind: 'external', label: 'Road frames', manifestSha256: 'a'.repeat(64) },
   split: 'test',
-  conditions: [{ name: 'day', sampleCount: 10 }, { name: 'night', sampleCount: 5 }],
+  conditions: [
+    { name: 'day', sampleCount: 10 },
+    { name: 'night', sampleCount: 5 }
+  ],
   metrics: [{ key: 'm', direction: 'max', unit: 'ratio', range: { min: 0, max: 1 }, headline: true }],
   aggregation: 'equal-mean-of-conditions',
   evaluator: { package: 'visin-fusion', minVersion: '1.0.0' },
@@ -85,61 +104,140 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
     app.use('/public', publicRoutes);
     app.use(errorHandler);
     server = createServer(app);
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 120_000);
 
   let client = 0;
   beforeEach(async () => {
     client += 1;
-    const ids = [OWNER, ADMIN, MEMBER, STRANGER].map(id => new mongoose.Types.ObjectId(id));
-    await mongoose.connection.collection('users').insertMany(ids.map(_id => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
-    await mongoose.connection.collection('user_sessions').insertMany(ids.map(_id => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    jest.mocked(getUserGroups).mockImplementation(async userId => ROLES[userId ?? ''] ?? []);
-    membership.mockImplementation(async (_group: string, userId: string) => {
+    const ids = [OWNER, ADMIN, MEMBER, STRANGER].map((id) => new mongoose.Types.ObjectId(id));
+    await mongoose.connection
+      .collection('users')
+      .insertMany(ids.map((_id) => ({ _id, email: `${_id}@example.test`, tokenVersion: 1 })));
+    await mongoose.connection
+      .collection('user_sessions')
+      .insertMany(ids.map((_id) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
+    vi.mocked(getUserGroups).mockImplementation(async function (userId) {
+      return ROLES[userId ?? ''] ?? [];
+    });
+    membership.mockImplementation(async function (_group: string, userId: string) {
       const role = ROLES[userId]?.[0]?.role;
       return role ? { member: true, role } : { member: false, role: null };
     });
   });
   afterEach(async () => {
-    await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
+    await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
-    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
-    try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await mongoose.disconnect();
+    } finally {
+      await mongo?.stop();
+    }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   type Body = { data: any; message?: string };
-  const call = async (path: string, { method = 'GET', user = OWNER, body }: { method?: string; user?: string; body?: unknown } = {}) => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: user, email: `${user}@example.test`, tokenVersion: 1, sid: user, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
-      .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
+  const call = async (
+    path: string,
+    { method = 'GET', user = OWNER, body }: { method?: string; user?: string; body?: unknown } = {}
+  ) => {
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: user,
+        email: `${user}@example.test`,
+        tokenVersion: 1,
+        sid: user,
+        typ: 'session',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${baseUrl}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.1.${Math.floor(client / 250)}.${client % 250}`, ...(user ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': `10.1.${Math.floor(client / 250)}.${client % 250}`,
+        ...(user ? { Authorization: `Bearer ${token}` } : {})
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     const text = await response.text();
-    return { status: response.status, headers: response.headers, body: (() => { try { return text ? JSON.parse(text) : {}; } catch { return {}; } })() as Body, text };
+    return {
+      status: response.status,
+      headers: response.headers,
+      body: (() => {
+        try {
+          return text ? JSON.parse(text) : {};
+        } catch {
+          return {};
+        }
+      })() as Body,
+      text
+    };
   };
   /** the project most recently created: a badge names the project whose row it shows */
   let lastProject = '';
   const project = (fields: Record<string, unknown> = {}) =>
-    Project.create({ name: 'Road team', slug: `road-${new mongoose.Types.ObjectId()}`, owner: { kind: 'group', id: GROUP }, createdBy: OWNER, visibility: 'public', ...fields }).then(created => {
+    Project.create({
+      name: 'Road team',
+      slug: `road-${new mongoose.Types.ObjectId()}`,
+      owner: { kind: 'group', id: GROUP },
+      createdBy: OWNER,
+      visibility: 'public',
+      ...fields
+    }).then((created) => {
       lastProject = String(created._id);
       return lastProject;
     });
   const publishSuite = (projectId: string, overrides: Record<string, unknown> = {}, proto = protocol()) =>
-    call('/suites', { method: 'POST', body: { slug: 'road-test', version: 1, name: 'Road test', projectId, visibility: 'public', protocol: proto, ...overrides } });
-  const record = async (projectId: string, name: string, day: number, night: number, extra: Record<string, unknown> = {}) =>
-    (await call('/evaluations', { method: 'POST', body: { projectId, uuid: `${name}-${day}-${night}`, suite: 'road-test@1', checkpoint: local(name), results: results(day, night), sampleCounts: counts, evidence: evidenceFor(), ...extra } })).body.data._id as string;
+    call('/suites', {
+      method: 'POST',
+      body: {
+        slug: 'road-test',
+        version: 1,
+        name: 'Road test',
+        projectId,
+        visibility: 'public',
+        protocol: proto,
+        ...overrides
+      }
+    });
+  const record = async (
+    projectId: string,
+    name: string,
+    day: number,
+    night: number,
+    extra: Record<string, unknown> = {}
+  ) =>
+    (
+      await call('/evaluations', {
+        method: 'POST',
+        body: {
+          projectId,
+          uuid: `${name}-${day}-${night}`,
+          suite: 'road-test@1',
+          checkpoint: local(name),
+          results: results(day, night),
+          sampleCounts: counts,
+          evidence: evidenceFor(),
+          ...extra
+        }
+      })
+    ).body.data._id as string;
   const publish = (id: string, user = OWNER) => call(`/evaluations/${id}/publish`, { method: 'POST', user });
   const withdraw = (id: string, user = OWNER) => call(`/evaluations/${id}/withdraw`, { method: 'POST', user });
   const board = (user = ANONYMOUS, version = 1) => call(`/public/leaderboards/road-test/${version}`, { user });
-  const entries = async (user = ANONYMOUS) => ((await board(user)).body.data?.entries ?? []) as { rank: number; checkpoint: { label: string } }[];
+  const entries = async (user = ANONYMOUS) =>
+    ((await board(user)).body.data?.entries ?? []) as { rank: number; checkpoint: { label: string } }[];
 
   describe('publishing', () => {
     it('needs manage on the project, and shows a stranger only that it is not found', async () => {
@@ -162,8 +260,12 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const open = await project();
       const hidden = await project({ visibility: 'private' });
       await publishSuite(open);
-      const exploratory = (await call('/evaluations', { method: 'POST', body: { projectId: open, results: {} } })).body.data._id;
-      const incomplete = await record(open, 'B', 0.5, 0.5, { results: { day: { overall: { m: 0.5 } } }, sampleCounts: { day: 10 } });
+      const exploratory = (await call('/evaluations', { method: 'POST', body: { projectId: open, results: {} } })).body
+        .data._id;
+      const incomplete = await record(open, 'B', 0.5, 0.5, {
+        results: { day: { overall: { m: 0.5 } } },
+        sampleCounts: { day: 10 }
+      });
       const failed = await record(open, 'C', 0, 0, { status: 'failed', results: {} });
       for (const id of [exploratory, incomplete, failed]) {
         const refused = await publish(id);
@@ -177,14 +279,26 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       expect(refusedPrivate.body.message).toContain('public project');
 
       await publishSuite(open, { slug: 'closed', visibility: 'private' });
-      const onPrivateSuite = (await call('/evaluations', { method: 'POST', body: { projectId: open, suite: 'closed@1', checkpoint: local('A'), results: results(0.8, 0.6), sampleCounts: counts, evidence: evidenceFor() } })).body.data._id;
+      const onPrivateSuite = (
+        await call('/evaluations', {
+          method: 'POST',
+          body: {
+            projectId: open,
+            suite: 'closed@1',
+            checkpoint: local('A'),
+            results: results(0.8, 0.6),
+            sampleCounts: counts,
+            evidence: evidenceFor()
+          }
+        })
+      ).body.data._id;
       const refusedSuite = await publish(onPrivateSuite);
       expect(refusedSuite.status).toBe(409);
       expect(refusedSuite.body.message).toContain('not public');
       expect(await Evaluation.countDocuments({ publishedAt: { $ne: null } })).toBe(0);
     });
 
-    it('is idempotent both ways, and recorded for the project\'s history', async () => {
+    it("is idempotent both ways, and recorded for the project's history", async () => {
       const id = await project();
       await publishSuite(id);
       const evaluation = await record(id, 'A', 0.8, 0.6);
@@ -193,9 +307,12 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       expect(again.body.data.publishedAt).toBe(first.body.data.publishedAt);
       expect((await withdraw(evaluation)).body.data.publishedAt).toBeUndefined();
       expect((await withdraw(evaluation)).status).toBe(200);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      const events = await mongoose.connection.collection('resource_events').find({ resourceType: 'evaluation' }).toArray();
-      expect(events.map(event => event.visibility)).toEqual(['public', 'private']);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const events = await mongoose.connection
+        .collection('resource_events')
+        .find({ resourceType: 'evaluation' })
+        .toArray();
+      expect(events.map((event) => event.visibility)).toEqual(['public', 'private']);
       expect(events[0]).toMatchObject({ action: 'visibility', actorId: OWNER, resourceId: evaluation });
     });
 
@@ -215,18 +332,31 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
     it('are shown beside the board, as the publisher wrote them, and only while the suite is public', async () => {
       const id = await project();
       await publishSuite(id, {
-        dataTerms: { license: { id: 'cc-by-4.0' }, sourceUrl: 'https://data.example.test/roads', credit: 'Road Lab, 2025' }
+        dataTerms: {
+          license: { id: 'cc-by-4.0' },
+          sourceUrl: 'https://data.example.test/roads',
+          credit: 'Road Lab, 2025'
+        }
       });
       const evaluation = await record(id, 'A', 0.8, 0.6);
       await publish(evaluation);
       const shown = (await board()).body.data.suite.dataTerms;
       expect(shown).toEqual({
-        license: { id: 'cc-by-4.0', name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/', commercial: true },
+        license: {
+          id: 'cc-by-4.0',
+          name: 'CC BY 4.0',
+          url: 'https://creativecommons.org/licenses/by/4.0/',
+          commercial: true
+        },
         sourceUrl: 'https://data.example.test/roads',
         credit: 'Road Lab, 2025'
       });
-      expect((await call('/public/leaderboards', { user: ANONYMOUS })).body.data.leaderboards[0].dataTerms).toEqual(shown);
-      expect((await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).body.data.suite.dataTerms).toEqual(shown);
+      expect((await call('/public/leaderboards', { user: ANONYMOUS })).body.data.leaderboards[0].dataTerms).toEqual(
+        shown
+      );
+      expect((await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).body.data.suite.dataTerms).toEqual(
+        shown
+      );
     });
 
     it('are absent when nothing was declared, rather than guessed', async () => {
@@ -240,7 +370,9 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
   describe('badges', () => {
     const keyOf = (name: string) => `sha256:${sha(name)}`;
     const badge = (key: string, version = 1, slug = 'road-test', projectRef = lastProject) =>
-      call(`/public/badges/${slug}/${version}/${encodeURIComponent(key)}.svg?project=${projectRef}`, { user: ANONYMOUS });
+      call(`/public/badges/${slug}/${version}/${encodeURIComponent(key)}.svg?project=${projectRef}`, {
+        user: ANONYMOUS
+      });
 
     it('is an SVG with the suite, the score and the rank among the published checkpoints', async () => {
       const id = await project();
@@ -283,7 +415,13 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
       const missing = await badge(keyOf('never-recorded'));
       expect(missing.status).toBe(404);
-      for (const response of [await badge(keyOf('unpublished')), await badge(keyOf('withdrawn')), await badge(keyOf('live'), 2), await badge(keyOf('live'), 1, 'closed'), await badge(keyOf('live'), 1, 'nope')]) {
+      for (const response of [
+        await badge(keyOf('unpublished')),
+        await badge(keyOf('withdrawn')),
+        await badge(keyOf('live'), 2),
+        await badge(keyOf('live'), 1, 'closed'),
+        await badge(keyOf('live'), 1, 'nope')
+      ]) {
         expect(response.status).toBe(404);
         expect(response.body.message).toBe(missing.body.message);
         expect(response.text).not.toContain('<svg');
@@ -307,8 +445,28 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
     it('draws only escaped text, whatever a suite names its headline', async () => {
       const id = await project();
-      await publishSuite(id, {}, protocol({ metrics: [{ key: 'm"><script>x</script>', direction: 'max', range: { min: 0, max: 1 }, headline: true }] }));
-      const body = { projectId: id, suite: 'road-test@1', checkpoint: local('X'), sampleCounts: counts, results: { day: { overall: { 'm"><script>x</script>': 0.5 } }, night: { overall: { 'm"><script>x</script>': 0.5 } } }, evidence: evidenceFor(protocol({ metrics: [{ key: 'm"><script>x</script>', direction: 'max', range: { min: 0, max: 1 }, headline: true }] })) };
+      await publishSuite(
+        id,
+        {},
+        protocol({
+          metrics: [{ key: 'm"><script>x</script>', direction: 'max', range: { min: 0, max: 1 }, headline: true }]
+        })
+      );
+      const body = {
+        projectId: id,
+        suite: 'road-test@1',
+        checkpoint: local('X'),
+        sampleCounts: counts,
+        results: {
+          day: { overall: { 'm"><script>x</script>': 0.5 } },
+          night: { overall: { 'm"><script>x</script>': 0.5 } }
+        },
+        evidence: evidenceFor(
+          protocol({
+            metrics: [{ key: 'm"><script>x</script>', direction: 'max', range: { min: 0, max: 1 }, headline: true }]
+          })
+        )
+      };
       const created = await call('/evaluations', { method: 'POST', body });
       expect(created.status).toBe(201);
       await publish(created.body.data._id);
@@ -329,8 +487,16 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
       const entry = (await entries())[0] as unknown as { evidenceLevel: string };
       expect(entry.evidenceLevel).toBe('none');
-      expect((await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).body.data.evidenceLevel).toBe('none');
-      expect((await call(`/public/badges/road-test/1/${encodeURIComponent(`sha256:${sha('Old')}`)}.svg?project=${id}`, { user: ANONYMOUS })).status).toBe(200);
+      expect((await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).body.data.evidenceLevel).toBe(
+        'none'
+      );
+      expect(
+        (
+          await call(`/public/badges/road-test/1/${encodeURIComponent(`sha256:${sha('Old')}`)}.svg?project=${id}`, {
+            user: ANONYMOUS
+          })
+        ).status
+      ).toBe(200);
     });
   });
 
@@ -340,7 +506,19 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(id);
       await publishSuite(id, { slug: 'depth-test' });
       const first = await record(id, 'A', 0.8, 0.6);
-      const second = (await call('/evaluations', { method: 'POST', body: { projectId: id, suite: 'depth-test@1', checkpoint: local('A'), results: results(0.4, 0.4), sampleCounts: counts, evidence: evidenceFor() } })).body.data._id;
+      const second = (
+        await call('/evaluations', {
+          method: 'POST',
+          body: {
+            projectId: id,
+            suite: 'depth-test@1',
+            checkpoint: local('A'),
+            results: results(0.4, 0.4),
+            sampleCounts: counts,
+            evidence: evidenceFor()
+          }
+        })
+      ).body.data._id;
       await publish(first);
       await publish(second);
       const key = encodeURIComponent(`sha256:${sha('A')}`);
@@ -358,7 +536,7 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const id = await project();
       await publishSuite(id);
       const best = await record(id, 'A', 0.9, 0.9);
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const worse = await record(id, 'A', 0.5, 0.5);
       const refused = await publish(best);
       expect(refused.status).toBe(409);
@@ -376,7 +554,7 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const first = await record(id, 'A', 0.9, 0.9);
       await publish(first);
       expect(await entries()).toHaveLength(1);
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const second = await record(id, 'A', 0.6, 0.6);
       expect(await entries()).toEqual([]);
       expect((await call(`/public/evaluations/${first}`, { user: ANONYMOUS })).status).toBe(404);
@@ -390,7 +568,11 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(id);
       const first = await record(id, 'A', 0.9, 0.9);
       await publish(first);
-      await record(id, 'A', 0.9, 0.9, { uuid: 'half', results: { day: { overall: { m: 0.1 } } }, sampleCounts: { day: 10 } });
+      await record(id, 'A', 0.9, 0.9, {
+        uuid: 'half',
+        results: { day: { overall: { m: 0.1 } } },
+        sampleCounts: { day: 10 }
+      });
       expect((await board()).body.data.entries).toMatchObject([{ evaluationId: first, attempts: 2 }]);
     });
 
@@ -400,12 +582,19 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(mine);
       const first = await record(mine, 'A', 0.9, 0.9);
       await publish(first);
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const rival = await record(theirs, 'A', 0.2, 0.2, { uuid: 'rival' });
       const stolen = await publish(rival);
       expect(stolen.status).toBe(200);
-      const rows = (await board()).body.data.entries as { evaluationId: string; rank: number; project: { name: string } }[];
-      expect(rows.map(row => [row.rank, row.evaluationId, row.project.name])).toEqual([[1, first, 'Mine'], [2, rival, 'Theirs']]);
+      const rows = (await board()).body.data.entries as {
+        evaluationId: string;
+        rank: number;
+        project: { name: string };
+      }[];
+      expect(rows.map((row) => [row.rank, row.evaluationId, row.project.name])).toEqual([
+        [1, first, 'Mine'],
+        [2, rival, 'Theirs']
+      ]);
     });
 
     it('draws a badge for the project it names, and for no other', async () => {
@@ -415,11 +604,14 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publish(await record(mine, 'A', 0.9, 0.9));
       await publish(await record(theirs, 'A', 0.2, 0.2, { uuid: 'rival' }));
       const key = `sha256:${sha('A')}`;
-      const at = (projectRef: string) => call(`/public/badges/road-test/1/${encodeURIComponent(key)}.svg?project=${projectRef}`, { user: ANONYMOUS });
+      const at = (projectRef: string) =>
+        call(`/public/badges/road-test/1/${encodeURIComponent(key)}.svg?project=${projectRef}`, { user: ANONYMOUS });
       expect((await at(mine)).text).toContain('m 0.9 · rank 1/2');
       expect((await at(theirs)).text).toContain('m 0.2 · rank 2/2');
       expect((await at('nobody')).status).toBe(404);
-      expect((await call(`/public/badges/road-test/1/${encodeURIComponent(key)}.svg`, { user: ANONYMOUS })).status).toBe(400);
+      expect(
+        (await call(`/public/badges/road-test/1/${encodeURIComponent(key)}.svg`, { user: ANONYMOUS })).status
+      ).toBe(400);
     });
   });
 
@@ -427,12 +619,23 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
     /** A public project of someone else's (managed by STRANGER), publishing to a suite the main project owns. */
     const foreign = () => project({ name: 'Visitors', owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER });
     const recordAs = (projectId: string, name: string, day: number, night: number, user = STRANGER) =>
-      call('/evaluations', { method: 'POST', user, body: { projectId, uuid: `${name}-${day}`, suite: 'road-test@1', checkpoint: local(name), results: results(day, night), sampleCounts: counts, evidence: evidenceFor() } })
-        .then(response => response.body.data._id as string);
+      call('/evaluations', {
+        method: 'POST',
+        user,
+        body: {
+          projectId,
+          uuid: `${name}-${day}`,
+          suite: 'road-test@1',
+          checkpoint: local(name),
+          results: results(day, night),
+          sampleCounts: counts,
+          evidence: evidenceFor()
+        }
+      }).then((response) => response.body.data._id as string);
     const submissions = (user = OWNER) => call('/suites/road-test/1/submissions', { user });
-    const names = async () => (await entries()).map(entry => entry.checkpoint.label);
+    const names = async () => (await entries()).map((entry) => entry.checkpoint.label);
 
-    it('lets a suite that takes its own project\'s results only refuse everyone else, and not its owner', async () => {
+    it("lets a suite that takes its own project's results only refuse everyone else, and not its owner", async () => {
       const home = await project();
       const away = await foreign();
       await publishSuite(home, { submissions: 'members' });
@@ -458,11 +661,27 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       // Verification is a label, not a visibility gate.
       expect(await names()).toEqual(['Mine', 'Theirs']);
       expect((await call(`/public/evaluations/${theirs}`, { user: ANONYMOUS })).status).toBe(200);
-      expect((await call(`/public/badges/road-test/1/${encodeURIComponent(`sha256:${sha('Theirs')}`)}.svg?project=${away}`, { user: ANONYMOUS })).status).toBe(200);
+      expect(
+        (
+          await call(
+            `/public/badges/road-test/1/${encodeURIComponent(`sha256:${sha('Theirs')}`)}.svg?project=${away}`,
+            { user: ANONYMOUS }
+          )
+        ).status
+      ).toBe(200);
 
       const queue = (await submissions()).body.data;
       expect(queue.suite).toEqual({ slug: 'road-test', version: 1, submissions: 'approval' });
-      expect(queue.pending).toEqual(expect.arrayContaining([expect.objectContaining({ evaluationId: theirs, project: expect.objectContaining({ name: 'Visitors' }), checkpoint: expect.objectContaining({ kind: 'local', label: 'Theirs' }), headline: expect.objectContaining({ key: 'm' }) })]));
+      expect(queue.pending).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            evaluationId: theirs,
+            project: expect.objectContaining({ name: 'Visitors' }),
+            checkpoint: expect.objectContaining({ kind: 'local', label: 'Theirs' }),
+            headline: expect.objectContaining({ key: 'm' })
+          })
+        ])
+      );
       expect(queue.hidden).toEqual([]);
 
       expect((await call(`/evaluations/${theirs}/approve`, { method: 'POST', user: MEMBER })).status).toBe(403);
@@ -478,7 +697,7 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       expect((await call(`/evaluations/${unpublished}/approve`, { method: 'POST', user: ADMIN })).status).toBe(409);
     });
 
-    it('shows the suite\'s own project\'s result at once, even where others need approval', async () => {
+    it("shows the suite's own project's result at once, even where others need approval", async () => {
       const home = await project();
       await publishSuite(home, { submissions: 'approval' });
       await publish(await record(home, 'Mine', 0.9, 0.9));
@@ -504,7 +723,9 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const away = await foreign();
       await publishSuite(home, { submissions: 'approval' });
       const theirs = await recordAs(away, 'Theirs', 0.8, 0.8);
-      expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'check' } })).status).toBe(409);
+      expect(
+        (await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'check' } })).status
+      ).toBe(409);
       await publish(theirs, STRANGER);
       await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'check' } });
       await call(`/evaluations/${theirs}/approve`, { method: 'POST', user: ADMIN });
@@ -521,39 +742,74 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const theirs = await recordAs(away, 'Theirs', 0.99, 0.99);
       await publish(theirs, STRANGER);
       expect(await names()).toEqual(['Theirs']);
-      const events = () => mongoose.connection.collection('resource_events').countDocuments({ resourceType: 'evaluation' });
+      const events = () =>
+        mongoose.connection.collection('resource_events').countDocuments({ resourceType: 'evaluation' });
       const before = await events();
 
       expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: OWNER, body: {} })).status).toBe(400);
-      expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: MEMBER, body: { reason: 'x' } })).status).toBe(403);
-      expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: STRANGER, body: { reason: 'x' } })).status).toBe(403);
-      const hidden = await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'Scores do not match the paper' } });
+      expect(
+        (await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: MEMBER, body: { reason: 'x' } })).status
+      ).toBe(403);
+      expect(
+        (await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: STRANGER, body: { reason: 'x' } })).status
+      ).toBe(403);
+      const hidden = await call(`/evaluations/${theirs}/hide`, {
+        method: 'POST',
+        user: ADMIN,
+        body: { reason: 'Scores do not match the paper' }
+      });
       expect(hidden.status).toBe(200);
       expect(await names()).toEqual([]);
       expect((await call(`/public/evaluations/${theirs}`, { user: ANONYMOUS })).status).toBe(404);
-      expect((await submissions()).body.data.hidden).toMatchObject([{ evaluationId: theirs, hidden: { reason: 'Scores do not match the paper' } }]);
+      expect((await submissions()).body.data.hidden).toMatchObject([
+        { evaluationId: theirs, hidden: { reason: 'Scores do not match the paper' } }
+      ]);
       expect(await events()).toBe(before + 1);
       // Its submitter sees it as hidden, cannot publish it again, and can still withdraw it.
-      expect((await call(`/evaluations/${theirs}`, { user: STRANGER })).body.data.hidden).toMatchObject({ reason: 'Scores do not match the paper' });
+      expect((await call(`/evaluations/${theirs}`, { user: STRANGER })).body.data.hidden).toMatchObject({
+        reason: 'Scores do not match the paper'
+      });
       expect((await publish(theirs, STRANGER)).status).toBe(409);
       expect((await withdraw(theirs, STRANGER)).status).toBe(200);
       expect((await publish(theirs, STRANGER)).status).toBe(409);
-      expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'again' } })).status).toBe(409);
+      expect(
+        (await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'again' } })).status
+      ).toBe(409);
       expect((await submissions()).body.data.hidden).toEqual([]);
 
       expect((await call(`/evaluations/${theirs}/unhide`, { method: 'POST', user: ADMIN })).status).toBe(200);
-      expect((await call(`/evaluations/${theirs}/unhide`, { method: 'POST', user: ADMIN })).body.data).toEqual({ hidden: false });
+      expect((await call(`/evaluations/${theirs}/unhide`, { method: 'POST', user: ADMIN })).body.data).toEqual({
+        hidden: false
+      });
       expect((await publish(theirs, STRANGER)).status).toBe(200);
       expect(await names()).toEqual(['Theirs']);
-      expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'second thoughts' } })).status).toBe(200);
-      expect((await call(`/evaluations/${theirs}/hide`, { method: 'POST', user: ADMIN, body: { reason: 'second thoughts' } })).status).toBe(200);
+      expect(
+        (
+          await call(`/evaluations/${theirs}/hide`, {
+            method: 'POST',
+            user: ADMIN,
+            body: { reason: 'second thoughts' }
+          })
+        ).status
+      ).toBe(200);
+      expect(
+        (
+          await call(`/evaluations/${theirs}/hide`, {
+            method: 'POST',
+            user: ADMIN,
+            body: { reason: 'second thoughts' }
+          })
+        ).status
+      ).toBe(200);
     });
 
     it('is not found for a result on a suite the caller cannot read, so none is confirmed', async () => {
       const home = await project({ visibility: 'private' });
       await publishSuite(home, { visibility: 'private' });
       const mine = await record(home, 'Mine', 0.9, 0.9);
-      expect((await call(`/evaluations/${mine}/hide`, { method: 'POST', user: STRANGER, body: { reason: 'x' } })).status).toBe(404);
+      expect(
+        (await call(`/evaluations/${mine}/hide`, { method: 'POST', user: STRANGER, body: { reason: 'x' } })).status
+      ).toBe(404);
       expect((await call('/evaluations/nope/hide', { method: 'POST', body: { reason: 'x' } })).status).toBe(404);
       expect((await call('/suites/nope/1/submissions')).status).toBe(404);
       expect((await call('/suites/road-test/1/submissions', { user: STRANGER })).status).toBe(404);
@@ -565,8 +821,14 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(home);
       const theirs = await recordAs(away, 'Theirs', 0.8, 0.8);
       await publish(theirs, STRANGER);
-      expect((await call('/suites/road-test/1', { method: 'PATCH', user: MEMBER, body: { submissions: 'members' } })).status).toBe(403);
-      const changed = await call('/suites/road-test/1', { method: 'PATCH', user: ADMIN, body: { submissions: 'members' } });
+      expect(
+        (await call('/suites/road-test/1', { method: 'PATCH', user: MEMBER, body: { submissions: 'members' } })).status
+      ).toBe(403);
+      const changed = await call('/suites/road-test/1', {
+        method: 'PATCH',
+        user: ADMIN,
+        body: { submissions: 'members' }
+      });
       expect(changed.body.data.submissions).toBe('members');
       expect(await names()).toEqual(['Theirs']);
       expect((await call('/suites/road-test/2', { method: 'GET' })).status).toBe(404);
@@ -606,7 +868,9 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(id);
       const evaluation = await record(id, 'A', 0.8, 0.6);
       await publish(evaluation);
-      expect((await call('/suites/road-test/1', { method: 'PATCH', body: { visibility: 'private' } })).status).toBe(200);
+      expect((await call('/suites/road-test/1', { method: 'PATCH', body: { visibility: 'private' } })).status).toBe(
+        200
+      );
       expect((await Evaluation.findById(evaluation))!.publishedAt).toBeUndefined();
       expect((await call('/suites/road-test/1', { method: 'PATCH', body: { visibility: 'public' } })).status).toBe(200);
       expect(await entries()).toEqual([]);
@@ -617,9 +881,16 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
   describe('what the server remembers of the public views', () => {
     const previous = process.env.NODE_ENV;
-    const names = async () => (await entries()).map(entry => entry.checkpoint.label);
-    beforeEach(() => { invalidatePublic(); process.env.NODE_ENV = 'production'; });
-    afterEach(() => { invalidatePublic(); if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous; });
+    const names = async () => (await entries()).map((entry) => entry.checkpoint.label);
+    beforeEach(() => {
+      invalidatePublic();
+      process.env.NODE_ENV = 'production';
+    });
+    afterEach(() => {
+      invalidatePublic();
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    });
 
     it('serves a board from memory, and forgets it at once when a result is published, withdrawn or moderated', async () => {
       const id = await project();
@@ -678,8 +949,11 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
       await call(`/evaluations/${evaluation}`, { method: 'DELETE' });
       expect((await Evaluation.findById(evaluation))?.publishedAt).toBeUndefined();
-      const logged = await mongoose.connection.collection('resource_events').find({ resourceType: 'evaluation', resourceId: evaluation }).toArray();
-      expect(logged.map(event => event.visibility)).toEqual(['public', 'private']);
+      const logged = await mongoose.connection
+        .collection('resource_events')
+        .find({ resourceType: 'evaluation', resourceId: evaluation })
+        .toArray();
+      expect(logged.map((event) => event.visibility)).toEqual(['public', 'private']);
       await call(`/evaluations/${evaluation}/restore`, { method: 'POST' });
       expect(await entries()).toEqual([]);
       expect((await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).status).toBe(404);
@@ -692,7 +966,8 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const id = await project();
       await publishSuite(id);
       const evaluation = await record(id, 'A', 0.8, 0.6);
-      const recorded = () => mongoose.connection.collection('resource_events').countDocuments({ resourceType: 'evaluation' });
+      const recorded = () =>
+        mongoose.connection.collection('resource_events').countDocuments({ resourceType: 'evaluation' });
       const before = await recorded();
       await call(`/evaluations/${evaluation}`, { method: 'DELETE' });
       expect(await recorded()).toBe(before);
@@ -768,10 +1043,21 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const middle = await record(id, 'Middle', 0.7, 0.7);
       await record(id, 'Worst', 0.5, 0.5);
       await publish(middle);
-      expect((await board()).body.data).toMatchObject({ scope: { candidates: 1 }, entries: [{ rank: 1, checkpoint: { label: 'Middle' } }] });
+      expect((await board()).body.data).toMatchObject({
+        scope: { candidates: 1 },
+        entries: [{ rank: 1, checkpoint: { label: 'Middle' } }]
+      });
       await publish(best);
       const data = (await board()).body.data;
-      expect(data.entries.map((entry: { rank: number; checkpoint: { label: string } }) => [entry.rank, entry.checkpoint.label])).toEqual([[1, 'Best'], [2, 'Middle']]);
+      expect(
+        data.entries.map((entry: { rank: number; checkpoint: { label: string } }) => [
+          entry.rank,
+          entry.checkpoint.label
+        ])
+      ).toEqual([
+        [1, 'Best'],
+        [2, 'Middle']
+      ]);
       expect(data.scope).toEqual({ candidates: 2 });
       expect(data.selection).toBe('latest-eligible-completed');
       expect(data.evidence).toBe('submitter-reported');
@@ -796,15 +1082,34 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const id = await project({ name: 'Road team' });
       await publishSuite(id);
       await publish(await record(id, 'A', 0.8, 0.6));
-      const { entries: [entry], suite } = (await board()).body.data;
-      expect(entry).toMatchObject({ rank: 1, attempts: 1, worst: { condition: 'night' }, conditions: { day: 0.8, night: 0.6 }, project: { name: 'Road team' } });
+      const {
+        entries: [entry],
+        suite
+      } = (await board()).body.data;
+      expect(entry).toMatchObject({
+        rank: 1,
+        attempts: 1,
+        worst: { condition: 'night' },
+        conditions: { day: 0.8, night: 0.6 },
+        project: { name: 'Road team' }
+      });
       expect(entry.headline).toBeCloseTo(0.7);
       expect(entry.worst.value).toBeCloseTo(0.6);
       expect(entry.gap).toBeCloseTo(0.1);
       expect(suite).toMatchObject({
-        slug: 'road-test', version: 1, name: 'Road test', task: 'segmentation', split: 'test', aggregation: 'equal-mean-of-conditions',
-        headline: { key: 'm', direction: 'max', unit: 'ratio' }, conditions: [{ name: 'day', sampleCount: 10 }, { name: 'night', sampleCount: 5 }],
-        data: { kind: 'external', label: 'Road frames' }, evaluator: { package: 'visin-fusion', minVersion: '1.0.0' }
+        slug: 'road-test',
+        version: 1,
+        name: 'Road test',
+        task: 'segmentation',
+        split: 'test',
+        aggregation: 'equal-mean-of-conditions',
+        headline: { key: 'm', direction: 'max', unit: 'ratio' },
+        conditions: [
+          { name: 'day', sampleCount: 10 },
+          { name: 'night', sampleCount: 5 }
+        ],
+        data: { kind: 'external', label: 'Road frames' },
+        evaluator: { package: 'visin-fusion', minVersion: '1.0.0' }
       });
     });
 
@@ -816,12 +1121,27 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(id, { slug: 'empty-test' });
       const a = await record(id, 'A', 0.8, 0.6);
       const b = await record(id, 'B', 0.7, 0.7);
-      const depth = (await call('/evaluations', { method: 'POST', body: { projectId: id, suite: 'depth-test@1', checkpoint: local('A'), results: results(0.5, 0.5), sampleCounts: counts, evidence: evidenceFor() } })).body.data._id;
+      const depth = (
+        await call('/evaluations', {
+          method: 'POST',
+          body: {
+            projectId: id,
+            suite: 'depth-test@1',
+            checkpoint: local('A'),
+            results: results(0.5, 0.5),
+            sampleCounts: counts,
+            evidence: evidenceFor()
+          }
+        })
+      ).body.data._id;
       await publish(a);
       await publish(b);
       await publish(depth);
       const { leaderboards } = (await call('/public/leaderboards', { user: ANONYMOUS })).body.data;
-      expect(leaderboards.map((item: { slug: string; checkpoints: number }) => [item.slug, item.checkpoints])).toEqual([['depth-test', 1], ['road-test', 2]]);
+      expect(leaderboards.map((item: { slug: string; checkpoints: number }) => [item.slug, item.checkpoints])).toEqual([
+        ['depth-test', 1],
+        ['road-test', 2]
+      ]);
       expect(leaderboards[0]).toMatchObject({ headline: { key: 'm' }, task: 'segmentation' });
       expect(leaderboards[0].lastPublishedAt).toBeTruthy();
       const second = (await call('/public/leaderboards?limit=1&page=2', { user: ANONYMOUS })).body.data;
@@ -879,7 +1199,7 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publishSuite(id);
       const better = await record(id, 'A', 0.9, 0.9);
       await publish(better);
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const later = await record(id, 'A', 0.6, 0.6);
       await publish(later);
       const { entries: rows } = (await board()).body.data;
@@ -917,25 +1237,61 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const detail = await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS });
       expect(detail.status).toBe(200);
       expect(detail.body.data).toMatchObject({
-        evaluationId: evaluation, checkpoint: { kind: 'local', label: 'A' }, evidence: 'submitter-reported',
-        evaluator: { package: 'visin-fusion', version: '1.4.2', commit: '9d1c2ab' }, sampleCounts: counts,
-        scores: { conditions: { day: { m: 0.8 }, night: { m: 0.6 } } }, suite: { slug: 'road-test', version: 1 }
+        evaluationId: evaluation,
+        checkpoint: { kind: 'local', label: 'A' },
+        evidence: 'submitter-reported',
+        evaluator: { package: 'visin-fusion', version: '1.4.2', commit: '9d1c2ab' },
+        sampleCounts: counts,
+        scores: { conditions: { day: { m: 0.8 }, night: { m: 0.6 } } },
+        suite: { slug: 'road-test', version: 1 }
       });
-      for (const leak of ['secret-flag', 'gpu-node-17', 'registry.internal', '/data/private', 'seeds', 'ownerId', 'projectId', 'uuid', 'contentHash', 'results', 'provenance', 'manifestSha256', 'protocolDigest', 'claims', OWNER]) {
+      for (const leak of [
+        'secret-flag',
+        'gpu-node-17',
+        'registry.internal',
+        '/data/private',
+        'seeds',
+        'ownerId',
+        'projectId',
+        'uuid',
+        'contentHash',
+        'results',
+        'provenance',
+        'manifestSha256',
+        'protocolDigest',
+        'claims',
+        OWNER
+      ]) {
         expect(detail.text).not.toContain(leak);
       }
       const listing = (await board()).text;
-      for (const leak of ['secret-flag', 'gpu-node-17', '/data/private', 'ownerId', 'projectId', 'contentHash', 'provenance', OWNER]) {
+      for (const leak of [
+        'secret-flag',
+        'gpu-node-17',
+        '/data/private',
+        'ownerId',
+        'projectId',
+        'contentHash',
+        'provenance',
+        OWNER
+      ]) {
         expect(listing).not.toContain(leak);
       }
     });
 
     it('does not name a Visin dataset or the run a checkpoint came from', async () => {
       const id = await project();
-      await publishSuite(id, {}, protocol({ data: { kind: 'visin', datasetId: 'private-dataset-42', archiveSha256: 'b'.repeat(64) } }));
+      await publishSuite(
+        id,
+        {},
+        protocol({ data: { kind: 'visin', datasetId: 'private-dataset-42', archiveSha256: 'b'.repeat(64) } })
+      );
       const evaluation = await record(id, 'A', 0.8, 0.6);
       await publish(evaluation);
-      const text = (await board()).text + (await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).text + (await call('/public/leaderboards', { user: ANONYMOUS })).text;
+      const text =
+        (await board()).text +
+        (await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).text +
+        (await call('/public/leaderboards', { user: ANONYMOUS })).text;
       expect(text).not.toContain('private-dataset-42');
       expect(text).not.toContain('b'.repeat(64));
       expect((await board()).body.data.suite.data).toEqual({ kind: 'visin' });
@@ -958,13 +1314,22 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
     it('leaves out what a suite or a submitter did not give, and anything that is not a short string', async () => {
       const id = await project({ storage: { provider: 'hf' } });
-      const bare = protocol({ metrics: [{ key: 'm', direction: 'max', range: { min: 0, max: 1 }, headline: true }], evaluator: { package: 'p' } });
+      const bare = protocol({
+        metrics: [{ key: 'm', direction: 'max', range: { min: 0, max: 1 }, headline: true }],
+        evaluator: { package: 'p' }
+      });
       await publishSuite(id, { description: 'Held-out frames.' }, bare);
       const withDescription = (await board()).status;
       expect(withDescription).toBe(200);
       const evidence = evidenceFor(bare);
-      const plain = await record(id, 'A', 0.8, 0.6, { evidence, checkpoint: { kind: 'hf', repo: 'acme/clft', commit: 'b'.repeat(40) } });
-      const odd = await record(id, 'B', 0.7, 0.7, { evidence, provenance: { evaluator: { package: 42, version: 'x'.repeat(101), commit: ['c'] } } });
+      const plain = await record(id, 'A', 0.8, 0.6, {
+        evidence,
+        checkpoint: { kind: 'hf', repo: 'acme/clft', commit: 'b'.repeat(40) }
+      });
+      const odd = await record(id, 'B', 0.7, 0.7, {
+        evidence,
+        provenance: { evaluator: { package: 42, version: 'x'.repeat(101), commit: ['c'] } }
+      });
       const none = await record(id, 'C', 0.6, 0.6, { evidence, provenance: { other: true } });
       await publish(plain);
       await publish(odd);
@@ -986,11 +1351,22 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const observed = await record(id, 'Seen', 0.7, 0.7);
       const training = await Training.create({ uuid: 'run-1', name: 'Final run', ownerId: OWNER, projectId: id });
       const legacy = await recordTest({
-        projectId: id, trainingId: String(training._id), epoch: 1, epoch_uuid: 'e-1', test_uuid: 't-1',
-        timestamp: new Date('2026-09-01T12:00:00Z'), test_results: results(0.9, 0.9)
+        projectId: id,
+        trainingId: String(training._id),
+        epoch: 1,
+        epoch_uuid: 'e-1',
+        test_uuid: 't-1',
+        timestamp: new Date('2026-09-01T12:00:00Z'),
+        test_results: results(0.9, 0.9)
       });
       const promoted = await call('/evaluations/promote', {
-        method: 'POST', body: { evaluationId: String(legacy._id), suite: 'road-test@1', checkpoint: local('Claimed'), sampleCounts: counts }
+        method: 'POST',
+        body: {
+          evaluationId: String(legacy._id),
+          suite: 'road-test@1',
+          checkpoint: local('Claimed'),
+          sampleCounts: counts
+        }
       });
       expect(promoted.status).toBe(201);
       const said = await record(id, 'Said', 0.5, 0.5, { evidence: undefined });
@@ -999,16 +1375,31 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       await publish(said);
 
       const all = (await board()).body.data;
-      expect(all.entries.map((entry: { checkpoint: { label: string }; rank: number; evidenceLevel: string }) => [entry.checkpoint.label, entry.rank, entry.evidenceLevel])).toEqual([
+      expect(
+        all.entries.map((entry: { checkpoint: { label: string }; rank: number; evidenceLevel: string }) => [
+          entry.checkpoint.label,
+          entry.rank,
+          entry.evidenceLevel
+        ])
+      ).toEqual([
         ['Claimed', 1, 'attested'],
         ['Seen', 2, 'observed'],
         ['Said', 3, 'reported']
       ]);
-      expect((await call(`/public/evaluations/${promoted.body.data._id}`, { user: ANONYMOUS })).body.data.evidenceLevel).toBe('attested');
-      expect((await call(`/public/evaluations/${observed}`, { user: ANONYMOUS })).body.data.evidenceLevel).toBe('observed');
+      expect(
+        (await call(`/public/evaluations/${promoted.body.data._id}`, { user: ANONYMOUS })).body.data.evidenceLevel
+      ).toBe('attested');
+      expect((await call(`/public/evaluations/${observed}`, { user: ANONYMOUS })).body.data.evidenceLevel).toBe(
+        'observed'
+      );
 
       const only = (await call('/public/leaderboards/road-test/1?evidence=observed', { user: ANONYMOUS })).body.data;
-      expect(only.entries.map((entry: { checkpoint: { label: string }; rank: number }) => [entry.checkpoint.label, entry.rank])).toEqual([['Seen', 1]]);
+      expect(
+        only.entries.map((entry: { checkpoint: { label: string }; rank: number }) => [
+          entry.checkpoint.label,
+          entry.rank
+        ])
+      ).toEqual([['Seen', 1]]);
       expect(only.scope.candidates).toBe(1);
       expect((await call('/public/leaderboards/road-test/1?evidence=attested', { user: ANONYMOUS })).status).toBe(400);
     });
@@ -1019,7 +1410,7 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
       const first = await record(id, 'A', 0.8, 0.6);
       const second = await record(id, 'B', 0.7, 0.7);
       const earlier = (await publish(second)).body.data.publishedAt;
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const later = (await publish(first)).body.data.publishedAt;
       const [item] = (await call('/public/leaderboards', { user: ANONYMOUS })).body.data.leaderboards;
       expect(item.lastPublishedAt).toBe(later);
@@ -1029,7 +1420,8 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
     it('does not show an evaluation that is not on a suite, is not published, or whose suite or project is gone', async () => {
       const id = await project();
       await publishSuite(id);
-      const exploratory = (await call('/evaluations', { method: 'POST', body: { projectId: id, results: {} } })).body.data._id;
+      const exploratory = (await call('/evaluations', { method: 'POST', body: { projectId: id, results: {} } })).body
+        .data._id;
       const unpublished = await record(id, 'A', 0.8, 0.6);
       const published = await record(id, 'B', 0.7, 0.7);
       await publish(published);

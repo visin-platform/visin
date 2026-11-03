@@ -1,29 +1,52 @@
+import { vi, type Mock } from 'vitest';
 // Reads go through the job's dataset; this caller contributes to it.
-jest.mock('../../clients/datasetServiceClient', () => ({ getPermission: jest.fn(async () => 'contribute') }));
-jest.mock('../../models/LabelTask', () => ({
-  LabelTask: {
-    findOneAndUpdate: jest.fn(),
-    findById: jest.fn(),
-    findOne: jest.fn(),
-    updateOne: jest.fn(),
-    countDocuments: jest.fn(),
-  },
-}));
-jest.mock('../../models/LabelJob', () => ({
-  LabelJob: { findById: jest.fn(), updateOne: jest.fn() },
-}));
-jest.mock('../../models/LabelAnnotation', () => ({
-  LabelAnnotation: { find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() },
-}));
-jest.mock('../../models/LabelSuggestion', () => ({
-  LabelSuggestion: { findOne: jest.fn() },
-}));
-jest.mock('../../clients/fileServiceClient', () => ({
-  getDownloadUrls: jest.fn(),
-  putFile: jest.fn(),
-  deleteFile: jest.fn(),
-  jobFolder: (jobId: string) => `label/${jobId}/`,
-}));
+vi.mock('../../clients/datasetServiceClient', async () => {
+  const module = await (() => ({
+    getPermission: vi.fn(async function () {
+      return 'contribute';
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelTask', async () => {
+  const module = await (() => ({
+    LabelTask: {
+      findOneAndUpdate: vi.fn(),
+      findById: vi.fn(),
+      findOne: vi.fn(),
+      updateOne: vi.fn(),
+      countDocuments: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelJob', async () => {
+  const module = await (() => ({
+    LabelJob: { findById: vi.fn(), updateOne: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelAnnotation', async () => {
+  const module = await (() => ({
+    LabelAnnotation: { find: vi.fn(), findOne: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/LabelSuggestion', async () => {
+  const module = await (() => ({
+    LabelSuggestion: { findOne: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (() => ({
+    getDownloadUrls: vi.fn(),
+    putFile: vi.fn(),
+    deleteFile: vi.fn(),
+    jobFolder: (jobId: string) => `label/${jobId}/`
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import * as svc from '../../services/taskService';
 import { LabelTask } from '../../models/LabelTask';
@@ -37,11 +60,11 @@ import type { ILabelTask } from '../../models/LabelTask';
 import { encodeMaskRle } from '../../utils/mask';
 import { decodePng } from '../../utils/png';
 
-const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
-const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
-const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
-const mockedSuggestion = LabelSuggestion as unknown as Record<string, jest.Mock>;
-const mockedFiles = files as unknown as Record<string, jest.Mock>;
+const mockedTask = LabelTask as unknown as Record<string, Mock>;
+const mockedJob = LabelJob as unknown as Record<string, Mock>;
+const mockedAnnotation = LabelAnnotation as unknown as Record<string, Mock>;
+const mockedSuggestion = LabelSuggestion as unknown as Record<string, Mock>;
+const mockedFiles = files as unknown as Record<string, Mock>;
 
 const user = { id: 'u1', email: 'Worker@X.com', name: 'Worker' };
 
@@ -56,9 +79,9 @@ const activeJob = (overrides: Record<string, unknown> = {}): ILabelJob =>
     classes: [
       { key: 'car', name: 'Car', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 },
       { key: 'road', name: 'Road', color: '#00ff00', tools: ['mask'], maskIndex: 2 },
-      { key: 'sign', name: 'Sign', color: '#0000ff', tools: ['box'], maskIndex: 3 },
+      { key: 'sign', name: 'Sign', color: '#0000ff', tools: ['box'], maskIndex: 3 }
     ],
-    ...overrides,
+    ...overrides
   }) as unknown as ILabelJob;
 
 const frameTask = (overrides: Record<string, unknown> = {}): ILabelTask =>
@@ -70,9 +93,9 @@ const frameTask = (overrides: Record<string, unknown> = {}): ILabelTask =>
     frame: { fileId: 'f-frame', path: 'camera/frame_000012.png', stem: 'frame_000012', width: 4, height: 2 },
     sensors: [
       { key: 'lidar', kind: 'image', fileId: 'f-lidar' },
-      { key: 'radar', kind: 'points', points: [{ u: 1, v: 1, value: 3 }] },
+      { key: 'radar', kind: 'points', points: [{ u: 1, v: 1, value: 3 }] }
     ],
-    ...overrides,
+    ...overrides
   }) as unknown as ILabelTask;
 
 const annotationDoc = (overrides: Record<string, unknown> = {}) => ({
@@ -82,21 +105,21 @@ const annotationDoc = (overrides: Record<string, unknown> = {}) => ({
   status: 'draft',
   objects: [{ id: 'o1', classKey: 'car', bbox: [0, 0, 2, 2], source: 'human' }],
   updatedAt: new Date('2026-10-01'),
-  ...overrides,
+  ...overrides
 });
 
 /** `LabelAnnotation.find(...).sort(...)` — the labels read behind every task item. */
 const annotationsOnTask = (docs: Record<string, unknown>[] = []) => {
-  mockedAnnotation.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(docs) });
+  mockedAnnotation.find.mockReturnValue({ sort: vi.fn().mockResolvedValue(docs) });
 };
 
 const signAll = () =>
-  mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) =>
-    Object.fromEntries(fileIds.map((fileId) => [fileId, `signed:${fileId}`]))
-  );
+  mockedFiles.getDownloadUrls.mockImplementation(async function (fileIds: string[]) {
+    return Object.fromEntries(fileIds.map((fileId) => [fileId, `signed:${fileId}`]));
+  });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockedJob.findById.mockResolvedValue(activeJob());
   annotationsOnTask();
   mockedSuggestion.findOne.mockResolvedValue(null);
@@ -122,7 +145,7 @@ describe('nextTask', () => {
       jobId: 'j1',
       answersCount: { $lt: 2 },
       answeredBy: { $ne: 'u1' },
-      skippedBy: { $ne: 'u1' },
+      skippedBy: { $ne: 'u1' }
     });
     // Free, expired, or already leased to this caller.
     expect(filter.$or).toHaveLength(3);
@@ -135,7 +158,7 @@ describe('nextTask', () => {
     expect(item!.images.frame).toEqual({ url: 'signed:f-frame', width: 4, height: 2, stem: 'frame_000012' });
     expect(item!.images.sensors).toEqual([
       { key: 'lidar', kind: 'image', url: 'signed:f-lidar' },
-      { key: 'radar', kind: 'points', points: [{ u: 1, v: 1, value: 3 }] },
+      { key: 'radar', kind: 'points', points: [{ u: 1, v: 1, value: 3 }] }
     ]);
     expect(item!.position).toEqual({ index: 4, total: 9 });
   });
@@ -166,8 +189,8 @@ describe('nextTask', () => {
       stratum: 'night',
       sensors: [
         { key: 'lidar', kind: 'image' },
-        { key: 'radar', kind: 'points' },
-      ],
+        { key: 'radar', kind: 'points' }
+      ]
     });
     expect(JSON.stringify(task)).not.toContain('f-lidar');
   });
@@ -198,10 +221,12 @@ describe('what has been labeled on the frame', () => {
     userName: 'Private Person',
     status: 'done',
     mask: { fileId: 'f-theirs', width: 4, height: 2 },
-    updatedAt: new Date('2026-10-02'),
+    updatedAt: new Date('2026-10-02')
   });
 
-  beforeEach(() => mockedTask.findOneAndUpdate.mockResolvedValue(frameTask()));
+  beforeEach(() => {
+    mockedTask.findOneAndUpdate.mockResolvedValue(frameTask());
+  });
 
   it('gives the caller their own labels and the latest finished ones, signed', async () => {
     annotationsOnTask([doneByOther, maskedMine]);
@@ -212,12 +237,10 @@ describe('what has been labeled on the frame', () => {
     expect(annotation.mine).toMatchObject({
       status: 'draft',
       objects: [{ id: 'o1', classKey: 'car', bbox: [0, 0, 2, 2], source: 'human' }],
-      mask: { url: 'signed:f-mine', width: 4, height: 2 },
+      mask: { url: 'signed:f-mine', width: 4, height: 2 }
     });
     expect(annotation.latest).toMatchObject({ status: 'done', mask: { url: 'signed:f-theirs' } });
-    expect(mockedFiles.getDownloadUrls).toHaveBeenCalledWith(
-      expect.arrayContaining(['f-frame', 'f-mine', 'f-theirs'])
-    );
+    expect(mockedFiles.getDownloadUrls).toHaveBeenCalledWith(expect.arrayContaining(['f-frame', 'f-mine', 'f-theirs']));
   });
 
   it('never carries who made the labels', async () => {
@@ -232,14 +255,14 @@ describe('what has been labeled on the frame', () => {
   it('offers a suggestion only to a signed-in caller with no labels of their own', async () => {
     const suggestion = {
       objects: [{ id: 's1', classKey: 'car', bbox: [0, 0, 1, 1], source: 'import', score: 0.5 }],
-      mask: { fileId: 'f-suggest', width: 4, height: 2 },
+      mask: { fileId: 'f-suggest', width: 4, height: 2 }
     };
     mockedSuggestion.findOne.mockResolvedValue(suggestion);
 
     const fresh = (await svc.nextTask(activeJob(), user))!;
     expect(fresh.suggestions).toEqual({
       objects: [{ id: 's1', classKey: 'car', bbox: [0, 0, 1, 1], source: 'import', score: 0.5 }],
-      mask: { url: 'signed:f-suggest', width: 4, height: 2 },
+      mask: { url: 'signed:f-suggest', width: 4, height: 2 }
     });
 
     annotationsOnTask([maskedMine]);
@@ -248,7 +271,7 @@ describe('what has been labeled on the frame', () => {
   });
 
   it('does not look for suggestions for an anonymous visitor', async () => {
-    mockedAnnotation.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) });
+    mockedAnnotation.find.mockReturnValue({ sort: vi.fn().mockResolvedValue([]) });
     mockedJob.findById.mockResolvedValue(activeJob());
     mockedTask.findById.mockResolvedValue(frameTask());
 
@@ -260,7 +283,9 @@ describe('what has been labeled on the frame', () => {
   });
 
   it('serves a suggestion that has boxes only', async () => {
-    mockedSuggestion.findOne.mockResolvedValue({ objects: [{ id: 's', classKey: 'car', bbox: [0, 0, 1, 1], source: 'import' }] });
+    mockedSuggestion.findOne.mockResolvedValue({
+      objects: [{ id: 's', classKey: 'car', bbox: [0, 0, 1, 1], source: 'import' }]
+    });
 
     const item = (await svc.nextTask(activeJob(), user))!;
 
@@ -281,14 +306,16 @@ describe('reading one frame', () => {
 
   it('refuses a frame of a job the caller may not read', async () => {
     mockedTask.findById.mockResolvedValue(frameTask());
-    mockedJob.findById.mockResolvedValue(activeJob({ isPublic: false, datasetId: undefined, createdBy: { userId: 'other' } }));
+    mockedJob.findById.mockResolvedValue(
+      activeJob({ isPublic: false, datasetId: undefined, createdBy: { userId: 'other' } })
+    );
 
     await expect(svc.getTaskItem('t1', 'u1')).rejects.toMatchObject({ statusCode: 403 });
     expect(mockedFiles.getDownloadUrls).not.toHaveBeenCalled();
   });
 
   it('steps to the frame at a position, and answers null past the end', async () => {
-    const skip = jest.fn().mockResolvedValue(frameTask({ order: 3 }));
+    const skip = vi.fn().mockResolvedValue(frameTask({ order: 3 }));
     mockedTask.findOne.mockReturnValue({ sort: () => ({ skip }) });
 
     expect((await svc.getTaskItemAtIndex('j1', 3, 'u1'))!.task.order).toBe(3);
@@ -339,7 +366,7 @@ describe('saveObjects', () => {
         [
           { id: 'a', classKey: 'car', bbox: [-1, 0, 3, 3], source: 'human' },
           { id: 'b', classKey: 'sign', bbox: [1, 1, 2, 1], source: 'model', score: 0.7 },
-          { id: 'c', classKey: 'car', bbox: [50, 50, 5, 5], source: 'human' },
+          { id: 'c', classKey: 'car', bbox: [50, 50, 5, 5], source: 'human' }
         ],
         { elapsedMs: 900 }
       )
@@ -354,8 +381,8 @@ describe('saveObjects', () => {
       elapsedMs: 900,
       objects: [
         { id: 'a', classKey: 'car', bbox: [0, 0, 2, 2], source: 'human' },
-        { id: 'b', classKey: 'sign', bbox: [1, 1, 2, 1], source: 'model', score: 0.7 },
-      ],
+        { id: 'b', classKey: 'sign', bbox: [1, 1, 2, 1], source: 'model', score: 0.7 }
+      ]
     });
     expect(update.$setOnInsert).toEqual({ status: 'draft' });
     expect(options).toMatchObject({ upsert: true, returnDocument: 'after' });
@@ -363,24 +390,40 @@ describe('saveObjects', () => {
 
   it('refuses a class the job does not have, and a box on a mask-only class', async () => {
     await expect(
-      svc.saveObjects(frameTask(), activeJob(), user, body([{ id: 'a', classKey: 'ghost', bbox: [0, 0, 1, 1], source: 'human' }]))
+      svc.saveObjects(
+        frameTask(),
+        activeJob(),
+        user,
+        body([{ id: 'a', classKey: 'ghost', bbox: [0, 0, 1, 1], source: 'human' }])
+      )
     ).rejects.toThrow('Unknown class "ghost"');
     await expect(
-      svc.saveObjects(frameTask(), activeJob(), user, body([{ id: 'a', classKey: 'road', bbox: [0, 0, 1, 1], source: 'human' }]))
+      svc.saveObjects(
+        frameTask(),
+        activeJob(),
+        user,
+        body([{ id: 'a', classKey: 'road', bbox: [0, 0, 1, 1], source: 'human' }])
+      )
     ).rejects.toThrow(BadRequestError);
     expect(mockedAnnotation.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('refuses writes while the job is not active, except revising a completed one', async () => {
     mockedAnnotation.findOne.mockResolvedValue(null);
-    await expect(svc.saveObjects(frameTask(), activeJob({ status: 'paused' }), user, body([]))).rejects.toThrow(ConflictError);
+    await expect(svc.saveObjects(frameTask(), activeJob({ status: 'paused' }), user, body([]))).rejects.toThrow(
+      ConflictError
+    );
     await expect(svc.saveObjects(frameTask(), activeJob({ status: 'completed' }), user, body([]))).rejects.toThrow(
       'Job is completed'
     );
 
     mockedAnnotation.findOne.mockResolvedValue(annotationDoc({ status: 'done' }));
-    await expect(svc.saveObjects(frameTask(), activeJob({ status: 'completed' }), user, body([]))).resolves.toBeDefined();
-    await expect(svc.saveObjects(frameTask(), activeJob({ status: 'archived' }), user, body([]))).rejects.toThrow(ConflictError);
+    await expect(
+      svc.saveObjects(frameTask(), activeJob({ status: 'completed' }), user, body([]))
+    ).resolves.toBeDefined();
+    await expect(svc.saveObjects(frameTask(), activeJob({ status: 'archived' }), user, body([]))).rejects.toThrow(
+      ConflictError
+    );
   });
 
   it('reopens a skipped frame the annotator starts drawing on', async () => {
@@ -432,7 +475,9 @@ describe('saveMask', () => {
   });
 
   it('checks the mask, writes it as a grayscale PNG and points the annotation at it', async () => {
-    mockedAnnotation.findOneAndUpdate.mockResolvedValueOnce(annotationDoc({ mask: { fileId: 'label/j1/masks/old.png' } }));
+    mockedAnnotation.findOneAndUpdate.mockResolvedValueOnce(
+      annotationDoc({ mask: { fileId: 'label/j1/masks/old.png' } })
+    );
     mockedAnnotation.findOneAndUpdate.mockResolvedValueOnce(annotationDoc({ mask: { fileId: 'new' } }));
 
     await svc.saveMask(frameTask(), activeJob(), user, upload([0, 1, 1, 0, 2, 2, 2, 0]));
@@ -442,7 +487,7 @@ describe('saveMask', () => {
     const decoded = decodePng(png);
     expect(Array.from(decoded.data)).toEqual([0, 1, 1, 0, 2, 2, 2, 0]);
     expect(mockedAnnotation.findOneAndUpdate.mock.calls[1][1]).toEqual({
-      $set: { mask: { fileId, width: 4, height: 2, pixels: { '1': 2, '2': 3 } } },
+      $set: { mask: { fileId, width: 4, height: 2, pixels: { '1': 2, '2': 3 } } }
     });
     // The file it replaced is removed, after the new one is in place.
     expect(mockedFiles.deleteFile).toHaveBeenCalledWith('label/j1/masks/old.png');
@@ -457,7 +502,9 @@ describe('saveMask', () => {
   });
 
   it('refuses a mask of another size than the frame', async () => {
-    await expect(svc.saveMask(frameTask(), activeJob(), user, upload([0, 1], 2, 1))).rejects.toThrow('mask is 2×1 but the frame is 4×2');
+    await expect(svc.saveMask(frameTask(), activeJob(), user, upload([0, 1], 2, 1))).rejects.toThrow(
+      'mask is 2×1 but the frame is 4×2'
+    );
     expect(mockedFiles.putFile).not.toHaveBeenCalled();
   });
 
@@ -479,9 +526,9 @@ describe('saveMask', () => {
   });
 
   it('needs the job to be taking labels', async () => {
-    await expect(svc.saveMask(frameTask(), activeJob({ status: 'paused' }), user, upload([0, 0, 0, 0, 0, 0, 0, 0]))).rejects.toThrow(
-      ConflictError
-    );
+    await expect(
+      svc.saveMask(frameTask(), activeJob({ status: 'paused' }), user, upload([0, 0, 0, 0, 0, 0, 0, 0]))
+    ).rejects.toThrow(ConflictError);
     expect(mockedFiles.putFile).not.toHaveBeenCalled();
   });
 });
@@ -529,7 +576,7 @@ describe('finishTask', () => {
         $inc: { answersCount: 1 },
         $addToSet: { answeredBy: 'u1' },
         $pull: { skippedBy: 'u1' },
-        $unset: { leasedBy: '', leaseExpiresAt: '' },
+        $unset: { leasedBy: '', leaseExpiresAt: '' }
       }
     );
     expect(mockedJob.updateOne).not.toHaveBeenCalled();
@@ -541,7 +588,10 @@ describe('finishTask', () => {
     await svc.finishTask(frameTask(), activeJob(), user, 'done');
 
     expect(mockedTask.countDocuments).toHaveBeenCalledWith({ jobId: 'j1', generation: null, answersCount: { $lt: 2 } });
-    expect(mockedJob.updateOne).toHaveBeenCalledWith({ _id: 'j1', status: 'active' }, { $set: { status: 'completed' } });
+    expect(mockedJob.updateOne).toHaveBeenCalledWith(
+      { _id: 'j1', status: 'active' },
+      { $set: { status: 'completed' } }
+    );
   });
 
   it('does not count a frame again when it is finished a second time', async () => {
@@ -585,6 +635,8 @@ describe('finishTask', () => {
   });
 
   it('refuses while the job is paused', async () => {
-    await expect(svc.finishTask(frameTask(), activeJob({ status: 'paused' }), user, 'done')).rejects.toThrow(ConflictError);
+    await expect(svc.finishTask(frameTask(), activeJob({ status: 'paused' }), user, 'done')).rejects.toThrow(
+      ConflictError
+    );
   });
 });

@@ -1,45 +1,40 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  createApiKey: jest.fn(),
-  listApiKeys: jest.fn(),
-  revealApiKey: jest.fn(),
-  revokeApiKey: jest.fn(),
-  deleteApiKey: jest.fn(),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    createApiKey: vi.fn(),
+    listApiKeys: vi.fn(),
+    revealApiKey: vi.fn(),
+    revokeApiKey: vi.fn(),
+    deleteApiKey: vi.fn(),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-jest.mock('../../clients/visionProjectClient', () => ({ getKeyProject: jest.fn() }));
+vi.mock('../../clients/visionProjectClient', async () => {
+  const module = await (() => ({ getKeyProject: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { getKeyProject } from '../../clients/visionProjectClient';
-import {
-  createApiKey,
-  deleteApiKey,
-  listApiKeys,
-  revealApiKey,
-  revokeApiKey,
-} from '@visin/backend-core';
-import {
-  createKey,
-  listKeys,
-  removeKey,
-  revealKey,
-  revokeKey,
-} from '../../controllers/apiKeyController';
+import { createApiKey, deleteApiKey, listApiKeys, revealApiKey, revokeApiKey } from '@visin/backend-core';
+import { createKey, listKeys, removeKey, revealKey, revokeKey } from '../../controllers/apiKeyController';
 
 const mocked = {
-  create: createApiKey as unknown as jest.Mock,
-  list: listApiKeys as unknown as jest.Mock,
-  reveal: revealApiKey as unknown as jest.Mock,
-  revoke: revokeApiKey as unknown as jest.Mock,
-  remove: deleteApiKey as unknown as jest.Mock,
+  create: createApiKey as unknown as Mock,
+  list: listApiKeys as unknown as Mock,
+  reveal: revealApiKey as unknown as Mock,
+  revoke: revokeApiKey as unknown as Mock,
+  remove: deleteApiKey as unknown as Mock
 };
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
@@ -49,7 +44,7 @@ const makeReq = (overrides: Record<string, unknown> = {}): Request =>
     body: {},
     params: {},
     user: { id: 'u1', email: 'a@b.com', name: 'A B' },
-    ...overrides,
+    ...overrides
   }) as unknown as Request;
 
 const summary = {
@@ -60,11 +55,11 @@ const summary = {
   createdAt: '2026-09-01T00:00:00.000Z',
   lastUsedAt: null,
   expiresAt: null,
-  revokedAt: null,
+  revokedAt: null
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   process.env.API_KEY_ENCRYPTION_SECRET = 'a-test-secret';
 });
 
@@ -75,7 +70,7 @@ describe('when the deployment has not enabled API keys', () => {
 
   it.each([
     ['createKey', createKey],
-    ['revealKey', revealKey],
+    ['revealKey', revealKey]
   ])('%s answers 501 with something actionable, not a 500 from inside scrypt', async (_name, handler) => {
     const res = makeRes();
 
@@ -109,10 +104,7 @@ describe('createKey', () => {
     mocked.create.mockResolvedValue({ summary, token: 'vsn_live_0123456789ab_secret' });
     const res = makeRes();
 
-    await createKey(
-      makeReq({ body: { name: 'Claude Code', scopes: ['vision:read', 'dataset:read'] } }),
-      res
-    );
+    await createKey(makeReq({ body: { name: 'Claude Code', scopes: ['vision:read', 'dataset:read'] } }), res);
 
     expect(mocked.create).toHaveBeenCalledWith({
       userId: 'u1',
@@ -121,7 +113,7 @@ describe('createKey', () => {
       name: 'Claude Code',
       scopes: ['vision:read', 'dataset:read'],
       expiresAt: null,
-      project: null,
+      project: null
     });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json.mock.calls[0][0].data.token).toBe('vsn_live_0123456789ab_secret');
@@ -129,7 +121,7 @@ describe('createKey', () => {
 
   describe('limited to a project', () => {
     const projectId = '0000000000000000000000a1';
-    const project = getKeyProject as jest.Mock;
+    const project = getKeyProject as Mock;
     const body = { name: 'nightly', scopes: ['vision:read', 'vision:write'], projectId };
 
     it('checks the project with vision-service and keeps its name on the key', async () => {
@@ -139,11 +131,15 @@ describe('createKey', () => {
       await createKey(makeReq({ body }), makeRes());
 
       expect(project).toHaveBeenCalledWith(projectId, 'u1');
-      expect(mocked.create).toHaveBeenCalledWith(expect.objectContaining({ project: { id: projectId, name: 'Road scenes' } }));
+      expect(mocked.create).toHaveBeenCalledWith(
+        expect.objectContaining({ project: { id: projectId, name: 'Road scenes' } })
+      );
     });
 
     it('allows only scopes that live inside a project, before asking vision-service', async () => {
-      await expect(createKey(makeReq({ body: { ...body, scopes: ['vision:write', 'dataset:read'] } }), makeRes())).rejects.toMatchObject({
+      await expect(
+        createKey(makeReq({ body: { ...body, scopes: ['vision:write', 'dataset:read'] } }), makeRes())
+      ).rejects.toMatchObject({
         statusCode: 400
       });
       expect(project).not.toHaveBeenCalled();
@@ -172,10 +168,7 @@ describe('createKey', () => {
   it('turns an expiry in days into a date', async () => {
     mocked.create.mockResolvedValue({ summary, token: 't' });
 
-    await createKey(
-      makeReq({ body: { name: 'k', scopes: ['vision:read'], expiresInDays: 30 } }),
-      makeRes()
-    );
+    await createKey(makeReq({ body: { name: 'k', scopes: ['vision:read'], expiresInDays: 30 } }), makeRes());
 
     const { expiresAt } = mocked.create.mock.calls[0][0];
     const days = (expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
@@ -189,7 +182,7 @@ describe('createKey', () => {
       makeReq({
         user: { id: 'u1', email: 'a@b.com' },
         dbUser: { email: 'a@b.com', firstName: 'Ada', lastName: 'Lovelace' },
-        body: { name: 'k', scopes: ['vision:read'] },
+        body: { name: 'k', scopes: ['vision:read'] }
       }),
       makeRes()
     );
@@ -228,16 +221,14 @@ describe('revealKey', () => {
     expect(mocked.reveal).toHaveBeenCalledWith('u1', 'k1');
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { token: 'vsn_live_0123456789ab_secret' },
+      data: { token: 'vsn_live_0123456789ab_secret' }
     });
   });
 
   it("404s on someone else's key rather than saying it exists", async () => {
     mocked.reveal.mockResolvedValue(null);
 
-    await expect(revealKey(makeReq({ params: { id: 'k9' } }), makeRes())).rejects.toThrow(
-      /not found/
-    );
+    await expect(revealKey(makeReq({ params: { id: 'k9' } }), makeRes())).rejects.toThrow(/not found/);
   });
 });
 

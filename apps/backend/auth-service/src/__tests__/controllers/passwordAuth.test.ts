@@ -1,31 +1,47 @@
+import { vi, type Mock } from 'vitest';
 import type { Request, Response } from 'express';
 
-jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
-jest.mock('../../services/handleService', () => ({ ensureHandle: jest.fn() }));
-jest.mock('../../models/User', () => ({
-  User: {
-    findOne: jest.fn(),
-    create: jest.fn(),
-    updateOne: jest.fn(),
-    exists: jest.fn()
-  }
-}));
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
-}));
+vi.mock('../../models/Session', async () => {
+  const module = await (async () =>
+    (
+      await vi.importActual<typeof import('../helpers/sessionModelMock')>('../helpers/sessionModelMock')
+    ).sessionModule())();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/handleService', async () => {
+  const module = await (() => ({ ensureHandle: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../models/User', async () => {
+  const module = await (() => ({
+    User: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      updateOne: vi.fn(),
+      exists: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import { getSetupStatus, setupFirstUser, register, login } from '../../controllers/authController';
 import { verifyJWT } from '../../services/jwtService';
 import { hashPassword } from '../../services/passwordService';
 import { User } from '../../models/User';
 
-const mockedUser = User as unknown as Record<string, jest.Mock>;
+const mockedUser = User as unknown as Record<string, Mock>;
 
-type MockRes = Response & { json: jest.Mock; cookie: jest.Mock; status: jest.Mock };
+type MockRes = Response & { json: Mock; cookie: Mock; status: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), cookie: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), cookie: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
@@ -43,7 +59,7 @@ const dbUser = (overrides: Record<string, unknown> = {}) => ({
 
 /** User.findOne(...).select('+passwordHash') */
 const findOneReturns = (value: unknown) => {
-  mockedUser.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(value) });
+  mockedUser.findOne.mockReturnValue({ select: vi.fn().mockResolvedValue(value) });
 };
 
 beforeAll(() => {
@@ -55,7 +71,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   delete process.env.GOOGLE_CLIENT_ID;
   delete process.env.GROUP_SERVICE_URL;
   mockedUser.updateOne.mockResolvedValue({});
@@ -97,7 +113,9 @@ describe('setupFirstUser', () => {
 
   it('creates an approved admin and signs them in', async () => {
     mockedUser.exists.mockResolvedValue(null);
-    mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) => dbUser(doc));
+    mockedUser.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return dbUser(doc);
+    });
     const res = makeRes();
 
     await setupFirstUser(makeReq(body), res);
@@ -109,14 +127,20 @@ describe('setupFirstUser', () => {
     expect(created.roles).toEqual(['admin']);
     expect(created.passwordHash).not.toBe(body.password);
 
-    expect(res.cookie).toHaveBeenCalledWith('access_token', expect.any(String), expect.objectContaining({ httpOnly: true }));
+    expect(res.cookie).toHaveBeenCalledWith(
+      'access_token',
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true })
+    );
     expect(res.status).toHaveBeenCalledWith(201);
     expect(verifyJWT(res.json.mock.calls[0][0].token).email).toBe('owner@example.com');
   });
 
   it('names the session from the supplied first and last name', async () => {
     mockedUser.exists.mockResolvedValue(null);
-    mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) => dbUser(doc));
+    mockedUser.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return dbUser(doc);
+    });
     const res = makeRes();
 
     await setupFirstUser(makeReq(body), res);
@@ -126,9 +150,9 @@ describe('setupFirstUser', () => {
 
   it('falls back to the email when no name is given', async () => {
     mockedUser.exists.mockResolvedValue(null);
-    mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) =>
-      dbUser({ ...doc, firstName: undefined, lastName: undefined })
-    );
+    mockedUser.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return dbUser({ ...doc, firstName: undefined, lastName: undefined });
+    });
     const res = makeRes();
 
     await setupFirstUser(makeReq({ email: 'owner@example.com', password: 'a-strong-password' }), res);
@@ -149,7 +173,9 @@ describe('register', () => {
 
   it('creates an unprivileged account and signs it straight in', async () => {
     mockedUser.findOne.mockResolvedValue(null);
-    mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) => dbUser(doc));
+    mockedUser.create.mockImplementation(async function (doc: Record<string, unknown>) {
+      return dbUser(doc);
+    });
     const res = makeRes();
 
     await register(makeReq(body), res);
@@ -160,7 +186,11 @@ describe('register', () => {
     expect(created.roles).toEqual([]);
     expect(created.passwordHash).not.toBe(body.password);
 
-    expect(res.cookie).toHaveBeenCalledWith('access_token', expect.any(String), expect.objectContaining({ httpOnly: true }));
+    expect(res.cookie).toHaveBeenCalledWith(
+      'access_token',
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true })
+    );
     expect(res.status).toHaveBeenCalledWith(201);
     expect(verifyJWT(res.json.mock.calls[0][0].token).email).toBe('new@example.com');
   });
@@ -183,7 +213,11 @@ describe('login', () => {
     await login(makeReq({ email: 'Ada@Example.com', password }), res);
 
     expect(mockedUser.findOne).toHaveBeenCalledWith({ email: 'ada@example.com' });
-    expect(res.cookie).toHaveBeenCalledWith('access_token', expect.any(String), expect.objectContaining({ httpOnly: true }));
+    expect(res.cookie).toHaveBeenCalledWith(
+      'access_token',
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true })
+    );
 
     const claims = verifyJWT(res.json.mock.calls[0][0].token);
     expect(claims.email).toBe('ada@example.com');

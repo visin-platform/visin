@@ -1,9 +1,15 @@
+import { vi } from 'vitest';
 import { GatewayTimeoutError } from '@visin/backend-core';
 import { searchUsers } from '../../clients/authUsersClient';
 import { maskEmail } from '../../services/groupService';
 
-const fetchMock = jest.fn();
-const saved = { url: process.env.AUTH_SERVICE_URL, internal: process.env.INTERNAL_SERVICE_TOKEN, env: process.env.NODE_ENV, fetch: global.fetch };
+const fetchMock = vi.fn();
+const saved = {
+  url: process.env.AUTH_SERVICE_URL,
+  internal: process.env.INTERNAL_SERVICE_TOKEN,
+  env: process.env.NODE_ENV,
+  fetch: global.fetch
+};
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -14,13 +20,18 @@ beforeEach(() => {
 
 afterAll(() => {
   global.fetch = saved.fetch;
-  for (const [key, value] of [['AUTH_SERVICE_URL', saved.url], ['INTERNAL_SERVICE_TOKEN', saved.internal], ['NODE_ENV', saved.env]] as const) {
+  for (const [key, value] of [
+    ['AUTH_SERVICE_URL', saved.url],
+    ['INTERNAL_SERVICE_TOKEN', saved.internal],
+    ['NODE_ENV', saved.env]
+  ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
 });
 
-const answer = (status: number, body: unknown = {}) => fetchMock.mockResolvedValue({ ok: status < 300, status, json: async () => body });
+const answer = (status: number, body: unknown = {}) =>
+  fetchMock.mockResolvedValue({ ok: status < 300, status, json: async () => body });
 
 it('asks auth-service as group-service', async () => {
   answer(200, { data: [{ id: 'u1', email: 'a@example.test' }] });
@@ -34,9 +45,15 @@ it("reports auth-service's failures as a bad gateway, keeping a timeout a timeou
   answer(500);
   await expect(searchUsers('mari', 25)).rejects.toMatchObject({ statusCode: 502 });
   answer(200, {});
-  await expect(searchUsers('mari', 25)).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('unexpected') });
+  await expect(searchUsers('mari', 25)).rejects.toMatchObject({
+    statusCode: 502,
+    message: expect.stringContaining('unexpected')
+  });
   fetchMock.mockRejectedValue(new TypeError('fetch failed'));
-  await expect(searchUsers('mari', 25)).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('unreachable') });
+  await expect(searchUsers('mari', 25)).rejects.toMatchObject({
+    statusCode: 502,
+    message: expect.stringContaining('unreachable')
+  });
   fetchMock.mockRejectedValue(new GatewayTimeoutError('auth-service did not answer'));
   await expect(searchUsers('mari', 25)).rejects.toBeInstanceOf(GatewayTimeoutError);
 });

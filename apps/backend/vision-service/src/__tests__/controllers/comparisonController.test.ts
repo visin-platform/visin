@@ -1,45 +1,58 @@
+import { vi, type Mock, type Mocked } from 'vitest';
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
-jest.mock('../../services/writeAccessService', () => ({
-  ...jest.requireActual('../../services/writeAccessService'),
-  assertResourceWrite: jest.fn(async (resource: unknown) => {
-    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-  }),
-  assertLibraryWrite: jest.fn(),
-  assertDatasetWrite: jest.fn(),
-  assertEpochWrite: jest.fn(async (uuid: string) => {
-    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
-    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
-    return epoch;
-  })
-}));
+vi.mock('../../services/writeAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/writeAccessService')>('../../services/writeAccessService')),
+    assertResourceWrite: vi.fn(async function (resource: unknown) {
+      if (!resource)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+    }),
+    assertLibraryWrite: vi.fn(),
+    assertDatasetWrite: vi.fn(),
+    assertEpochWrite: vi.fn(async function (uuid: string) {
+      const epoch = await (await import('../../models/Epoch')).default.findOne({ epoch_uuid: uuid });
+      if (!epoch)
+        throw new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).ForbiddenError();
+      return epoch;
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import type { Request, Response } from 'express';
 import { NotFoundError, ForbiddenError } from '@visin/backend-core';
 import { getComparisonById, createComparison } from '../../controllers/comparisonController';
 
 const makeRes = () => {
-  const res = { status: jest.fn(), json: jest.fn() };
+  const res = { status: vi.fn(), json: vi.fn() };
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
   return res as unknown as Response;
 };
 
-jest.mock('../../models/Comparison');
-jest.mock('../../services/projectAccessService', () => ({
-  ...jest.requireActual('../../services/projectAccessService'),
-  resolveProject: jest.fn(async (id: string) => ({ _id: id })),
-  checkProjectAccess: jest.fn(),
-  getVisibleProjectIds: jest.fn().mockResolvedValue([])
-}));
+vi.mock('../../models/Comparison');
+vi.mock('../../services/projectAccessService', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../services/projectAccessService')>(
+      '../../services/projectAccessService'
+    )),
+    resolveProject: vi.fn(async function (id: string) {
+      return { _id: id };
+    }),
+    checkProjectAccess: vi.fn(),
+    getVisibleProjectIds: vi.fn().mockResolvedValue([])
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import Comparison from '../../models/Comparison';
 import { checkProjectAccess } from '../../services/projectAccessService';
 
-const mockComparison = Comparison as jest.Mocked<typeof Comparison>;
-const mockCheckProjectAccess = checkProjectAccess as jest.Mock;
+const mockComparison = Comparison as Mocked<typeof Comparison>;
+const mockCheckProjectAccess = checkProjectAccess as Mock;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('getComparisonById', () => {
@@ -76,8 +89,11 @@ describe('getComparisonById', () => {
 describe('createComparison', () => {
   it('prefers the API token project scope (req.projectId) over the body projectId', async () => {
     mockCheckProjectAccess.mockResolvedValueOnce(true);
-    const save = jest.fn().mockResolvedValue({ uuid: 'x' });
-    (mockComparison as unknown as jest.Mock).mockImplementation(function (this: Record<string, unknown>, data: Record<string, unknown>) {
+    const save = vi.fn().mockResolvedValue({ uuid: 'x' });
+    (mockComparison as unknown as Mock).mockImplementation(function (
+      this: Record<string, unknown>,
+      data: Record<string, unknown>
+    ) {
       Object.assign(this, data);
       this.save = save;
     });

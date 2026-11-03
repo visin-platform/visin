@@ -1,34 +1,61 @@
-jest.mock('../services/analyst', () => ({
-  RESERVATION: 160000,
-  analyze: jest.fn(async () => ({
-    text: 'Validation peaked at epoch 42.',
-    evidence: [],
-    inputTokens: 100,
-    outputTokens: 20
-  }))
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../services/analyst', async () => {
+  const module = await (() => ({
+    RESERVATION: 160000,
+    analyze: vi.fn(async function () {
+      return {
+        text: 'Validation peaked at epoch 42.',
+        evidence: [],
+        inputTokens: 100,
+        outputTokens: 20
+      };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import type { Request, Response, NextFunction } from 'express';
-jest.mock('@visin/backend-core', () => ({
-  ...jest.requireActual('@visin/backend-core'),
-  fetchWithTimeout: jest.fn(jest.requireActual('@visin/backend-core').fetchWithTimeout),
-  createGroupServiceClient: jest.fn(() => ({
-    getMyGroups: jest.fn(async () => []),
-    checkMembership: jest.fn(async () => ({ member: false, role: null }))
-  })),
-  createApiKey: jest.fn(async () => ({ token: 'ephemeral', summary: { id: 'key1' } })),
-  deleteApiKey: jest.fn(async () => true),
-  authenticateToken: (req: Request, _res: Response, next: NextFunction) => {
-    const id = req.headers['x-test-user'];
-    if (!id) return next(new (jest.requireActual('@visin/backend-core').UnauthorizedError)());
-    req.user = { id: String(id), email: `${id}@test.invalid`, name: String(id) };
-    next();
-  }
-}));
-jest.mock('../services/access', () => ({
-  ...jest.requireActual('../services/access'),
-  publicPerson: jest.fn(async (handle: string) => ({ id: handle, name: handle, handle })),
-  peer: jest.fn(async () => ({ _id: '111111111111111111111111', owner: { kind: 'user', id: 'alice' } }))
-}));
+vi.mock('@visin/backend-core', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
+    fetchWithTimeout: vi.fn(
+      (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
+    ),
+    createGroupServiceClient: vi.fn(function () {
+      return {
+        getMyGroups: vi.fn(async () => []),
+        checkMembership: vi.fn(async () => ({ member: false, role: null }))
+      };
+    }),
+    createApiKey: vi.fn(async function () {
+      return { token: 'ephemeral', summary: { id: 'key1' } };
+    }),
+    deleteApiKey: vi.fn(async function () {
+      return true;
+    }),
+    authenticateToken: async (req: Request, _res: Response, next: NextFunction) => {
+      const id = req.headers['x-test-user'];
+      if (!id)
+        return next(
+          new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).UnauthorizedError()
+        );
+      req.user = { id: String(id), email: `${id}@test.invalid`, name: String(id) };
+      next();
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../services/access', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../services/access')>('../services/access')),
+    publicPerson: vi.fn(async function (handle: string) {
+      return { id: handle, name: handle, handle };
+    }),
+    peer: vi.fn(async function () {
+      return { _id: '111111111111111111111111', owner: { kind: 'user', id: 'alice' } };
+    })
+  }))();
+  return Object.assign({ default: module }, module);
+});
 import { createServer, type Server } from 'http';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -94,8 +121,8 @@ beforeEach(async () => {
   await Pricing.deleteMany({});
   await mongoose.connection.collection('users').deleteMany({});
   resetAssistantSettingsCache();
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([]);
-  (groups.checkMembership as jest.Mock).mockResolvedValue({ member: false, role: null });
+  (groups.getMyGroups as Mock).mockResolvedValue([]);
+  (groups.checkMembership as Mock).mockResolvedValue({ member: false, role: null });
 });
 
 /** A provider key as an administrator saves it in the page: encrypted, with its last characters kept to show. */
@@ -215,8 +242,8 @@ it('rechecks a private analysis project on every read', async () => {
     projectId: '111111111111111111111111'
   });
   expect(created.status).toBe(201);
-  (fetchWithTimeout as jest.Mock).mockRejectedValueOnce(
-    new (jest.requireActual('@visin/backend-core').NotFoundError)()
+  (fetchWithTimeout as Mock).mockRejectedValueOnce(
+    new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).NotFoundError()
   );
   expect((await request(`/conversations/${created.body.data._id}/messages`)).status).toBe(404);
 });
@@ -278,33 +305,34 @@ it('marks expired work as interrupted instead of repeating a potentially billed 
 
 it('discovers only shared-group roster contacts and revalidates them when starting a DM', async () => {
   const target = '222222222222222222222222';
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([{ groupId: 'group1', role: 'member', name: 'Lab' }]);
-  (fetchWithTimeout as jest.Mock).mockImplementation(
-    async () =>
-      new Response(
-        JSON.stringify({
-          data: {
-            members: [
-              { userId: 'alice', email: 'alice@private.invalid' },
-              { userId: target, email: 'colleague@private.invalid' }
-            ]
-          }
-        })
-      )
-  );
+  (groups.getMyGroups as Mock).mockResolvedValue([{ groupId: 'group1', role: 'member', name: 'Lab' }]);
+  (fetchWithTimeout as Mock).mockImplementation(async function () {
+    return new Response(
+      JSON.stringify({
+        data: {
+          members: [
+            { userId: 'alice', email: 'alice@private.invalid' },
+            { userId: target, email: 'colleague@private.invalid' }
+          ]
+        }
+      })
+    );
+  });
   const contacts = await request('/contacts');
   expect(contacts.body.data).toEqual([{ id: target, name: 'colleague@private.invalid' }]);
   const created = await request('/conversations', 'alice', { kind: 'direct', title: 'Colleague', userIds: [target] });
   expect(created.status).toBe(201);
   expect(JSON.stringify(created.body.data)).not.toContain('colleague@private.invalid');
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([]);
+  (groups.getMyGroups as Mock).mockResolvedValue([]);
   expect(
     (await request('/conversations', 'alice', { kind: 'direct', title: 'Colleague', userIds: [target] })).status
   ).toBe(404);
-  (fetchWithTimeout as jest.Mock).mockImplementation(jest.requireActual('@visin/backend-core').fetchWithTimeout);
+  (fetchWithTimeout as Mock).mockImplementation(
+    (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
+  );
 });
 it('revokes group-channel access as soon as current membership is removed', async () => {
-  (groups.checkMembership as jest.Mock).mockResolvedValue({ member: true, role: 'admin' });
+  (groups.checkMembership as Mock).mockResolvedValue({ member: true, role: 'admin' });
   const created = await request('/conversations', 'alice', {
     kind: 'group',
     title: 'Lab channel',
@@ -312,7 +340,7 @@ it('revokes group-channel access as soon as current membership is removed', asyn
   });
   expect(created.status).toBe(201);
   expect((await request(`/conversations/${created.body.data._id}/messages`)).status).toBe(200);
-  (groups.checkMembership as jest.Mock).mockResolvedValue({ member: false, role: null });
+  (groups.checkMembership as Mock).mockResolvedValue({ member: false, role: null });
   expect((await request(`/conversations/${created.body.data._id}/messages`)).status).toBe(404);
 });
 it('replays durable message sequences over SSE without exposing the outbox', async () => {
@@ -346,9 +374,9 @@ it('saves a reviewed finding with assistant attribution credentials and deletes 
     body: 'Measured result',
     clientId: 'save-result-001'
   });
-  (fetchWithTimeout as jest.Mock).mockImplementation(
-    async () => new Response(JSON.stringify({ data: { _id: 'saved-finding' } }))
-  );
+  (fetchWithTimeout as Mock).mockImplementation(async function () {
+    return new Response(JSON.stringify({ data: { _id: 'saved-finding' } }));
+  });
   const saved = await request(`/conversations/${id}/findings`, 'alice', {
     messageId: answer.id,
     title: 'Peak',
@@ -356,12 +384,14 @@ it('saves a reviewed finding with assistant attribution credentials and deletes 
   });
   expect(saved.status).toBe(200);
   expect((await Message.findById(answer.id))?.findingId).toBe('saved-finding');
-  const outgoing = (fetchWithTimeout as jest.Mock).mock.calls.find(
+  const outgoing = (fetchWithTimeout as Mock).mock.calls.find(
     (args) => args[1]?.method === 'POST' && String(args[0]).endsWith('/findings')
   );
   expect(JSON.parse(outgoing[1].body).sourceId).toBe(`chat:${answer.id}`);
   expect(deleteApiKey).toHaveBeenCalledWith('alice', 'key1');
-  (fetchWithTimeout as jest.Mock).mockImplementation(jest.requireActual('@visin/backend-core').fetchWithTimeout);
+  (fetchWithTimeout as Mock).mockImplementation(
+    (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
+  );
 });
 it('orders follow-up context by logical turns even when a reply was published later', async () => {
   await enableAnalyst('test');
@@ -387,7 +417,7 @@ it('orders follow-up context by logical turns even when a reply was published la
   const worker = startWorker();
   worker();
   await worker.tick();
-  const call = (analyze as jest.Mock).mock.calls.at(-1)[0];
+  const call = (analyze as Mock).mock.calls.at(-1)[0];
   expect(call.history.map((m: { content: string }) => m.content)).toEqual([
     'First question',
     'First answer',
@@ -415,11 +445,11 @@ it('does not generate when a cancelled question races with outbox recovery', asy
     membershipVersion: 1,
     state: 'queued'
   });
-  const before = (analyze as jest.Mock).mock.calls.length;
+  const before = (analyze as Mock).mock.calls.length;
   const worker = startWorker();
   worker();
   await worker.tick();
-  expect((analyze as jest.Mock).mock.calls.length).toBe(before);
+  expect((analyze as Mock).mock.calls.length).toBe(before);
   expect((await AssistantRun.findOne({ messageId: sent.body.data._id }))?.state).toBe('cancelled');
   expect(await Budget.countDocuments()).toBe(0);
 });
@@ -447,15 +477,15 @@ it('re-invites a removed room participant without counting departed people again
   expect((await request(`/conversations/${id}/participants`, 'alice', { handle: 'bob' })).status).toBe(400);
 });
 it('lists group channels from the groups already fetched, without a membership call per row', async () => {
-  (groups.checkMembership as jest.Mock).mockResolvedValue({ member: true, role: 'admin' });
+  (groups.checkMembership as Mock).mockResolvedValue({ member: true, role: 'admin' });
   const group = '111111111111111111111111';
   for (const title of ['One', 'Two', 'Three'])
     expect((await request('/conversations', 'alice', { kind: 'group', title, groupId: group })).status).toBe(201);
-  (groups.checkMembership as jest.Mock).mockClear();
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([{ groupId: group, role: 'member', name: 'Lab' }]);
+  (groups.checkMembership as Mock).mockClear();
+  (groups.getMyGroups as Mock).mockResolvedValue([{ groupId: group, role: 'member', name: 'Lab' }]);
   expect((await request('/conversations', 'bob')).body.data).toHaveLength(3);
   expect(groups.checkMembership).not.toHaveBeenCalled();
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([]);
+  (groups.getMyGroups as Mock).mockResolvedValue([]);
   expect((await request('/conversations', 'bob')).body.data).toHaveLength(0);
 });
 it('answers other conversations while one conversation is locked by another worker', async () => {
@@ -482,7 +512,7 @@ it('runs queued analyses of different conversations side by side', async () => {
   await request(`/conversations/${second}/messages`, 'alice', { body: 'Two', clientId: 'parallel-two-1' });
   let running = 0,
     peak = 0;
-  (analyze as jest.Mock).mockImplementation(async () => {
+  (analyze as Mock).mockImplementation(async function () {
     peak = Math.max(peak, ++running);
     await new Promise((resolve) => setTimeout(resolve, 50));
     running--;
@@ -517,9 +547,9 @@ it('cancels only the questions still waiting for an answer', async () => {
 const project = { _id: '111111111111111111111111', name: 'Lab', owner: { kind: 'user', id: 'alice' } };
 /** vision-service: the project for access checks, `post` for the finding save. */
 const vision = (post: () => Response) =>
-  (fetchWithTimeout as jest.Mock).mockImplementation(async (_url: string, init?: { method?: string }) =>
-    init?.method === 'POST' ? post() : new Response(JSON.stringify({ data: project }))
-  );
+  (fetchWithTimeout as Mock).mockImplementation(async function (_url: string, init?: { method?: string }) {
+    return init?.method === 'POST' ? post() : new Response(JSON.stringify({ data: project }));
+  });
 it('returns an already saved finding without minting another write key', async () => {
   vision(() => new Response(JSON.stringify({ data: { _id: 'should-not-be-called' } })));
   const created = await request('/conversations', 'alice', {
@@ -537,7 +567,7 @@ it('returns an already saved finding without minting another write key', async (
     clientId: 'saved-already-1'
   });
   await Message.updateOne({ _id: answer.id }, { $set: { findingId: 'existing-finding' } });
-  const { createApiKey } = jest.requireMock('@visin/backend-core') as { createApiKey: jest.Mock };
+  const { createApiKey } = (await import('@visin/backend-core')) as { createApiKey: Mock };
   createApiKey.mockClear();
   const saved = await request(`/conversations/${id}/findings`, 'alice', {
     messageId: answer.id,
@@ -546,7 +576,9 @@ it('returns an already saved finding without minting another write key', async (
   });
   expect(saved.body.data._id).toBe('existing-finding');
   expect(createApiKey).not.toHaveBeenCalled();
-  (fetchWithTimeout as jest.Mock).mockImplementation(jest.requireActual('@visin/backend-core').fetchWithTimeout);
+  (fetchWithTimeout as Mock).mockImplementation(
+    (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
+  );
 });
 it('passes a refusal from vision-service through and reports its outages as a bad gateway', async () => {
   const created = await request('/conversations', 'alice', {
@@ -571,18 +603,20 @@ it('passes a refusal from vision-service through and reports its outages as a ba
   expect(refused.body.message).toBe('A cited run was removed');
   vision(() => new Response('down', { status: 503 }));
   expect((await save()).status).toBe(502);
-  (fetchWithTimeout as jest.Mock).mockImplementation(jest.requireActual('@visin/backend-core').fetchWithTimeout);
+  (fetchWithTimeout as Mock).mockImplementation(
+    (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
+  );
 });
 it("opens a group's channel for any member, once, and refuses people outside the group", async () => {
   const group = '333333333333333333333333';
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([{ groupId: group, role: 'member', name: 'Lab' }]);
+  (groups.getMyGroups as Mock).mockResolvedValue([{ groupId: group, role: 'member', name: 'Lab' }]);
   const first = await request(`/groups/${group}/channel`, 'alice', {});
   expect(first.status).toBe(200);
   expect(first.body.data.title).toBe('Lab');
   const again = await request(`/groups/${group}/channel`, 'bob', {});
   expect(again.body.data._id).toBe(first.body.data._id);
   expect(await Conversation.countDocuments({ groupId: group })).toBe(1);
-  (groups.getMyGroups as jest.Mock).mockResolvedValue([]);
+  (groups.getMyGroups as Mock).mockResolvedValue([]);
   expect((await request(`/groups/${group}/channel`, 'eve', {})).status).toBe(404);
   expect((await request('/groups/not-an-id/channel', 'alice', {})).status).toBe(400);
 });
@@ -592,7 +626,7 @@ const makeAdmin = (id = ADMIN) =>
   mongoose.connection.collection('users').insertOne({ _id: new mongoose.Types.ObjectId(id), roles: ['admin'] });
 /** What each provider's list endpoint answers with, by the address asked. */
 const provider = (lists: { anthropic?: string[]; openai?: { id: string; created: number }[] }) =>
-  (fetchWithTimeout as jest.Mock).mockImplementation(async (url: string) => {
+  (fetchWithTimeout as Mock).mockImplementation(async function (url: string) {
     if (String(url).startsWith('https://api.anthropic.com/v1/models') && lists.anthropic)
       return new Response(
         JSON.stringify({ data: lists.anthropic.map((id) => ({ id, display_name: id.toUpperCase() })) })
@@ -601,8 +635,10 @@ const provider = (lists: { anthropic?: string[]; openai?: { id: string; created:
       return new Response(JSON.stringify({ data: lists.openai }));
     return new Response('down', { status: 503 });
   });
-const restoreFetch = () =>
-  (fetchWithTimeout as jest.Mock).mockImplementation(jest.requireActual('@visin/backend-core').fetchWithTimeout);
+const restoreFetch = async () =>
+  (fetchWithTimeout as Mock).mockImplementation(
+    (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
+  );
 const putSettings = (user: string, body: unknown) =>
   fetch(`${base}/api/chat/settings/assistant`, {
     method: 'PUT',
@@ -753,7 +789,7 @@ describe('analyst settings', () => {
         { id: 'dall-e-3', created: 1 }
       ]
     });
-    (fetchWithTimeout as jest.Mock).mockClear();
+    (fetchWithTimeout as Mock).mockClear();
     expect((await request('/settings/assistant/models?provider=anthropic', ADMIN)).body.data).toEqual({
       provider: 'anthropic',
       reachable: true,
@@ -763,12 +799,12 @@ describe('analyst settings', () => {
         { id: 'claude-sonnet-5-5', name: 'CLAUDE-SONNET-5-5', tier: 'balanced' }
       ]
     });
-    expect((fetchWithTimeout as jest.Mock).mock.calls[0][1].headers['x-api-key']).toBe('anthropic-key');
+    expect((fetchWithTimeout as Mock).mock.calls[0][1].headers['x-api-key']).toBe('anthropic-key');
     const openai = (await request('/settings/assistant/models?provider=openai', ADMIN)).body.data as {
       models: { id: string }[];
     };
     expect(openai.models.map((model) => model.id)).toEqual(['gpt-5.1', 'o4-mini', 'gpt-4o']);
-    expect((fetchWithTimeout as jest.Mock).mock.calls.at(-1)[1].headers.authorization).toBe('Bearer openai-key');
+    expect((fetchWithTimeout as Mock).mock.calls.at(-1)[1].headers.authorization).toBe('Bearer openai-key');
     // With no provider named, the one in use.
     expect((await request('/settings/assistant/models', ADMIN)).body.data).toMatchObject({ provider: 'anthropic' });
     await ProviderKey.deleteOne({ provider: 'anthropic' });
@@ -790,7 +826,7 @@ describe('analyst settings', () => {
     const worker = startWorker();
     worker();
     await worker.tick();
-    expect((analyze as jest.Mock).mock.calls.at(-1)[0]).toMatchObject({ provider: 'openai', model: 'gpt-5.1' });
+    expect((analyze as Mock).mock.calls.at(-1)[0]).toMatchObject({ provider: 'openai', model: 'gpt-5.1' });
     expect(await AssistantRun.findOne({ conversationId: id })).toMatchObject({ provider: 'openai', model: 'gpt-5.1' });
   });
 
@@ -800,11 +836,11 @@ describe('analyst settings', () => {
     await request(`/conversations/${id}/messages`, 'alice', { body: 'Compare', clientId: 'off-question-1' });
     await Settings.updateOne({ _id: 'assistant' }, { $set: { enabled: false } });
     resetAssistantSettingsCache();
-    const before = (analyze as jest.Mock).mock.calls.length;
+    const before = (analyze as Mock).mock.calls.length;
     const worker = startWorker();
     worker();
     await worker.tick();
-    expect((analyze as jest.Mock).mock.calls.length).toBe(before);
+    expect((analyze as Mock).mock.calls.length).toBe(before);
     expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('queued');
   });
 });
@@ -826,14 +862,15 @@ describe('provider keys', () => {
   const providers = async () => (await view()).providers as Record<string, unknown>[];
   /** The provider accepts only GOOD, whichever header it came in. */
   const acceptsOnly = (key: string) =>
-    (fetchWithTimeout as jest.Mock).mockImplementation(
-      async (_url: string, init?: { headers?: Record<string, string> }) => {
-        const presented = init?.headers?.['x-api-key'] ?? init?.headers?.authorization?.replace('Bearer ', '');
-        return presented === key
-          ? new Response(JSON.stringify({ data: [{ id: 'claude-opus-5-5', display_name: 'Opus' }] }))
-          : new Response('invalid key', { status: 401 });
-      }
-    );
+    (fetchWithTimeout as Mock).mockImplementation(async function (
+      _url: string,
+      init?: { headers?: Record<string, string> }
+    ) {
+      const presented = init?.headers?.['x-api-key'] ?? init?.headers?.authorization?.replace('Bearer ', '');
+      return presented === key
+        ? new Response(JSON.stringify({ data: [{ id: 'claude-opus-5-5', display_name: 'Opus' }] }))
+        : new Response('invalid key', { status: 401 });
+    });
 
   beforeEach(async () => {
     await makeAdmin();
@@ -897,17 +934,17 @@ describe('provider keys', () => {
   });
 
   it('reports the provider being unreachable as that, not as a bad key', async () => {
-    (fetchWithTimeout as jest.Mock).mockRejectedValue(new Error('socket hang up'));
+    (fetchWithTimeout as Mock).mockRejectedValue(new Error('socket hang up'));
     expect((await putKey(ADMIN, 'anthropic', { key: GOOD })).status).toBe(502);
     expect(await ProviderKey.countDocuments()).toBe(0);
   });
 
   it('uses the saved key to list models and to answer', async () => {
     await putKey(ADMIN, 'anthropic', { key: GOOD });
-    (fetchWithTimeout as jest.Mock).mockClear();
+    (fetchWithTimeout as Mock).mockClear();
     const models = (await request('/settings/assistant/models?provider=anthropic', ADMIN)).body.data;
     expect(models).toMatchObject({ reachable: true });
-    expect((fetchWithTimeout as jest.Mock).mock.calls[0][1].headers['x-api-key']).toBe(GOOD);
+    expect((fetchWithTimeout as Mock).mock.calls[0][1].headers['x-api-key']).toBe(GOOD);
 
     const put = await putSettings(ADMIN, { enabled: true, provider: 'anthropic', model: 'claude-opus-5-5' });
     expect(put.status).toBe(200);
@@ -916,7 +953,7 @@ describe('provider keys', () => {
     const worker = startWorker();
     worker();
     await worker.tick();
-    expect((analyze as jest.Mock).mock.calls.at(-1)[0]).toMatchObject({ provider: 'anthropic', apiKey: GOOD });
+    expect((analyze as Mock).mock.calls.at(-1)[0]).toMatchObject({ provider: 'anthropic', apiKey: GOOD });
     // The key is used for the call and never kept with the run.
     expect(JSON.stringify(await AssistantRun.findOne({ conversationId: id }).lean())).not.toContain(GOOD);
   });
@@ -1028,11 +1065,11 @@ describe('the daily token limit', () => {
     resetAssistantSettingsCache();
     const id = await create('assistant', []);
     await request(`/conversations/${id}/messages`, 'alice', { body: 'First', clientId: 'limit-question-1' });
-    const before = (analyze as jest.Mock).mock.calls.length;
+    const before = (analyze as Mock).mock.calls.length;
     const worker = startWorker();
     worker();
     await worker.tick();
-    expect((analyze as jest.Mock).mock.calls.length).toBe(before);
+    expect((analyze as Mock).mock.calls.length).toBe(before);
     const refused = await AssistantRun.findOne({ conversationId: id });
     expect(refused?.state).toBe('failed');
     expect(refused?.error).toContain('daily assistant token budget is used');
@@ -1044,7 +1081,7 @@ describe('the daily token limit', () => {
     resetAssistantSettingsCache();
     await request(`/conversations/${id}/messages`, 'alice', { body: 'Second', clientId: 'limit-question-2' });
     await worker.tick();
-    expect((analyze as jest.Mock).mock.calls.length).toBe(before + 1);
+    expect((analyze as Mock).mock.calls.length).toBe(before + 1);
   });
 
   it('refuses a question before charging anything when there is no model or key to answer it', async () => {
@@ -1085,13 +1122,12 @@ describe('model listing and key decryption', () => {
     await makeAdmin();
     await saveKeys();
     let release: (value: Response) => void = () => undefined;
-    (fetchWithTimeout as jest.Mock).mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
-          release = resolve;
-        })
-    );
-    (fetchWithTimeout as jest.Mock).mockClear();
+    (fetchWithTimeout as Mock).mockImplementation(function () {
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+    });
+    (fetchWithTimeout as Mock).mockClear();
     const both = Promise.all([
       request('/settings/assistant/models?provider=anthropic', ADMIN),
       request('/settings/assistant/models?provider=anthropic', ADMIN)
@@ -1107,8 +1143,12 @@ describe('model listing and key decryption', () => {
   });
 
   it('reports a saved key that no longer decrypts once, not on every use', async () => {
-    const { logger } = jest.requireActual('@visin/backend-core') as { logger: { error: (...args: unknown[]) => void } };
-    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const { logger } = (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')) as {
+      logger: { error: (...args: unknown[]) => void };
+    };
+    const error = vi.spyOn(logger, 'error').mockImplementation(function () {
+      return undefined;
+    });
     await ProviderKey.create({
       owner: 'deployment',
       provider: 'anthropic',
@@ -1129,7 +1169,9 @@ describe('model listing and key decryption', () => {
 it("does not keep a replaced key's models, even when their listing finishes after the change", async () => {
   await makeAdmin();
   const releases: ((value: Response) => void)[] = [];
-  (fetchWithTimeout as jest.Mock).mockImplementation(() => new Promise<Response>((resolve) => releases.push(resolve)));
+  (fetchWithTimeout as Mock).mockImplementation(function () {
+    return new Promise<Response>((resolve) => releases.push(resolve));
+  });
   const listed = (id: string) => new Response(JSON.stringify({ data: [{ id, display_name: id }] }));
   const tick = () => new Promise((resolve) => setTimeout(resolve, 50));
   await saveKey('anthropic', 'old-key');
@@ -1484,11 +1526,11 @@ describe('refreshing prices from the price list', () => {
       finishedAt: new Date()
     });
   const serve = (body: unknown, status = 200) =>
-    (fetchWithTimeout as jest.Mock).mockImplementation(async (url: string) =>
-      String(url).includes('model_prices') || String(url).includes('prices.test')
+    (fetchWithTimeout as Mock).mockImplementation(async function (url: string) {
+      return String(url).includes('model_prices') || String(url).includes('prices.test')
         ? new Response(JSON.stringify(body), { status })
-        : new Response('{}', { status: 404 })
-    );
+        : new Response('{}', { status: 404 });
+    });
   const refresh = (user = ADMIN) =>
     fetch(`${base}/api/chat/settings/assistant/prices/refresh`, { method: 'POST', headers: { 'x-test-user': user } });
   const putPrices = (body: unknown) =>
@@ -1502,7 +1544,7 @@ describe('refreshing prices from the price list', () => {
 
   beforeEach(async () => {
     await makeAdmin();
-    (fetchWithTimeout as jest.Mock).mockClear();
+    (fetchWithTimeout as Mock).mockClear();
   });
   afterEach(restoreFetch);
 
@@ -1522,7 +1564,7 @@ describe('refreshing prices from the price list', () => {
     const { data } = (await response.json()) as {
       data: { currency: string; entries: Record<string, unknown>[]; refresh: Record<string, unknown> };
     };
-    expect((fetchWithTimeout as jest.Mock).mock.calls[0][0]).toBe(LIST_URL);
+    expect((fetchWithTimeout as Mock).mock.calls[0][0]).toBe(LIST_URL);
     expect(data.currency).toBe('USD');
     // 1e-7 per token is exactly 0.1 per million, not 0.09999999999999999.
     expect(data.entries).toEqual(
@@ -1654,18 +1696,18 @@ describe('refreshing prices from the price list', () => {
       expect(response.status).toBe(502);
       expect(((await response.json()) as { message: string }).message).toContain('The prices are as they were');
     }
-    (fetchWithTimeout as jest.Mock).mockRejectedValue(new Error('getaddrinfo ENOTFOUND'));
+    (fetchWithTimeout as Mock).mockRejectedValue(new Error('getaddrinfo ENOTFOUND'));
     expect((await refresh()).status).toBe(502);
     expect(JSON.stringify(await table())).toBe(before);
   });
 
   it('refuses a list that announces itself as far too large, or a failure that carries no message', async () => {
     await answered('anthropic', 'claude-haiku-5-5');
-    (fetchWithTimeout as jest.Mock).mockResolvedValue(
+    (fetchWithTimeout as Mock).mockResolvedValue(
       new Response(JSON.stringify(list), { headers: { 'content-length': String(21 * 1024 * 1024) } })
     );
     expect((await refresh()).status).toBe(502);
-    (fetchWithTimeout as jest.Mock).mockRejectedValue('offline');
+    (fetchWithTimeout as Mock).mockRejectedValue('offline');
     expect((await refresh()).status).toBe(502);
   });
 
@@ -1685,7 +1727,7 @@ describe('refreshing prices from the price list', () => {
     try {
       serve(list);
       expect((await refresh()).status).toBe(200);
-      expect((fetchWithTimeout as jest.Mock).mock.calls[0][0]).toBe(
+      expect((fetchWithTimeout as Mock).mock.calls[0][0]).toBe(
         'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'
       );
     } finally {

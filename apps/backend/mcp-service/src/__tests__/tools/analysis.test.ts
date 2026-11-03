@@ -1,18 +1,22 @@
-jest.mock('../../vision', () => ({
-  vision: {
-    listFindings: jest.fn(),
-    getFinding: jest.fn(),
-    createFinding: jest.fn(),
-    exportFinding: jest.fn()
-  }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('../../vision', async () => {
+  const module = await (() => ({
+    vision: {
+      listFindings: vi.fn(),
+      getFinding: vi.fn(),
+      createFinding: vi.fn(),
+      exportFinding: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { vision } from '../../vision';
 import { VisinError } from '../../http';
 import { analysisRead, analysisWrite } from '../../tools/analysis';
 
-const mocked = vision as unknown as Record<string, jest.Mock>;
+const mocked = vision as unknown as Record<string, Mock>;
 
 type Handler = (a: Record<string, unknown>) => Promise<{ isError?: boolean; content: { text: string }[] }>;
 
@@ -48,7 +52,7 @@ const finding = (over: Record<string, unknown> = {}) => ({
   ...over
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe('list_findings', () => {
   it('names each conclusion, who wrote it and how much it draws on', async () => {
@@ -57,8 +61,7 @@ describe('list_findings', () => {
     const { text } = await call('list_findings', { project: 'clftv2' });
 
     expect(text).toContain(
-      'Window ablation plateaus past 16 — Claude, 2026-09-05, cites window16 ablation, ' +
-        'window24 ablation  [f1]'
+      'Window ablation plateaus past 16 — Claude, 2026-09-05, cites window16 ablation, ' + 'window24 ablation  [f1]'
     );
     expect(text).toContain('get_finding');
   });
@@ -91,9 +94,7 @@ describe('list_findings', () => {
       })
     ]);
 
-    expect((await call('list_findings')).text).toContain(
-      'cites window16 ablation, 1 not visible to this key'
-    );
+    expect((await call('list_findings')).text).toContain('cites window16 ablation, 1 not visible to this key');
   });
 
   it('caps the names on one line for a finding citing dozens of runs', async () => {
@@ -132,9 +133,7 @@ describe('list_findings', () => {
   });
 
   it('caps a long list', async () => {
-    mocked.listFindings.mockResolvedValue(
-      Array.from({ length: 70 }, (_, i) => finding({ _id: `f${i}` }))
-    );
+    mocked.listFindings.mockResolvedValue(Array.from({ length: 70 }, (_, i) => finding({ _id: `f${i}` })));
 
     expect((await call('list_findings')).text).toContain('first 50 of 70 findings');
   });
@@ -156,9 +155,7 @@ describe('get_finding', () => {
     // Degraded, but still the id a follow-up tool call needs.
     mocked.getFinding.mockResolvedValue(finding({ citedTrainings: [] }));
 
-    expect((await call('get_finding', { finding: 'f1' })).text).toContain(
-      'Draws on 2 run(s): t1, t2'
-    );
+    expect((await call('get_finding', { finding: 'f1' })).text).toContain('Draws on 2 run(s): t1, t2');
   });
 
   it('accounts for a cited run this key cannot see', async () => {
@@ -228,9 +225,7 @@ describe('exporting a finding as a paper section', () => {
   });
 
   it('shows what to run next, kept apart from the analysis itself', async () => {
-    mocked.getFinding.mockResolvedValue(
-      finding({ recommendations: 'Drop window24. Add early stopping at epoch 30.' })
-    );
+    mocked.getFinding.mockResolvedValue(finding({ recommendations: 'Drop window24. Add early stopping at epoch 30.' }));
 
     const { text } = await call('get_finding', { finding: 'f1' });
 
@@ -283,9 +278,9 @@ describe('record_finding', () => {
   it('points at the export, so the analysis gets used rather than retyped', async () => {
     mocked.createFinding.mockResolvedValue(finding());
 
-    expect(
-      (await call('record_finding', { project: 'p', title: 'T', body: 'B' })).text
-    ).toContain('get_finding(format:"latex")');
+    expect((await call('record_finding', { project: 'p', title: 'T', body: 'B' })).text).toContain(
+      'get_finding(format:"latex")'
+    );
   });
 
   it('tells the model not to retry when the scope is missing', async () => {
@@ -305,9 +300,7 @@ describe('record_finding', () => {
   });
 
   it('surfaces a refusal to annotate a project the caller does not own', async () => {
-    mocked.createFinding.mockRejectedValue(
-      new VisinError('Only the project owner can record findings on it', 403)
-    );
+    mocked.createFinding.mockRejectedValue(new VisinError('Only the project owner can record findings on it', 403));
 
     expect((await call('record_finding', { project: 'p', title: 'T', body: 'B' })).text).toContain(
       'Only the project owner'
@@ -323,6 +316,11 @@ describe('continuing finding pages', () => {
     expect((await call('list_findings', { limit: 1 })).text).toContain(`before="${before}"`);
     mocked.listFindings.mockResolvedValueOnce([]);
     expect((await call('list_findings', { limit: 1, before })).text).toBe('No more findings.');
-    expect(mocked.listFindings).toHaveBeenLastCalledWith('k', { project: undefined, training: undefined, limit: 1, before });
+    expect(mocked.listFindings).toHaveBeenLastCalledWith('k', {
+      project: undefined,
+      training: undefined,
+      limit: 1,
+      before
+    });
   });
 });

@@ -31,14 +31,19 @@ const BOM = String.fromCharCode(0xfeff);
  * so a spreadsheet keeps it a number.
  */
 export const toCsv = ({ columns, rows }: Table): string =>
-  `${BOM}${[columns, ...rows].map(row => row.map(csvField).join(',')).join('\r\n')}\r\n`;
+  `${BOM}${[columns, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n')}\r\n`;
 
 /** XML 1.0 forbids these control characters, and a workbook with one will not open. */
-// eslint-disable-next-line no-control-regex
+// oxlint-disable-next-line no-control-regex
 const XML_FORBIDDEN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g;
 
 const xml = (text: string): string =>
-  text.replace(XML_FORBIDDEN, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  text
+    .replace(XML_FORBIDDEN, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
 /** `A`, `B`, … `Z`, `AA` — a spreadsheet's column letters. */
 const columnName = (index: number): string => {
@@ -119,8 +124,14 @@ function zip(entries: ZipEntry[]): Buffer {
 
 /** A one-sheet workbook with a frozen header row; text stays text and numbers stay numbers. */
 export function toXlsx(table: Table, sheetName = 'Comparison'): Buffer {
-  const name = sheetName.replace(XML_FORBIDDEN, '').replace(/[\\/?*[\]:]/g, ' ')
-    .trim().slice(0, 31).replace(/^'+|'+$/g, '').trim() || 'Comparison';
+  const name =
+    sheetName
+      .replace(XML_FORBIDDEN, '')
+      .replace(/[\\/?*[\]:]/g, ' ')
+      .trim()
+      .slice(0, 31)
+      .replace(/^'+|'+$/g, '')
+      .trim() || 'Comparison';
   const file = (name: string, text: string): ZipEntry => ({ name, data: Buffer.from(text) });
   const header = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   return zip([

@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import Project from '../../models/Project';
@@ -7,12 +8,21 @@ import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 import { fetchDatasetCovers } from '../../clients/datasetCoversClient';
 import { getSignedUrl } from '../../clients/fileServiceClient';
 
-jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn() }));
-jest.mock('../../clients/datasetCoversClient', () => ({ fetchDatasetCovers: jest.fn() }));
-jest.mock('../../clients/fileServiceClient', () => ({
-  ...jest.requireActual('../../clients/fileServiceClient'),
-  getSignedUrl: jest.fn()
-}));
+vi.mock('../../clients/ownerIdentityClient', async () => {
+  const module = await (() => ({ lookupOwnerIdentities: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/datasetCoversClient', async () => {
+  const module = await (() => ({ fetchDatasetCovers: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../clients/fileServiceClient', async () => {
+  const module = await (async () => ({
+    ...(await vi.importActual<typeof import('../../clients/fileServiceClient')>('../../clients/fileServiceClient')),
+    getSignedUrl: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 const OWNER = '000000000000000000000001';
 const at = (iso: string) => new Date(`${iso}T12:00:00.000Z`);
@@ -70,9 +80,9 @@ describe('the project list, with run counts and activity', () => {
 
   beforeEach(async () => {
     await Promise.all([Project, Training].map((model) => model.deleteMany({})));
-    jest.mocked(fetchDatasetCovers).mockReset().mockResolvedValue({});
-    jest.mocked(getSignedUrl).mockReset().mockResolvedValue(null);
-    jest.mocked(lookupOwnerIdentities).mockReset().mockResolvedValue(new Map());
+    vi.mocked(fetchDatasetCovers).mockReset().mockResolvedValue({});
+    vi.mocked(getSignedUrl).mockReset().mockResolvedValue(null);
+    vi.mocked(lookupOwnerIdentities).mockReset().mockResolvedValue(new Map());
     await project('Alpha', { updatedAt: at('2026-09-02'), lastActivityAt: at('2026-09-20') });
     await project('Beta', { updatedAt: at('2026-09-10') });
     await project('Gamma', { updatedAt: at('2026-09-05'), lastActivityAt: at('2026-09-30') });
@@ -85,7 +95,7 @@ describe('the project list, with run counts and activity', () => {
     await run('Gamma', '2026-09-29T08:00:00Z', 'completed', { deletedAt: at('2026-09-30') });
   });
 
-  it('counts each project\'s runs, those running, and when the latest started', async () => {
+  it("counts each project's runs, those running, and when the latest started", async () => {
     const rows = await list();
     const by = Object.fromEntries(rows.map((row) => [row.name, row]));
 

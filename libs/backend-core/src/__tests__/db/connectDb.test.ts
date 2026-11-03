@@ -1,34 +1,55 @@
-jest.mock('mongoose', () => ({
-  connect: jest.fn().mockResolvedValue(undefined),
-  connection: { on: jest.fn(), getClient: jest.fn(() => ({ client: true })) }
-}));
-jest.mock('../../db/commandMonitoring', () => ({ observeCommands: jest.fn() }));
-jest.mock('../../logging/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
-}));
+import { vi, type Mock } from 'vitest';
+vi.mock('mongoose', async () => {
+  const module = await (() => ({
+    connect: vi.fn().mockResolvedValue(undefined),
+    connection: {
+      on: vi.fn(),
+      getClient: vi.fn(function () {
+        return { client: true };
+      })
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../db/commandMonitoring', async () => {
+  const module = await (() => ({ observeCommands: vi.fn() }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../logging/logger', async () => {
+  const module = await (() => ({
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-type LoggerMock = { info: jest.Mock; warn: jest.Mock; error: jest.Mock };
+type LoggerMock = { info: Mock; warn: Mock; error: Mock };
 
 // connectDb keeps a module-level "already connected" flag, so each test loads
 // a fresh copy of the module (and the mongoose mock instance it captured).
-function loadFresh() {
+async function loadFresh() {
   let connectDb!: typeof import('../../db/connectDb').connectDb;
-  let mongooseMock!: { connect: jest.Mock; connection: { on: jest.Mock; getClient: jest.Mock } };
+  let mongooseMock!: { connect: Mock; connection: { on: Mock; getClient: Mock } };
   let loggerMock!: LoggerMock;
-  let observeCommands!: jest.Mock;
-  jest.isolateModules(() => {
-    mongooseMock = jest.requireMock('mongoose');
-    observeCommands = (jest.requireMock('../../db/commandMonitoring') as { observeCommands: jest.Mock }).observeCommands;
-    loggerMock = (jest.requireMock('../../logging/logger') as { logger: LoggerMock }).logger;
-    connectDb = (jest.requireActual('../../db/connectDb') as typeof import('../../db/connectDb')).connectDb;
-  });
+  let observeCommands!: Mock;
+  vi.resetModules();
+  await (async () => {
+    mongooseMock = (await import('mongoose')).default as unknown as typeof mongooseMock;
+    observeCommands = ((await import('../../db/commandMonitoring')) as { observeCommands: Mock }).observeCommands;
+    loggerMock = ((await import('../../logging/logger')) as unknown as { logger: LoggerMock }).logger;
+    connectDb = (
+      (await vi.importActual<typeof import('../../db/connectDb')>(
+        '../../db/connectDb'
+      )) as typeof import('../../db/connectDb')
+    ).connectDb;
+  })();
   return { connectDb, mongooseMock, loggerMock, observeCommands };
 }
 
 const ORIGINAL_MONGODB_URI = process.env.MONGODB_URI;
 
-beforeEach(() => {
-  jest.clearAllMocks();
+beforeEach(async () => {
+  vi.resetAllMocks();
+  vi.mocked((await import('mongoose')).default.connect).mockResolvedValue(undefined as never);
   delete process.env.MONGODB_URI;
 });
 
@@ -42,14 +63,14 @@ afterAll(() => {
 
 describe('connectDb', () => {
   it('throws when neither options.uri nor MONGODB_URI is set', async () => {
-    const { connectDb, mongooseMock } = loadFresh();
+    const { connectDb, mongooseMock } = await loadFresh();
 
     await expect(connectDb({ serviceName: 'auth-service' })).rejects.toThrow('MONGODB_URI not set');
     expect(mongooseMock.connect).not.toHaveBeenCalled();
   });
 
   it('connects with an explicitly passed uri and logs the service name', async () => {
-    const { connectDb, mongooseMock, loggerMock } = loadFresh();
+    const { connectDb, mongooseMock, loggerMock } = await loadFresh();
 
     await connectDb({ uri: 'mongodb://explicit-host/db', serviceName: 'vision-service' });
 
@@ -58,7 +79,7 @@ describe('connectDb', () => {
   });
 
   it('hands the driver client to the query timing, once connected', async () => {
-    const { connectDb, mongooseMock, observeCommands } = loadFresh();
+    const { connectDb, mongooseMock, observeCommands } = await loadFresh();
 
     await connectDb({ uri: 'mongodb://host/db', serviceName: 'vision-service' });
 
@@ -66,7 +87,7 @@ describe('connectDb', () => {
   });
 
   it('falls back to process.env.MONGODB_URI when no uri option is given', async () => {
-    const { connectDb, mongooseMock } = loadFresh();
+    const { connectDb, mongooseMock } = await loadFresh();
     process.env.MONGODB_URI = 'mongodb://env-host/db';
 
     await connectDb({ serviceName: 'file-service' });
@@ -75,7 +96,7 @@ describe('connectDb', () => {
   });
 
   it('is a no-op on a second call once connected', async () => {
-    const { connectDb, mongooseMock } = loadFresh();
+    const { connectDb, mongooseMock } = await loadFresh();
 
     await connectDb({ uri: 'mongodb://host/db', serviceName: 'group-service' });
     await connectDb({ uri: 'mongodb://host/db', serviceName: 'group-service' });
@@ -84,12 +105,12 @@ describe('connectDb', () => {
   });
 
   it('does not mark itself connected when mongoose.connect rejects', async () => {
-    const { connectDb, mongooseMock } = loadFresh();
+    const { connectDb, mongooseMock } = await loadFresh();
     mongooseMock.connect.mockRejectedValueOnce(new Error('connection refused'));
 
-    await expect(
-      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' })
-    ).rejects.toThrow('connection refused');
+    await expect(connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' })).rejects.toThrow(
+      'connection refused'
+    );
 
     await connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' });
     expect(mongooseMock.connect).toHaveBeenCalledTimes(2);
@@ -101,12 +122,10 @@ describe('connectDb', () => {
    * non-zero and the container restart policy takes it from there.
    */
   it('does not retry a failing connection', async () => {
-    const { connectDb, mongooseMock, loggerMock } = loadFresh();
+    const { connectDb, mongooseMock, loggerMock } = await loadFresh();
     mongooseMock.connect.mockRejectedValue(new Error('auth failed'));
 
-    await expect(
-      connectDb({ uri: 'mongodb://host/db', serviceName: 'label-service' })
-    ).rejects.toThrow('auth failed');
+    await expect(connectDb({ uri: 'mongodb://host/db', serviceName: 'label-service' })).rejects.toThrow('auth failed');
 
     expect(mongooseMock.connect).toHaveBeenCalledTimes(1);
     expect(loggerMock.error).toHaveBeenCalledWith(
@@ -116,7 +135,7 @@ describe('connectDb', () => {
   });
 
   it('lets concurrent callers share one connection attempt', async () => {
-    const { connectDb, mongooseMock } = loadFresh();
+    const { connectDb, mongooseMock } = await loadFresh();
 
     await Promise.all([
       connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' }),
@@ -127,7 +146,7 @@ describe('connectDb', () => {
   });
 
   it('registers reconnection listeners once connected', async () => {
-    const { connectDb, mongooseMock } = loadFresh();
+    const { connectDb, mongooseMock } = await loadFresh();
 
     await connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' });
 
@@ -142,8 +161,8 @@ describe('connectDb', () => {
    * flipping to "disconnected" with nothing in the log to explain it.
    */
   describe('connection listeners', () => {
-    function connectAndGetHandlers(serviceName: string) {
-      const { connectDb, mongooseMock, loggerMock } = loadFresh();
+    async function connectAndGetHandlers(serviceName: string) {
+      const { connectDb, mongooseMock, loggerMock } = await loadFresh();
       return connectDb({ uri: 'mongodb://host/db', serviceName }).then(() => {
         const handlers = Object.fromEntries(mongooseMock.connection.on.mock.calls) as Record<
           string,

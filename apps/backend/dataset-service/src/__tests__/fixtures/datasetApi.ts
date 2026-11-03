@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHmac } from 'crypto';
@@ -46,7 +47,7 @@ const saved = {
 
 /**
  * Starts the dataset API against an in-memory database for one test file, with the seeded users and group
- * roles. Call it once at the top of the file, below its `jest.mock` lines (those must stay in the test file).
+ * roles. Call it once at the top of the file, below its `vi.mock` lines (those must stay in the test file).
  */
 export function useDatasetApi(): void {
   beforeAll(async () => {
@@ -68,17 +69,15 @@ export function useDatasetApi(): void {
   }, 120_000);
 
   beforeEach(async () => {
-    jest.mocked(projectDatasetOwner).mockResolvedValue({ kind: 'user', id: OWNER });
+    vi.mocked(projectDatasetOwner).mockResolvedValue({ kind: 'user', id: OWNER });
     replace(roles, { [MEMBER]: 'member', [ADMIN]: 'admin', [GROUP_OWNER]: 'owner' });
-    await mongoose.connection
-      .collection('users')
-      .insertMany(
-        [OWNER, MEMBER, ADMIN, STRANGER, GROUP_OWNER].map((id) => ({
-          _id: new mongoose.Types.ObjectId(id),
-          email: `${id}@example.test`,
-          tokenVersion: 1
-        }))
-      );
+    await mongoose.connection.collection('users').insertMany(
+      [OWNER, MEMBER, ADMIN, STRANGER, GROUP_OWNER].map((id) => ({
+        _id: new mongoose.Types.ObjectId(id),
+        email: `${id}@example.test`,
+        tokenVersion: 1
+      }))
+    );
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany(
       (
@@ -91,20 +90,20 @@ export function useDatasetApi(): void {
     replace(otherRoles, { [GROUP_OWNER]: 'member', [OWNER]: 'member' });
     const roleIn = (groupId: string, userId: string): GroupRole | undefined =>
       groupId === GROUP ? roles[userId] : groupId === OTHER_GROUP ? otherRoles[userId] : undefined;
-    jest.mocked(checkMembership).mockImplementation(async (groupId, userId) => {
+    vi.mocked(checkMembership).mockImplementation(async function (groupId, userId) {
       const role = roleIn(groupId, userId);
       return role ? { member: true, role } : { member: false, role: null };
     });
-    jest
-      .mocked(getMyGroups)
-      .mockImplementation(async (userId) => [
+    vi.mocked(getMyGroups).mockImplementation(async function (userId) {
+      return [
         ...(roles[userId] ? [{ groupId: GROUP, name: 'Team', role: roles[userId] }] : []),
         ...(otherRoles[userId] ? [{ groupId: OTHER_GROUP, name: 'Other team', role: otherRoles[userId] }] : [])
-      ]);
+      ];
+    });
   });
 
   afterEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     fileStore.stored.clear();
     await Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({})));
   });
@@ -139,7 +138,7 @@ export const tokenFor = (userId: string) => {
   return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response shapes vary per route; each assertion names what it reads
+// oxlint-disable-next-line typescript/no-explicit-any -- response shapes vary per route; each assertion names what it reads
 export type Body = { data?: any; message?: string };
 
 export const call = async (

@@ -1,56 +1,69 @@
+import { vi, type Mock } from 'vitest';
 /**
  * Covers the thin delegation controllers (training / benchmark /
  * visualization / project): each handler extracts request data, calls its
  * service, and shapes the JSON response — so one parametrized suite per
  * controller keeps this compact.
  */
-jest.mock('../../services/trainingService', () => ({
-  trainingService: {
-    getTrainings: jest.fn(),
-    getTrainingById: jest.fn(),
-    getTrainingByUuid: jest.fn(),
-    getTrainingWithEpochs: jest.fn(),
-    createTraining: jest.fn(),
-    updateTraining: jest.fn(),
-    deleteTraining: jest.fn(),
-    getTrainingStats: jest.fn(),
-    getTrainingTags: jest.fn(),
-    compareTrainings: jest.fn(),
-    getDeletedTrainings: jest.fn(),
-    restoreTraining: jest.fn(),
-  },
-}));
+vi.mock('../../services/trainingService', async () => {
+  const module = await (() => ({
+    trainingService: {
+      getTrainings: vi.fn(),
+      getTrainingById: vi.fn(),
+      getTrainingByUuid: vi.fn(),
+      getTrainingWithEpochs: vi.fn(),
+      createTraining: vi.fn(),
+      updateTraining: vi.fn(),
+      deleteTraining: vi.fn(),
+      getTrainingStats: vi.fn(),
+      getTrainingTags: vi.fn(),
+      compareTrainings: vi.fn(),
+      getDeletedTrainings: vi.fn(),
+      restoreTraining: vi.fn()
+    }
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
-jest.mock('../../services/benchmarkService', () => ({
-  getBenchmarks: jest.fn(),
-  getBenchmarkById: jest.fn(),
-  createBenchmark: jest.fn(),
-  uploadBenchmark: jest.fn(),
-  getBenchmarkStats: jest.fn(),
-  updateBenchmark: jest.fn(),
-  deleteBenchmark: jest.fn(),
-}));
-jest.mock('../../services/visualizationService', () => ({
-  getVisualizationUploadUrl: jest.fn(),
-  createVisualization: jest.fn(),
-  getVisualizationByUuid: jest.fn(),
-  deleteVisualization: jest.fn(),
-  getVisualizationsByEpoch: jest.fn(),
-  getVisualizationsByTraining: jest.fn(),
-  getVisualizationTypes: jest.fn(),
-}));
-jest.mock('../../services/projectService', () => ({
-  listProjects: jest.fn(),
-  getProjectByIdOrSlug: jest.fn(),
-  createProject: jest.fn(),
-  updateProject: jest.fn(),
-  trashProject: jest.fn(),
-  listTrashedProjects: jest.fn(),
-  restoreProject: jest.fn(),
-  deleteProjectForever: jest.fn(),
-  transferProject: jest.fn(),
-  getProjectDashboardStats: jest.fn(),
-}));
+vi.mock('../../services/benchmarkService', async () => {
+  const module = await (() => ({
+    getBenchmarks: vi.fn(),
+    getBenchmarkById: vi.fn(),
+    createBenchmark: vi.fn(),
+    uploadBenchmark: vi.fn(),
+    getBenchmarkStats: vi.fn(),
+    updateBenchmark: vi.fn(),
+    deleteBenchmark: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/visualizationService', async () => {
+  const module = await (() => ({
+    getVisualizationUploadUrl: vi.fn(),
+    createVisualization: vi.fn(),
+    getVisualizationByUuid: vi.fn(),
+    deleteVisualization: vi.fn(),
+    getVisualizationsByEpoch: vi.fn(),
+    getVisualizationsByTraining: vi.fn(),
+    getVisualizationTypes: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
+vi.mock('../../services/projectService', async () => {
+  const module = await (() => ({
+    listProjects: vi.fn(),
+    getProjectByIdOrSlug: vi.fn(),
+    createProject: vi.fn(),
+    updateProject: vi.fn(),
+    trashProject: vi.fn(),
+    listTrashedProjects: vi.fn(),
+    restoreProject: vi.fn(),
+    deleteProjectForever: vi.fn(),
+    transferProject: vi.fn(),
+    getProjectDashboardStats: vi.fn()
+  }))();
+  return Object.assign({ default: module }, module);
+});
 
 import type { Request, Response } from 'express';
 import * as trainingCtrl from '../../controllers/trainingController';
@@ -62,15 +75,15 @@ import * as benchmarkService from '../../services/benchmarkService';
 import * as visualizationService from '../../services/visualizationService';
 import * as projectService from '../../services/projectService';
 
-const mockedTrainingSvc = trainingService as unknown as Record<string, jest.Mock>;
-const mockedBenchmarkSvc = benchmarkService as unknown as Record<string, jest.Mock>;
-const mockedVizSvc = visualizationService as unknown as Record<string, jest.Mock>;
-const mockedProjectSvc = projectService as unknown as Record<string, jest.Mock>;
+const mockedTrainingSvc = trainingService as unknown as Record<string, Mock>;
+const mockedBenchmarkSvc = benchmarkService as unknown as Record<string, Mock>;
+const mockedVizSvc = visualizationService as unknown as Record<string, Mock>;
+const mockedProjectSvc = projectService as unknown as Record<string, Mock>;
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock };
+type MockRes = Response & { json: Mock; status: Mock };
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn() };
+  const res = { json: vi.fn(), status: vi.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
@@ -81,11 +94,11 @@ const makeReq = (overrides: Record<string, unknown> = {}): Request =>
     query: {},
     body: {},
     user: { id: 'u1' },
-    ...overrides,
-  } as unknown as Request);
+    ...overrides
+  }) as unknown as Request;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('trainingController', () => {
@@ -136,10 +149,7 @@ describe('trainingController', () => {
     mockedTrainingSvc.createTraining.mockResolvedValue('saved');
     const res = makeRes();
 
-    await trainingCtrl.createTraining(
-      makeReq({ projectId: 'p-token', body: { name: 'T', projectId: 'p-body' } }),
-      res
-    );
+    await trainingCtrl.createTraining(makeReq({ projectId: 'p-token', body: { name: 'T', projectId: 'p-body' } }), res);
 
     expect(mockedTrainingSvc.createTraining).toHaveBeenCalledWith(
       'u1',
@@ -191,10 +201,7 @@ describe('trainingController', () => {
     expect(mockedTrainingSvc.deleteTraining).toHaveBeenCalledWith('i1', 'u1');
 
     await trainingCtrl.getTrainingStats(makeReq({ query: { status: 'done' } }), makeRes());
-    expect(mockedTrainingSvc.getTrainingStats).toHaveBeenCalledWith(
-      'u1',
-      expect.objectContaining({ status: 'done' })
-    );
+    expect(mockedTrainingSvc.getTrainingStats).toHaveBeenCalledWith('u1', expect.objectContaining({ status: 'done' }));
 
     await trainingCtrl.compareTrainings(makeReq({ body: { trainingIds: ['a'] } }), makeRes());
     expect(mockedTrainingSvc.compareTrainings).toHaveBeenCalledWith('u1', ['a']);
@@ -271,16 +278,10 @@ describe('visualizationController', () => {
     expect(mockedVizSvc.createVisualization).toHaveBeenCalledWith({ epoch_uuid: 'e' }, 'u1', undefined);
     expect(createRes.status).toHaveBeenCalledWith(201);
 
-    await visualizationCtrl.getVisualizationByUuid(
-      makeReq({ params: { visualization_uuid: 'v1' } }),
-      makeRes()
-    );
+    await visualizationCtrl.getVisualizationByUuid(makeReq({ params: { visualization_uuid: 'v1' } }), makeRes());
     expect(mockedVizSvc.getVisualizationByUuid).toHaveBeenCalledWith('v1', 'u1');
 
-    await visualizationCtrl.deleteVisualization(
-      makeReq({ params: { visualization_uuid: 'v1' } }),
-      makeRes()
-    );
+    await visualizationCtrl.deleteVisualization(makeReq({ params: { visualization_uuid: 'v1' } }), makeRes());
     expect(mockedVizSvc.deleteVisualization).toHaveBeenCalledWith('v1', 'u1', undefined);
 
     await visualizationCtrl.getVisualizationsByEpoch(
@@ -293,11 +294,7 @@ describe('visualizationController', () => {
       makeReq({ params: { training_uuid: 'tu' }, query: { limit: 50, page: 1 } }),
       makeRes()
     );
-    expect(mockedVizSvc.getVisualizationsByTraining).toHaveBeenCalledWith(
-      'tu',
-      { limit: 50, page: 1 },
-      'u1'
-    );
+    expect(mockedVizSvc.getVisualizationsByTraining).toHaveBeenCalledWith('tu', { limit: 50, page: 1 }, 'u1');
 
     const typesRes = makeRes();
     await visualizationCtrl.getVisualizationTypes(makeReq({ query: { epoch_uuid: 'e1' } }), typesRes);
@@ -334,7 +331,7 @@ describe('projectController', () => {
       name: 'N',
       description: 'D',
       visibility: 'public',
-      owner: { kind: 'group', id: 'g' },
+      owner: { kind: 'group', id: 'g' }
     });
     expect(createRes.status).toHaveBeenCalledWith(201);
 
@@ -343,7 +340,7 @@ describe('projectController', () => {
       name: 'N',
       description: undefined,
       visibility: undefined,
-      slug: undefined,
+      slug: undefined
     });
 
     await projectCtrl.deleteProject(makeReq({ params: { id: 'i' } }), makeRes());
@@ -359,7 +356,10 @@ describe('projectController', () => {
     await projectCtrl.deleteProjectForever(makeReq({ params: { id: 'i' } }), makeRes());
     expect(mockedProjectSvc.deleteProjectForever).toHaveBeenCalledWith('i', 'u1');
 
-    await projectCtrl.transferProject(makeReq({ params: { id: 'i' }, body: { owner: { kind: 'group', id: 'g' } } }), makeRes());
+    await projectCtrl.transferProject(
+      makeReq({ params: { id: 'i' }, body: { owner: { kind: 'group', id: 'g' } } }),
+      makeRes()
+    );
     expect(mockedProjectSvc.transferProject).toHaveBeenCalledWith('i', 'u1', { kind: 'group', id: 'g' });
 
     await projectCtrl.getProjectDashboardStats(makeReq({ params: { id: 'i' } }), makeRes());

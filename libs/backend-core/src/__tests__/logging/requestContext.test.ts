@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { EventEmitter } from 'events';
 import type { Request, Response } from 'express';
 import { currentRequestId, resolveRequestId, runWithRequestId } from '../../logging/requestContext';
@@ -19,11 +20,15 @@ describe('resolveRequestId', () => {
 
 describe('requestLogger request ids', () => {
   const run = (headers: Record<string, string>) => {
-    const res = Object.assign(new EventEmitter(), { statusCode: 200, setHeader: jest.fn() });
+    const res = Object.assign(new EventEmitter(), { statusCode: 200, setHeader: vi.fn() });
     let seen: string | undefined;
-    requestLogger({ originalUrl: '/x', method: 'GET', headers } as unknown as Request, res as unknown as Response, () => {
-      seen = currentRequestId();
-    });
+    requestLogger(
+      { originalUrl: '/x', method: 'GET', headers } as unknown as Request,
+      res as unknown as Response,
+      () => {
+        seen = currentRequestId();
+      }
+    );
     return { seen, res };
   };
 
@@ -45,7 +50,7 @@ describe('requestLogger request ids', () => {
 
 describe('fetchWithTimeout request id forwarding', () => {
   const realFetch = global.fetch;
-  const mockFetch = jest.fn().mockResolvedValue({ ok: true });
+  const mockFetch = vi.fn().mockResolvedValue({ ok: true });
   beforeEach(() => {
     mockFetch.mockClear();
     global.fetch = mockFetch as unknown as typeof fetch;

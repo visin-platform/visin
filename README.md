@@ -148,22 +148,23 @@ mongo-express on <http://localhost:8081>.
 ```sh
 npm run lint            # ESLint, zero warnings allowed
 npm run typecheck       # tsc --noEmit per workspace
-npm test                # Jest (backends) + Vitest (frontends)
+npm test                # Vitest across all workspaces
 npm run test:coverage   # every workspace enforces a coverage floor
 npm run format          # Prettier
 ```
 
-MongoDB integration tests share [one Jest setup](scripts/jest-mongo-setup.mjs). It checks the required Node VM
-flag, downloads the test binary once before suites start, and passes its executable path to every suite with
-further downloads disabled. The default version is `8.3.9`, matching Compose; `MONGOMS_VERSION` can override it
-for deliberate compatibility testing. `MONGOMS_SYSTEM_BINARY` can select an already installed executable for
-offline runs. Run through `npm test --workspace=<service>` so the VM flag is present.
+MongoDB integration tests share [one Vitest setup](scripts/vitest-mongo-setup.mjs). It prepares the test
+binary once before suites start and passes its executable path to every suite with further downloads disabled.
+The default version is `8.3.9`, matching Compose; `MONGOMS_VERSION` can override it for deliberate compatibility
+testing. `MONGOMS_SYSTEM_BINARY` can select an already installed executable for offline runs. Vitest does not
+require Node VM flags. The setup's offline failure-path checks run with
+`node --test scripts/vitest-mongo-setup.test.mjs`.
 
-This avoids downloading inside 120-second setup hooks. Jest isolates dependency module state between suites;
-MongoMemoryServer's download lock checks both the PID and module-local state, so overlapping downloads from
-isolated suites in the same process can overwrite the shared temporary archive. A preparation error now stops
-the run before suites start and preserves the original cause. Tests exit normally rather than using `forceExit`.
-The setup's offline failure-path checks run with `node --test scripts/jest-mongo-setup.test.mjs`.
+Linting uses Oxlint, retaining React hooks, refresh boundaries, and the frontend theme-token rule. Releases use
+`node scripts/release.mjs` with maintained Conventional Changelog libraries. `--dry-run` previews the next
+version and changelog without writing files, committing, tagging, publishing, or pushing. Library releases use
+`--library` to update their version without creating the monorepo's release commit or tag. Release-script tests
+run in disposable repositories with `node --test scripts/release.test.mjs`.
 
 Shared libraries are consumed from npm, not from the workspace, because a service's Docker build never sees the
 monorepo. After changing one, publish it and let `npm run sync:libs` re-pin consumers; `npm run lockfiles` then
