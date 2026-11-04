@@ -1,5 +1,16 @@
 # Visin Changelog
 
+## [2.5.0](https://github.com/visin-platform/visin/compare/v2.4.1...v2.5.0) (2026-11-04)
+
+### Features
+
+* add bot creation tools ([b16211a](https://github.com/visin-platform/visin/commit/b16211ab20f2b53bfbe66ccb86eddb8da3f436ce))
+
+### Chores
+
+* **release:** @visin/backend-core 1.18.0 ([7e830d7](https://github.com/visin-platform/visin/commit/7e830d79d883292669a1e8f428766e397656d8d1))
+* **release:** @visin/frontend-core 1.22.0 ([b82ae72](https://github.com/visin-platform/visin/commit/b82ae720df0d4c145191d88efbbb226237595f16))
+
 ## [2.4.1](https://github.com/visin-platform/visin/compare/v2.4.0...v2.4.1) (2026-11-03)
 
 ### Bug Fixes
