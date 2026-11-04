@@ -1,5 +1,4 @@
-import { useCallback, useState } from 'react';
-import type { SharedAssistantSettings } from '../../types/assistant';
+import { useState } from 'react';
 import { ReplyPreview } from './ReplyPreview';
 import { AutoAwesome, MoreVert } from '@mui/icons-material';
 import {
@@ -17,7 +16,6 @@ import {
 } from '@mui/material';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { KIND_LABEL, displayTitle } from '../../utils/chatContext';
-import { SharedAssistants } from '../assistants/SharedAssistants';
 import { AnalystSetupNotice } from './AnalystSetupNotice';
 import { BackToConversations } from './BackToConversations';
 import { ChatContextChips } from './ChatContextChips';
@@ -38,26 +36,16 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     membership,
     sending,
     connection,
-    sharedAvailable,
-    sharedTarget,
-    chooseSharedAssistant,
     canConfigure,
     draft,
     setDraft,
     send,
     composerInput,
-    sharedSettings,
-    setSharedSettings,
     replyTarget,
     setReplyTarget
   } = useChatWorkspaceContext();
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
-  const receiveSettings = useCallback(
-    (settings: SharedAssistantSettings | undefined) => setSharedSettings({ conversationId: c?._id || '', settings }),
-    [c?._id, setSharedSettings]
-  );
   if (!c) return null;
-  const settings = sharedSettings?.conversationId === c._id ? sharedSettings.settings : undefined;
   return (
     <>
       <Stack direction="row" sx={{ p: 1.5, alignItems: 'center', gap: 1 }}>
@@ -85,17 +73,16 @@ export function ConversationThread({ panel }: { panel: boolean }) {
             {displayTitle(c, user?.id)}
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            {c.kind === 'assistant' ? 'Private analysis · only you can read it' : KIND_LABEL[c.kind]}
+            {c.kind === 'assistant'
+              ? 'Private chat · you and this assistant'
+              : c.kind === 'direct'
+                ? 'Private conversation'
+                : KIND_LABEL[c.kind]}
             {c.kind === 'direct' &&
               lastActiveLabel(c.profile?.lastActiveAt) &&
               ` · ${lastActiveLabel(c.profile?.lastActiveAt)}`}
           </Typography>
         </Box>
-        {c.kind !== 'assistant' && (
-          <Button size="small" onClick={() => setShowPeople(true)}>
-            People
-          </Button>
-        )}
         {c.kind !== 'assistant' && c.projectId && enabled && (
           <Button
             size="small"
@@ -123,29 +110,19 @@ export function ConversationThread({ panel }: { panel: boolean }) {
               View profile
             </MenuItem>
           )}
-          {c.kind !== 'assistant' && (
-            <MenuItem
-              onClick={() => {
-                setSettingsAnchor(null);
-                setShowPeople(true);
-              }}
-            >
-              People and permissions
-            </MenuItem>
-          )}
+          <MenuItem
+            onClick={() => {
+              setSettingsAnchor(null);
+              setShowPeople(true);
+            }}
+          >
+            People
+          </MenuItem>
           {canConfigure && (
             <MenuItem component="a" href={analystSettingsHref()} onClick={() => setSettingsAnchor(null)}>
               Analyst settings
             </MenuItem>
           )}
-          <MenuItem
-            onClick={() => {
-              setSettingsAnchor(null);
-              forgetSelection();
-            }}
-          >
-            Back to conversations
-          </MenuItem>
         </Menu>
       </Stack>
       {<ChatContextChips context={c} labels={c.trainingLabels} />}
@@ -173,21 +150,10 @@ export function ConversationThread({ panel }: { panel: boolean }) {
         </Typography>
       )}
       <MessageList />
-      {c.kind !== 'assistant' && enabled && sharedAvailable && me?.state !== 'invited' && (
-        <SharedAssistants
-          key={`${user?.id}:${c._id}`}
-          conversationId={c._id}
-          target={sharedTarget}
-          onTarget={chooseSharedAssistant}
-          busy={sending}
-          onSettings={receiveSettings}
-        />
-      )}
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
       {replyTarget && (
         <ReplyPreview
           message={replyTarget}
-          shared={c.kind !== 'assistant'}
           onCancel={() => setReplyTarget(undefined)}
         />
       )}
@@ -198,9 +164,6 @@ export function ConversationThread({ panel }: { panel: boolean }) {
         onSend={() => void send()}
         sending={sending}
         inputRef={composerInput}
-        assistants={c.kind !== 'assistant' && enabled && settings?.enabled ? settings.bots : undefined}
-        selectedAssistantId={sharedTarget}
-        onMention={chooseSharedAssistant}
         hint={panel ? undefined : 'Enter to send, Shift+Enter for a new line'}
         disabled={me?.state === 'invited' || (c.kind === 'assistant' && !enabled)}
       />

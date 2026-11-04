@@ -31,7 +31,7 @@ describe('following the page', () => {
     render(<Chat panel />);
     await screen.findByText('Research discussion');
     showPage({ projectId: 'p1', trainingIds: ['t1'], title: 'Base model' });
-    expect(await screen.findByText('Private analysis · only you can read it')).toBeInTheDocument();
+    expect(await screen.findByText('Private chat · you and this assistant')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Run t1' })).toHaveAttribute('href', '/trainings/t1');
     showPage({ projectId: 'p1', trainingIds: ['t2'], title: 'Second run' });
     expect(await screen.findByRole('link', { name: 'Second run' })).toHaveAttribute('href', '/trainings/t2');
@@ -71,18 +71,20 @@ describe('following the page', () => {
   });
 });
 
-it('offers the analyst, a person and a room on the new chat screen', async () => {
+it('offers a simple picker with project analysis behind More options', async () => {
   state.enabled = true;
   render(<Chat panel />);
   fireEvent.click(await screen.findByRole('button', { name: 'New chat' }));
+  expect(screen.getByLabelText('Search people or assistants')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
   expect(screen.getByRole('region', { name: 'Ask the analyst' })).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'Start a room' })).toBeInTheDocument();
   fireEvent.click(await screen.findByText('Road scene experiments'));
   expect(await screen.findByText('New analysis · only you can read it')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Conversation list' }));
   fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
-  fireEvent.change(screen.getByLabelText('Profile handle'), { target: { value: '@ada' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Message' }));
+  fireEvent.change(screen.getByLabelText('Search people or assistants'), { target: { value: '@ada' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Message @ada' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith('/conversations', expect.objectContaining({ kind: 'direct', handles: ['ada'] }))
   );

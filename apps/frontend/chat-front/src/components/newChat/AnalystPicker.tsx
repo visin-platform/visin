@@ -9,7 +9,8 @@ export function AnalystPicker({
   setupHref,
   busy,
   onAnalysis,
-  projects
+  projects,
+  showAssistants = true
 }: {
   pageContext?: PageContext;
   assistant: boolean;
@@ -17,6 +18,7 @@ export function AnalystPicker({
   busy: boolean;
   onAnalysis: (context: PageContext) => void;
   projects: ChatProject[];
+  showAssistants?: boolean;
 }) {
   return (
     <Section
@@ -79,7 +81,7 @@ export function AnalystPicker({
           </ListItemButton>
         </List>
       )}
-      <Assistants busy={busy || !assistant} onAnalysis={onAnalysis} pageContext={pageContext} />
+      {showAssistants && <Assistants busy={busy || !assistant} onAnalysis={onAnalysis} pageContext={pageContext} />}
     </Section>
   );
 }

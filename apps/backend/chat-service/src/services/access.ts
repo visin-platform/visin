@@ -7,6 +7,7 @@ import {
   requireEnv
 } from '@visin/backend-core';
 import type { Request } from 'express';
+import { repairBotDirect } from './botConversations';
 import { Conversation, type ChatConversation } from '../models/Conversation';
 
 export const groups = createGroupServiceClient('chat-service');
@@ -48,7 +49,8 @@ export const accessCache = (groupIds?: Iterable<string>): AccessCache => ({
 export async function authorize(req: Request, id: string, write = false) {
   const conversation = await Conversation.findOne({ _id: id, deletedAt: null });
   if (!conversation) throw new NotFoundError('Conversation not found');
-  return checkAccess(req, conversation, write);
+  await checkAccess(req, conversation, write);
+  return repairBotDirect(conversation, req.user!.id);
 }
 /** The checks of `authorize` for a conversation already loaded. Throws NotFound/Forbidden. */
 export async function checkAccess<C extends ChatConversation>(

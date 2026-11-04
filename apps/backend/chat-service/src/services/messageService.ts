@@ -55,10 +55,8 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     throw new BadRequestError('Reply to a message everyone in this room can see');
   if (input.assistantId && c.kind === 'assistant')
     throw new BadRequestError('This private thread already has its assistant');
-  const replied = c.kind !== 'assistant' && !input.assistantId && reply?.kind === 'assistant' ? reply : null;
-  const invocation =
-    input.assistantId ||
-    (replied?.senderId.startsWith('assistant:') ? replied.senderId.slice('assistant:'.length) : undefined);
+  // A quote never invokes a bot in a conversation between people.
+  const invocation = input.assistantId;
   const sharedBot = invocation ? await requireSharedBot(c, invocation) : null;
   if (sharedBot && !sharedEnabled(c))
     throw new ForbiddenError('Shared assistants require agreement or administrator enablement');

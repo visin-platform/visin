@@ -127,6 +127,7 @@ describe('setting up the analyst', () => {
     expect(screen.getByRole('link', { name: 'Set up' })).toHaveAttribute('href', '/account/analyst');
     fireEvent.click(screen.getByRole('button', { name: 'Conversation list' }));
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
     expect(await screen.findByRole('link', { name: 'Set up the analyst' })).toHaveAttribute('href', '/account/analyst');
   });
 

@@ -1,139 +1,106 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PageContext } from '../../types/chat';
 import { NewChat } from './NewChat';
 
-const state = vi.hoisted(() => ({
-  projects: [] as { _id: string; name: string }[],
-  contacts: [] as { id: string; name: string }[],
-  failing: false
-}));
+const state = vi.hoisted(() => ({ failing: false }));
 vi.mock('../../services/apiClient', () => ({
   api: vi.fn(async (path: string) => {
     if (state.failing) throw new Error('offline');
-    if (path === '/projects') return state.projects;
-    if (path === '/contacts') return state.contacts;
+    if (path === '/projects') return [{ _id: 'p1', name: 'Road experiments' }];
+    if (path === '/contacts') return [{ id: 'u1', name: 'Ada' }, { id: 'u2', name: 'Grace' }];
+    if (path === '/assistants') return [{ _id: 'vivi', name: 'Vivi', personality: '', paused: false }];
     return [];
   })
 }));
-
-const handlers = () => ({
-  onBack: vi.fn(),
-  onAnalysis: vi.fn(),
-  onPerson: vi.fn(),
-  onGroup: vi.fn(),
-  onRoom: vi.fn()
-});
 const mount = (props: Partial<React.ComponentProps<typeof NewChat>> = {}) => {
-  const on = handlers();
-  render(<NewChat assistant groups={[]} busy={false} {...on} {...props} />);
+  const on = { onBack: vi.fn(), onAnalysis: vi.fn(), onPerson: vi.fn(), onGroup: vi.fn(), onRoom: vi.fn() };
+  render(<NewChat assistant groups={[{ groupId: 'g1', name: 'Road lab' }]} busy={false} {...on} {...props} />);
   return on;
 };
-const page: PageContext = { projectId: 'p1', trainingIds: ['t1'], title: 'resnet50 · lr 3e-4' };
+beforeEach(() => { vi.clearAllMocks(); state.failing = false; });
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  state.projects = [
-    { _id: 'p1', name: 'CLFTv2 (final)' },
-    { _id: 'p2', name: 'SAM on ZOD' }
-  ];
-  state.contacts = [
-    { id: 'u2', name: 'ada@lab.test' },
-    { id: 'u3', name: 'grace@lab.test' }
-  ];
-  state.failing = false;
+it('starts with a compact picker instead of setup and creation forms', async () => {
+  const on = mount({ assistantModel: { provider: 'anthropic', model: 'configured-model', ready: true } });
+  fireEvent.click(await screen.findByRole('button', { name: /Vivi/ }));
+  expect(on.onAnalysis).toHaveBeenCalledWith({ assistantId: 'vivi', title: 'Vivi' });
+  expect(screen.getByLabelText('Search people or assistants')).toBeInTheDocument();
+  expect(screen.queryByLabelText(/Assistant name/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Deployment model/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'Start a room' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Road lab/ })).not.toBeInTheDocument();
 });
-
-describe('asking the analyst', () => {
-  it('offers what the person is looking at first, then each project, then a general question', async () => {
-    const on = mount({ pageContext: page });
-    fireEvent.click(await screen.findByRole('button', { name: /resnet50 · lr 3e-4/ }));
-    expect(on.onAnalysis).toHaveBeenLastCalledWith(page);
-    fireEvent.click(await screen.findByRole('button', { name: /SAM on ZOD/ }));
-    expect(on.onAnalysis).toHaveBeenLastCalledWith({
-      projectId: 'p2',
-      trainingIds: [],
-      title: 'SAM on ZOD',
-      projectName: 'SAM on ZOD'
-    });
-    fireEvent.click(screen.getByRole('button', { name: /General question/ }));
-    expect(on.onAnalysis).toHaveBeenLastCalledWith({ title: 'General question' });
-  });
-
-  it('offers no page of its own where nothing is being looked at', async () => {
-    mount();
-    await screen.findByRole('button', { name: /CLFTv2 \(final\)/ });
-    expect(screen.queryByText('What you are looking at')).toBeNull();
-  });
-
-  it('explains, and offers nothing to ask, where the analyst is off', async () => {
-    mount({ assistant: false });
-    expect(
-      screen.getByText('The analyst is not turned on for this deployment. Ask an administrator.')
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Analyse' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Set up the analyst' })).toBeNull();
-  });
-
-  it('sends an administrator to where it is turned on', () => {
-    mount({ assistant: false, setupHref: '/account/analyst' });
-    expect(screen.getByText('The analyst is not turned on yet.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Set up the analyst' })).toHaveAttribute('href', '/account/analyst');
-  });
-
-  it('does not offer to analyse anything while a conversation is being opened', async () => {
-    mount({ busy: true, pageContext: page });
-    expect(await screen.findByRole('button', { name: /General question/ })).toHaveAttribute('aria-disabled', 'true');
-  });
+it('filters contacts and assistants from one search and opens a contact directly', async () => {
+  const on = mount();
+  await screen.findByRole('button', { name: 'Grace' });
+  fireEvent.change(screen.getByLabelText('Search people or assistants'), { target: { value: 'gra' } });
+  expect(screen.queryByRole('button', { name: 'Ada' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Vivi/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Grace' }));
+  expect(on.onPerson).toHaveBeenCalledWith({ userId: 'u2', name: 'Grace' });
 });
-
-describe('messaging a person', () => {
-  it('starts from a profile handle, with or without the @, and ignores an empty one', async () => {
-    const on = mount();
-    const message = screen.getByRole('button', { name: 'Message' });
-    expect(message).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Profile handle'), { target: { value: ' @ada ' } });
-    fireEvent.click(message);
-    expect(on.onPerson).toHaveBeenCalledWith({ handle: 'ada', name: 'ada' });
-    await screen.findByText('ada@lab.test');
-  });
-
-  it("offers colleagues from the person's groups, one click each", async () => {
-    const on = mount();
-    const colleagues = within(await screen.findByRole('list', { name: 'Group colleagues' }));
-    fireEvent.click(colleagues.getByRole('button', { name: /grace@lab.test/ }));
-    expect(on.onPerson).toHaveBeenCalledWith({ userId: 'u3', name: 'grace@lab.test' });
-  });
-
-  it('offers no colleague list to someone with none, nor when the list cannot be read', async () => {
-    state.contacts = [];
-    const first = render(<NewChat assistant groups={[]} busy={false} {...handlers()} />);
-    await screen.findByRole('button', { name: /CLFTv2/ });
-    expect(screen.queryByText('From your groups')).toBeNull();
-    first.unmount();
-    state.failing = true;
-    render(<NewChat assistant groups={[]} busy={false} {...handlers()} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: /General question/ })).toBeInTheDocument());
-    expect(screen.queryByText('From your groups')).toBeNull();
-  });
+it('opens a typed profile handle and disables starting a chat while busy', async () => {
+  const on = mount({ busy: true });
+  fireEvent.change(screen.getByLabelText('Search people or assistants'), { target: { value: '@ada' } });
+  expect(screen.getByRole('button', { name: 'Message @ada' })).toBeDisabled();
+  fireEvent.submit(screen.getByLabelText('Search people or assistants').closest('form')!);
+  expect(on.onPerson).not.toHaveBeenCalled();
 });
-
-describe('messaging a group', () => {
-  it("opens the group's channel, and is absent for someone in no group", async () => {
-    const on = mount({ groups: [{ groupId: 'g1', name: 'Road lab' }] });
-    fireEvent.click(await screen.findByRole('button', { name: /Road lab/ }));
-    expect(on.onGroup).toHaveBeenCalledWith('g1', 'Road lab');
-  });
-
-  it('has no group section without groups', () => {
-    mount();
-    expect(screen.queryByRole('region', { name: 'Message a group' })).toBeNull();
-  });
+it('submits a handle with Enter and keeps optional discovery failures from blocking it', async () => {
+  state.failing = true;
+  const on = mount();
+  fireEvent.change(screen.getByLabelText('Search people or assistants'), { target: { value: ' @ada ' } });
+  fireEvent.submit(screen.getByLabelText('Search people or assistants').closest('form')!);
+  expect(on.onPerson).toHaveBeenCalledWith({ handle: 'ada', name: 'ada' });
+  await waitFor(() => expect(screen.getByText('Could not load your assistants.')).toBeInTheDocument());
+});
+it('moves editing and model configuration behind Manage and returns to the picker', async () => {
+  mount({ assistant: false, setupHref: '/account/analyst', assistantModel: { provider: 'anthropic', model: 'configured-model', ready: false } });
+  expect(screen.getByText('Assistant chats are currently unavailable.')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Set up the analyst' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+  expect(await screen.findByLabelText(/Assistant name/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Set up the analyst' })).toHaveAttribute('href', '/account/analyst');
+  expect(screen.getByText('Model: anthropic / configured-model')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to new chat' }));
+  expect(screen.getByLabelText('Search people or assistants')).toBeInTheDocument();
+});
+it('keeps an unavailable assistant disabled and explains setup to non-admins only in Manage', async () => {
+  mount({ assistant: false });
+  expect(await screen.findByRole('button', { name: /Vivi/ })).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+  expect(screen.getByText('Ask an administrator to enable assistant chats.')).toBeInTheDocument();
+});
+it('keeps project analysis and group chats under More options', async () => {
+  const on = mount();
+  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Road experiments' }));
+  expect(on.onAnalysis).toHaveBeenCalledWith({ projectId: 'p1', trainingIds: [], title: 'Road experiments', projectName: 'Road experiments' });
+  fireEvent.click(screen.getByRole('button', { name: 'Road lab' }));
+  expect(on.onGroup).toHaveBeenCalledWith('g1', 'Road lab');
+  expect(screen.queryByLabelText(/Assistant name/)).not.toBeInTheDocument();
+});
+it('keeps room creation available under More options', async () => {
+  const on = mount();
+  await screen.findByRole('button', { name: 'Ada' });
+  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+  fireEvent.click(screen.getByRole('button', { name: 'New room' }));
+  expect(screen.getByRole('button', { name: 'Create room' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Room name'), { target: { value: 'Review' } });
+  fireEvent.click(within(screen.getByRole('region', { name: 'Start a room' })).getByRole('button', { name: 'Ada' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
+  expect(on.onRoom).toHaveBeenCalledWith('Review', [], ['u1']);
+});
+it('goes back to conversations from the picker', () => {
+  const on = mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to conversations' }));
+  expect(on.onBack).toHaveBeenCalled();
 });
 
 describe('starting a room', () => {
   const openRoom = async () => {
     const on = mount();
+    await screen.findByRole('button', { name: 'Ada' });
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(await screen.findByRole('button', { name: 'New room' }));
     return on;
   };
@@ -149,15 +116,15 @@ describe('starting a room', () => {
     expect(create).toBeDisabled();
     fireEvent.change(screen.getByLabelText("People's handles"), { target: { value: '@ada, grace  @hopper' } });
     expect(create).toBeEnabled();
-    fireEvent.click(await chip('ada@lab.test'));
+    fireEvent.click(await chip('Ada'));
     fireEvent.click(create);
-    expect(on.onRoom).toHaveBeenCalledWith('Review', ['ada', 'grace', 'hopper'], ['u2']);
+    expect(on.onRoom).toHaveBeenCalledWith('Review', ['ada', 'grace', 'hopper'], ['u1']);
   });
 
   it('lets a colleague be added and removed again, and a room be abandoned', async () => {
     const on = await openRoom();
     fireEvent.change(screen.getByLabelText('Room name'), { target: { value: 'Review' } });
-    const ada = await chip('ada@lab.test');
+    const ada = await chip('Ada');
     fireEvent.click(ada);
     expect(ada).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Create room' })).toBeEnabled();
@@ -170,13 +137,12 @@ describe('starting a room', () => {
   });
 });
 
-it('goes back to the conversations', () => {
-  const on = mount();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to conversations' }));
-  expect(on.onBack).toHaveBeenCalled();
-});
 
-it('discloses the deployment model and its availability without offering per-assistant selection', () => {
-  mount({ assistantModel: { provider: 'anthropic', model: 'configured-model', ready: false } });
-  expect(screen.getByText('Deployment model: anthropic / configured-model · unavailable')).toBeInTheDocument();
+it('opens an assistant with the current project context after filtering by its name', async () => {
+  const page = { projectId: 'p1', trainingIds: ['t1'], title: 'Current run' };
+  const on = mount({ pageContext: page });
+  await screen.findByRole('button', { name: 'Ada' });
+  fireEvent.change(screen.getByLabelText('Search people or assistants'), { target: { value: 'vivi' } });
+  fireEvent.click(await screen.findByRole('button', { name: /Vivi/ }));
+  expect(on.onAnalysis).toHaveBeenCalledWith({ ...page, assistantId: 'vivi', title: 'Vivi' });
 });

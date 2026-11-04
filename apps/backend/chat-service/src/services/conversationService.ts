@@ -1,3 +1,4 @@
+import { repairBotDirect } from './botConversations';
 import { usableAssistant } from './assistantAvailability';
 import { BadRequestError, ForbiddenError, NotFoundError, createOwnerIdentityLookup } from '@visin/backend-core';
 import { type Request } from 'express';
@@ -38,7 +39,8 @@ export async function listConversations(req: Request) {
   const checked = await Promise.all(
     candidates.map(async (c) => {
       try {
-        return await checkAccess(req, c, false, cache);
+        await checkAccess(req, c, false, cache);
+        return await repairBotDirect(c, actor);
       } catch (e) {
         if (!(e instanceof NotFoundError || e instanceof ForbiddenError)) throw e;
         return undefined;

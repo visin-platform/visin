@@ -1,16 +1,21 @@
+import { AutoAwesome } from '@mui/icons-material';
 import { useState } from 'react';
 import { AssistantProfileForm } from './AssistantProfileForm';
-import { Alert, Button, Checkbox, FormControlLabel, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, List, ListItemButton, ListItemIcon, ListItemText, Stack, TextField, Typography } from '@mui/material';
 import { useAssistants } from '../../hooks/useAssistants';
 import type { PageContext } from '../../types/chat';
 export function Assistants({
   busy,
   onAnalysis,
-  pageContext
+  pageContext,
+  compact = false,
+  search = ''
 }: {
   busy: boolean;
   onAnalysis: (context: PageContext) => void;
   pageContext?: PageContext;
+  compact?: boolean;
+  search?: string;
 }) {
   const [profile, setProfile] = useState<{ id: string; name: string }>();
   const {
@@ -28,6 +33,26 @@ export function Assistants({
     save,
     remove
   } = useAssistants();
+  if (compact) {
+    const bots = [...rows, ...catalog.filter((bot) => !rows.some((row) => row._id === bot._id))]
+      .filter((bot) => bot.name.toLowerCase().includes(search.trim().replace(/^@/, '').toLowerCase()));
+    return (
+      <List dense disablePadding aria-label="Assistants">
+        {bots.map((bot) => (
+          <ListItemButton
+            key={bot._id}
+            disabled={busy || bot.paused}
+            onClick={() => onAnalysis({ ...pageContext, assistantId: bot._id, title: bot.name })}
+            sx={{ borderRadius: 1, minHeight: 56 }}
+          >
+            <ListItemIcon sx={{ minWidth: 40, color: 'primary.main' }}><AutoAwesome /></ListItemIcon>
+            <ListItemText primary={bot.name} secondary={bot.paused ? 'Paused' : 'Private assistant chat'} />
+          </ListItemButton>
+        ))}
+        {error && <Alert severity="warning">Could not load your assistants.</Alert>}
+      </List>
+    );
+  }
   return (
     <Stack spacing={1} sx={{ mt: 2 }}>
       {catalog

@@ -104,6 +104,17 @@ beforeEach(() => {
 });
 
 describe('validateToken', () => {
+  it('refuses Google sign-in when this deployment has no client id', async () => {
+    delete process.env.GOOGLE_CLIENT_ID;
+    try {
+      await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
+        'Google sign-in is not configured on this instance'
+      );
+    } finally {
+      process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
+    }
+  });
+
   const googlePayload = { sub: 'google-subject-1', email: 'Test@Example.com', name: 'Test User', picture: 'pic.png' };
 
   it('rejects when Google verification throws', async () => {

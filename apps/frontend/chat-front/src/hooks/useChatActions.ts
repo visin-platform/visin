@@ -26,8 +26,6 @@ export function useChatActions({
     selected,
     draft,
     setDraft,
-    sharedTarget,
-    setSharedTarget,
     replyTarget,
     setReplyTarget,
     show,
@@ -37,7 +35,7 @@ export function useChatActions({
   const [sending, setSending] = useState(false);
 
   const retry = useRef<
-    { body: string; clientId: string; conversation: string; assistantId?: string; replyTo?: string } | undefined
+    { body: string; clientId: string; conversation: string; replyTo?: string } | undefined
   >(undefined);
 
   const composerInput = useRef<HTMLTextAreaElement>(null);
@@ -83,23 +81,20 @@ export function useChatActions({
     [analyze, openConversation]
   );
 
-  const post = (body: string, fromDraft: boolean, requestedAssistant?: string, requestedReply?: string) =>
+  const post = (body: string, fromDraft: boolean, requestedReply?: string) =>
     perform(async () => {
       const text = body.trim();
       if (!c || !text) return;
-      const target = c.kind === 'assistant' ? undefined : requestedAssistant || sharedTarget || undefined;
       const replyTo = fromDraft ? replyTarget?._id : requestedReply;
       if (
         retry.current?.body !== text ||
         retry.current.conversation !== c._id ||
-        retry.current.assistantId !== target ||
         retry.current.replyTo !== replyTo
       )
         retry.current = {
           body: text,
           clientId: crypto.randomUUID(),
           conversation: c._id,
-          assistantId: target,
           replyTo
         };
       setSending(true);
@@ -107,7 +102,6 @@ export function useChatActions({
         await chatService.send(c._id, {
           body: text,
           clientId: retry.current.clientId,
-          ...(target ? { assistantId: target } : {}),
           ...(replyTo ? { replyTo } : {})
         });
         const current = latestNavigation.current;
@@ -116,7 +110,6 @@ export function useChatActions({
           setDraft('');
           if (current.replyTarget?._id === replyTarget?._id) setReplyTarget(undefined);
         }
-        if (sameThread && target && current.sharedTarget === target) setSharedTarget('');
         retry.current = undefined;
         if (sameThread) atBottom.current = true;
         const [rows, jobs] = await Promise.all([chatService.messages(c._id), chatService.runs(c._id)]);

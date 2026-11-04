@@ -633,6 +633,26 @@ describe('handles and public users with in-memory MongoDB', () => {
       expect((await fetch(`${base}/users/fresh`)).status).toBe(404);
     });
   });
+  it('shows only public managers with handles on a bot profile', async () => {
+    const named = await account('named@example.test', { handle: 'ann-lee', firstName: 'Ann', lastName: 'Lee' });
+    const plain = await account('plain@example.test', { handle: 'ray' });
+    const hidden = await account('hidden@example.test', { handle: 'hidden', profilePublic: false });
+    const unlisted = await account('unlisted@example.test');
+    await account('bot@example.test', {
+      kind: 'assistant', signupMethod: 'assistant', assistantId: 'assistant-test', handle: 'helper',
+      managerIds: [named.id, plain.id, hidden.id, unlisted.id]
+    });
+
+    const response = await fetch(`${base}/users/helper`);
+
+    expect(response.status).toBe(200);
+    const { data } = (await response.json()) as { data: { managers: object[] } };
+    expect(data.managers).toEqual(
+      expect.arrayContaining([{ handle: 'ann-lee', name: 'Ann Lee' }, { handle: 'ray', name: 'ray' }])
+    );
+    expect(data.managers).toHaveLength(2);
+  });
+
   it('serves a labeled bot profile while refusing sessions and human bootstrap authority', async () => {
     const bot = await User.create({
       email: 'vivi@bots.visin.invalid',

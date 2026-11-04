@@ -11,6 +11,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  Link,
   List,
   ListItem,
   ListItemAvatar,
@@ -20,6 +21,8 @@ import {
   Tooltip,
   Typography
 } from '@mui/material';
+import type { AuthUser } from '@visin/frontend-core';
+import { authService } from '../../contexts/AuthContext';
 import { useEffect, useId, useState } from 'react';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { chatService } from '../../services/chatService';
@@ -31,7 +34,7 @@ const STATUS: Record<Participant['state'], string> = {
   left: 'Left',
   blocked: 'Blocked'
 };
-const ROLE: Record<string, string> = { owner: 'Owner', admin: 'Administrator', member: 'Member' };
+const ROLE: Record<string, string> = { owner: 'Owner', admin: 'Administrator', member: 'Member', assistant: 'AI assistant' };
 const initials = (name: string) =>
   name
     .trim()
@@ -43,6 +46,7 @@ const initials = (name: string) =>
 
 export function PeopleDialog() {
   const titleId = useId();
+  const [ownProfile, setOwnProfile] = useState<AuthUser | null>(null);
   const [busy, setBusy] = useState(false);
   const [inviteHandle, setInviteHandle] = useState('');
   const { showPeople, setShowPeople, c, me, user, perform, selected, refreshList, membership, error, setError } =
@@ -53,6 +57,15 @@ export function PeopleDialog() {
       setError('');
     }
   }, [showPeople, c?._id, setError]);
+  useEffect(() => {
+    if (!showPeople || !user?.id) return;
+    let cancelled = false;
+    setOwnProfile(null);
+    void authService.getProfile().then((profile) => {
+      if (!cancelled && profile?.id === user.id) setOwnProfile(profile);
+    });
+    return () => { cancelled = true; };
+  }, [showPeople, user?.id]);
   const run = async (operation: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -63,7 +76,15 @@ export function PeopleDialog() {
     }
   };
   const close = () => setShowPeople(false);
-  const participants = c?.participants || [];
+  const participants: Participant[] = c?.kind === 'assistant'
+    ? [...c.participants, {
+        userId: `assistant:${c.assistantId || c._id}`,
+        name: c.profile?.name || c.title,
+        state: 'active',
+        role: 'assistant',
+        readSeq: 0
+      }]
+    : c?.participants || [];
   const canInvite = c?.kind === 'room' && ['owner', 'admin'].includes(me?.role || '');
   const invite = () =>
     void run(async () => {
@@ -88,7 +109,9 @@ export function PeopleDialog() {
               People
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {c?.groupId
+              {c?.kind === 'assistant'
+                ? 'Private chat · you and this assistant'
+                : c?.groupId
                 ? 'Group membership controls access'
                 : `${participants.filter((p) => p.state === 'active').length} joined · ${participants.filter((p) => p.state === 'invited').length} invited`}
             </Typography>
@@ -108,6 +131,22 @@ export function PeopleDialog() {
         <List disablePadding aria-label="Conversation members">
           {participants.map((p) => {
             const own = p.userId === user?.id;
+            const identity = own
+              ? (ownProfile?.id === user?.id ? ownProfile : user)
+              : p.role === 'assistant' || c?.profile?.id === p.userId ? c?.profile : undefined;
+            const profileHref = identity?.handle ? `/u/${encodeURIComponent(identity.handle)}` : undefined;
+            const avatar = (
+              <Avatar
+                src={identity?.picture}
+                alt={p.name}
+                sx={{
+                  width: 38, height: 38, fontSize: 14, fontWeight: 600,
+                  bgcolor: 'action.selected', color: own ? 'primary.main' : 'text.secondary'
+                }}
+              >
+                {initials(p.name)}
+              </Avatar>
+            );
             const departed = p.state === 'left' || p.state === 'blocked';
             return (
               <ListItem
@@ -116,18 +155,11 @@ export function PeopleDialog() {
                 sx={{ py: 1.5, gap: 1, opacity: departed ? 0.65 : 1, alignItems: 'center' }}
               >
                 <ListItemAvatar sx={{ minWidth: 48 }}>
-                  <Avatar
-                    sx={{
-                      width: 38,
-                      height: 38,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      bgcolor: 'action.selected',
-                      color: own ? 'primary.main' : 'text.secondary'
-                    }}
-                  >
-                    {initials(p.name)}
-                  </Avatar>
+                  {profileHref ? (
+                    <Link href={profileHref} aria-label={own ? 'View your profile' : `View ${p.name} profile`} sx={{ display: 'inline-flex', borderRadius: '50%' }}>
+                      {avatar}
+                    </Link>
+                  ) : avatar}
                 </ListItemAvatar>
                 <ListItemText
                   sx={{ minWidth: 0, m: 0 }}

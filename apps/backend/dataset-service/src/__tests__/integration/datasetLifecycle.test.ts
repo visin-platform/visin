@@ -162,6 +162,8 @@ describe('transferring a dataset', () => {
       kind: 'group',
       id: OTHER_GROUP
     });
+    // The audit write is asynchronous; let it finish before fixture cleanup.
+    expect((await events(1))[0]).toMatchObject({ action: 'transfer', resourceId: id });
   });
 });
 

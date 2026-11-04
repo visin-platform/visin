@@ -74,9 +74,15 @@ describe('shared assistants', () => {
     expect(await Message.countDocuments({ conversationId, kind: 'assistant' })).toBe(1);
     expect((await AssistantRun.findOne({ conversationId }))?.userId).toBe('bob');
     const answer = await Message.findOne({ conversationId, kind: 'assistant' });
+    const quoted = await request(`/conversations/${conversationId}/messages`, 'alice', {
+      body: 'For Bob, quoting the earlier answer', clientId: 'human-quote-001', replyTo: answer!.id
+    });
+    expect(quoted.status).toBe(201);
+    expect((await Message.findById(quoted.body.data._id).select('+assistantRequest'))?.assistantRequest).toBeUndefined();
     const followUp = await request(`/conversations/${conversationId}/messages`, 'alice', {
       body: 'Explain more',
       clientId: 'reply-to-assistant-001',
+      assistantId: assistant.id,
       replyTo: answer!.id
     });
     expect(followUp.status).toBe(201);

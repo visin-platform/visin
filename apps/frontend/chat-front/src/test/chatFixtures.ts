@@ -13,6 +13,7 @@ export const state = {
 };
 
 vi.mock('../contexts/AuthContext', () => ({
+  authService: { getProfile: vi.fn(async () => ({ id: 'alice', handle: 'alice', picture: 'https://example.test/alice.png' })) },
   useAuth: () => ({ user: { id: 'alice' }, isAuthenticated: state.authenticated, isLoading: false, login: vi.fn() })
 }));
 

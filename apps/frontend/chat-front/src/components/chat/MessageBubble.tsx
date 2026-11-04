@@ -1,8 +1,16 @@
 import { ContentCopy, Reply } from '@mui/icons-material';
-import { Avatar, Box, Button, Chip, Link, Stack, Typography } from '@mui/material';
+import { Avatar, Box, Button, Chip, IconButton, Link, Stack, Tooltip, Typography } from '@mui/material';
 import { Markdown } from '@visin/frontend-core';
 import type { Message } from '../../types/chat';
 import { evidenceLinks } from '../../utils/messages';
+
+const actionSx = {
+  color: 'text.secondary',
+  width: { xs: 44, sm: 36 },
+  height: { xs: 44, sm: 36 },
+  '&:hover': { color: 'primary.main' }
+};
+
 export function MessageBubble({
   message,
   own = false,
@@ -99,25 +107,31 @@ export function MessageBubble({
           </Stack>
         )}
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ px: 1, mt: 0.5 }}>
-        {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </Typography>
-      <Stack
-        direction="row"
-        sx={{ gap: 0.5, flexWrap: 'wrap', '& .MuiButton-root': { fontSize: '0.7rem', py: 0, minHeight: 28 } }}
-      >
-        <Button size="small" startIcon={<ContentCopy />} onClick={() => onCopy(message.body)}>
-          Copy
-        </Button>
-        {message.kind !== 'system' && (
-          <Button
+      <Stack direction="row" sx={{ gap: 0.25, mt: 0.25, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ px: 0.75 }}>
+          {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Typography>
+        <Tooltip title="Copy message" arrow>
+          <IconButton
             size="small"
-            startIcon={<Reply />}
-            aria-label={`Reply to ${message.senderName}`}
-            onClick={() => onReply(message)}
+            aria-label="Copy"
+            onClick={() => onCopy(message.body)}
+            sx={actionSx}
           >
-            Reply
-          </Button>
+            <ContentCopy sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+        {message.kind !== 'system' && (
+          <Tooltip title="Reply to message" arrow>
+            <IconButton
+              size="small"
+              aria-label={`Reply to ${message.senderName}`}
+              onClick={() => onReply(message)}
+              sx={actionSx}
+            >
+              <Reply sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
         )}
         {canSave && message.kind === 'assistant' && (
           <Button size="small" disabled={Boolean(message.findingId)} onClick={() => onSave(message)}>

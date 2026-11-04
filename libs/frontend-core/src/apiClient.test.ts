@@ -114,3 +114,20 @@ describe('createApiClient', () => {
     expect(init.body).toBe(JSON.stringify({ name: 'x' }));
   });
 });
+
+describe('API update methods', () => {
+  it.each(['post', 'put', 'patch'] as const)('sends JSON or a bodyless %s request and keeps caller headers', async method => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ saved: true })));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createApiClient({ baseUrl: () => 'https://api.test' });
+    await expect(client[method]('/item', { name: 'New' }, { headers: { 'X-Request-ID': 'request-1' } })).resolves.toEqual({ saved: true });
+    expect(fetchMock).toHaveBeenLastCalledWith('https://api.test/item', expect.objectContaining({
+      method: method.toUpperCase(), body: '{"name":"New"}',
+      headers: { 'Content-Type': 'application/json', 'X-Request-ID': 'request-1' }
+    }));
+    await client[method]('/item');
+    expect(fetchMock).toHaveBeenLastCalledWith('https://api.test/item', expect.objectContaining({
+      method: method.toUpperCase(), body: undefined
+    }));
+  });
+});

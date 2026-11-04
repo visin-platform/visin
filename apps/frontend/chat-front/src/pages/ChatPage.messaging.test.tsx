@@ -1,5 +1,5 @@
 import { state } from '../test/chatFixtures';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { api } from '../services/apiClient';
 import '../utils/chatContext';
@@ -244,7 +244,8 @@ it('shows failed invitations inside the People dialog and preserves the handle f
   try {
     render(<Chat />);
     fireEvent.click(await screen.findByText('Research discussion'));
-    fireEvent.click(await screen.findByRole('button', { name: 'People' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Conversation settings' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'People' }));
     fireEvent.change(screen.getByLabelText('Public profile handle'), { target: { value: '@missing' } });
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     const dialog = screen.getByRole('dialog', { name: 'People' });
@@ -287,7 +288,7 @@ it('opens people and permissions from the conversation settings menu', async () 
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   fireEvent.click(screen.getByRole('button', { name: 'Conversation settings' }));
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'People and permissions' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'People' }));
   expect(await screen.findByRole('dialog', { name: 'People' })).toBeInTheDocument();
 });
 
@@ -302,4 +303,49 @@ it('shows approximate last activity for a human direct contact', async () => {
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   expect((await screen.findAllByText(/Last active about 10m ago/)).length).toBeGreaterThan(0);
+});
+
+it('keeps a direct conversation free of shared assistant controls and requests', async () => {
+  state.enabled = true;
+  render(<Chat />);
+  fireEvent.click(await screen.findByText('Research discussion'));
+  expect(await screen.findByText('Private conversation')).toBeInTheDocument();
+  expect(screen.queryByText(/Shared assistants/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Agree to shared assistants/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Message'), { target: { value: '@Vivi hello Bob' } });
+  expect(screen.queryByRole('listbox', { name: 'Mention an assistant' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/conversations/c1/messages', expect.objectContaining({ body: '@Vivi hello Bob' })));
+  const sent = vi.mocked(api).mock.calls.find(([path, body]) => path === '/conversations/c1/messages' && body);
+  expect(sent?.[1]).not.toHaveProperty('assistantId');
+  expect(vi.mocked(api).mock.calls.some(([path]) => path.endsWith('/assistants'))).toBe(false);
+});
+
+it('offers People in an assistant chat menu without a duplicate back action', async () => {
+  state.enabled = true;
+  state.conversations[0].kind = 'assistant';
+  state.conversations[0].assistantId = 'vivi';
+  state.conversations[0].participants = [state.conversations[0].participants[0]];
+  state.conversations[0].profile = { id: 'bot', handle: 'vivi', name: 'Vivi' };
+  render(<Chat />);
+  fireEvent.click(await screen.findByText('Research discussion'));
+  fireEvent.click(screen.getByRole('button', { name: 'Conversation settings' }));
+  expect(screen.queryByRole('menuitem', { name: 'Back to conversations' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'People' }));
+  const dialog = await screen.findByRole('dialog', { name: 'People' });
+  expect(within(dialog).getByText('Vivi')).toBeInTheDocument();
+  expect(within(dialog).getByText('Alice')).toBeInTheDocument();
+  expect(within(dialog).getByText('AI assistant')).toBeInTheDocument();
+  expect(within(dialog).queryByRole('button', { name: 'Invite' })).not.toBeInTheDocument();
+});
+
+it('shows your avatar in People and links it to your profile', async () => {
+  render(<Chat />);
+  fireEvent.click(await screen.findByText('Research discussion'));
+  fireEvent.click(screen.getByRole('button', { name: 'Conversation settings' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'People' }));
+  const dialog = await screen.findByRole('dialog', { name: 'People' });
+  const link = await within(dialog).findByRole('link', { name: 'View your profile' });
+  expect(link).toHaveAttribute('href', '/u/alice');
+  expect(within(link).getByRole('img', { name: 'Alice' })).toHaveAttribute('src', 'https://example.test/alice.png');
 });

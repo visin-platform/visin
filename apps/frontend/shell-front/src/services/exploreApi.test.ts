@@ -362,3 +362,14 @@ describe('entryName', () => {
     expect(entryName(base)).toBe('Evaluation');
   });
 });
+
+it('requests paginated public people and group directories', async () => {
+  const people = { people: [{ id: 'u1', handle: 'ann', name: 'Ann' }], pagination: { page: 2, limit: 12, total: 13, pages: 2 } };
+  get.mockResolvedValueOnce({ data: people });
+  await expect(exploreApi.directoryPeople(2, 12)).resolves.toEqual(people);
+  expect(get).toHaveBeenLastCalledWith('https://auth.test/auth/directory?page=2&limit=12', { skipAuthRedirect: true });
+  const groups = { groups: [], pagination: { page: 1, limit: 24, total: 0, pages: 0 } };
+  get.mockResolvedValueOnce({ data: groups });
+  await expect(exploreApi.directoryGroups(1, 24)).resolves.toEqual(groups);
+  expect(get).toHaveBeenLastCalledWith('https://group.test/api/public/directory?page=1&limit=24', { skipAuthRedirect: true });
+});

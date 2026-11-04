@@ -296,6 +296,18 @@ describe('profile pictures with in-memory MongoDB', () => {
       expect((await picture(bot.id)).status).toBe(404);
       expect((await User.findById(bot.id))!.picture).toBeUndefined();
     });
+    it('requires a public service address and an uploaded picture for manager previews', async () => {
+      const { manager, bot } = await botFixture();
+      const headers = { authorization: `Bearer ${await tokenFor(manager)}`, 'content-type': 'image/png' };
+      expect((await fetch(`${base}/bots/${bot.id}/picture`, { headers })).status).toBe(404);
+      expect((await fetch(`${base}/bots/not-an-id/picture`, { headers })).status).toBe(404);
+      delete process.env.AUTH_SERVICE_PUBLIC_URL;
+      delete process.env.AUTH_SERVICE_URL;
+      const response = await fetch(`${base}/bots/${bot.id}/picture`, { method: 'PUT', headers, body: PNG });
+      expect(response.status).toBe(503);
+      expect(await Avatar.countDocuments({ userId: bot.id })).toBe(0);
+      expect((await User.findById(bot.id))!.picture).toBeUndefined();
+    });
     it('rejects outsiders, humans, stale manager metadata, unsafe formats and oversized uploads', async () => {
       const { manager, bot, assistantId } = await botFixture();
       const outsider = await account();

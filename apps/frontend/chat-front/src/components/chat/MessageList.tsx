@@ -1,6 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Refresh, Stop } from '@mui/icons-material';
-import { Alert, Box, Button, Chip, CircularProgress, IconButton, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, IconButton, Snackbar, Stack, Typography } from '@mui/material';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { chatService } from '../../services/chatService';
 import { MessageBubble } from './MessageBubble';
@@ -19,6 +19,7 @@ function messageDay(value: string) {
 }
 
 export function MessageList() {
+  const [copied, setCopied] = useState(false);
   const {
     scroller,
     atBottom,
@@ -105,6 +106,7 @@ export function MessageList() {
             onCopy={(body) =>
               void perform(async () => {
                 await navigator.clipboard.writeText(body);
+                setCopied(true);
               })
             }
           />
@@ -142,6 +144,7 @@ export function MessageList() {
           severity="warning"
           action={
             failedQuestion &&
+            c.kind === 'assistant' &&
             enabled &&
             (latestRun.canRetry ?? ownRun(latestRun)) && (
               <Button
@@ -149,7 +152,7 @@ export function MessageList() {
                 size="small"
                 startIcon={<Refresh />}
                 disabled={sending}
-                onClick={() => void post(failedQuestion.body, false, latestRun.assistantId, failedQuestion.replyTo)}
+                onClick={() => void post(failedQuestion.body, false, failedQuestion.replyTo)}
               >
                 Retry
               </Button>
@@ -159,6 +162,12 @@ export function MessageList() {
           {latestRun.error || 'The analysis failed.'}
         </Alert>
       )}
+      <Snackbar
+        open={copied}
+        autoHideDuration={2000}
+        onClose={() => setCopied(false)}
+        message="Message copied"
+      />
       {c.kind === 'assistant' && !messages.length && <AnalysisStarters context={c} onAsk={ask} />}
     </Box>
   );

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -16,6 +17,7 @@ vi.mock('../../remotes', () => {
         <a href={`${window.location.origin}/u/vivi?from=chat#about`} target="_blank">
           Absolute profile
         </a>
+        {createPortal(<a href="/account/analyst">Analyst settings</a>, document.body)}
         <input aria-label="Chat draft" defaultValue="Unsent message" />
       </div>
     );
@@ -259,4 +261,16 @@ it('preserves modified clicks on profile links', () => {
   openChat();
   fireEvent.click(screen.getByRole('link', { name: 'Vivi profile' }), { ctrlKey: true });
   expect(screen.getByText('Results at /projects')).toBeInTheDocument();
+});
+
+it('opens analyst settings from a portaled menu in the left page without remounting chat', () => {
+  mount();
+  openChat();
+  const draft = screen.getByLabelText('Chat draft');
+  fireEvent.change(draft, { target: { value: 'Keep this question' } });
+  fireEvent.click(screen.getByRole('link', { name: 'Analyst settings' }));
+  expect(screen.getByText('Results at /account/analyst')).toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: 'Chat' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Chat draft')).toBe(draft);
+  expect(draft).toHaveValue('Keep this question');
 });

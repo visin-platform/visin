@@ -192,7 +192,8 @@ export function ChatSidePanel() {
         const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
         if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download')) return;
         const url = new URL(anchor.href, window.location.href);
-        if (url.origin !== window.location.origin || !/^\/u\/[^/]+\/?$/.test(url.pathname)) return;
+        const inShell = /^\/u\/[^/]+\/?$/.test(url.pathname) || /^\/account\/analyst\/?$/.test(url.pathname);
+        if (url.origin !== window.location.origin || !inShell) return;
         // Remotes render ordinary anchors (including Markdown links). The shell owns navigation,
         // so keep the mounted conversation and change only the page beside it.
         event.preventDefault();
