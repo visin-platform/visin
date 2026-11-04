@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.6.0](https://github.com/visin-platform/visin/compare/v2.5.0...v2.6.0) (2026-11-04)
+
+### Features
+
+* improve bot setup ux ([c628fdc](https://github.com/visin-platform/visin/commit/c628fdc14ac6f1bfa2aebbc018eb81d32bc95303))
+
 ## [2.5.0](https://github.com/visin-platform/visin/compare/v2.4.1...v2.5.0) (2026-11-04)
 
 ### Features
