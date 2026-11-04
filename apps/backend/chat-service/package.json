@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit && tsc --project src/__tests__/tsconfig.json"
   },
   "dependencies": {
-    "@visin/backend-core": "1.17.1",
+    "@visin/backend-core": "1.18.0",
     "express": "^5.3.0",
     "mongoose": "~9.10.4",
     "zod": "^4.6.7",
