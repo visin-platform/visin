@@ -1,4 +1,3 @@
-import type { Request } from 'express';
 import {
   BadGatewayError,
   ForbiddenError,
@@ -7,7 +6,8 @@ import {
   fetchWithTimeout,
   requireEnv
 } from '@visin/backend-core';
-import { Conversation, type ChatConversation } from '../models';
+import type { Request } from 'express';
+import { Conversation, type ChatConversation } from '../models/Conversation';
 
 export const groups = createGroupServiceClient('chat-service');
 export function endpoint(service: string): string {
@@ -104,14 +104,14 @@ export function historyFilter(conversation: ChatConversation, userId: string) {
       : { seq: -1 };
   return {};
 }
-export async function publicPerson(handle: string): Promise<{ id: string; name: string; handle: string }> {
+export async function publicPerson(handle: string): Promise<{ id: string; name: string; handle: string; kind?: string; assistantId?: string }> {
   const response = await fetchWithTimeout(`${endpoint('AUTH')}/auth/users/${encodeURIComponent(handle)}`, {
     timeoutMs: 5000,
     serviceName: 'auth-service'
   });
   if (response.status === 404) throw new NotFoundError('Public profile not found');
   if (!response.ok) throw new BadGatewayError('Could not look up this profile');
-  return ((await response.json()) as { data: { id: string; name: string; handle: string } }).data;
+  return ((await response.json()) as { data: { id: string; name: string; handle: string; kind?: string; assistantId?: string } }).data;
 }
 
 /** Only contacts whose roster the current user may already read. Never an account directory. */

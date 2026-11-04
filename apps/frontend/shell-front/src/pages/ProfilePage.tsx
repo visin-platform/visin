@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link as RouterLink, useParams, useNavigate } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { ChatBubbleOutlined } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
@@ -6,6 +6,7 @@ import { useTrackVisit } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { exploreApi } from '../services/exploreApi';
+import { AssistantProfileEditor } from '../components/profile/AssistantProfileEditor';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
 import { useChatDock } from '../components/chat/chatDock';
@@ -26,6 +27,7 @@ const shell = {
  */
 export function ProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
+  const navigate = useNavigate();
   const { user: me } = useAuth();
   const chat = useChatDock();
   const profile = useQuery({ queryKey: ['profile', handle], queryFn: () => exploreApi.user(handle) });
@@ -83,28 +85,64 @@ export function ProfilePage({ now }: { now?: Date }) {
         picture={person.picture}
         bio={person.bio}
         links={person.links}
-        meta={`Joined ${joined}`}
+        meta={person.kind === 'assistant' ? 'Bot · AI assistant' : `Joined ${joined}`}
         edit={me?.id === person.id ? { to: '/account/profile' } : undefined}
         actions={
-          chat.available &&
-          me?.id !== person.id && (
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<ChatBubbleOutlined />}
-              onClick={() => chat.openWith({ kind: 'direct', handle: person.handle, name: person.name })}
-            >
-              Message
-            </Button>
-          )
+          <>
+            {me && person.kind === 'assistant' && person.assistantId && (
+              <AssistantProfileEditor
+                key={`${me.id}:${person.assistantId}`}
+                assistantId={person.assistantId}
+                userId={person.id}
+                viewerId={me.id}
+                handle={person.handle}
+                bio={person.bio}
+                onSaved={async (savedHandle) => {
+                  if (savedHandle && savedHandle !== person.handle) {
+                    navigate(`/u/${encodeURIComponent(savedHandle)}`, { replace: true });
+                  } else {
+                    await profile.refetch();
+                  }
+                }}
+              />
+            )}
+            {chat.available && me?.id !== person.id && (
+              <Button
+                disabled={person.kind === 'assistant' && person.paused}
+                variant="contained"
+                size="small"
+                startIcon={<ChatBubbleOutlined />}
+                onClick={() =>
+                  chat.openWith(
+                    person.kind === 'assistant' && person.assistantId
+                      ? { kind: 'assistant', assistantId: person.assistantId, title: person.name }
+                      : { kind: 'direct', handle: person.handle, name: person.name }
+                  )
+                }
+              >
+                {person.kind === 'assistant' ? `Ask ${person.name}` : 'Message'}
+              </Button>
+            )}
+          </>
         }
       />
-      <ProfileLists
-        owner={{ user: person.id }}
-        cacheKey={`user:${handle}`}
-        showActivity={person.showActivity}
-        now={now}
-      />
+      {person.kind === 'assistant' &&
+        person.managers?.map((manager) => (
+          <Typography key={manager.handle} variant="body2">
+            Managed by{' '}
+            <Button component={RouterLink} to={`/u/${manager.handle}`}>
+              {manager.name}
+            </Button>
+          </Typography>
+        ))}
+      {person.kind !== 'assistant' && (
+        <ProfileLists
+          owner={{ user: person.id }}
+          cacheKey={`user:${handle}`}
+          showActivity={person.showActivity}
+          now={now}
+        />
+      )}
     </Box>
   );
 }

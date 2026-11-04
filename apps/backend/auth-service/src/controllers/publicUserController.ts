@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { appLink, escapeHtml, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
 import { User, type IUser } from '../models/User';
+import { Session } from '../models/Session';
 import { ensureHandle } from '../services/handleService';
 import { escapeRegex } from '../utils/escapeRegex';
 
-const PUBLIC_FIELDS = 'handle firstName lastName picture bio links profilePublic showActivity createdAt';
+const PUBLIC_FIELDS =
+  'kind assistantId managerIds assistantPaused handle firstName lastName picture bio links profilePublic showActivity createdAt';
 
 /**
  * What the world may know of an account: never the email, and a name only as
@@ -12,6 +14,9 @@ const PUBLIC_FIELDS = 'handle firstName lastName picture bio links profilePublic
  * to fall back to that was not chosen to be shown.
  */
 export const toPublicUser = (user: IUser) => ({
+  ...(user.kind === 'assistant'
+    ? { kind: 'assistant' as const, assistantId: user.assistantId, paused: Boolean(user.assistantPaused) }
+    : {}),
   id: user._id.toString(),
   handle: user.handle as string,
   name: [user.firstName, user.lastName].filter(Boolean).join(' ') || (user.handle as string),
@@ -32,7 +37,25 @@ export const getPublicUser = async (req: Request, res: Response): Promise<void> 
   if (!user || user.profilePublic !== true) {
     throw new NotFoundError('No such user');
   }
-  res.json({ success: true, data: toPublicUser(user) });
+  const managers =
+    user.kind === 'assistant'
+      ? await User.find({ _id: { $in: user.managerIds || [] }, profilePublic: true }).select(
+          'handle firstName lastName'
+        )
+      : [];
+  res.json({
+    success: true,
+    data: {
+      ...toPublicUser(user),
+      ...(user.kind === 'assistant'
+        ? {
+            managers: managers
+              .filter((m) => m.handle)
+              .map((m) => ({ handle: m.handle, name: [m.firstName, m.lastName].filter(Boolean).join(' ') || m.handle }))
+          }
+        : {})
+    }
+  });
 };
 
 /**
@@ -43,13 +66,30 @@ export const getPublicUser = async (req: Request, res: Response): Promise<void> 
 export const lookupPublicUsers = async (req: Request, res: Response): Promise<void> => {
   const { ids } = req.body as { ids: string[] };
   const users = await User.find({ _id: { $in: ids } }).select(PUBLIC_FIELDS);
+  const activityIds = users
+    .filter((user) => user.profilePublic === true && user.showActivity !== false && user.kind !== 'assistant')
+    .map((user) => user._id);
+  const activity = activityIds.length
+    ? await Session.aggregate<{ _id: unknown; lastActiveAt: Date }>([
+        { $match: { userId: { $in: activityIds }, expiresAt: { $gt: new Date() } } },
+        { $group: { _id: '$userId', lastActiveAt: { $max: '$lastSeenAt' } } }
+      ])
+    : [];
+  const lastActive = new Map(activity.map((entry) => [String(entry._id), entry.lastActiveAt]));
   const data = await Promise.all(
     users.map(async (user) => {
       if (user.profilePublic !== true) return { id: user._id.toString() };
       // Reading is what gives a pre-handle account its handle, so its page can be linked.
       await ensureHandle(user);
-      const { id, handle, name, picture } = toPublicUser(user);
-      return { id, handle, name, ...(picture ? { picture } : {}) };
+      const { id, handle, name, picture, kind } = toPublicUser(user);
+      return {
+        id,
+        handle,
+        name,
+        ...(kind ? { kind } : {}),
+        ...(picture ? { picture } : {}),
+        ...(lastActive.has(id) ? { lastActiveAt: lastActive.get(id)!.toISOString() } : {})
+      };
     })
   );
   res.json({ success: true, data });
@@ -74,8 +114,8 @@ export const searchPublicUsers = async (req: Request, res: Response): Promise<vo
   res.json({
     success: true,
     data: users.map((user) => {
-      const { id, handle, name, picture } = toPublicUser(user);
-      return { id, handle, name, ...(picture ? { picture } : {}) };
+      const { id, handle, name, picture, kind } = toPublicUser(user);
+      return { id, handle, name, ...(kind ? { kind } : {}), ...(picture ? { picture } : {}) };
     })
   });
 };
@@ -122,8 +162,8 @@ export const listPublicUsers = async (req: Request, res: Response): Promise<void
     success: true,
     data: {
       people: users.map((user) => {
-        const { id, handle, name, picture } = toPublicUser(user);
-        return { id, handle, name, ...(picture ? { picture } : {}) };
+        const { id, handle, name, picture, kind } = toPublicUser(user);
+        return { id, handle, name, ...(kind ? { kind } : {}), ...(picture ? { picture } : {}) };
       }),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     }

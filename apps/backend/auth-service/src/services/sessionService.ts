@@ -147,6 +147,7 @@ export const startSession = async (
   method: SignInMethod,
   identity: SessionIdentity = {}
 ): Promise<{ payload: UserPayload; token: string }> => {
+  if (dbUser.kind === 'assistant') throw new UnauthorizedError('Bots cannot sign in');
   const session = await createSession(req, dbUser._id.toString(), method);
   return mintSessionToken(
     res,

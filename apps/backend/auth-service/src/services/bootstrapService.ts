@@ -15,7 +15,7 @@ export const initializeBootstrap = async (): Promise<void> => {
 };
 
 /** Legacy non-empty installations must never become public setup candidates. */
-export const needsSetup = async (): Promise<boolean> => !(await User.exists({}));
+export const needsSetup = async (): Promise<boolean> => !(await User.exists({ kind: { $ne: 'assistant' } }));
 
 export const assertRegistrationOpen = async (): Promise<void> => {
   if (await needsSetup()) throw new ConflictError('Complete initial setup before registering');
@@ -44,7 +44,7 @@ export const createFirstUser = async ({ email, password, firstName, lastName }: 
 /** Local operator recovery only; this function has no public HTTP route. */
 export const recoverAdministrator = async (userId: string): Promise<IUser> => {
   if (!/^[a-f\d]{24}$/i.test(userId)) throw new BadRequestError('A valid existing user ID is required');
-  const user = await User.findByIdAndUpdate(userId, { $addToSet: { roles: 'admin' } }, { returnDocument: 'after' });
+  const user = await User.findOneAndUpdate({ _id: userId, kind: { $ne: 'assistant' } }, { $addToSet: { roles: 'admin' } }, { returnDocument: 'after' });
   if (!user) throw new NotFoundError('User not found; recovery does not create accounts');
   return user;
 };

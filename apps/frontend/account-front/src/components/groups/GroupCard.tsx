@@ -17,6 +17,7 @@ import {
 import { livePalette } from '@visin/frontend-core';
 import { Check, Close, Delete, Edit, ExpandMore } from '@mui/icons-material';
 import { Group, GroupRole, permissionsFor, roleOf } from '../../types/group';
+import { OpenChatButton } from './OpenChatButton';
 import GroupMembers from './GroupMembers';
 import GroupInvitations from './GroupInvitations';
 import AddMember from './AddMember';
@@ -107,6 +108,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
       </AccordionSummary>
 
       <AccordionDetails sx={{ px: { xs: 2, sm: 3 }, pb: 3, pt: 1, bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
+        {myRole && <OpenChatButton request={{ kind: 'group', groupId: group._id }} disabled={busy} />}
         {permissions.canRename && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
             {editingName ? (

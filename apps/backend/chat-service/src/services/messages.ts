@@ -1,6 +1,10 @@
-import { Conversation, Message } from '../models';
+import { ConflictError } from '@visin/backend-core';
+import { flushMembershipEvents } from './membershipAudit';
+import { Conversation } from '../models/Conversation';
+import { Message } from '../models/Message';
 
 export async function appendMessage(input: {
+  expectedMembershipVersion?: number;
   conversationId: string;
   senderId: string;
   senderName: string;
@@ -8,9 +12,19 @@ export async function appendMessage(input: {
   body: string;
   clientId: string;
   replyTo?: string;
-  assistantRequest?: { email: string; userId: string; name: string; membershipVersion: number };
+  quote?: { messageId: string; senderName: string; body: string; kind: 'person' | 'assistant' | 'system' };
+  assistantRequest?: {
+    email: string;
+    userId: string;
+    name: string;
+    membershipVersion: number;
+    assistantId?: string;
+    assistantName?: string;
+    personality?: string;
+  };
   evidence?: { tool: string; input: unknown; at: Date }[];
 }) {
+  await flushMembershipEvents(input.conversationId);
   const existing = await Message.findOne({ conversationId: input.conversationId, clientId: input.clientId });
   if (existing) {
     await Conversation.updateOne(
@@ -20,11 +34,15 @@ export async function appendMessage(input: {
     return existing;
   }
   const conversation = await Conversation.findOneAndUpdate(
-    { _id: input.conversationId, deletedAt: null },
+    {
+      _id: input.conversationId,
+      deletedAt: null,
+      ...(input.expectedMembershipVersion === undefined ? {} : { membershipVersion: input.expectedMembershipVersion })
+    },
     { $inc: { seq: 1 } },
     { returnDocument: 'after' }
   );
-  if (!conversation) throw new Error('Conversation removed');
+  if (!conversation) throw new ConflictError('Conversation changed; reload before sending');
   try {
     const message = await Message.create({ ...input, seq: conversation.seq });
     await Conversation.updateOne(

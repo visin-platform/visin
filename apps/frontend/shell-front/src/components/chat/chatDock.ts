@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 
 /** A deliberate request to open chat on something. Chat-front reads it and re-checks every id in it. */
 export type ChatRequest =
-  | { kind?: 'assistant' | 'project'; projectId?: string; trainingIds?: string[]; title?: string }
+  | { kind?: 'assistant' | 'project'; assistantId?: string; projectId?: string; trainingIds?: string[]; title?: string }
   | { kind: 'direct'; handle?: string; userId?: string; name?: string }
   | { kind: 'group'; groupId: string; title?: string };
 

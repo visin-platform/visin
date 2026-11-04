@@ -1,4 +1,5 @@
 import React from 'react';
+import { OpenChatButton } from './OpenChatButton';
 import {
   Box,
   Chip,
@@ -77,6 +78,7 @@ const GroupMembers: React.FC<GroupMembersProps> = ({
               <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="body2">{member.email || member.userId}</Typography>
+                  {me && member.userId !== me && <OpenChatButton label="Message" request={{ kind: 'direct', userId: member.userId, name: member.email || member.userId }} disabled={busy} />}
                   {member.userId === me && <Chip label="You" size="small" variant="outlined" />}
                 </Box>
               </TableCell>

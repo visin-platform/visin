@@ -1,3 +1,6 @@
+import type { Request, Response as ExpressResponse } from 'express';
+import { startSession } from '../../services/sessionService';
+import { needsSetup, recoverAdministrator } from '../../services/bootstrapService';
 import { vi } from 'vitest';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -5,6 +8,7 @@ import type { Server } from 'node:http';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler } from '@visin/backend-core';
+import { Session } from '../../models/Session';
 import { User } from '../../models/User';
 import authRoutes from '../../routes/authRoutes';
 import { ensureHandle, isValidHandle, slugify, suggestHandle } from '../../services/handleService';
@@ -483,6 +487,29 @@ describe('handles and public users with in-memory MongoDB', () => {
       return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown>[] } };
     };
 
+    it('returns approximate activity only for public human profiles that show activity', async () => {
+      const visible = await account('active@example.test', { handle: 'active' });
+      const hidden = await account('quiet@example.test', { handle: 'quiet', showActivity: false });
+      const privateUser = await account('private-active@example.test', {
+        handle: 'private-active',
+        profilePublic: false
+      });
+      const at = new Date(Date.now() - 600_000);
+      await Session.create(
+        [visible, hidden, privateUser].map((user) => ({
+          userId: user._id,
+          method: 'password',
+          lastSeenAt: at,
+          expiresAt: new Date(Date.now() + 3600_000),
+          absoluteExpiresAt: new Date(Date.now() + 3600_000)
+        }))
+      );
+      const { body } = await lookup({ ids: [visible.id, hidden.id, privateUser.id] });
+      expect(body.data?.find((user) => user.id === visible.id)?.lastActiveAt).toBe(at.toISOString());
+      expect(body.data?.find((user) => user.id === hidden.id)).not.toHaveProperty('lastActiveAt');
+      expect(body.data?.find((user) => user.id === privateUser.id)).toEqual({ id: privateUser.id });
+    });
+
     it('names the owners it is asked about, and leaves out the ones that do not exist', async () => {
       const ann = await account('ann@example.test', {
         firstName: 'Ann',
@@ -605,5 +632,35 @@ describe('handles and public users with in-memory MongoDB', () => {
       await User.updateOne({ handle: 'fresh' }, { profilePublic: false });
       expect((await fetch(`${base}/users/fresh`)).status).toBe(404);
     });
+  });
+  it('serves a labeled bot profile while refusing sessions and human bootstrap authority', async () => {
+    const bot = await User.create({
+      email: 'vivi@bots.visin.invalid',
+      kind: 'assistant',
+      assistantId: 'assistant-vivi',
+      firstName: 'Vivi',
+      handle: 'vivi',
+      signupMethod: 'assistant',
+      profilePublic: true,
+      showActivity: false
+    });
+    const res = await fetch(`${base}/users/vivi`);
+    const profile = (await res.json()) as { data: Record<string, unknown> };
+    expect(profile.data).toMatchObject({
+      kind: 'assistant',
+      assistantId: 'assistant-vivi',
+      handle: 'vivi',
+      name: 'Vivi'
+    });
+    expect(profile.data).not.toHaveProperty('email');
+    expect(await needsSetup()).toBe(true);
+    const directory = await fetch(`${base}/directory?page=1&limit=24`);
+    expect(((await directory.json()) as { data: { people: object[] } }).data.people).toContainEqual(
+      expect.objectContaining({ handle: 'vivi', kind: 'assistant' })
+    );
+    await expect(startSession({} as Request, {} as ExpressResponse, bot, 'password')).rejects.toThrow(
+      'Bots cannot sign in'
+    );
+    await expect(recoverAdministrator(bot.id)).rejects.toThrow('User not found');
   });
 });

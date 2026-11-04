@@ -1,6 +1,14 @@
+import { initializeAssistantProfileIndexes } from './services/assistantProfiles';
 import { assertRequiredEnv, connectDb, logger, serve } from '@visin/backend-core';
-import { Conversation, Message, AssistantRun, Budget, Block, Settings } from './models';
 import { createApp } from './app';
+import { Assistant } from './models/Assistant';
+import { AssistantRun } from './models/AssistantRun';
+import { Block } from './models/Block';
+import { Budget } from './models/Budget';
+import { Conversation } from './models/Conversation';
+import { ConversationAssistant } from './models/ConversationAssistant';
+import { Message } from './models/Message';
+import { Settings } from './models/Settings';
 import { startWorker } from './services/worker';
 assertRequiredEnv([
   'MONGODB_URI',
@@ -16,6 +24,9 @@ assertRequiredEnv([
 void connectDb({ serviceName: 'chat-service' })
   .then(async () => {
     await Promise.all([
+      initializeAssistantProfileIndexes(),
+      ConversationAssistant.init(),
+      Assistant.init(),
       Conversation.init(),
       Message.init(),
       AssistantRun.init(),

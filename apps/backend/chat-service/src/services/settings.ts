@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
 import { logger } from '@visin/backend-core';
-import { Settings } from '../models';
+import mongoose from 'mongoose';
+import { Settings } from '../models/Settings';
 import { keyStatus, resetProviderKeyCache, resolveProviderKey } from './keys';
 import {
   ADAPTERS,

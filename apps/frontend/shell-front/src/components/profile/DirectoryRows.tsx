@@ -20,7 +20,7 @@ export function PersonRow({ person }: { person: PersonResult }) {
         </Avatar>
       }
       title={person.name}
-      secondary={`@${person.handle}`}
+      secondary={`@${person.handle}${person.kind === 'assistant' ? ' · Bot' : ''}`}
     />
   );
 }

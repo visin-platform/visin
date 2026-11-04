@@ -114,3 +114,5 @@ export type { CreateConfigProviderOptions } from './config/createConfigProvider'
 
 export { ShareButton } from './components/ShareButton';
 export { VerificationMark } from './components/VerificationMark';
+
+export { AVATAR_SIZE, MAX_SOURCE_BYTES, AvatarError, resizeToAvatar } from './profile/resizeImage';

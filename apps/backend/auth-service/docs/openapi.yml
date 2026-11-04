@@ -1202,6 +1202,107 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/bots/{userId}/picture:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [People]
+      summary: Preview a managed bot picture, including unpublished profiles
+      operationId: previewBotPicture
+      x-internal: true
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: The image, with no-store caching and live manager authorization
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      tags: [People]
+      summary: Set a managed bot profile picture
+      operationId: setBotProfilePicture
+      x-internal: true
+      description: |
+        A signed-in creator or manager may upload a bot picture. Live chat assistant authority is rechecked;
+        mirrored profile manager metadata alone grants nothing. JPEG, PNG and WebP bytes up to 256 KB are accepted.
+        Uses the existing avatar store and public image privacy rules; neither the manager's picture nor session changes.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/png: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        '200':
+          description: The picture is set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [picture]
+                    properties:
+                      picture: { type: string, format: uri }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: The picture is over 256 KB
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: This deployment has no public auth-service address configured for picture links
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [People]
+      summary: Remove a managed bot profile picture
+      operationId: removeBotProfilePicture
+      x-internal: true
+      description: The signed-in creator or manager may remove the bot picture. The bot then displays its default avatar.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: The picture is removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, enum: [true] }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/avatars/{userId}:
     get:
       tags: [People]

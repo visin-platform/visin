@@ -29,6 +29,7 @@ export interface PublicGroup {
 
 /** A person as the search lists them: enough to name and link them. */
 export interface PersonResult {
+  kind?: 'human' | 'assistant';
   id: string;
   handle: string;
   name: string;
@@ -46,6 +47,10 @@ export interface GroupResult {
 
 /** What anyone may see of an account (auth-service's public page); never the email. */
 export interface PublicUser {
+  kind?: 'human' | 'assistant';
+  assistantId?: string;
+  paused?: boolean;
+  managers?: { handle: string; name: string }[];
   id: string;
   handle: string;
   name: string;

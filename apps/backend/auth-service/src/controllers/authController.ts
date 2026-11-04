@@ -91,7 +91,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body as { email: string; password: string };
 
   // passwordHash is select:false on the schema, so it has to be asked for.
-  const dbUser = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
+  const dbUser = await User.findOne({ email: email.toLowerCase(), kind: { $ne: 'assistant' } }).select('+passwordHash');
 
   // One message for "no such user" and "wrong password", so the response can't
   // be used to enumerate which emails have accounts.
@@ -185,7 +185,7 @@ export const searchUsers = async (req: Request, res: Response): Promise<void> =>
     words.length === 1
       ? { $or: [{ email: new RegExp(`^[^@]*${escapeRegex(q)}`, 'i') }, ...inName(q).$or] }
       : { $and: words.map(inName) };
-  const users = await User.find(filter)
+  const users = await User.find({ $and: [filter, { kind: { $ne: 'assistant' } }] })
     .select('email firstName lastName')
     .sort({ email: 1 })
     .limit(limit);

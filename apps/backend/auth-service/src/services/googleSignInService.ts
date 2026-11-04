@@ -21,7 +21,7 @@ const EMAIL_TAKEN = 'An account with this email already exists. Sign in with its
  */
 export async function signInWithGoogle(identity: TokenPayload): Promise<IUser> {
   const { sub } = identity;
-  const bound = await User.findOne({ googleSubject: sub });
+  const bound = await User.findOne({ googleSubject: sub, kind: { $ne: 'assistant' } });
   if (bound) return bound;
 
   if (identity.email_verified !== true || !identity.email) {
@@ -30,8 +30,8 @@ export async function signInWithGoogle(identity: TokenPayload): Promise<IUser> {
   const email = identity.email.toLowerCase();
   try {
     const legacy = await User.findOneAndUpdate(
-      { email, signupMethod: 'google', googleSubject: { $exists: false }, passwordHash: { $exists: false } },
-      { $set: { googleSubject: sub } },
+      { email, kind: { $ne: 'assistant' }, signupMethod: 'google', googleSubject: { $exists: false }, passwordHash: { $exists: false } },
+      { $set: { googleSubject: sub, kind: { $ne: 'assistant' } } },
       { returnDocument: 'after' }
     );
     if (legacy) return legacy;
@@ -55,7 +55,7 @@ export async function signInWithGoogle(identity: TokenPayload): Promise<IUser> {
 
 /** A concurrent first sign-in with the same subject may already have bound or created the account. */
 async function concurrentWinner(sub: string): Promise<IUser> {
-  const winner = await User.findOne({ googleSubject: sub });
+  const winner = await User.findOne({ googleSubject: sub, kind: { $ne: 'assistant' } });
   if (!winner) throw new ConflictError(EMAIL_TAKEN);
   return winner;
 }

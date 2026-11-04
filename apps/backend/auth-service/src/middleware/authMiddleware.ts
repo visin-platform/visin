@@ -69,7 +69,7 @@ export const authenticateToken = async (req: Request, _res: Response, next: Next
   let session: ISession | null;
   try {
     dbUser = await User.findOne(
-      { _id: decoded.id, email: decoded.email.toLowerCase() },
+      { _id: decoded.id, kind: { $ne: 'assistant' }, email: decoded.email.toLowerCase() },
       undefined,
       { readPreference: 'primary', maxTimeMS: 3000 }
     );
@@ -116,7 +116,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         : null;
       if (session !== null && decoded.tokenVersion != null) {
         const dbUser = await User.findOneAndUpdate(
-          { _id: decoded.id, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
+          { _id: decoded.id, kind: { $ne: 'assistant' }, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
           { $set: { lastLoginAt: new Date() } },
           { returnDocument: 'after', upsert: false }
         );

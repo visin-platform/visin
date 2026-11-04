@@ -10,6 +10,7 @@ export interface OwnerIdentity {
   handle?: string;
   name?: string;
   picture?: string;
+  lastActiveAt?: string;
 }
 
 const MAX_PER_CALL = 100;
@@ -67,7 +68,9 @@ export type OwnerIdentityLookup = (
 export const createOwnerIdentityLookup =
   (serviceId: string): OwnerIdentityLookup =>
   async (owners) => {
-    const ids = (kind: 'user' | 'group') => [...new Set(owners.filter((owner) => owner.kind === kind).map((owner) => owner.id))];
+    const ids = (kind: 'user' | 'group') => [
+      ...new Set(owners.filter((owner) => owner.kind === kind).map((owner) => owner.id))
+    ];
     const [people, groups] = await Promise.all([
       lookup(serviceId, process.env.AUTH_SERVICE_URL, '/auth/internal/users/public', ids('user')),
       lookup(serviceId, process.env.GROUP_SERVICE_URL, '/api/internal/groups/public', ids('group'))

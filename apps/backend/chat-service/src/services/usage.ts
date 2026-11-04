@@ -1,4 +1,5 @@
-import { AssistantRun, Pricing } from '../models';
+import { AssistantRun } from '../models/AssistantRun';
+import { Pricing } from '../models/Pricing';
 import type { ProviderId } from './providers';
 
 const PRICING_KEY = 'pricing';

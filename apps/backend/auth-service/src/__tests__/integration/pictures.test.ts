@@ -265,4 +265,51 @@ describe('profile pictures with in-memory MongoDB', () => {
       expect(verifyJWT(result.token)).toMatchObject({ picture: uploaded });
     });
   });
+  describe('managed bot pictures', () => {
+    async function botFixture() {
+      const manager = await account({ picture: 'https://manager.test/own.png' });
+      const assistantId = new mongoose.Types.ObjectId();
+      const bot = await account({ kind: 'assistant', assistantId: assistantId.toString(), signupMethod: 'assistant', managerIds: [manager.id] });
+      await mongoose.connection.collection('chatassistants').insertOne({ _id: assistantId, profileUserId: bot.id, createdBy: manager.id, managerIds: [], deletedAt: null });
+      return { manager, bot, assistantId };
+    }
+    it('lets the live manager upload, replace and remove a bot avatar without changing their own session or image', async () => {
+      const { manager, bot } = await botFixture();
+      const headers = { authorization: `Bearer ${await tokenFor(manager)}`, 'content-type': 'image/png' };
+      const uploaded = await fetch(`${base}/bots/${bot.id}/picture`, { method: 'PUT', headers, body: PNG });
+      expect(uploaded.status).toBe(200);
+      expect(uploaded.headers.get('set-cookie')).toBeNull();
+      expect((await User.findById(manager.id))!.picture).toBe('https://manager.test/own.png');
+      expect((await picture(bot.id)).status).toBe(200);
+      await User.updateOne({ _id: bot.id }, { $set: { profilePublic: false } });
+      expect((await picture(bot.id)).status).toBe(404);
+      const preview = await fetch(`${base}/bots/${bot.id}/picture`, { headers });
+      expect(preview.status).toBe(200);
+      expect(preview.headers.get('cache-control')).toBe('no-store');
+      expect((await fetch(`${base}/bots/${bot.id}/picture`)).status).toBe(401);
+      const replaced = await fetch(`${base}/bots/${bot.id}/picture`, { method: 'PUT', headers, body: WEBP });
+      expect(replaced.status).toBe(200);
+      expect(await Avatar.countDocuments({ userId: bot.id })).toBe(1);
+      expect((await Avatar.findOne({ userId: bot.id }))!.contentType).toBe('image/webp');
+      const removed = await fetch(`${base}/bots/${bot.id}/picture`, { method: 'DELETE', headers });
+      expect(removed.status).toBe(200);
+      expect((await picture(bot.id)).status).toBe(404);
+      expect((await User.findById(bot.id))!.picture).toBeUndefined();
+    });
+    it('rejects outsiders, humans, stale manager metadata, unsafe formats and oversized uploads', async () => {
+      const { manager, bot, assistantId } = await botFixture();
+      const outsider = await account();
+      const upload = async (actor: typeof manager, target: string, body = PNG) => fetch(`${base}/bots/${target}/picture`, {
+        method: 'PUT', headers: { authorization: `Bearer ${await tokenFor(actor)}`, 'content-type': 'application/octet-stream' }, body
+      });
+      expect((await upload(outsider, bot.id)).status).toBe(404);
+      expect((await upload(manager, manager.id)).status).toBe(404);
+      expect((await upload(manager, bot.id, Buffer.from('<svg></svg>'))).status).toBe(400);
+      expect((await upload(manager, bot.id, Buffer.alloc(256 * 1024 + 1))).status).toBe(413);
+      await mongoose.connection.collection('chatassistants').updateOne({ _id: assistantId }, { $set: { createdBy: outsider.id } });
+      expect((await upload(manager, bot.id)).status).toBe(404);
+      expect(await Avatar.countDocuments({ userId: bot.id })).toBe(0);
+    });
+  });
+
 });

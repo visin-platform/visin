@@ -7,7 +7,7 @@ export async function linkGoogleAccount(userId: string, tokenVersion: number | u
   if (!process.env.GOOGLE_CLIENT_ID) throw new ForbiddenError('Google sign-in is not configured on this instance');
   if (tokenVersion == null) throw new UnauthorizedError('Sign in again before linking Google');
   const user = await User.findById(userId).select('+passwordHash');
-  if (!user || !await verifyPassword(currentPassword, user.passwordHash)) {
+  if (!user || user.kind === 'assistant' || !await verifyPassword(currentPassword, user.passwordHash)) {
     throw new UnauthorizedError('Current password is incorrect. Set a password first if your account has none.');
   }
   let identity;

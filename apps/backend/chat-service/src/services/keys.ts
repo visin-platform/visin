@@ -1,5 +1,5 @@
 import { decryptSecret, encryptSecret, isEncryptionConfigured, logger } from '@visin/backend-core';
-import { ProviderKey } from '../models';
+import { ProviderKey } from '../models/ProviderKey';
 import type { ProviderId } from './providers';
 
 /**

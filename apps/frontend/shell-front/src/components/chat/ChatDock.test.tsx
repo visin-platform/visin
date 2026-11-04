@@ -6,14 +6,22 @@ vi.mock('../../config/ConfigProvider', () => ({
   useConfig: () => ({ CHAT_FRONT_URL: state.enabled ? 'http://chat.test' : undefined })
 }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ isAuthenticated: state.authenticated }) }));
-vi.mock('../../remotes', () => ({
-  remoteChatPanel: () =>
-    function Panel() {
-      if (state.failed) throw new Error('Deployment offline');
-      return <div>Embedded conversations</div>;
-    },
-  forgetChatPanel: vi.fn()
-}));
+vi.mock('../../remotes', () => {
+  function Panel() {
+    if (state.failed) throw new Error('Deployment offline');
+    return (
+      <div>
+        Embedded conversations
+        <a href="/u/vivi">Vivi profile</a>
+        <a href={`${window.location.origin}/u/vivi?from=chat#about`} target="_blank">
+          Absolute profile
+        </a>
+        <input aria-label="Chat draft" defaultValue="Unsent message" />
+      </div>
+    );
+  }
+  return { remoteChatPanel: () => Panel, forgetChatPanel: vi.fn() };
+});
 import { ChatButton, ChatProvider, ChatSidePanel } from './ChatDock';
 import { clampWidth, useChatDock } from './chatDock';
 import { forgetChatPanel } from '../../remotes';
@@ -230,4 +238,25 @@ it('narrows itself when the window does', () => {
   });
   expect(separator).toHaveAttribute('aria-valuenow', '400');
   window.innerWidth = wide;
+});
+
+it('opens profile links in the left page while preserving the chat and draft', () => {
+  mount();
+  openChat();
+  const draft = screen.getByLabelText('Chat draft');
+  fireEvent.change(draft, { target: { value: 'Keep this draft' } });
+  fireEvent.click(screen.getByRole('link', { name: 'Vivi profile' }));
+  expect(screen.getByText('Results at /u/vivi')).toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: 'Chat' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Chat draft')).toBe(draft);
+  expect(draft).toHaveValue('Keep this draft');
+  fireEvent.click(screen.getByRole('link', { name: 'Absolute profile' }));
+  expect(screen.getByText('Results at /u/vivi?from=chat')).toBeInTheDocument();
+});
+
+it('preserves modified clicks on profile links', () => {
+  mount();
+  openChat();
+  fireEvent.click(screen.getByRole('link', { name: 'Vivi profile' }), { ctrlKey: true });
+  expect(screen.getByText('Results at /projects')).toBeInTheDocument();
 });

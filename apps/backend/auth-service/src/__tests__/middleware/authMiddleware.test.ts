@@ -99,7 +99,7 @@ describe('authenticateToken', () => {
     await authenticateToken(req, makeRes(), next as unknown as NextFunction);
 
     expect(mockedVerifyJWT).toHaveBeenCalledWith('cookie-token');
-    expect(mockedUser.findOne).toHaveBeenCalledWith({ _id: 'db-id-1', email: 'test@example.com' }, undefined, {
+    expect(mockedUser.findOne).toHaveBeenCalledWith({ _id: 'db-id-1', kind: { $ne: 'assistant' }, email: 'test@example.com' }, undefined, {
       readPreference: 'primary',
       maxTimeMS: 3000
     });
@@ -254,7 +254,7 @@ describe('optionalAuth', () => {
 
     expect(req.user).toEqual(decoded);
     expect(mockedUser.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 },
+      { _id: 'db-id-1', kind: { $ne: 'assistant' }, email: 'test@example.com', tokenVersion: 3 },
       { $set: { lastLoginAt: expect.any(Date) } },
       { returnDocument: 'after', upsert: false }
     );

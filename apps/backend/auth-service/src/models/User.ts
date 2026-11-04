@@ -2,6 +2,10 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IUser extends Document {
   _id: Types.ObjectId;
+  kind?: 'human' | 'assistant';
+  assistantId?: string;
+  managerIds?: string[];
+  assistantPaused?: boolean;
   email: string;
   firstName?: string;
   lastName?: string;
@@ -53,6 +57,10 @@ export interface IUser extends Document {
 
 const UserSchema = new Schema<IUser>(
   {
+    kind: { type: String, enum: ['human', 'assistant'], default: 'human', immutable: true },
+    managerIds: { type: [String], default: undefined },
+    assistantPaused: Boolean,
+    assistantId: { type: String, immutable: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
@@ -86,6 +94,8 @@ UserSchema.index({ handle: 1 }, {
   unique: true,
   partialFilterExpression: { handle: { $type: 'string' } }
 });
+
+UserSchema.index({ assistantId: 1 }, { unique: true, partialFilterExpression: { assistantId: { $type: 'string' } } });
 
 UserSchema.index({ googleSubject: 1 }, {
   unique: true,

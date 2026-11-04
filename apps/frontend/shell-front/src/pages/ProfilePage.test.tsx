@@ -329,3 +329,15 @@ describe('messaging', () => {
     expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
   });
 });
+
+it('shows Vivi as a bot and opens a private assistant conversation instead of a human invitation', async () => {
+  dock.available = true;
+  authState.user = { id: 'viewer' };
+  api.user.mockResolvedValue({ id: 'bot-user', kind: 'assistant', assistantId: 'assistant-vivi', handle: 'vivi', name: 'Vivi', bio: 'Research assistant', managers: [{ handle: 'bot-manager', name: 'Bot manager' }], links: [], showActivity: false, createdAt: '2026-11-04T00:00:00.000Z' });
+  renderAt('/u/vivi');
+  expect(await screen.findByText('Bot · AI assistant')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Bot manager' })).toHaveAttribute('href', '/u/bot-manager');
+  fireEvent.click(screen.getByRole('button', { name: 'Ask Vivi' }));
+  expect(dock.openWith).toHaveBeenCalledWith({ kind: 'assistant', assistantId: 'assistant-vivi', title: 'Vivi' });
+  expect(screen.queryByRole('tab', { name: 'Projects' })).not.toBeInTheDocument();
+});

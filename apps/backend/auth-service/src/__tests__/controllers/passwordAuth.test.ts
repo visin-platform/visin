@@ -212,7 +212,7 @@ describe('login', () => {
 
     await login(makeReq({ email: 'Ada@Example.com', password }), res);
 
-    expect(mockedUser.findOne).toHaveBeenCalledWith({ email: 'ada@example.com' });
+    expect(mockedUser.findOne).toHaveBeenCalledWith({ email: 'ada@example.com', kind: { $ne: 'assistant' } });
     expect(res.cookie).toHaveBeenCalledWith(
       'access_token',
       expect.any(String),

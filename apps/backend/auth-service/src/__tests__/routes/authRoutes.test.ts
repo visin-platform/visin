@@ -45,7 +45,10 @@ describe('authRoutes', () => {
     expect(find('get', '/sessions')!.handlerCount).toBe(2);
     expect(find('post', '/sessions/revoke-others')!.handlerCount).toBe(2);
     expect(find('delete', '/sessions/:id')!.handlerCount).toBe(3);
-    expect(routes).toHaveLength(34);
+    expect(find('put', '/bots/:userId/picture')!.handlerCount).toBe(4);
+    expect(find('delete', '/bots/:userId/picture')!.handlerCount).toBe(3);
+    expect(find('get', '/bots/:userId/picture')!.handlerCount).toBe(3);
+    expect(routes).toHaveLength(37);
   });
 
   it('lets nobody reach an API key without a session', () => {

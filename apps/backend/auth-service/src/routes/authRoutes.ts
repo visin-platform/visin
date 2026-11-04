@@ -1,3 +1,4 @@
+import { uploadBotPicture, removeBotPicture, getBotPicture } from '../controllers/botPictureController';
 import express, { Router } from 'express';
 import {
   validateToken,
@@ -92,6 +93,9 @@ router.put(
   uploadPicture
 );
 router.delete('/profile/picture', pictureLimiter, authenticateToken, removePicture);
+router.put('/bots/:userId/picture', pictureLimiter, authenticateToken, express.raw({ type: () => true, limit: MAX_AVATAR_BYTES }), uploadBotPicture);
+router.get('/bots/:userId/picture', createRateLimiter({ max: 600 }), authenticateToken, getBotPicture);
+router.delete('/bots/:userId/picture', pictureLimiter, authenticateToken, removeBotPicture);
 // What a public page's `<img>` loads: anyone, so a budget of its own like the other public reads.
 router.get('/avatars/:userId', createRateLimiter({ max: 600 }), getPicture);
 

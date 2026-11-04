@@ -1,11 +1,16 @@
+import { recoverMembershipEvents } from './membershipAudit';
 import { createApiKey, deleteApiKey, logger } from '@visin/backend-core';
-import { AssistantRun, Budget, Conversation, Message } from '../models';
+import { AssistantRun } from '../models/AssistantRun';
+import { Budget } from '../models/Budget';
+import { Conversation } from '../models/Conversation';
+import { Message } from '../models/Message';
 import { analyze, RESERVATION } from './analyst';
-import { appendMessage } from './messages';
-import { assistantSettings } from './settings';
 import { resolveProviderKey } from './keys';
-import { priceSnapshot } from './usage';
+import { appendMessage } from './messages';
 import { PROVIDERS } from './providers';
+import { assistantSettings } from './settings';
+import { runAllowed } from './sharedAssistants';
+import { priceSnapshot } from './usage';
 
 /**
  * Analyses one process runs at once. A turn can take minutes, so one at a time would
@@ -56,6 +61,7 @@ export function startWorker() {
   const active = new Set<string>();
 
   const housekeeping = async () => {
+    await recoverMembershipEvents();
     // A completed result is an outbox too: retries publish the same message ID after a crash.
     const completed = await AssistantRun.find({ state: 'completed', published: false }).limit(50);
     for (const job of completed) {
@@ -64,11 +70,15 @@ export function startWorker() {
         deletedAt: null,
         membershipVersion: job.membershipVersion
       });
-      if (target && job.result)
+      const available =
+        (await assistantSettings()).enabled &&
+        (await runAllowed(job.conversationId, job.userId, job.membershipVersion, job.assistantId));
+      if (target && available && job.result)
         await appendMessage({
+          expectedMembershipVersion: job.membershipVersion ?? undefined,
           conversationId: job.conversationId,
-          senderId: 'assistant:analyst',
-          senderName: 'Visin analyst',
+          senderId: job.assistantId ? `assistant:${job.assistantId}` : 'assistant:analyst',
+          senderName: job.assistantName || 'Visin analyst',
           kind: 'assistant',
           body: job.result,
           clientId: `assistant:${job.messageId}`,
@@ -112,6 +122,9 @@ export function startWorker() {
             userId: request.userId,
             email: request.email,
             name: request.name,
+            assistantId: request.assistantId,
+            assistantName: request.assistantName,
+            personality: request.personality,
             membershipVersion: request.membershipVersion,
             conversationId: message.conversationId,
             messageId: message.id,
@@ -130,22 +143,26 @@ export function startWorker() {
     let key: Awaited<ReturnType<typeof createApiKey>> | undefined;
     const controller = new AbortController();
     controllers.set(run.id, controller);
+    const assistantAvailable = () => runAllowed(run.conversationId, run.userId, run.membershipVersion, run.assistantId);
+    const guard = async () => {
+      controller.signal.throwIfAborted();
+      if (
+        !(await assistantSettings()).enabled ||
+        !(await assistantAvailable()) ||
+        !(await AssistantRun.exists({ _id: run.id, state: 'running' }))
+      )
+        throw new Error('Assistant access or agreement changed');
+    };
     const watch = setInterval(() => {
       // Turning the analyst off in the settings stops a run that is under way, within a second.
-      void Promise.all([AssistantRun.findById(run.id), assistantSettings()])
-        .then(([r, settings]) => {
-          if (!r || r.state !== 'running' || !settings.enabled) controller.abort();
+      void Promise.all([AssistantRun.findById(run.id), assistantSettings(), assistantAvailable()])
+        .then(([r, settings, available]) => {
+          if (!r || r.state !== 'running' || !settings.enabled || !available) controller.abort();
         })
         .catch(() => controller.abort());
     }, 1000);
     try {
-      if (
-        c.kind !== 'assistant' ||
-        c.createdBy !== run.userId ||
-        c.membershipVersion !== run.membershipVersion ||
-        c.deletedAt
-      )
-        throw new Error('Conversation access changed');
+      await guard();
       const trigger = await Message.findById(run.messageId).select('+assistantCancelled');
       if (!trigger || trigger.assistantCancelled) {
         await AssistantRun.updateOne(
@@ -169,7 +186,7 @@ export function startWorker() {
       if (!budget) throw new Error('Your daily assistant token budget is used. Try again tomorrow.');
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
       // provider may have consumed tokens even if the connection did not return usage.
-      if (c.projectId)
+      if (c.kind === 'assistant' && c.projectId)
         key = await createApiKey({
           userId: run.userId,
           userEmail: run.email,
@@ -180,7 +197,15 @@ export function startWorker() {
           project: { id: c.projectId, name: c.projectName || c.title }
         });
       if (key) await AssistantRun.updateOne({ _id: run.id }, { $set: { keyId: key.summary.id } });
-      const questions = await Message.find({ conversationId: c.id, kind: 'person', seq: { $lte: trigger.seq } })
+      const historyAfter =
+        c.kind === 'room'
+          ? Math.max(0, ...c.participants.filter((p) => p.state === 'active').map((p) => p.joinedSeq))
+          : 0;
+      const questions = await Message.find({
+        conversationId: c.id,
+        kind: 'person',
+        seq: { $gt: historyAfter, $lte: trigger.seq }
+      })
         .sort({ seq: -1 })
         .limit(10);
       const replies = await Message.find({
@@ -190,30 +215,56 @@ export function startWorker() {
       });
       // A question posted while a previous answer is running still sees that answer
       // when its own turn starts, even though the answer's sequence is newer.
-      const history = questions.reverse().flatMap((question) => {
+      const privateHistory = questions.reverse().flatMap((question) => {
         const reply = replies.find((r) => r.replyTo === question.id);
         return [
-          { role: 'user' as const, content: question.body },
+          {
+            role: 'user' as const,
+            content: question.quote ? JSON.stringify({ quote: question.quote, question: question.body }) : question.body
+          },
           ...(reply ? [{ role: 'assistant' as const, content: reply.body }] : [])
         ];
       });
+      // Shared history is data, labelled by author; only the triggering person invokes the assistant.
+      const transcript = questions
+        .filter((q) => q.id !== trigger.id)
+        .flatMap((q) => [
+          { speaker: q.senderName, kind: q.kind, body: q.body },
+          ...replies
+            .filter((reply) => reply.replyTo === q.id && reply.seq > historyAfter)
+            .map((reply) => ({ speaker: reply.senderName, kind: reply.kind, body: reply.body }))
+        ]);
+      const sharedText = () =>
+        JSON.stringify({
+          transcript,
+          asker: run.name,
+          question: trigger.body,
+          ...(trigger.quote ? { quote: trigger.quote } : {})
+        });
+      while (transcript.length && sharedText().length > 11000) transcript.shift();
+      const history = c.kind === 'assistant' ? privateHistory : [{ role: 'user' as const, content: sharedText() }];
       await AssistantRun.updateOne({ _id: run.id }, { $set: { provider, model } });
       const result = await analyze({
         provider,
         model,
         apiKey: resolved.key,
         token: key?.token || '',
-        projectId: c.projectId ?? undefined,
-        trainingIds: c.trainingIds,
+        projectId: c.kind === 'assistant' ? (c.projectId ?? undefined) : undefined,
+        trainingIds: c.kind === 'assistant' ? c.trainingIds : [],
+        shared: c.kind !== 'assistant',
+        guard,
+        personality: run.personality ?? undefined,
         history,
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(260000)]),
         activity: async (activity) => {
           await AssistantRun.updateOne({ _id: run.id, state: 'running' }, { $set: { activity } });
         }
       });
+      await guard();
       const current = await AssistantRun.findById(run.id);
       const currentConversation = await Conversation.findById(c.id);
       if (
+        !(await assistantAvailable()) ||
         controller.signal.aborted ||
         current?.state !== 'running' ||
         currentConversation?.membershipVersion !== c.membershipVersion ||

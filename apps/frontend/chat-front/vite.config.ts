@@ -13,7 +13,7 @@ export default defineConfig(() => ({
   envDir: process.env.VITEST ? (false as const) : undefined,
   plugins: [
     react(),
-    // Besides running standalone, account-front is a module-federation remote:
+    // Besides running standalone, chat-front is a module-federation remote:
     // shell-front loads `./App` from this origin's remoteEntry.js. Vitest has no
     // use for the federation build, so it is left out there.
     ...(process.env.VITEST

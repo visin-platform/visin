@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "oxlint . --deny-warnings",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --project src/__tests__/tsconfig.json"
   },
   "dependencies": {
     "@visin/backend-core": "1.17.1",
