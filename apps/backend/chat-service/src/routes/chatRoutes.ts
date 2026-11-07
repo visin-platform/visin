@@ -9,6 +9,7 @@ import { createMembershipRoutes } from './membershipRoutes';
 import { createMessageRoutes } from './messageRoutes';
 import { createChatRateLimits } from './rateLimits';
 import { createRunRoutes } from './runRoutes';
+import { createScreenRoutes } from './screenRoutes';
 import { createSharedAssistantRoutes } from './sharedAssistantRoutes';
 import { createStreamRoutes } from './streamRoutes';
 
@@ -24,6 +25,7 @@ export function createChatRoutes() {
   router.use(createMembershipRoutes(limits));
   router.use(createMessageRoutes(limits));
   router.use(createRunRoutes(limits));
+  router.use(createScreenRoutes(limits));
   router.use(createFindingRoutes(limits));
   router.use(createStreamRoutes());
   return router;

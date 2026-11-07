@@ -22,18 +22,29 @@ export function usePageChatContext({
   const [pageContext, setPageContext] = useState<PageContext | undefined>(() => window.__visinPageContext);
 
   const [request, setRequest] = useState<OpenRequest>();
+  const steeredPath = useRef<string | undefined>(undefined);
   const latest = useRef({ current, composing });
   useEffect(() => {
     latest.current = { current, composing };
   });
   useEffect(() => {
-    const onPage = (event: Event) => setPageContext((event as CustomEvent<PageContext | null>).detail ?? undefined);
+    const onPage = (event: Event) => {
+      if (steeredPath.current !== `${window.location.pathname}${window.location.search}`)
+        steeredPath.current = undefined;
+      setPageContext((event as CustomEvent<PageContext | null>).detail ?? undefined);
+    };
+    const onSteer = (event: Event) => {
+      const path = (event as CustomEvent<unknown>).detail;
+      if (typeof path === 'string') steeredPath.current = path;
+    };
     const onOpen = (event: Event) => {
       const value = (event as CustomEvent<OpenRequest>).detail;
       if (!value) return;
+      steeredPath.current = undefined;
       delete window.__visinChatContext;
       setRequest(value);
     };
+    window.addEventListener('visin:screen-navigation', onSteer);
     window.addEventListener(PAGE_CONTEXT_EVENT, onPage);
     window.addEventListener(OPEN_EVENT, onOpen);
     // A newly loaded chat takes the most recent request, or the full page's address.
@@ -41,6 +52,7 @@ export function usePageChatContext({
     delete window.__visinChatContext;
     if (waiting) setRequest(waiting);
     return () => {
+      window.removeEventListener('visin:screen-navigation', onSteer);
       window.removeEventListener(PAGE_CONTEXT_EVENT, onPage);
       window.removeEventListener(OPEN_EVENT, onOpen);
     };
@@ -56,6 +68,8 @@ export function usePageChatContext({
 
   useEffect(() => {
     if (!loaded || !enabled || !pageKey || !pageContext) return;
+    // Analyst navigation keeps this conversation; deliberate browsing still follows the page.
+    if (steeredPath.current === `${window.location.pathname}${window.location.search}`) return;
     const { current, composing } = latest.current;
     if (composing || (current && current.kind !== 'assistant')) return;
     analyze(pageContext);

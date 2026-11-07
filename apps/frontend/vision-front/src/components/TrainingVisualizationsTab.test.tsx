@@ -122,3 +122,15 @@ describe('TrainingVisualizationsTab', () => {
     expect(screen.getByText('image-dialog')).toBeInTheDocument();
   });
 });
+
+it('opens a currently loaded frame through its registered page action', () => {
+  const id = 'a'.repeat(24);
+  mockHook.mockReturnValue({ ...defaultHookReturn, visualizations: [{ visualization_uuid: id, filename: 'Frame' }] });
+  const { unmount } = render(<TrainingVisualizationsTab {...baseProps} />);
+  const detail = { action: 'open_frame', id };
+  fireEvent(window, new CustomEvent('visin:page-action', { detail }));
+  expect(screen.getByText('image-dialog')).toBeInTheDocument();
+  expect(detail).toMatchObject({ result: { ok: true } });
+  unmount();
+  expect(window.__visinScreenActions).toEqual([]);
+});

@@ -38,6 +38,10 @@ const settings = (overrides: Partial<AnalystSettings> = {}): AnalystSettings => 
   model: '',
   dailyTokenLimit: 800000,
   tokenReservation: 160000,
+  toolRounds: 8,
+  tokensPerRound: 40000,
+  minToolRounds: 2,
+  maxToolRounds: 16,
   source: 'default',
   ready: false,
   missing: [],
@@ -173,7 +177,8 @@ describe('choosing a model', () => {
         enabled: true,
         provider: 'anthropic',
         model: 'claude-sonnet-5-5',
-        dailyTokenLimit: 800000
+        dailyTokenLimit: 800000,
+        toolRounds: 8
       })
     );
     expect(await screen.findByText('Saved. It applies to the next question.')).toBeInTheDocument();
@@ -301,7 +306,8 @@ describe('switching provider', () => {
         enabled: true,
         provider: 'openai',
         model: 'gpt-5.1',
-        dailyTokenLimit: 800000
+        dailyTokenLimit: 800000,
+        toolRounds: 8
       })
     );
   });
@@ -413,5 +419,38 @@ describe('provider keys', () => {
     fireEvent.change(await keyField(), { target: { value: 'sk-openai-key-77' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save key' }));
     await waitFor(() => expect(service.saveKey).toHaveBeenCalledWith('openai', 'sk-openai-key-77'));
+  });
+});
+
+describe('tool-round settings', () => {
+  it('saves the round limit and updates the reservation shown in the allowance', async () => {
+    service.settings.mockResolvedValue(
+      settings({ model: 'claude-sonnet-5-5', source: 'admin', tokenReservation: 440000 })
+    );
+    renderTab();
+    const rounds = await screen.findByLabelText('Tool rounds per answer');
+    expect(rounds).toHaveValue(8);
+    fireEvent.change(rounds, { target: { value: '12' } });
+    expect(screen.getByText(/sets aside up to 600,000 tokens/)).toBeInTheDocument();
+    fireEvent.click(saveButton());
+    await waitFor(() =>
+      expect(service.save).toHaveBeenCalledWith(expect.objectContaining({ toolRounds: 12, dailyTokenLimit: 800000 }))
+    );
+  });
+
+  it('rejects fractional or out-of-range rounds and a daily allowance below the new reservation', async () => {
+    service.settings.mockResolvedValue(
+      settings({ model: 'claude-sonnet-5-5', source: 'admin', tokenReservation: 440000, dailyTokenLimit: 440000 })
+    );
+    renderTab();
+    const rounds = await screen.findByLabelText('Tool rounds per answer');
+    for (const value of ['1', '17', '3.5', '']) {
+      fireEvent.change(rounds, { target: { value } });
+      expect(rounds).toHaveAttribute('aria-invalid', 'true');
+      expect(saveButton()).toBeDisabled();
+    }
+    fireEvent.change(rounds, { target: { value: '12' } });
+    expect(screen.getByText('At least 600,000: one question reserves that much.')).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
   });
 });

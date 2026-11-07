@@ -46,7 +46,7 @@ describe('analyst settings', () => {
       provider: 'anthropic',
       model: '',
       dailyTokenLimit: 800000,
-      tokenReservation: 160000,
+      tokenReservation: 440000,
       source: 'default',
       ready: false
     });
@@ -241,7 +241,7 @@ describe('the daily token limit', () => {
     expect(saved.status).toBe(200);
     expect(((await saved.json()) as { data: Record<string, unknown> }).data).toMatchObject({
       dailyTokenLimit: 2000000,
-      tokenReservation: 160000,
+      tokenReservation: 440000,
       source: 'admin'
     });
     // Saving only the switch leaves the limit alone.
@@ -251,10 +251,10 @@ describe('the daily token limit', () => {
   });
 
   it('is a whole number of tokens, at least what one question reserves, and not absurdly large', async () => {
-    const tooSmall = await save({ dailyTokenLimit: 159999 });
+    const tooSmall = await save({ dailyTokenLimit: 439999 });
     expect(tooSmall.status).toBe(400);
-    expect(((await tooSmall.json()) as { message: string }).message).toContain('at least 160,000 tokens');
-    expect((await save({ dailyTokenLimit: 160000 })).status).toBe(200);
+    expect(((await tooSmall.json()) as { message: string }).message).toContain('at least 440,000 tokens');
+    expect((await save({ dailyTokenLimit: 440000 })).status).toBe(200);
     expect((await save({ dailyTokenLimit: 1_000_000_001 })).status).toBe(400);
     expect((await save({ dailyTokenLimit: 1_000_000_000 })).status).toBe(200);
     for (const bad of [1.5, '800000', -5, 0, null, Number.NaN])
@@ -319,5 +319,21 @@ describe('the daily token limit', () => {
     expect(run?.state).toBe('failed');
     expect(run?.error).toContain('key is configured');
     expect(await Budget.countDocuments()).toBe(0);
+  });
+});
+
+describe('the tool-round limit', () => {
+  it('defaults existing settings to eight, validates bounds and preserves omitted values', async () => {
+    await makeAdmin();
+    await enableAnalyst();
+    const view = async () => (await request('/settings/assistant', ADMIN)).body.data;
+    expect(await view()).toMatchObject({ toolRounds: 8, tokenReservation: 440000 });
+    const save = (extra: object) => putSettings(ADMIN, { enabled: false, provider: 'anthropic', model: '', ...extra });
+    for (const toolRounds of [1, 17, 2.5, '8', null]) expect((await save({ toolRounds })).status).toBe(400);
+    expect((await save({ toolRounds: 12, dailyTokenLimit: 599999 })).status).toBe(400);
+    expect((await save({ toolRounds: 12, dailyTokenLimit: 600000 })).status).toBe(200);
+    expect(await view()).toMatchObject({ toolRounds: 12, tokenReservation: 600000 });
+    expect((await save({})).status).toBe(200);
+    expect((await Settings.findById('assistant'))?.toolRounds).toBe(12);
   });
 });

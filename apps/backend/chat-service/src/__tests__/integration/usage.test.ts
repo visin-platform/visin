@@ -287,3 +287,134 @@ describe('usage and spend', () => {
     expect((await getPricingForTest()).entries).toEqual([]);
   });
 });
+
+it('prices ordinary input, cache reads, cache writes and output at the saved rates', async () => {
+  await makeAdmin();
+  await AssistantRun.create({
+    conversationId: 'cached',
+    messageId: 'cached',
+    userId: 'alice',
+    email: 'alice@test.invalid',
+    name: 'Alice',
+    state: 'completed',
+    provider: 'anthropic',
+    model: 'cached-model',
+    inputTokens: 1000000,
+    outputTokens: 100000,
+    cacheReadTokens: 600000,
+    cacheWriteTokens: 100000,
+    providerRequests: 2,
+    toolCalls: 1,
+    durationMs: 1200,
+    finishedAt: new Date(),
+    price: {
+      currency: 'USD',
+      inputPerMillion: 3,
+      outputPerMillion: 15,
+      cacheReadPerMillion: 0.3,
+      cacheWritePerMillion: 3.75
+    }
+  });
+  const response = await request<
+    UsageBody & { performance: { cacheReadTokens: number; cacheWriteTokens: number; providerRequests: number } }
+  >('/settings/assistant/usage', ADMIN);
+  expect(response.body.data.totals.cost).toBeCloseTo(2.955);
+  expect(response.body.data.performance).toMatchObject({
+    cacheReadTokens: 600000,
+    cacheWriteTokens: 100000,
+    providerRequests: 2
+  });
+});
+it('keeps cached questions unpriced when the applicable cache rates are missing', async () => {
+  await makeAdmin();
+  await AssistantRun.create({
+    conversationId: 'cached',
+    messageId: 'missing-cache-price',
+    userId: 'alice',
+    email: 'alice@test.invalid',
+    name: 'Alice',
+    state: 'completed',
+    provider: 'openai',
+    model: 'cached-model',
+    inputTokens: 1000,
+    outputTokens: 100,
+    cacheReadTokens: 500,
+    finishedAt: new Date(),
+    price: { currency: 'USD', inputPerMillion: 3, outputPerMillion: 15 }
+  });
+  const response = await request<UsageBody>('/settings/assistant/usage', ADMIN);
+  expect(response.body.data.totals).toMatchObject({ cost: null, unpricedQuestions: 1, unpricedTokens: 1100 });
+});
+it('round-trips optional cache prices and freezes them in the per-answer snapshot', async () => {
+  await makeAdmin();
+  const entry = {
+    provider: 'openai',
+    model: 'cached-model',
+    inputPerMillion: 2,
+    outputPerMillion: 8,
+    cacheReadPerMillion: 0,
+    cacheWritePerMillion: 2.5
+  };
+  const response = await fetch(`${base}/api/chat/settings/assistant/prices`, {
+    method: 'PUT',
+    headers: { 'x-test-user': ADMIN, 'content-type': 'application/json' },
+    body: JSON.stringify({ currency: 'USD', entries: [entry] })
+  });
+  expect(response.status).toBe(200);
+  const { priceSnapshot } = await import('../../services/usage.js');
+  expect(await priceSnapshot('openai', 'cached-model')).toMatchObject({
+    cacheReadPerMillion: 0,
+    cacheWritePerMillion: 2.5
+  });
+});
+it('backfills missing cache rates once while retaining the original input/output prices', async () => {
+  await makeAdmin();
+  const run = await AssistantRun.create({
+    conversationId: 'cached',
+    messageId: 'backfill-cache',
+    userId: 'alice',
+    email: 'alice@test.invalid',
+    name: 'Alice',
+    state: 'completed',
+    provider: 'openai',
+    model: 'cached-model',
+    inputTokens: 1000000,
+    outputTokens: 100000,
+    cacheReadTokens: 500000,
+    cacheWriteTokens: 100000,
+    finishedAt: new Date(),
+    price: { currency: 'USD', inputPerMillion: 3, outputPerMillion: 15 }
+  });
+  await fetch(`${base}/api/chat/settings/assistant/prices`, {
+    method: 'PUT',
+    headers: { 'x-test-user': ADMIN, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      currency: 'USD',
+      entries: [
+        {
+          provider: 'openai',
+          model: 'cached-model',
+          inputPerMillion: 1,
+          outputPerMillion: 2,
+          cacheReadPerMillion: 0.3,
+          cacheWritePerMillion: 3.75
+        }
+      ]
+    })
+  });
+  const first = await request<{ questions: number }>('/settings/assistant/prices/backfill', ADMIN, {});
+  expect(first.status, JSON.stringify(first.body)).toBe(200);
+  expect(first.body.data.questions).toBe(1);
+  expect((await AssistantRun.findById(run.id))?.price).toMatchObject({
+    inputPerMillion: 3,
+    outputPerMillion: 15,
+    cacheReadPerMillion: 0.3,
+    cacheWritePerMillion: 3.75,
+    backfilled: true
+  });
+  const usage = await request<UsageBody>('/settings/assistant/usage', ADMIN);
+  expect(usage.body.data.totals.cost).toBeCloseTo(3.225);
+  expect(
+    (await request<{ questions: number }>('/settings/assistant/prices/backfill', ADMIN, {})).body.data.questions
+  ).toBe(0);
+});

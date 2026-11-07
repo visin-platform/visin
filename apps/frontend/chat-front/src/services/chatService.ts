@@ -12,6 +12,7 @@ import type {
 } from '../types/chat';
 
 import { api } from './apiClient';
+import type { ScreenCall } from '../utils/screen';
 
 const read = <T>(path: string, signal?: AbortSignal) => (signal ? api<T>(path, undefined, signal) : api<T>(path));
 
@@ -34,5 +35,9 @@ export const chatService = {
   invite: (id: string, handle: string) => api<void>(`/conversations/${id}/participants`, { handle }),
   removeParticipant: (id: string, userId: string) => api<void>(`/conversations/${id}/remove-participant`, { userId }),
   cancel: (id: string) => api<void>(`/conversations/${id}/cancel`, {}),
+  screenCalls: (id: string, tab: string, signal?: AbortSignal) =>
+    read<ScreenCall[]>(`/conversations/${id}/screen-calls?tab=${encodeURIComponent(tab)}`, signal),
+  screenResult: (id: string, result: { ok: boolean; summary: string }) =>
+    api<void>(`/screen-calls/${id}/result`, result),
   saveFinding: (id: string, input: FindingInput) => api<void>(`/conversations/${id}/findings`, input)
 };

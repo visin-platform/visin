@@ -34,15 +34,27 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     selected: navigation.selected,
     userId: isAuthenticated ? user?.id : undefined,
     isAuthenticated,
+    panel,
     setError,
     setConversations: list.setConversations
   });
-  const actions = useChatActions({ navigation, thread, refreshList: list.refreshList, perform });
+  // Older restored threads may sit outside the capped conversation list. Apply their streamed selection too.
+  const currentNavigation = {
+    ...navigation,
+    c: navigation.c && thread.selection ? { ...navigation.c, ...thread.selection } : navigation.c
+  };
+  const actions = useChatActions({
+    navigation: currentNavigation,
+    thread,
+    refreshList: list.refreshList,
+    perform,
+    panel
+  });
   const pageContext = usePageChatContext({
     panel,
     loaded: list.loaded,
     enabled: list.enabled,
-    current: navigation.c,
+    current: currentNavigation.c,
     composing: navigation.composing,
     handle: actions.handle,
     analyze: navigation.analyze
@@ -58,6 +70,7 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     ...list,
     ...navigation,
     ...thread,
+    c: currentNavigation.c,
     ...actions,
     pageContext,
     showPeople,

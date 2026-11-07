@@ -16,6 +16,7 @@ import { useConfig } from '../../config/ConfigProvider';
 import { useAuth } from '../../contexts/AuthContext';
 import { forgetChatPanel, remoteChatPanel } from '../../remotes';
 import { RemoteBoundary } from '../RemoteBoundary';
+import { useScreenCalls } from './useScreenCalls';
 import { ChatDockContext, PANEL_WIDTH, clampWidth, useChatDock, type ChatRequest } from './chatDock';
 
 const OPEN_KEY = 'visin.chat.open';
@@ -83,11 +84,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('visin:open-chat', receive);
   }, [available, openWith, compact, navigate]);
 
+  // Not on the chat page itself, which would be the same conversation twice; not on a phone, which has no room.
+  const panelOpen = available && open && !onChatPage && !compact;
+  useScreenCalls(panelOpen);
   const value = useMemo(
     () => ({
       available,
-      // Not on the chat page itself, which would be the same conversation twice; not on a phone, which has no room.
-      open: available && open && !onChatPage && !compact,
+      open: panelOpen,
       toggle: () => {
         if (compact || onChatPage) navigate('/chat');
         else setOpen((current) => !current);
@@ -96,7 +99,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       openWith,
       conversationId
     }),
-    [available, open, onChatPage, compact, navigate, openWith, conversationId]
+    [available, panelOpen, compact, onChatPage, navigate, openWith, conversationId]
   );
   return <ChatDockContext.Provider value={value}>{children}</ChatDockContext.Provider>;
 }

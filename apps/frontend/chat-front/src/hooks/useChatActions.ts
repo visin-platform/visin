@@ -4,6 +4,7 @@ import { chatService } from '../services/chatService';
 import type { Conversation, OpenRequest, PageContext } from '../types/chat';
 import { analysisOf } from '../utils/chatContext';
 import { mergeMessages } from '../utils/messages';
+import { screenContext } from '../utils/screen';
 import type { useChatNavigation } from './useChatNavigation';
 import type { useChatThread } from './useChatThread';
 
@@ -11,31 +12,36 @@ export function useChatActions({
   navigation,
   thread,
   refreshList,
-  perform
+  perform,
+  panel = false
 }: {
   navigation: ReturnType<typeof useChatNavigation>;
   thread: ReturnType<typeof useChatThread>;
   refreshList: () => Promise<void>;
   perform: (operation: () => Promise<void>) => Promise<void>;
+  /** In the shell's side panel, where a page sits beside the chat. */
+  panel?: boolean;
 }) {
   const latestNavigation = useRef(navigation);
   latestNavigation.current = navigation;
-  const {
-    c,
-    pending,
-    selected,
-    draft,
-    setDraft,
-    replyTarget,
-    setReplyTarget,
-    show,
-    analyze
-  } = navigation;
+  const { c, pending, selected, draft, setDraft, replyTarget, setReplyTarget, show, analyze } = navigation;
   const { messages, runs, setMessages, setRuns, atBottom } = thread;
   const [sending, setSending] = useState(false);
 
+  const screenFor = () => {
+    const screen = screenContext(panel);
+    return screen ? { screen } : {};
+  };
+
   const retry = useRef<
-    { body: string; clientId: string; conversation: string; replyTo?: string } | undefined
+    | {
+        body: string;
+        clientId: string;
+        conversation: string;
+        replyTo?: string;
+        screen?: ReturnType<typeof screenContext>;
+      }
+    | undefined
   >(undefined);
 
   const composerInput = useRef<HTMLTextAreaElement>(null);
@@ -86,15 +92,12 @@ export function useChatActions({
       const text = body.trim();
       if (!c || !text) return;
       const replyTo = fromDraft ? replyTarget?._id : requestedReply;
-      if (
-        retry.current?.body !== text ||
-        retry.current.conversation !== c._id ||
-        retry.current.replyTo !== replyTo
-      )
+      if (retry.current?.body !== text || retry.current.conversation !== c._id || retry.current.replyTo !== replyTo)
         retry.current = {
           body: text,
           clientId: crypto.randomUUID(),
           conversation: c._id,
+          screen: c.kind === 'assistant' ? screenContext(panel) : undefined,
           replyTo
         };
       setSending(true);
@@ -102,7 +105,8 @@ export function useChatActions({
         await chatService.send(c._id, {
           body: text,
           clientId: retry.current.clientId,
-          ...(replyTo ? { replyTo } : {})
+          ...(replyTo ? { replyTo } : {}),
+          ...(retry.current.screen ? { screen: retry.current.screen } : {})
         });
         const current = latestNavigation.current;
         const sameThread = current.accountId === navigation.accountId && current.c?._id === c._id;
@@ -133,7 +137,7 @@ export function useChatActions({
           title: (context.title || 'Analysis').slice(0, 120),
           ...(context.projectId ? { projectId: context.projectId, trainingIds: context.trainingIds ?? [] } : {})
         });
-        await chatService.send(created._id, { body: text, clientId: crypto.randomUUID() });
+        await chatService.send(created._id, { body: text, clientId: crypto.randomUUID(), ...screenFor() });
         await refreshList();
         show(created._id);
       } finally {
@@ -159,5 +163,16 @@ export function useChatActions({
       await refreshList();
       if (action !== 'accept') show(undefined);
     });
-  return { sending, openConversation, handle, post, send, ask, latestRun, failedQuestion, membership, composerInput };
+  return {
+    sending,
+    openConversation,
+    handle,
+    post,
+    send,
+    ask,
+    latestRun,
+    failedQuestion,
+    membership,
+    composerInput
+  };
 }

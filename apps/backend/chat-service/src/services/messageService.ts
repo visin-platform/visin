@@ -66,7 +66,7 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     ? await Assistant.findOne({ _id: c.assistantId, ...usableAssistant(req.user!.id) })
     : null;
   if (c.assistantId && !selectedAssistant) throw new BadRequestError('This assistant is paused or removed');
-  const { assistantId: _invocation, ...messageInput } = input;
+  const { assistantId: _invocation, screen, ...messageInput } = input;
   const message = await appendMessage({
     expectedMembershipVersion: c.membershipVersion,
     conversationId: c.id,
@@ -88,12 +88,19 @@ export async function sendMessage(req: Request, conversationId: string, body: un
             assistantId: sharedBot?.assistantId || selectedAssistant?.id,
             assistantName: sharedBot?.name || selectedAssistant?.name,
             personality: sharedBot?.personality || selectedAssistant?.personality,
-            membershipVersion: c.membershipVersion
+            membershipVersion: c.membershipVersion,
+            // Only a private thread has a page to move; a shared conversation never gets the screen tool.
+            ...(c.kind === 'assistant' && screen ? { screen } : {})
           }
         }
       : {})
   });
-  const { assistantRequest: _request, assistantCancelled: _cancelled, ...view } = message.toObject();
+  const {
+    assistantRequest: _request,
+    screenRequest: _screenRequest,
+    assistantCancelled: _cancelled,
+    ...view
+  } = message.toObject();
   return { message: view, created: true };
 }
 

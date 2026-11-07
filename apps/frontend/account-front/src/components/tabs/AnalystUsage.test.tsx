@@ -105,6 +105,10 @@ beforeEach(() => {
     model: 'claude-sonnet-5-5',
     dailyTokenLimit: 800000,
     tokenReservation: 160000,
+    toolRounds: 8,
+    tokensPerRound: 40000,
+    minToolRounds: 2,
+    maxToolRounds: 16,
     source: 'admin',
     ready: true,
     missing: [],
@@ -581,4 +585,36 @@ describe('pricing earlier questions', () => {
     fireEvent.click(button);
     expect(await screen.findByText('Not allowed')).toBeInTheDocument();
   });
+});
+
+it('saves explicit cache rates, including a zero read price, without assuming a discount', async () => {
+  renderUsage();
+  await screen.findByText('Estimated spend');
+  fireEvent.change(await screen.findByLabelText('claude-sonnet-5-5 cache read price per million tokens'), {
+    target: { value: '0' }
+  });
+  fireEvent.change(screen.getByLabelText('claude-sonnet-5-5 cache write price per million tokens'), {
+    target: { value: '3.75' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save prices' }));
+  await waitFor(() => expect(service.savePrices).toHaveBeenCalled());
+  expect(service.savePrices.mock.calls[0][0].entries).toContainEqual(
+    expect.objectContaining({ model: 'claude-sonnet-5-5', cacheReadPerMillion: 0, cacheWritePerMillion: 3.75 })
+  );
+});
+it('shows latency only for measured questions rather than averaging legacy zero durations', async () => {
+  service.usage.mockResolvedValue(
+    report({
+      performance: {
+        measuredQuestions: 1,
+        cacheReadTokens: 600,
+        cacheWriteTokens: 100,
+        providerRequests: 2,
+        toolCalls: 1,
+        durationMs: 5000
+      }
+    })
+  );
+  renderUsage();
+  expect(await screen.findByText(/cached input tokens/)).toHaveTextContent('5s average measured answer time');
 });

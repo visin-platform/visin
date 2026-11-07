@@ -14,6 +14,7 @@ import { ConversationAssistant } from '../../models/ConversationAssistant';
 import { Message } from '../../models/Message';
 import { Pricing } from '../../models/Pricing';
 import { ProviderKey } from '../../models/ProviderKey';
+import { ScreenCall } from '../../models/ScreenCall';
 import { Settings } from '../../models/Settings';
 import { groups } from '../../services/access';
 import { resetAssistantSettingsCache } from '../../services/settings';
@@ -64,7 +65,8 @@ export function setupChatTests() {
         Block,
         Settings,
         ProviderKey,
-        Pricing
+        Pricing,
+        ScreenCall
       ].map((model) => model.init())
     );
     currentApp = createApp();
@@ -91,6 +93,7 @@ export function setupChatTests() {
     await Settings.deleteMany({});
     await ProviderKey.deleteMany({});
     await Pricing.deleteMany({});
+    await ScreenCall.deleteMany({});
     await mongoose.connection.collection('users').deleteMany({});
     resetAssistantSettingsCache();
     (groups.getMyGroups as Mock).mockResolvedValue([]);

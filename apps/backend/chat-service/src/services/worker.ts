@@ -4,12 +4,15 @@ import { AssistantRun } from '../models/AssistantRun';
 import { Budget } from '../models/Budget';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
-import { analyze, RESERVATION } from './analyst';
+import { analyze } from './analyst';
+import { budgetPlans } from './analysisLimits';
 import { resolveProviderKey } from './keys';
 import { appendMessage } from './messages';
 import { PROVIDERS } from './providers';
 import { assistantSettings } from './settings';
 import { runAllowed } from './sharedAssistants';
+import { expireScreenCalls, screenContextSchema } from './screen';
+import { steerScreen } from './screenSteering';
 import { priceSnapshot } from './usage';
 
 /**
@@ -27,7 +30,9 @@ const LEASE_MS = 300000;
  * conversation whose oldest run cannot be taken is skipped as a whole, never overtaken.
  */
 async function claim() {
-  const candidates = await AssistantRun.find({ state: 'queued' }).sort({ createdAt: 1 }).limit(CLAIM_CANDIDATES);
+  const candidates = await AssistantRun.find({ state: { $in: ['queued', 'screen_queued'] } })
+    .sort({ createdAt: 1 })
+    .limit(CLAIM_CANDIDATES);
   const skipped = new Set<string>();
   for (const next of candidates) {
     if (skipped.has(next.conversationId)) continue;
@@ -39,7 +44,7 @@ async function claim() {
     );
     if (!conversation) continue;
     const run = await AssistantRun.findOneAndUpdate(
-      { _id: next.id, state: 'queued' },
+      { _id: next.id, state: next.state },
       { $set: { state: 'running', leaseUntil: new Date(Date.now() + LEASE_MS) }, $inc: { attempt: 1 } },
       { returnDocument: 'after' }
     );
@@ -62,6 +67,7 @@ export function startWorker() {
 
   const housekeeping = async () => {
     await recoverMembershipEvents();
+    await expireScreenCalls();
     // A completed result is an outbox too: retries publish the same message ID after a crash.
     const completed = await AssistantRun.find({ state: 'completed', published: false }).limit(50);
     for (const job of completed) {
@@ -107,13 +113,16 @@ export function startWorker() {
       );
     }
     // Message-level outbox: saving a question is sufficient to recover queue creation.
-    const pending = await Message.find({ assistantRequest: { $exists: true }, assistantCancelled: false })
-      .select('+assistantRequest')
+    const pending = await Message.find({
+      $or: [{ assistantRequest: { $exists: true } }, { screenRequest: { $exists: true } }],
+      assistantCancelled: false
+    })
+      .select('+assistantRequest +screenRequest')
       .sort({ createdAt: 1 })
       .limit(200);
     const configured = pending.length ? await assistantSettings() : undefined;
     for (const message of pending) {
-      const request = message.assistantRequest;
+      const request = message.screenRequest ?? message.assistantRequest;
       if (!request?.userId || !request.email || !request.name) continue;
       await AssistantRun.updateOne(
         { messageId: message.id },
@@ -126,16 +135,17 @@ export function startWorker() {
             assistantName: request.assistantName,
             personality: request.personality,
             membershipVersion: request.membershipVersion,
+            ...(request.screen?.tabId ? { screen: request.screen } : {}),
             conversationId: message.conversationId,
             messageId: message.id,
             provider: configured?.provider,
             model: configured?.model,
-            state: 'queued'
+            state: request.screen?.tabId ? 'screen_queued' : 'queued'
           }
         },
         { upsert: true }
       );
-      await Message.updateOne({ _id: message.id }, { $unset: { assistantRequest: 1 } });
+      await Message.updateOne({ _id: message.id }, { $unset: { assistantRequest: 1, screenRequest: 1 } });
     }
   };
 
@@ -173,20 +183,45 @@ export function startWorker() {
       }
       // The provider, model and limit are read as the run starts, so a change in the settings applies to the next
       // question. A run that cannot happen is refused before it is charged anything.
-      const { provider, model, dailyTokenLimit: limit } = await assistantSettings();
+      const { provider, model, dailyTokenLimit: limit, toolRounds } = await assistantSettings();
       if (!model) throw new Error('No assistant model is configured');
       const resolved = await resolveProviderKey(provider);
       if (!resolved) throw new Error(`No ${PROVIDERS[provider].name} key is configured`);
+      const checkedScreen = screenContextSchema.safeParse(
+        run.screen
+          ? {
+              tabId: run.screen.tabId,
+              allowActions: run.screen.allowActions ?? undefined,
+              path: run.screen.path,
+              actions: run.screen.actions?.map((action) => ({
+                name: action.name,
+                ids: [...action.ids],
+                labels: action.labels ? [...action.labels] : undefined
+              }))
+            }
+          : undefined
+      );
+      const screen = c.kind === 'assistant' && checkedScreen.success ? checkedScreen.data : undefined;
       const day = new Date().toISOString().slice(0, 10);
       await Budget.updateOne({ userId: run.userId, day }, { $setOnInsert: { reserved: 0 } }, { upsert: true });
-      const budget = await Budget.findOneAndUpdate(
-        { userId: run.userId, day, reserved: { $lte: limit - RESERVATION } },
-        { $inc: { reserved: RESERVATION } }
-      );
-      if (!budget) throw new Error('Your daily assistant token budget is used. Try again tomorrow.');
+      // The best plan the day's budget still holds: page changes need more room, and are given up before the question.
+      let plan: ReturnType<typeof budgetPlans>[number] | undefined;
+      for (const candidate of budgetPlans(limit, toolRounds, screen?.allowActions === true)) {
+        const budget = await Budget.findOneAndUpdate(
+          { userId: run.userId, day, reserved: { $lte: limit - candidate.reserve } },
+          { $inc: { reserved: candidate.reserve } }
+        );
+        if (budget) {
+          plan = candidate;
+          break;
+        }
+      }
+      if (!plan) throw new Error('Your daily assistant token budget is used. Try again tomorrow.');
+      const reserve = plan.reserve;
+      const steering = plan.screen;
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
       // provider may have consumed tokens even if the connection did not return usage.
-      if (c.kind === 'assistant' && c.projectId)
+      if (c.kind === 'assistant' && (c.projectId || steering))
         key = await createApiKey({
           userId: run.userId,
           userEmail: run.email,
@@ -194,7 +229,7 @@ export function startWorker() {
           name: 'Visin analyst',
           scopes: ['vision:read', 'analysis:read'],
           expiresAt: new Date(Date.now() + LEASE_MS),
-          project: { id: c.projectId, name: c.projectName || c.title }
+          ...(c.projectId ? { project: { id: c.projectId, name: c.projectName || c.title } } : {})
         });
       if (key) await AssistantRun.updateOne({ _id: run.id }, { $set: { keyId: key.summary.id } });
       const historyAfter =
@@ -245,6 +280,7 @@ export function startWorker() {
       const history = c.kind === 'assistant' ? privateHistory : [{ role: 'user' as const, content: sharedText() }];
       await AssistantRun.updateOne({ _id: run.id }, { $set: { provider, model } });
       const result = await analyze({
+        toolRounds: plan.toolRounds,
         provider,
         model,
         apiKey: resolved.key,
@@ -253,6 +289,18 @@ export function startWorker() {
         trainingIds: c.kind === 'assistant' ? c.trainingIds : [],
         shared: c.kind !== 'assistant',
         guard,
+        screenContext: screen,
+        screen: steering
+          ? (request, signal) =>
+              steerScreen(
+                { id: run.id, conversationId: run.conversationId, userId: run.userId, screen },
+                c.projectId ?? undefined,
+                key?.token || '',
+                request,
+                signal,
+                guard
+              )
+          : undefined,
         personality: run.personality ?? undefined,
         history,
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(260000)]),
@@ -284,6 +332,11 @@ export function startWorker() {
             activity: 'Completed',
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
+            cacheReadTokens: result.cacheReadTokens ?? 0,
+            cacheWriteTokens: result.cacheWriteTokens ?? 0,
+            providerRequests: result.providerRequests ?? 0,
+            toolCalls: result.toolCalls ?? 0,
+            durationMs: result.durationMs ?? 0,
             finishedAt: new Date()
           }
         }
@@ -291,7 +344,7 @@ export function startWorker() {
       if (!finished.modifiedCount) throw new Error('Analysis cancelled');
       await Budget.updateOne(
         { userId: run.userId, day },
-        { $inc: { reserved: -(RESERVATION - result.inputTokens - result.outputTokens) } }
+        { $inc: { reserved: -(reserve - result.inputTokens - result.outputTokens) } }
       );
     } catch (error) {
       await AssistantRun.updateOne(

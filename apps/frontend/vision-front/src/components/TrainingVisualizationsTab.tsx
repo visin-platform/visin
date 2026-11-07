@@ -23,6 +23,7 @@ import ImageViewDialog from './visualizations/ImageViewDialog';
 import type { ModelReference, Training } from '../types/training';
 import { outputClassesOf } from '../providers/visin';
 import { describeEmpty } from '../utils/trainingStatus';
+import { useScreenAction } from '../hooks/useScreenAction';
 
 interface TrainingVisualizationsTabProps {
   training_uuid: string;
@@ -67,6 +68,14 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   const [selectedForCompare, setSelectedForCompare] = useState<Visualization[]>([]);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<Visualization | null>(null);
+
+  useScreenAction(visualizations.map((viz) => viz.visualization_uuid), (id) => {
+    const frame = visualizations.find((viz) => viz.visualization_uuid === id);
+    if (!frame) return { ok: false, summary: 'That frame is no longer loaded' };
+    setSelectedImage(frame);
+    setImageDialogOpen(true);
+    return { ok: true, summary: `Opened frame ${id}` };
+  }, visualizations.map((viz) => viz.filename || viz.visualization_uuid));
 
   // Handle compare selection
   const handleCompareToggle = (viz: Visualization) => {

@@ -117,6 +117,13 @@ export interface SendMessageInput {
   clientId: string;
   assistantId?: string;
   replyTo?: string;
+  /** The side panel's tab and page, so the analyst can change the page beside it. */
+  screen?: {
+    tabId: string;
+    path: string;
+    allowActions?: boolean;
+    actions?: { name: 'open_frame'; ids: string[]; labels?: string[] }[];
+  };
 }
 
 export interface FindingInput {

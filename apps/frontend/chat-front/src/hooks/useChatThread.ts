@@ -6,18 +6,22 @@ import { chatService } from '../services/chatService';
 
 import type { Conversation, Message, Run } from '../types/chat';
 import { PAGE, mergeMessages } from '../utils/messages';
+import { TAB_ID, parseScreenCalls, showOnScreen, type ScreenCall, type ScreenResult } from '../utils/screen';
 import { useConversationRows } from './useConversationRows';
 
 export function useChatThread({
   selected,
   userId,
   isAuthenticated,
+  panel = false,
   setError,
   setConversations
 }: {
   selected?: string;
   userId?: string;
   isAuthenticated: boolean;
+  /** In the shell's side panel: the stream then also carries the analyst's requests to change the page. */
+  panel?: boolean;
   setError: (error: string) => void;
   setConversations: Dispatch<SetStateAction<Conversation[]>>;
 }) {
@@ -25,11 +29,17 @@ export function useChatThread({
 
   const [runs, setRuns] = useConversationRows<Run>(`${userId}:${selected}`);
 
+  const [selections, setSelections] = useConversationRows<Pick<Conversation, 'trainingIds' | 'trainingLabels'>>(
+    `${userId}:${selected}`
+  );
+
   const [connection, setConnection] = useState<'connecting' | 'live' | 'reconnecting' | 'offline'>('connecting');
 
   const [hasOlder, setHasOlder] = useState(false);
 
   const running = runs.some((r) => r.state === 'queued' || r.state === 'running');
+  const runningRef = useRef(running);
+  runningRef.current = running;
 
   useEffect(() => {
     if (!selected || !isAuthenticated) {
@@ -44,6 +54,53 @@ export function useChatThread({
     setError('');
     const streamBase = getGlobalConfig().CHAT_SERVICE_URL;
     let stream: EventSource | undefined;
+    // A reconnect may repeat a call that is still pending; it is acted on once.
+    const handled = new Set<string>();
+    let screenWaiting = false;
+    const answers = new Map<string, ScreenResult>();
+    const answering = new Set<string>();
+    const reply = async (id: string) => {
+      const result = answers.get(id);
+      if (!result || answering.has(id) || controller.signal.aborted) return;
+      answering.add(id);
+      try {
+        await chatService.screenResult(id, result);
+        answers.delete(id);
+      } catch {
+        /* A pending call is polled again; retry the answer without navigating twice. */
+      } finally {
+        answering.delete(id);
+      }
+    };
+    const receiveScreens = (calls: ScreenCall[]) => {
+      if (!panel || controller.signal.aborted) return;
+      for (const call of calls) {
+        if (handled.has(call.id)) {
+          void reply(call.id);
+          continue;
+        }
+        handled.add(call.id);
+        screenWaiting = true;
+        revision++;
+        void showOnScreen(call).then((result) => {
+          if (controller.signal.aborted) return;
+          answers.set(call.id, result);
+          void reply(call.id);
+        });
+      }
+    };
+    let pollingScreens = false;
+    const pollScreens = async () => {
+      if (!panel || pollingScreens || !navigator.onLine || controller.signal.aborted) return;
+      pollingScreens = true;
+      try {
+        receiveScreens(await chatService.screenCalls(selected!, TAB_ID, controller.signal));
+      } catch {
+        /* Stream and polling recover independently; never interrupt the conversation. */
+      } finally {
+        pollingScreens = false;
+      }
+    };
     let streaming = false;
     let lastEvent = Date.now();
     let revision = 0;
@@ -63,8 +120,11 @@ export function useChatThread({
         return;
       }
       if (!streamBase || typeof EventSource === 'undefined') return;
+      const query = new URLSearchParams();
+      if (replayAfter) query.set('after', String(replayAfter));
+      if (panel) query.set('tab', TAB_ID);
       stream = new EventSource(
-        `${streamBase.replace(/\/$/, '')}/api/chat/conversations/${selected}/events${replayAfter ? `?after=${replayAfter}` : ''}`,
+        `${streamBase.replace(/\/$/, '')}/api/chat/conversations/${selected}/events${query.size ? `?${query}` : ''}`,
         {
           withCredentials: true
         }
@@ -84,6 +144,37 @@ export function useChatThread({
       stream.addEventListener('heartbeat', () => {
         if (controller.signal.aborted || source !== stream) return;
         lastEvent = Date.now();
+      });
+      stream.addEventListener('screen', (event) => {
+        if (controller.signal.aborted || source !== stream) return;
+        lastEvent = Date.now();
+        receiveScreens(parseScreenCalls((event as MessageEvent).data));
+      });
+      stream.addEventListener('selection', (event) => {
+        if (controller.signal.aborted || source !== stream) return;
+        try {
+          const selection = JSON.parse((event as MessageEvent).data) as Pick<
+            Conversation,
+            'trainingIds' | 'trainingLabels'
+          >;
+          if (
+            !Array.isArray(selection.trainingIds) ||
+            !selection.trainingIds.every((id) => typeof id === 'string') ||
+            !Array.isArray(selection.trainingLabels)
+          )
+            return;
+          lastEvent = Date.now();
+          setSelections([selection]);
+          setConversations((rows) =>
+            rows.map((row) =>
+              row._id === selected && row.kind === 'assistant'
+                ? { ...row, trainingIds: selection.trainingIds, trainingLabels: selection.trainingLabels }
+                : row
+            )
+          );
+        } catch {
+          /* Ignore malformed frames; the next connection replays the selection. */
+        }
       });
       stream.addEventListener('state', (event) => {
         if (controller.signal.aborted || source !== stream) return;
@@ -109,6 +200,17 @@ export function useChatThread({
       });
     };
     connect();
+    if (panel) void pollScreens();
+    // Calls exist only while a run is working. The stream brings them within about half a second; this HTTP
+    // fallback covers a stream that is down (every second) or held by a buffering proxy (every third second, since
+    // each request re-checks access with other services).
+    let screenTicks = 0;
+    const screenTimer = panel
+      ? setInterval(() => {
+          screenTicks++;
+          if (runningRef.current && (!streaming || screenTicks % 3 === 0)) void pollScreens();
+        }, 1000)
+      : undefined;
     let first = true;
     let loading = false;
     const load = async () => {
@@ -129,7 +231,10 @@ export function useChatThread({
         setError('');
         first = false;
         setMessages((old) => mergeMessages(old, rows));
-        if (startedAt === revision) setRuns(jobs);
+        if (startedAt === revision) {
+          setRuns(jobs);
+          screenWaiting = jobs.some((job) => job.state === 'queued' || job.state === 'running');
+        }
         if (!streaming) setConnection(streamBase && typeof EventSource !== 'undefined' ? 'reconnecting' : 'live');
       } catch (e) {
         if (!controller.signal.aborted) {
@@ -152,7 +257,7 @@ export function useChatThread({
         setConnection('reconnecting');
         connect();
       }
-      if (!streaming) void load();
+      if (!streaming || runningRef.current || screenWaiting) void load();
     }, 5000);
     const resume = () => {
       if (document.visibilityState === 'hidden') return;
@@ -163,6 +268,7 @@ export function useChatThread({
       }
       if (!streaming || Date.now() - lastEvent > 45000) connect();
       void load();
+      if (panel) void pollScreens();
     };
     const offline = () => {
       disconnect();
@@ -178,8 +284,9 @@ export function useChatThread({
       controller.abort();
       stream?.close();
       clearInterval(timer);
+      clearInterval(screenTimer);
     };
-  }, [selected, userId, isAuthenticated, setMessages, setRuns, setError]);
+  }, [selected, userId, isAuthenticated, panel, setMessages, setRuns, setError, setConversations, setSelections]);
 
   const lastSeq = messages.at(-1)?.seq;
 
@@ -237,6 +344,7 @@ export function useChatThread({
   }, [lastSeq, activity, running]);
   return {
     connection,
+    selection: selections[0],
     messages,
     setMessages,
     runs,

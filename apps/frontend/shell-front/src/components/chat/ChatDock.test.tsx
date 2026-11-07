@@ -274,3 +274,70 @@ it('opens analyst settings from a portaled menu in the left page without remount
   expect(screen.getByLabelText('Chat draft')).toBe(draft);
   expect(draft).toHaveValue('Keep this question');
 });
+
+describe('the analyst changing the page', () => {
+  const askForScreen = (detail: unknown) => {
+    const done = vi.fn();
+    window.addEventListener('visin:screen-done', done);
+    act(() => {
+      window.dispatchEvent(new CustomEvent('visin:screen', { detail }));
+    });
+    window.removeEventListener('visin:screen-done', done);
+    return done.mock.calls.map((c) => (c[0] as CustomEvent).detail);
+  };
+  const id = 'a'.repeat(24);
+  it('opens the place beside the chat and says what it did, leaving the chat mounted', () => {
+    mount();
+    openChat();
+    const answers = askForScreen({ id: 'call1', place: 'training', params: { id, tab: 'epochs' } });
+    expect(answers).toEqual([{ id: 'call1', ok: true, summary: `Opened training ${id}, epochs tab` }]);
+    expect(screen.getByText(`Results at /trainings/${id}?tab=epochs`)).toBeInTheDocument();
+    expect(screen.getByText('Embedded conversations')).toBeInTheDocument();
+  });
+  it('refuses a place that is not valid and stays where it is', () => {
+    mount();
+    openChat();
+    const answers = askForScreen({ id: 'call2', place: 'training', params: { id: '../account' } });
+    expect(answers).toEqual([{ id: 'call2', ok: false, summary: 'The training id is not valid' }]);
+    expect(screen.getByText('Results at /projects')).toBeInTheDocument();
+  });
+  it('does not let a parameter change which place is asked for', () => {
+    mount();
+    openChat();
+    const answers = askForScreen({ id: 'call3', place: 'projects', params: { place: 'datasets' } });
+    expect(answers[0].ok).toBe(true);
+    expect(screen.getByText('Results at /projects')).toBeInTheDocument();
+  });
+  it('says so when no panel is beside the page', () => {
+    mount();
+    const answers = askForScreen({ id: 'call4', place: 'datasets', params: {} });
+    expect(answers).toEqual([{ id: 'call4', ok: false, summary: 'There is no page beside the chat here' }]);
+    expect(screen.getByText('Results at /projects')).toBeInTheDocument();
+  });
+  it('delegates only a valid page action and leaves navigation to the page', () => {
+    mount();
+    openChat();
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail.action === 'open_frame' && detail.id === id)
+        detail.result = { ok: true, summary: 'Opened loaded frame' };
+    };
+    window.addEventListener('visin:page-action', handler);
+    expect(askForScreen({ id: 'action1', place: 'action', params: { action: 'open_frame', id } })).toEqual([
+      { id: 'action1', ok: true, summary: 'Opened loaded frame' }
+    ]);
+    expect(screen.getByText('Results at /projects')).toBeInTheDocument();
+    window.removeEventListener('visin:page-action', handler);
+    expect(askForScreen({ id: 'action2', place: 'action', params: { action: 'open_frame', id } })[0].ok).toBe(false);
+    expect(askForScreen({ id: 'action3', place: 'action', params: { action: 'delete_frame', id } })[0].ok).toBe(false);
+    expect(askForScreen({ id: 'action4', place: 'action', params: { action: 'open_frame', id: '../x' } })[0].ok).toBe(
+      false
+    );
+  });
+  it('ignores a request with no id to answer', () => {
+    mount();
+    openChat();
+    expect(askForScreen({ place: 'datasets' })).toEqual([]);
+    expect(screen.getByText('Results at /projects')).toBeInTheDocument();
+  });
+});

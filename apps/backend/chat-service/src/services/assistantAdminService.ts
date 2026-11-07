@@ -1,5 +1,5 @@
 import { BadGatewayError, BadRequestError, isEncryptionConfigured, logger } from '@visin/backend-core';
-import { RESERVATION } from './analyst';
+import { reservationFor, TOKENS_PER_ROUND, MIN_TOOL_ROUNDS, MAX_TOOL_ROUNDS } from './analysisLimits';
 import { removeProviderKey, saveProviderKey } from './keys';
 import { refreshPrices } from './priceList';
 import { ADAPTERS, PROVIDERS } from './providers';
@@ -32,7 +32,11 @@ const settingsView = async () => {
     model: settings.model,
     dailyTokenLimit: settings.dailyTokenLimit,
     // What one question reserves of that limit until its answer is in, so the page can say how far it goes.
-    tokenReservation: RESERVATION,
+    toolRounds: settings.toolRounds,
+    minToolRounds: MIN_TOOL_ROUNDS,
+    maxToolRounds: MAX_TOOL_ROUNDS,
+    tokensPerRound: TOKENS_PER_ROUND,
+    tokenReservation: reservationFor(true, settings.toolRounds),
     source: settings.source,
     ready,
     missing,
@@ -66,13 +70,16 @@ export async function updateSettings(userId: string, body: unknown) {
     if (!offered.some((model) => model.id === input.model))
       throw new BadRequestError(`${name} does not offer ${input.model}`);
   }
-  const dailyTokenLimit = input.dailyTokenLimit ?? (await assistantSettings()).dailyTokenLimit;
+  const current = await assistantSettings();
+  const dailyTokenLimit = input.dailyTokenLimit ?? current.dailyTokenLimit;
+  const toolRounds = input.toolRounds ?? current.toolRounds;
+  const reservation = reservationFor(true, toolRounds);
   // A question reserves its worst case up front, so a limit below one question would refuse every one.
-  if (dailyTokenLimit < RESERVATION)
+  if (dailyTokenLimit < reservation)
     throw new BadRequestError(
-      `The daily limit must be at least ${RESERVATION.toLocaleString('en-US')} tokens: one question reserves that much`
+      `The daily limit must be at least ${reservation.toLocaleString('en-US')} tokens: one question reserves that much`
     );
-  await saveAssistantSettings({ ...input, dailyTokenLimit }, userId);
+  await saveAssistantSettings({ ...input, dailyTokenLimit, toolRounds }, userId);
   logger.info('Assistant settings changed', { by: userId, ...input, dailyTokenLimit });
   return await settingsView();
 }

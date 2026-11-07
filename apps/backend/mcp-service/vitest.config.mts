@@ -16,7 +16,7 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       include: ['src/**/*.ts'],
       exclude: ['src/**/__tests__/**', 'src/index.ts', 'src/**/*.d.ts'],
-      thresholds: { statements: 96, branches: 90, functions: 97, lines: 96 }
+      thresholds: { statements: 97, branches: 91, functions: 98, lines: 98 }
     }
   }
 });

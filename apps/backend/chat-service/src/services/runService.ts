@@ -13,13 +13,15 @@ export async function listRuns(req: Request, conversationId: string) {
 export async function visibleRuns(c: ChatConversation, userId: string) {
   if (c.kind === 'assistant') {
     const runs = await AssistantRun.find({ conversationId: c._id.toString(), userId })
-      .select('-email -keyId -result -evidence -personality')
+      // The screen context holds the page's frame list: the worker's business, and too large for every poll.
+      .select('-email -keyId -result -evidence -personality -screen')
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
     return runs.map((run) => ({
       ...run,
-      canCancel: ['queued', 'running'].includes(run.state),
+      state: run.state === 'screen_queued' ? 'queued' : run.state,
+      canCancel: ['queued', 'screen_queued', 'running'].includes(run.state),
       canRetry: run.state === 'failed'
     }));
   }
@@ -51,7 +53,7 @@ export async function visibleRuns(c: ChatConversation, userId: string) {
       ...(run.error
         ? { error: run.userId === userId ? run.error : 'The assistant could not complete this reply.' }
         : {}),
-      canCancel: run.userId === userId && ['queued', 'running'].includes(run.state),
+      canCancel: run.userId === userId && ['queued', 'screen_queued', 'running'].includes(run.state),
       canRetry: run.userId === userId && run.state === 'failed'
     }));
 }
@@ -62,18 +64,22 @@ export async function cancelRuns(req: Request, conversationId: string) {
   const open = await AssistantRun.find({
     conversationId: c.id,
     userId: req.user!.id,
-    state: { $in: ['queued', 'running'] }
+    state: { $in: ['queued', 'screen_queued', 'running'] }
   }).select('messageId');
   await Message.updateMany(
     {
       conversationId: c.id,
       senderId: req.user!.id,
-      $or: [{ assistantRequest: { $exists: true } }, { _id: { $in: open.map((run) => run.messageId) } }]
+      $or: [
+        { assistantRequest: { $exists: true } },
+        { screenRequest: { $exists: true } },
+        { _id: { $in: open.map((run) => run.messageId) } }
+      ]
     },
-    { $unset: { assistantRequest: 1 }, $set: { assistantCancelled: true } }
+    { $unset: { assistantRequest: 1, screenRequest: 1 }, $set: { assistantCancelled: true } }
   );
   await AssistantRun.updateMany(
-    { conversationId: c.id, userId: req.user!.id, state: { $in: ['queued', 'running'] } },
+    { conversationId: c.id, userId: req.user!.id, state: { $in: ['queued', 'screen_queued', 'running'] } },
     { $set: { state: 'cancelled', finishedAt: new Date(), activity: 'Cancelled' } }
   );
   return;

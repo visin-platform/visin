@@ -9,6 +9,7 @@ const settingsSchema = new Schema(
     model: { type: String, default: '' },
     // Absent on settings saved before there was one: the default applies.
     dailyTokenLimit: Number,
+    toolRounds: Number,
     updatedBy: String
   },
   { timestamps: true }

@@ -12,7 +12,7 @@ What an operator must still provide, because it is not something to type into a 
 
 Nothing about the analyst's provider, model, switch or limit is set in the environment. Until an administrator saves settings it counts as on, with whichever provider already has a key and no model, so it stays silent until a model is chosen from that provider's own list. The administrator role is the one `auth-service` gives the first user. Shared threads support explicitly invoked, transcript-only assistants after consent or administrator enablement (see below). **Ask privately** opens a private analyst thread without copying shared messages.
 
-The chosen provider's API ([Anthropic Messages](https://platform.claude.com/docs/en/api/messages) or OpenAI Chat Completions, one adapter each in `services/providers.ts`) is called with a local MCP client's tools. It exposes an explicit read-only tool allowlist under the asking user's project-limited key. Generation is bounded to four provider requests, eight tool calls per round, 6,000 output tokens per request and a 160,000-token worst-case reservation. The daily token limit per person (a UTC day), set by an administrator in Account > Analyst, defaults to 800,000 and cannot be lower than one question's reservation. Actual successful usage releases unused reservations; failed or interrupted calls keep the reservation because consumption may be unknown. This is a token cap, not a dollar billing meter.
+The chosen provider's API ([Anthropic Messages](https://platform.claude.com/docs/en/api/messages) or OpenAI Chat Completions, one adapter each in `services/providers.ts`) is called with a local MCP client's tools. It exposes an explicit read-only tool allowlist under the asking user's project-limited key when a project is selected. A private side-panel chat without a selected project uses a short-lived read-only user key so it can resolve named projects through `list_projects` and verify them with `get_project`; normal resource permissions still apply. Shared chat never gets these tools. Account > Analyst configures 2–16 tool rounds per answer (default 8, including the final answer). Generation allows up to that many provider requests plus three screen-only rounds, eight tool calls per round, 6,000 output tokens per request and a reservation calculated as 40,000 tokens per configured round, plus 120,000 for screen-enabled questions. The daily token limit per person (a UTC day), set by an administrator in Account > Analyst, defaults to 800,000 and cannot be lower than one question's reservation. Actual successful usage releases unused reservations; failed or interrupted calls keep the reservation because consumption may be unknown. This is a token cap, not a dollar billing meter.
 
 Questions contain a hidden outbox request. The worker recovers it into a unique job, uses a database conversation lease to serialize turns, and persists the completed result before publishing an idempotent answer. Expired jobs fail visibly rather than automatically repeating a possibly billed provider call. Retrying a failed analysis is an explicit new question. Short-lived keys are deleted after use and expire after five minutes as a fallback. Cancellation aborts provider work and cleans up keys; the kill switch stops new generation and cancels active work at its next check.
 
@@ -40,7 +40,7 @@ The remaining scope is tracked in root `todo.md`: shared research-tool access, p
 
 Account > Analyst > **Usage and cost** (administrators) shows what answered questions used, by day, model and person, and an estimate of what that cost. Providers return no price with an answer, so each model's input and output price per million tokens is entered there, in one currency. **Refresh prices** fills them in from [LiteLLM's public price list](https://github.com/BerriAI/litellm), once per click and never in the background; prices typed by hand are never overwritten, and the list is read in dollars, so a refresh is refused for another currency.
 
-Prices change, so each question keeps the price in effect when it was answered (`price` on its run) and is costed at that, now and later: changing a price affects only questions asked after it, and the report says when a model's questions in a period were asked at more than one price. A question asked before its model had a price shows tokens only, until **Price earlier questions** prices it at today's price; that is an estimate, so it is marked on each question and counted in the report, and it never touches a question that already has a price. Prices in more than one currency are never added together: such a period shows no cost total. Cost is an estimate from token counts and these prices, not an invoice; failed or stopped questions may have used tokens that were never reported, so they are counted but not costed.
+Prices change, so each question keeps the price in effect when it was answered (`price` on its run) and is costed at that, now and later: changing a price affects only questions asked after it, and the report says when a model's questions in a period were asked at more than one price. A question asked before its model had a price shows tokens only, until **Price earlier questions** prices it at today's price; that is an estimate, so it is marked on each question and counted in the report, and it never changes an existing rate. Missing cache rates can be filled afterwards in the same currency, retaining the original input/output rates and marking the estimate as backfilled. Prices in more than one currency are never added together: such a period shows no cost total. Cost is an estimate from token counts and these prices, not an invoice; failed or stopped questions may have used tokens that were never reported, so they are counted but not costed.
 
 ## Reusable private assistants
 
@@ -116,3 +116,37 @@ Deploy auth-service and the shared backend-core session guard before enabling bo
 Bot profile editors also read `userId` and `picture` from the manager-only profile response. Avatar writes go to auth-service's `PUT/DELETE /auth/bots/:userId/picture`; that service validates the signed-in human against the current chat assistant creator/managers, not only mirrored profile metadata. Images use the existing `user_avatars` storage and public `/auth/avatars/:userId` serving/privacy rules. Uploads accept bounded JPEG/PNG/WebP bytes and never renew a bot session or change the manager's own picture.
 
 Review follow-ups: profile saves return the bot identity and picture metadata so managers can upload an avatar immediately. Removal is retryable after a failed public-profile write, preserving the first deletion time while finishing revocation/hiding. Direct handle requests reuse their profile lookup when distinguishing humans from bots.
+
+
+### Screen permissions and model costs
+
+Private desktop side-panel messages carry a page hint and enable navigation and page actions by default,
+including successive messages sent with Enter. Full-page and shared chats do not receive screen actions.
+The analyst uses navigation only when the person asks to open or show something. Navigation IDs must be explicit `structuredContent.navigation`
+references emitted by trusted MCP tool code; descriptions, configs, quoted messages and frame names grant no
+navigation permissions. References remain scoped to the credential's project and pages still enforce access.
+An older MCP service without these references fails closed for resource navigation; deploy MCP before chat-service.
+
+Page identity uses `get_training` with `detail: "identity"`, without epochs, descriptions or configs. The captured
+page context is provider-native tool data, separate from user questions. Successful identical reads are reused only
+within a turn, behind live guards; the final project-access check is always fresh. Comparison selection also retains
+its fresh resource/project checks. Tool output and advertised frame metadata are bounded; `get_screen_context` can search the captured frame names on demand. Full run reads omit launch configuration in chat unless `includeConfig:true` is requested.
+
+Anthropic uses an explicit five-minute cache breakpoint on the stable system/tool prefix; OpenAI's supported models
+cache prefixes automatically. Personality, selected IDs and page metadata are outside that stable prefix. Runs retain
+normalized total input, output, cache read/write counts, provider request count, research-call count and duration. Average latency counts only newly measured answers, not legacy zero durations.
+**Usage and cost** accepts optional cache-read and cache-write rates per model. Missing applicable rates leave a
+cached question unpriced; an explicit backfill can fill missing cache rates while preserving existing prices; provider-specific discounts are never inferred. Old runs without cache counts keep their
+existing accounting. Counts and estimates are measurements for evaluating cheaper model choices; model routing is
+unchanged until an accuracy baseline exists.
+
+Provider protocol references: [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching) and
+[Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+
+Screen calls are delivered over SSE with a private user/tab-scoped HTTP polling fallback. The panel polls pending calls every five seconds, and every second while a run is active. It deduplicates delivery and retries failed acknowledgements without navigating twice. Tab identity survives local hot reloads.
+
+Empty screen-call parameters are normalized to `{}` on delivery, including old MongoDB records where empty objects were minimized away. The client also accepts omitted parameters from older streams. Regression coverage exercises both streaming and polling navigation through the real shell/chat browser integration.
+
+Screen-aware questions use a hidden `screenRequest` outbox and internal `screen_queued` state in the same message/run collections. This prevents workers without screen support from claiming a job and dropping its tab context. Current workers recover both outboxes; API responses expose the internal state as `queued`. Cancellation and assistant revocation cover both paths. Chat history, keys and settings remain shared between deployments.
+
+Provider requests keep the 34 KB serialized envelope ceiling, including tool schemas. Before rejecting an oversized request, the provider adapter removes complete older conversational turns and compacts older tool results, marking omitted data as unknown and asking for narrower reads. The current question, verified application context, tool invocation IDs, error flags and invocation/result pairing remain intact. Schemas and a current question that cannot fit still fail before a provider call; compaction does not increase token reservations.

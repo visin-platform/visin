@@ -1,3 +1,4 @@
+import { fitProviderContext } from './providerContext';
 import { fetchWithTimeout } from '@visin/backend-core';
 
 /**
@@ -46,6 +47,8 @@ export interface Turn {
   stop: 'done' | 'length' | 'refused';
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   /** The model's own message, to be sent back as it was when tool results follow. */
   assistant: unknown;
 }
@@ -101,6 +104,8 @@ export function withTiers(
 }
 
 export interface ProviderAdapter {
+  /** Provider-native tool data, kept below application instructions. */
+  context(content: string): unknown[];
   send(request: {
     /** The provider's key, resolved when the run started. */
     apiKey: string;
@@ -117,6 +122,7 @@ export interface ProviderAdapter {
 }
 
 function withinLimit(payload: string): string {
+  payload = fitProviderContext(payload, MAX_REQUEST_BYTES);
   // UTF-8 bytes bound token input conservatively, including schemas and system text.
   if (Buffer.byteLength(payload, 'utf8') > MAX_REQUEST_BYTES)
     throw new Error('The results needed are too large for one answer. Ask a narrower question.');
@@ -125,6 +131,13 @@ function withinLimit(payload: string): string {
 /** Only the status: the body of a refusal can echo what was sent, or a key. */
 function unavailable(status: number): Error {
   return new Error(`Assistant provider unavailable (${status}). Try again later.`);
+}
+
+/** Missing/invalid usage cannot become a free completed answer in the budget or spend report. */
+function tokenCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new Error('The assistant provider did not report valid token usage');
+  return value;
 }
 
 interface AnthropicBlock {
@@ -136,12 +149,22 @@ interface AnthropicBlock {
 }
 
 const anthropic: ProviderAdapter = {
+  context(content) {
+    return [
+      { role: 'user', content: 'Read the application context for the next question.' },
+      {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'visin_context', name: 'get_screen_context', input: {} }]
+      },
+      ...this.toolResults([{ id: 'visin_context', content, isError: false }])
+    ];
+  },
   async send({ apiKey, model, system, messages, tools, signal }) {
     const payload = withinLimit(
       JSON.stringify({
         model,
         max_tokens: MAX_OUTPUT_TOKENS,
-        system,
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: '5m' } }],
         messages,
         ...(tools.length
           ? {
@@ -170,7 +193,12 @@ const anthropic: ProviderAdapter = {
     const result = (await response.json()) as {
       content: AnthropicBlock[];
       stop_reason: string;
-      usage: { input_tokens: number; output_tokens: number };
+      usage: {
+        input_tokens: number;
+        output_tokens: number;
+        cache_read_input_tokens?: number;
+        cache_creation_input_tokens?: number;
+      };
     };
     return {
       text: result.content
@@ -182,8 +210,13 @@ const anthropic: ProviderAdapter = {
         .filter((block) => block.type === 'tool_use')
         .map((block) => ({ id: block.id || '', name: block.name || '', input: block.input || {} })),
       stop: result.stop_reason === 'refusal' ? 'refused' : result.stop_reason === 'max_tokens' ? 'length' : 'done',
-      inputTokens: result.usage.input_tokens,
-      outputTokens: result.usage.output_tokens,
+      inputTokens:
+        tokenCount(result.usage.input_tokens) +
+        tokenCount(result.usage.cache_read_input_tokens ?? 0) +
+        tokenCount(result.usage.cache_creation_input_tokens ?? 0),
+      cacheReadTokens: tokenCount(result.usage.cache_read_input_tokens ?? 0),
+      cacheWriteTokens: tokenCount(result.usage.cache_creation_input_tokens ?? 0),
+      outputTokens: tokenCount(result.usage.output_tokens),
       assistant: { role: 'assistant', content: result.content }
     };
   },
@@ -240,6 +273,18 @@ const OPENAI_CHAT = /^(gpt-|chatgpt-|o\d)/;
 const OPENAI_OTHER = /(audio|realtime|transcribe|tts|image|embedding|moderation|search|instruct|codex|davinci|babbage)/;
 
 const openai: ProviderAdapter = {
+  context(content) {
+    return [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'visin_context', type: 'function', function: { name: 'get_screen_context', arguments: '{}' } }
+        ]
+      },
+      ...this.toolResults([{ id: 'visin_context', content, isError: false }])
+    ];
+  },
   async send({ apiKey, model, system, messages, tools, signal }) {
     const payload = withinLimit(
       JSON.stringify({
@@ -270,7 +315,11 @@ const openai: ProviderAdapter = {
         finish_reason?: string;
         message?: { content?: string | null; refusal?: string | null; tool_calls?: OpenAiToolCall[] };
       }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+      };
     };
     const choice = result.choices?.[0];
     const message = choice?.message;
@@ -289,8 +338,10 @@ const openai: ProviderAdapter = {
           : choice?.finish_reason === 'length'
             ? 'length'
             : 'done',
-      inputTokens: result.usage?.prompt_tokens ?? 0,
-      outputTokens: result.usage?.completion_tokens ?? 0,
+      inputTokens: tokenCount(result.usage?.prompt_tokens),
+      cacheReadTokens: tokenCount(result.usage?.prompt_tokens_details?.cached_tokens ?? 0),
+      cacheWriteTokens: tokenCount(result.usage?.prompt_tokens_details?.cache_write_tokens ?? 0),
+      outputTokens: tokenCount(result.usage?.completion_tokens),
       assistant: {
         role: 'assistant',
         content: message.content ?? null,

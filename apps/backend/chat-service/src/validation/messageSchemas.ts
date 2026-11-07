@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { screenContextSchema } from '../services/screen';
 import { id } from './commonSchemas';
 
 export const sendSchema = z
@@ -6,7 +7,9 @@ export const sendSchema = z
     body: z.string().trim().min(1).max(8000),
     clientId: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/),
     replyTo: id.optional(),
-    assistantId: id.optional()
+    assistantId: id.optional(),
+    // Where the asker's chat panel is, so the analyst can change the page beside it. Never stored on the message.
+    screen: screenContextSchema.optional()
   })
   .strict();
 

@@ -2,10 +2,17 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({ CHAT_SERVICE_URL: 'http://chat.test' }) }));
 vi.mock('../services/chatService', () => ({
-  chatService: { messages: vi.fn(async () => []), runs: vi.fn(async () => []), markRead: vi.fn(async () => {}) }
+  chatService: {
+    messages: vi.fn(async () => []),
+    runs: vi.fn(async () => []),
+    markRead: vi.fn(async () => {}),
+    screenCalls: vi.fn(async (): Promise<{ id: string; place: string; params: Record<string, unknown> }[]> => []),
+    screenResult: vi.fn(async () => {})
+  }
 }));
 import { chatService } from '../services/chatService';
 import { useChatThread } from './useChatThread';
+import type { Run } from '../types/chat';
 class Stream extends EventTarget {
   static instances: Stream[] = [];
   close = vi.fn();
@@ -132,4 +139,135 @@ it('marks a shared thread read again after switching accounts', async () => {
   await act(async () => {});
   await act(async () => Stream.instances[1].dispatchEvent(frame()));
   expect(chatService.markRead).toHaveBeenCalledTimes(2);
+});
+
+it('opens its stream with the tab id only in the side panel', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  const args = { selected: 'c1', userId: 'alice', isAuthenticated: true, setError: vi.fn(), setConversations: vi.fn() };
+  const page = renderHook(() => useChatThread(args));
+  await act(async () => {});
+  expect(Stream.instances[0].url).not.toContain('tab=');
+  page.unmount();
+  const panel = renderHook(() => useChatThread({ ...args, panel: true }));
+  await act(async () => {});
+  expect(Stream.instances[1].url).toMatch(/\/events\?tab=[A-Za-z0-9_-]{8,64}$/);
+  panel.unmount();
+});
+it('shows a requested place once and reports what the shell did', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  const asked = vi.fn((event: Event) => {
+    const { id } = (event as CustomEvent<{ id: string }>).detail;
+    window.dispatchEvent(
+      new CustomEvent('visin:screen-done', { detail: { id, ok: true, summary: 'Opened projects' } })
+    );
+  });
+  window.addEventListener('visin:screen', asked);
+  const setError = vi.fn(),
+    setConversations = vi.fn();
+  const { unmount } = renderHook(() =>
+    useChatThread({
+      selected: 'c1',
+      userId: 'alice',
+      isAuthenticated: true,
+      panel: true,
+      setError,
+      setConversations
+    })
+  );
+  await act(async () => {});
+  const stream = Stream.instances[0];
+  const data = JSON.stringify([{ id: 'call1', place: 'projects', params: {} }]);
+  await act(async () => {
+    stream.dispatchEvent(new MessageEvent('screen', { data }));
+    stream.dispatchEvent(new MessageEvent('screen', { data }));
+  });
+  expect(asked).toHaveBeenCalledTimes(1);
+  expect(chatService.screenResult).toHaveBeenCalledWith('call1', { ok: true, summary: 'Opened projects' });
+  await act(async () => {
+    stream.dispatchEvent(new MessageEvent('screen', { data: 'garbage' }));
+  });
+  expect(asked).toHaveBeenCalledTimes(1);
+  window.removeEventListener('visin:screen', asked);
+  unmount();
+});
+
+it('updates the current private thread’s selected runs from selection events', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  const setConversations = vi.fn(),
+    setError = vi.fn();
+  const { unmount } = renderHook(() =>
+    useChatThread({ selected: 'c1', userId: 'alice', isAuthenticated: true, setError, setConversations })
+  );
+  await act(async () => {});
+  const selection = {
+    trainingIds: ['a', 'b'],
+    trainingLabels: [
+      { id: 'a', name: 'Run A' },
+      { id: 'b', name: 'Run B' }
+    ]
+  };
+  act(() => Stream.instances[0].dispatchEvent(new MessageEvent('selection', { data: JSON.stringify(selection) })));
+  const change = setConversations.mock.calls.at(-1)![0];
+  expect(
+    change([
+      { _id: 'c1', kind: 'assistant' },
+      { _id: 'c2', kind: 'assistant' }
+    ])
+  ).toEqual([
+    { _id: 'c1', kind: 'assistant', ...selection },
+    { _id: 'c2', kind: 'assistant' }
+  ]);
+  expect(change([{ _id: 'c1', kind: 'direct' }])).toEqual([{ _id: 'c1', kind: 'direct' }]);
+  unmount();
+});
+
+const working = { _id: 'run1', messageId: 'm1', state: 'running', activity: 'Opening a page' } as Run;
+
+it('stops asking for screen calls while no run is working', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('EventSource', Stream);
+  const setError = vi.fn(),
+    setConversations = vi.fn();
+  const { unmount } = renderHook(() =>
+    useChatThread({ selected: 'c1', userId: 'alice', isAuthenticated: true, panel: true, setError, setConversations })
+  );
+  await act(async () => {});
+  const first = vi.mocked(chatService.screenCalls).mock.calls.length;
+  await act(async () => vi.advanceTimersByTimeAsync(30000));
+  expect(vi.mocked(chatService.screenCalls).mock.calls.length).toBe(first);
+  unmount();
+});
+
+it('delivers a screen call through polling when streaming is unavailable, and retries only its acknowledgement', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('EventSource', undefined);
+  const call = { id: 'poll-call', place: 'projects', params: {} };
+  // A call exists only while its run is working.
+  vi.mocked(chatService.runs).mockResolvedValue([working]);
+  vi.mocked(chatService.screenCalls).mockResolvedValue([call]);
+  vi.mocked(chatService.screenResult).mockRejectedValueOnce(new Error('temporary network failure'));
+  const asked = vi.fn((event: Event) => {
+    window.dispatchEvent(
+      new CustomEvent('visin:screen-done', {
+        detail: { id: (event as CustomEvent).detail.id, ok: true, summary: 'Opened projects' }
+      })
+    );
+  });
+  window.addEventListener('visin:screen', asked);
+  const setError = vi.fn(),
+    setConversations = vi.fn();
+  const { unmount } = renderHook(() =>
+    useChatThread({ selected: 'c1', userId: 'alice', isAuthenticated: true, panel: true, setError, setConversations })
+  );
+  await act(async () => {});
+  expect(asked).toHaveBeenCalledTimes(1);
+  expect(chatService.screenCalls).toHaveBeenCalledWith('c1', expect.any(String), expect.any(AbortSignal));
+  // The runs arrive with the next reload (rendered when its act ends), then the acknowledgement is retried.
+  await act(async () => vi.advanceTimersByTimeAsync(5000));
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(asked).toHaveBeenCalledTimes(1);
+  expect(chatService.screenResult).toHaveBeenCalledTimes(2);
+  unmount();
+  window.removeEventListener('visin:screen', asked);
+  expect(vi.getTimerCount()).toBe(0);
 });

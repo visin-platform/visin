@@ -1,3 +1,4 @@
+import { DEFAULT_TOOL_ROUNDS } from './analysisLimits';
 import { logger } from '@visin/backend-core';
 import mongoose from 'mongoose';
 import { Settings } from '../models/Settings';
@@ -31,6 +32,7 @@ export interface AssistantSettings {
   model: string;
   /** Tokens one person may use a day, counting every question's reservation until its answer is in. */
   dailyTokenLimit: number;
+  toolRounds: number;
   /** Where these came from: what an admin saved, or the defaults until one does. */
   source: 'admin' | 'default';
 }
@@ -65,7 +67,8 @@ async function savedSettings() {
           enabled: found.enabled,
           provider: isProviderId(found.provider) ? found.provider : 'anthropic',
           model: found.model || '',
-          dailyTokenLimit: found.dailyTokenLimit || DEFAULT_DAILY_TOKEN_LIMIT
+          dailyTokenLimit: found.dailyTokenLimit || DEFAULT_DAILY_TOKEN_LIMIT,
+          toolRounds: found.toolRounds ?? DEFAULT_TOOL_ROUNDS
         }
       : null
   };
@@ -82,13 +85,21 @@ export async function assistantSettings(): Promise<AssistantSettings> {
   if (doc) return { ...doc, source: 'admin' };
   for (const provider of PROVIDER_IDS) {
     if ((await keyStatus(provider)).configured)
-      return { enabled: true, provider, model: '', dailyTokenLimit: DEFAULT_DAILY_TOKEN_LIMIT, source: 'default' };
+      return {
+        enabled: true,
+        provider,
+        model: '',
+        dailyTokenLimit: DEFAULT_DAILY_TOKEN_LIMIT,
+        toolRounds: DEFAULT_TOOL_ROUNDS,
+        source: 'default'
+      };
   }
   return {
     enabled: true,
     provider: PROVIDER_IDS[0],
     model: '',
     dailyTokenLimit: DEFAULT_DAILY_TOKEN_LIMIT,
+    toolRounds: DEFAULT_TOOL_ROUNDS,
     source: 'default'
   };
 }

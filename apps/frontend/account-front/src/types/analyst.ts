@@ -18,8 +18,12 @@ export interface AnalystSettings {
   model: string;
   /** Tokens one person may use a day, counting every question's reservation until its answer is in. */
   dailyTokenLimit: number;
+  toolRounds: number;
   /** What one question reserves of that limit until its answer is in. The limit cannot be lower. */
   tokenReservation: number;
+  tokensPerRound: number;
+  minToolRounds: number;
+  maxToolRounds: number;
   /** An administrator's saved choice, or the defaults until one is saved. */
   source: 'admin' | 'default';
   /** On, with a model, a key, and everything the server needs. */
@@ -60,6 +64,7 @@ export interface AnalystSettingsUpdate {
   provider: AnalystProviderId;
   model: string;
   dailyTokenLimit: number;
+  toolRounds: number;
 }
 
 /** What the provider charges for one model, in the deployment's currency, per million tokens. */
@@ -68,6 +73,8 @@ export interface AnalystPrice {
   model: string;
   inputPerMillion: number;
   outputPerMillion: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
   /** Typed by an administrator, which a refresh never overwrites, or fetched from the price list. */
   source: 'manual' | 'fetched';
   /** When a fetched price was fetched. */
@@ -108,6 +115,14 @@ export interface AnalystUsageTally {
 }
 
 export interface AnalystUsage {
+  performance?: {
+    measuredQuestions: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    providerRequests: number;
+    toolCalls: number;
+    durationMs: number;
+  };
   /** The window, in whole UTC days counting today. */
   days: number;
   /** Its first day, as YYYY-MM-DD. */

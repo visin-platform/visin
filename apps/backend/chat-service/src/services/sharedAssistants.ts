@@ -109,8 +109,7 @@ export async function runAllowed(
   if (c.kind === 'assistant') {
     return (
       c.createdBy === userId &&
-      (!assistantId ||
-        Boolean(await Assistant.exists({ _id: assistantId, ...usableAssistant(userId) })))
+      (!assistantId || Boolean(await Assistant.exists({ _id: assistantId, ...usableAssistant(userId) })))
     );
   }
   if (!assistantId || !sharedEnabled(c)) return false;
@@ -133,11 +132,11 @@ export async function requireSharedManager(req: Request, c: ChatConversation) {
 /** Pause/removal cancels durable work too: briefly resuming must not revive old questions. */
 export async function revokeAssistantWork(assistantId: string) {
   await Message.updateMany(
-    { 'assistantRequest.assistantId': assistantId },
-    { $set: { assistantCancelled: true }, $unset: { assistantRequest: 1 } }
+    { $or: [{ 'assistantRequest.assistantId': assistantId }, { 'screenRequest.assistantId': assistantId }] },
+    { $set: { assistantCancelled: true }, $unset: { assistantRequest: 1, screenRequest: 1 } }
   );
   await AssistantRun.updateMany(
-    { assistantId, state: { $in: ['queued', 'running'] } },
+    { assistantId, state: { $in: ['queued', 'screen_queued', 'running'] } },
     { $set: { state: 'cancelled', activity: 'Cancelled', finishedAt: new Date() } }
   );
   // Keep completed usage/prices intact while preventing later outbox publication.

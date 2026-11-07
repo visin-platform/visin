@@ -64,6 +64,7 @@ const ALLOWANCES = [5, 20, 50];
 
 /** What has been changed on this page and not yet saved; anything left out is as the service has it. */
 interface Draft {
+  toolRounds?: string;
   enabled?: boolean;
   provider?: AnalystProviderId;
   model?: string;
@@ -177,7 +178,11 @@ const AnalystSetup: React.FC = () => {
   const allOptions =
     model && !offered.some((option) => option.id === model) ? [{ id: model, name: model }, ...offered] : offered;
 
-  const reservation = current.tokenReservation;
+  const toolRoundsText = draft.toolRounds ?? String(current.toolRounds);
+  const toolRounds = Number(toolRoundsText);
+  const roundsError =
+    !/^\d+$/.test(toolRoundsText) || toolRounds < current.minToolRounds || toolRounds > current.maxToolRounds;
+  const reservation = current.tokenReservation + (toolRounds - current.toolRounds) * current.tokensPerRound;
   const savedPreset = ALLOWANCES.find((questions) => questions * reservation === current.dailyTokenLimit);
   const allowance = draft.allowance ?? (savedPreset ? String(savedPreset * reservation) : 'custom');
   const customText = draft.customTokens ?? String(current.dailyTokenLimit);
@@ -194,6 +199,7 @@ const AnalystSetup: React.FC = () => {
           : '';
 
   const changed =
+    toolRounds !== current.toolRounds ||
     enabled !== current.enabled ||
     provider !== current.provider ||
     model !== current.model ||
@@ -226,7 +232,7 @@ const AnalystSetup: React.FC = () => {
   };
   const save = () =>
     saveSettings.mutate(
-      { enabled, provider, model, dailyTokenLimit: limit },
+      { enabled, provider, model, dailyTokenLimit: limit, toolRounds },
       {
         onSuccess: () => {
           setDraft({});
@@ -436,7 +442,17 @@ const AnalystSetup: React.FC = () => {
           )}
         </Step>
 
-        <Step number={3} title="Daily allowance">
+        <Step number={3} title="Analysis limits">
+          <TextField
+            label="Tool rounds per answer"
+            type="number"
+            value={toolRoundsText}
+            onChange={(event) => setDraft((previous) => ({ ...previous, toolRounds: event.target.value }))}
+            error={roundsError}
+            helperText={`Choose ${current.minToolRounds}–${current.maxToolRounds}. More rounds allow more lookups and can increase cost. One round is reserved for the final answer; page-only navigation has a separate allowance.`}
+            slotProps={{ htmlInput: { min: current.minToolRounds, max: current.maxToolRounds, step: 1 } }}
+            sx={{ maxWidth: 420 }}
+          />
           <TextField
             select
             label="Questions per person per day"
@@ -497,12 +513,12 @@ const AnalystSetup: React.FC = () => {
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <Button
                 variant="contained"
-                disabled={!changed || Boolean(limitError) || Boolean(blocker) || saveSettings.isPending}
+                disabled={!changed || Boolean(limitError) || roundsError || Boolean(blocker) || saveSettings.isPending}
                 onClick={save}
               >
                 Save
               </Button>
-              {changed && !blocker && !limitError && (
+              {changed && !blocker && !limitError && !roundsError && (
                 <Typography variant="body2" color="text.secondary">
                   You have unsaved changes.
                 </Typography>

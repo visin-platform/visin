@@ -16,6 +16,8 @@ const pricingSchema = new Schema(
             provider: { type: String, enum: ['anthropic', 'openai'], required: true },
             model: { type: String, required: true },
             inputPerMillion: { type: Number, required: true, min: 0 },
+            cacheReadPerMillion: { type: Number, min: 0 },
+            cacheWritePerMillion: { type: Number, min: 0 },
             outputPerMillion: { type: Number, required: true, min: 0 },
             // Typed by an administrator, or fetched from the price list when they asked for a refresh.
             source: { type: String, enum: ['manual', 'fetched'], default: 'manual' },

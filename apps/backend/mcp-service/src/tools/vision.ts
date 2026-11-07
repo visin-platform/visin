@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { vision } from '../vision';
 import { isHubRunModel } from '../schemas';
+import { navigable, trainingReferences } from './navigation';
 import {
   Caller,
   ToolModule,
@@ -132,7 +133,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
             `${count(stats.visualizationsCount)} visualizations.`
         );
 
-        return ok(lines.filter((line) => line !== '').join('\n'));
+        return navigable(lines.filter((line) => line !== '').join('\n'), [{ place: 'project', id: details._id }]);
       } catch (error) {
         return explain(error);
       }
@@ -174,7 +175,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           total > trainings.length
             ? `${count(trainings.length)} of ${count(total)} runs:`
             : `${count(trainings.length)} runs:`;
-        return ok([header, ...trainings.map(describeTraining)].join('\n'));
+        return navigable([header, ...trainings.map(describeTraining)].join('\n'), trainings.flatMap(trainingReferences));
       } catch (error) {
         return explain(error);
       }
@@ -189,17 +190,34 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         'One run: status, duration, the hyperparameters it was launched with, its final epoch, ' +
         'and where every metric peaked. Answers "how did X go" and "what was it set to". For the ' +
         'shape of the curve rather than its ends, use get_training_curve.',
-      inputSchema: { training: z.string().describe('The training id, from list_trainings') }
+      inputSchema: {
+        training: z.string().describe('The training id, from list_trainings'),
+        detail: z
+          .enum(['identity', 'full'])
+          .optional()
+          .describe('identity verifies IDs only, without epochs, descriptions or configuration; full is the default'),
+        includeConfig: z
+          .boolean()
+          .optional()
+          .describe('Full results: include launch configuration (default true); false returns measurements without configuration')
+      }
     },
-    async ({ training }) => {
+    async ({ training, detail, includeConfig }) => {
       try {
+        if (detail === 'identity') {
+          const run = await vision.getTraining(key, training);
+          return navigable(
+            JSON.stringify({ id: run._id, uuid: run.uuid, projectId: run.projectId }),
+            trainingReferences(run)
+          );
+        }
         // Configs are fetched alongside, and a failure there must not take the
         // run's metrics with it: the settings are context for the numbers, not
         // the answer. A run whose config was deleted still has results worth
         // reading.
         const [{ training: details, epochs }, configs, summary] = await Promise.all([
           vision.getTrainingWithEpochs(key, training),
-          vision.getTrainingConfigs(key, training).catch(() => []),
+          includeConfig === false ? Promise.resolve([]) : vision.getTrainingConfigs(key, training).catch(() => []),
           // Like the configs: context that sharpens the answer, never a reason to lose it.
           vision.getTrainingSummary(key, training).catch(() => null)
         ]);
@@ -240,7 +258,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
 
         if (epochs.length === 0) {
           lines.push('', 'No epochs recorded yet.');
-          return ok(lines.filter((line) => line !== '').join('\n'));
+          return navigable(lines.filter((line) => line !== '').join('\n'), trainingReferences(details));
         }
 
         const totalTime = epochs.reduce((sum, epoch) => sum + (epoch.epoch_time ?? 0), 0);
@@ -290,7 +308,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           );
         }
 
-        return ok(lines.filter((line) => line !== '').join('\n'));
+        return navigable(lines.filter((line) => line !== '').join('\n'), trainingReferences(details));
       } catch (error) {
         return explain(error);
       }
@@ -329,7 +347,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           training,
           wanted
         );
-        if (epochs.length === 0) return ok(`${details.name} has recorded no epochs yet.`);
+        if (epochs.length === 0) return navigable(`${details.name} has recorded no epochs yet.`, trainingReferences(details));
 
         const picked = sample(epochs, wanted);
         const total = totalEpochs ?? epochs.length;
@@ -343,7 +361,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           lines.push('', `(Sampled evenly from ${count(total)} epochs; the first and last are always included.)`);
         }
 
-        return ok(lines.join('\n'));
+        return navigable(lines.join('\n'), trainingReferences(details));
       } catch (error) {
         return explain(error);
       }
@@ -396,7 +414,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           'Where a metric ends far from its best end, say so — that gap is the finding.'
         );
 
-        return ok(lines.join('\n').trimEnd());
+        return navigable(lines.join('\n').trimEnd(), comparison.flatMap((entry) => trainingReferences(entry.training)));
       } catch (error) {
         return explain(error);
       }

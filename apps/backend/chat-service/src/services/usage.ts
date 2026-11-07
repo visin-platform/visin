@@ -11,6 +11,8 @@ export interface PriceEntry {
   /** In the deployment's currency, per million tokens. */
   inputPerMillion: number;
   outputPerMillion: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
   /** Typed by an administrator (which a refresh never overwrites), or fetched from the price list. */
   source: 'manual' | 'fetched';
   /** When a fetched price was fetched. */
@@ -30,6 +32,8 @@ export async function getPricing(): Promise<PriceTable> {
       model: entry.model,
       inputPerMillion: entry.inputPerMillion,
       outputPerMillion: entry.outputPerMillion,
+      ...(typeof entry.cacheReadPerMillion === 'number' ? { cacheReadPerMillion: entry.cacheReadPerMillion } : {}),
+      ...(typeof entry.cacheWritePerMillion === 'number' ? { cacheWritePerMillion: entry.cacheWritePerMillion } : {}),
       source: entry.source === 'fetched' ? 'fetched' : 'manual',
       fetchedAt: entry.fetchedAt ? new Date(entry.fetchedAt).toISOString() : null
     }))
@@ -62,6 +66,8 @@ export async function priceSnapshot(provider: string, model: string) {
         currency: pricing.currency,
         inputPerMillion: entry.inputPerMillion,
         outputPerMillion: entry.outputPerMillion,
+        ...(typeof entry.cacheReadPerMillion === 'number' ? { cacheReadPerMillion: entry.cacheReadPerMillion } : {}),
+        ...(typeof entry.cacheWritePerMillion === 'number' ? { cacheWritePerMillion: entry.cacheWritePerMillion } : {}),
         source: entry.source,
         backfilled: false
       }
@@ -74,7 +80,7 @@ const costOf = (inputPerMillion: number, outputPerMillion: number, inputTokens: 
 /**
  * Prices answered questions that were asked before their model had a price, at the price set now. Never done on
  * its own: it is an estimate (the price then may have been different), so it is marked on each question and
- * counted in the report. Questions that already have a price are left exactly as they are.
+ * counted in the report. Existing rates are retained; missing cache rates can be filled in the same currency.
  */
 export async function backfillPrices(): Promise<{ questions: number; models: { model: string; questions: number }[] }> {
   const pricing = await getPricing();
@@ -93,13 +99,62 @@ export async function backfillPrices(): Promise<{ questions: number; models: { m
             currency: pricing.currency,
             inputPerMillion: entry.inputPerMillion,
             outputPerMillion: entry.outputPerMillion,
+            ...(typeof entry.cacheReadPerMillion === 'number'
+              ? { cacheReadPerMillion: entry.cacheReadPerMillion }
+              : {}),
+            ...(typeof entry.cacheWritePerMillion === 'number'
+              ? { cacheWritePerMillion: entry.cacheWritePerMillion }
+              : {}),
             source: entry.source,
             backfilled: true
           }
         }
       }
     );
-    if (result.modifiedCount) models.push({ model: entry.model, questions: result.modifiedCount });
+    const missing = [
+      ...(entry.cacheReadPerMillion !== undefined
+        ? [{ cacheReadTokens: { $gt: 0 }, 'price.cacheReadPerMillion': { $exists: false } }]
+        : []),
+      ...(entry.cacheWritePerMillion !== undefined
+        ? [{ cacheWriteTokens: { $gt: 0 }, 'price.cacheWritePerMillion': { $exists: false } }]
+        : [])
+    ];
+    const cached = missing.length
+      ? await AssistantRun.updateMany(
+          {
+            state: 'completed',
+            provider: entry.provider,
+            model: entry.model,
+            'price.inputPerMillion': { $exists: true },
+            'price.currency': pricing.currency,
+            $or: missing
+          },
+          [
+            {
+              $set: {
+                ...(entry.cacheReadPerMillion !== undefined
+                  ? {
+                      'price.cacheReadPerMillion': {
+                        $ifNull: ['$price.cacheReadPerMillion', entry.cacheReadPerMillion]
+                      }
+                    }
+                  : {}),
+                ...(entry.cacheWritePerMillion !== undefined
+                  ? {
+                      'price.cacheWritePerMillion': {
+                        $ifNull: ['$price.cacheWritePerMillion', entry.cacheWritePerMillion]
+                      }
+                    }
+                  : {}),
+                'price.backfilled': true
+              }
+            }
+          ],
+          { updatePipeline: true }
+        )
+      : { modifiedCount: 0 };
+    const questions = result.modifiedCount + cached.modifiedCount;
+    if (questions) models.push({ model: entry.model, questions });
   }
   return { questions: models.reduce((sum, row) => sum + row.questions, 0), models };
 }
@@ -149,6 +204,14 @@ export interface UsageReport {
   /** The currency of the prices the questions were asked at, or MIXED where they differ and no total is possible. */
   currency: string;
   totals: Tally;
+  performance: {
+    measuredQuestions: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    providerRequests: number;
+    toolCalls: number;
+    durationMs: number;
+  };
   /** Answers that failed or were interrupted: they may have used tokens the provider did not report. */
   failedQuestions: number;
   /** Questions priced afterwards at the price then current, not at the time they were asked. */
@@ -185,12 +248,20 @@ export async function usageReport(days: number, now = new Date()): Promise<Usage
         currency?: string;
         inputPerMillion?: number;
         outputPerMillion?: number;
+        cacheReadPerMillion?: number;
+        cacheWritePerMillion?: number;
         backfilled?: boolean;
       };
       name: string;
       questions: number;
       inputTokens: number;
       outputTokens: number;
+      measuredQuestions: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+      providerRequests: number;
+      toolCalls: number;
+      durationMs: number;
     }>([
       { $match: { state: 'completed', finishedAt: { $gte: since } } },
       {
@@ -203,12 +274,20 @@ export async function usageReport(days: number, now = new Date()): Promise<Usage
             currency: '$price.currency',
             inputPerMillion: '$price.inputPerMillion',
             outputPerMillion: '$price.outputPerMillion',
+            cacheReadPerMillion: '$price.cacheReadPerMillion',
+            cacheWritePerMillion: '$price.cacheWritePerMillion',
             backfilled: '$price.backfilled'
           },
           name: { $last: '$name' },
           questions: { $sum: 1 },
           inputTokens: { $sum: '$inputTokens' },
-          outputTokens: { $sum: '$outputTokens' }
+          outputTokens: { $sum: '$outputTokens' },
+          measuredQuestions: { $sum: { $cond: [{ $gt: ['$providerRequests', 0] }, 1, 0] } },
+          cacheReadTokens: { $sum: '$cacheReadTokens' },
+          cacheWriteTokens: { $sum: '$cacheWriteTokens' },
+          providerRequests: { $sum: '$providerRequests' },
+          toolCalls: { $sum: '$toolCalls' },
+          durationMs: { $sum: '$durationMs' }
         }
       }
     ]),
@@ -222,21 +301,46 @@ export async function usageReport(days: number, now = new Date()): Promise<Usage
   const currency = mixed ? 'MIXED' : ([...currencies][0] ?? prices.currency);
 
   const totals = empty();
+  const performance = {
+    measuredQuestions: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    providerRequests: 0,
+    toolCalls: 0,
+    durationMs: 0
+  };
   let backfilledQuestions = 0;
   const byDay = new Map<string, Tally>();
   const byModel = new Map<string, Tally & { provider: string; model: string; seen: Set<string> }>();
   const byPerson = new Map<string, Tally & { name: string }>();
   for (const row of rows) {
+    for (const field of Object.keys(performance) as (keyof typeof performance)[]) performance[field] += row[field] || 0;
     const provider = row._id.provider ?? 'unknown';
     const model = row._id.model ?? 'unknown';
     // A question with no price has no such fields at all, which a grouping leaves out rather than nulls.
-    const asked = typeof row._id.inputPerMillion === 'number' && typeof row._id.outputPerMillion === 'number' && !mixed;
+    const asked =
+      typeof row._id.inputPerMillion === 'number' &&
+      typeof row._id.outputPerMillion === 'number' &&
+      !mixed &&
+      (!row.cacheReadTokens || typeof row._id.cacheReadPerMillion === 'number') &&
+      (!row.cacheWriteTokens || typeof row._id.cacheWritePerMillion === 'number') &&
+      row.cacheReadTokens + row.cacheWriteTokens <= row.inputTokens;
     const entry: Row = {
       questions: row.questions,
       inputTokens: row.inputTokens,
       outputTokens: row.outputTokens,
       priced: asked,
-      cost: asked ? costOf(row._id.inputPerMillion!, row._id.outputPerMillion!, row.inputTokens, row.outputTokens) : 0
+      cost: asked
+        ? costOf(
+            row._id.inputPerMillion!,
+            row._id.outputPerMillion!,
+            row.inputTokens - row.cacheReadTokens - row.cacheWriteTokens,
+            row.outputTokens
+          ) +
+          (row.cacheReadTokens * (row._id.cacheReadPerMillion ?? 0) +
+            row.cacheWriteTokens * (row._id.cacheWritePerMillion ?? 0)) /
+            1_000_000
+        : 0
     };
     if (row._id.backfilled) backfilledQuestions += row.questions;
     add(totals, entry);
@@ -246,7 +350,9 @@ export async function usageReport(days: number, now = new Date()): Promise<Usage
       byModel.get(modelKey) ?? byModel.set(modelKey, { ...empty(), provider, model, seen: new Set() }).get(modelKey)!;
     add(modelTally, entry);
     if (typeof row._id.inputPerMillion === 'number')
-      modelTally.seen.add(`${row._id.inputPerMillion}/${row._id.outputPerMillion}`);
+      modelTally.seen.add(
+        `${row._id.inputPerMillion}/${row._id.outputPerMillion}/${row._id.cacheReadPerMillion}/${row._id.cacheWritePerMillion}`
+      );
     const person =
       byPerson.get(row._id.userId) ?? byPerson.set(row._id.userId, { ...empty(), name: row.name }).get(row._id.userId)!;
     person.name = row.name || person.name;
@@ -260,6 +366,7 @@ export async function usageReport(days: number, now = new Date()): Promise<Usage
     since: since.toISOString().slice(0, 10),
     currency,
     totals,
+    performance,
     failedQuestions,
     backfilledQuestions,
     // Oldest first, so a chart or list reads left to right.

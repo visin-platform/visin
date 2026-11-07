@@ -151,12 +151,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
       )}
       <MessageList />
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
-      {replyTarget && (
-        <ReplyPreview
-          message={replyTarget}
-          onCancel={() => setReplyTarget(undefined)}
-        />
-      )}
+      {replyTarget && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}
       <Composer
         label={c.kind === 'assistant' ? 'Ask a follow-up' : 'Message'}
         value={draft}

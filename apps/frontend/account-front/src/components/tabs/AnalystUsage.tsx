@@ -74,6 +74,8 @@ const priceKey = (provider: string, model: string): string => `${provider}:${mod
 interface PriceDraft {
   input: string;
   output: string;
+  cacheRead: string;
+  cacheWrite: string;
 }
 
 const parsePrice = (text: string): number => (/^\d+(\.\d+)?$/.test(text.trim()) ? Number(text.trim()) : NaN);
@@ -191,7 +193,9 @@ const AnalystUsagePanel: React.FC = () => {
   const shown = (provider: string, model: string, saved: AnalystPrice | null): PriceDraft =>
     draft[priceKey(provider, model)] ?? {
       input: saved ? String(saved.inputPerMillion) : '',
-      output: saved ? String(saved.outputPerMillion) : ''
+      output: saved ? String(saved.outputPerMillion) : '',
+      cacheRead: saved?.cacheReadPerMillion === undefined ? '' : String(saved.cacheReadPerMillion),
+      cacheWrite: saved?.cacheWritePerMillion === undefined ? '' : String(saved.cacheWritePerMillion)
     };
   const edit = (provider: string, model: string, saved: AnalystPrice | null, change: Partial<PriceDraft>) =>
     setDraft((previous) => ({
@@ -202,19 +206,37 @@ const AnalystUsagePanel: React.FC = () => {
   // Each model row is either empty (no price), complete (both numbers) or half-done, which cannot be saved.
   const rows = report.byModel.map((row) => {
     const text = shown(row.provider, row.model, row.price);
-    const empty = !text.input.trim() && !text.output.trim();
+    const empty = !text.input.trim() && !text.output.trim() && !text.cacheRead.trim() && !text.cacheWrite.trim();
     const input = parsePrice(text.input);
     const output = parsePrice(text.output);
+    const cacheRead = text.cacheRead.trim() ? parsePrice(text.cacheRead) : undefined;
+    const cacheWrite = text.cacheWrite.trim() ? parsePrice(text.cacheWrite) : undefined;
     const edited = Boolean(draft[priceKey(row.provider, row.model)]);
-    return { row, text, empty, input, output, edited, valid: empty || (!Number.isNaN(input) && !Number.isNaN(output)) };
+    return {
+      row,
+      text,
+      empty,
+      input,
+      output,
+      cacheRead,
+      cacheWrite,
+      edited,
+      valid:
+        empty ||
+        (!Number.isNaN(input) && !Number.isNaN(output) && !Number.isNaN(cacheRead) && !Number.isNaN(cacheWrite))
+    };
   });
   const invalid = rows.some((entry) => !entry.valid);
   const currencyValid = /^[A-Za-z]{3}$/.test(currency.trim());
   // Changed means different from what is saved, not merely touched: typing the old value back is no change.
-  const rowChanged = ({ row, empty, input, output }: (typeof rows)[number]) =>
+  const rowChanged = ({ row, empty, input, output, cacheRead, cacheWrite }: (typeof rows)[number]) =>
     empty
       ? Boolean(row.price)
-      : !row.price || input !== row.price.inputPerMillion || output !== row.price.outputPerMillion;
+      : !row.price ||
+        input !== row.price.inputPerMillion ||
+        output !== row.price.outputPerMillion ||
+        cacheRead !== row.price.cacheReadPerMillion ||
+        cacheWrite !== row.price.cacheWritePerMillion;
   const changed = currency.trim().toUpperCase() !== report.prices.currency || rows.some(rowChanged);
 
   const save = () => {
@@ -222,17 +244,23 @@ const AnalystUsagePanel: React.FC = () => {
     // typed, and a model left empty loses its price.
     const shownKeys = new Set(report.byModel.map((row) => priceKey(row.provider, row.model)));
     const kept = report.prices.entries.filter((entry) => !shownKeys.has(priceKey(entry.provider, entry.model)));
-    const edited = rows.flatMap(({ row, empty, input, output }) => {
+    const edited = rows.flatMap(({ row, empty, input, output, cacheRead, cacheWrite }) => {
       if (empty) return [];
       // A price left as it was keeps its source; one changed by hand is the administrator's, which a refresh
       // will not overwrite.
-      const unchanged = row.price?.inputPerMillion === input && row.price?.outputPerMillion === output;
+      const unchanged =
+        row.price?.inputPerMillion === input &&
+        row.price?.outputPerMillion === output &&
+        row.price?.cacheReadPerMillion === cacheRead &&
+        row.price?.cacheWritePerMillion === cacheWrite;
       return [
         {
           provider: row.provider as AnalystProviderId,
           model: row.model,
           inputPerMillion: input,
           outputPerMillion: output,
+          ...(cacheRead !== undefined ? { cacheReadPerMillion: cacheRead } : {}),
+          ...(cacheWrite !== undefined ? { cacheWritePerMillion: cacheWrite } : {}),
           source: unchanged ? row.price!.source : ('manual' as const),
           fetchedAt: unchanged ? row.price!.fetchedAt : null
         }
@@ -314,6 +342,16 @@ const AnalystUsagePanel: React.FC = () => {
         </Box>
       </Panel>
 
+      {report.performance && (
+        <Typography variant="body2" color="text.secondary">
+          {compact(report.performance.cacheReadTokens)} cached input tokens ·{' '}
+          {compact(report.performance.cacheWriteTokens)} cache writes · {number(report.performance.providerRequests)}{' '}
+          provider requests · {number(report.performance.toolCalls)} research calls ·{' '}
+          {report.performance.measuredQuestions
+            ? `${Math.round(report.performance.durationMs / report.performance.measuredQuestions / 1000)}s average measured answer time`
+            : 'No timed answers yet'}
+        </Typography>
+      )}
       {report.totals.questions === 0 ? (
         <Alert severity="info">No questions have been answered in this period yet.</Alert>
       ) : (
@@ -327,7 +365,8 @@ const AnalystUsagePanel: React.FC = () => {
                 Providers do not send a price with an answer. Press Refresh prices to fill them in from a public price
                 list, or enter what yours charges, per million tokens. A price you type is never overwritten by a
                 refresh. A price applies to questions asked after you set it: an answered question keeps the price it
-                was asked at. Costs are estimates from token counts, not an invoice.
+                was asked at. Enter cache read/write rates when your model uses caching; questions with missing
+                applicable rates remain unpriced. Costs are estimates from token counts, not an invoice.
               </Typography>
               <TableContainer>
                 <Table size="small" aria-label="Usage by model">
@@ -338,11 +377,13 @@ const AnalystUsagePanel: React.FC = () => {
                       <TableCell align="right">Tokens in / out</TableCell>
                       <TableCell align="right">Price in, per 1M</TableCell>
                       <TableCell align="right">Price out, per 1M</TableCell>
+                      <TableCell align="right">Cache read, per 1M</TableCell>
+                      <TableCell align="right">Cache write, per 1M</TableCell>
                       <TableCell align="right">Cost</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {rows.map(({ row, text, input, output, edited }) => (
+                    {rows.map(({ row, text, input, output, cacheRead, cacheWrite, edited }) => (
                       <TableRow key={priceKey(row.provider, row.model)}>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
@@ -358,8 +399,8 @@ const AnalystUsagePanel: React.FC = () => {
                         <TableCell align="right">
                           {number(row.inputTokens)} / {number(row.outputTokens)}
                         </TableCell>
-                        {(['input', 'output'] as const).map((side) => {
-                          const value = side === 'input' ? input : output;
+                        {(['input', 'output', 'cacheRead', 'cacheWrite'] as const).map((side) => {
+                          const value = { input, output, cacheRead, cacheWrite }[side];
                           const typed = text[side].trim();
                           return (
                             <TableCell key={side} align="right" sx={{ width: 140, verticalAlign: 'middle' }}>
@@ -373,7 +414,7 @@ const AnalystUsagePanel: React.FC = () => {
                                 placeholder="—"
                                 slotProps={{
                                   htmlInput: {
-                                    'aria-label': `${row.model} ${side === 'input' ? 'input' : 'output'} price per million tokens`,
+                                    'aria-label': `${row.model} ${{ input: 'input', output: 'output', cacheRead: 'cache read', cacheWrite: 'cache write' }[side]} price per million tokens`,
                                     inputMode: 'decimal',
                                     style: { textAlign: 'right' }
                                   }

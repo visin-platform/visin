@@ -44,7 +44,8 @@ describe('analystService', () => {
       enabled: true,
       provider: 'anthropic',
       model: 'claude-opus-5-5',
-      dailyTokenLimit: 1000000
+      dailyTokenLimit: 1000000,
+      toolRounds: 8
     });
     expect(call(fetchMock).url).toBe('http://chat-api.test/api/chat/settings/assistant');
     expect(call(fetchMock).init.method).toBe('PUT');
@@ -52,7 +53,8 @@ describe('analystService', () => {
       enabled: true,
       provider: 'anthropic',
       model: 'claude-opus-5-5',
-      dailyTokenLimit: 1000000
+      dailyTokenLimit: 1000000,
+      toolRounds: 8
     });
   });
 

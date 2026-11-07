@@ -315,7 +315,9 @@ it('keeps a direct conversation free of shared assistant controls and requests',
   fireEvent.change(screen.getByLabelText('Message'), { target: { value: '@Vivi hello Bob' } });
   expect(screen.queryByRole('listbox', { name: 'Mention an assistant' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
-  await waitFor(() => expect(api).toHaveBeenCalledWith('/conversations/c1/messages', expect.objectContaining({ body: '@Vivi hello Bob' })));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/conversations/c1/messages', expect.objectContaining({ body: '@Vivi hello Bob' }))
+  );
   const sent = vi.mocked(api).mock.calls.find(([path, body]) => path === '/conversations/c1/messages' && body);
   expect(sent?.[1]).not.toHaveProperty('assistantId');
   expect(vi.mocked(api).mock.calls.some(([path]) => path.endsWith('/assistants'))).toBe(false);
@@ -348,4 +350,53 @@ it('shows your avatar in People and links it to your profile', async () => {
   const link = await within(dialog).findByRole('link', { name: 'View your profile' });
   expect(link).toHaveAttribute('href', '/u/alice');
   expect(within(link).getByRole('img', { name: 'Alice' })).toHaveAttribute('src', 'https://example.test/alice.png');
+});
+
+describe('telling the analyst which page is beside the chat', () => {
+  const ask = async (panel: boolean) => {
+    state.conversations[0].kind = 'assistant';
+    state.enabled = true;
+    window.history.replaceState({}, '', '/trainings/abc?tab=epochs');
+    render(panel ? <Chat panel /> : <Chat />);
+    fireEvent.click(await screen.findByText('Research discussion'));
+    fireEvent.change(await screen.findByLabelText('Ask a follow-up'), { target: { value: 'Open it' } });
+    fireEvent.keyDown(screen.getByLabelText('Ask a follow-up'), { key: 'Enter' });
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/conversations/c1/messages', expect.objectContaining({ body: 'Open it' }))
+    );
+    return (api as unknown as { mock: { calls: [string, Record<string, unknown>][] } }).mock.calls.find(
+      (c) => c[0] === '/conversations/c1/messages' && c[1]?.body === 'Open it'
+    )![1];
+  };
+  it('sends the tab and path from the side panel', async () => {
+    expect((await ask(true)).screen).toEqual({
+      tabId: expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/),
+      path: '/trainings/abc?tab=epochs',
+      allowActions: true
+    });
+  });
+  it('sends nothing from the full page', async () => {
+    expect(await ask(false)).not.toHaveProperty('screen');
+  });
+});
+
+it('keeps page changes enabled across consecutive Enter sends without a checkbox', async () => {
+  state.conversations[0].kind = 'assistant';
+  state.enabled = true;
+  render(<Chat panel />);
+  fireEvent.click(await screen.findByText('Research discussion'));
+  const input = await screen.findByLabelText('Ask a follow-up');
+  expect(screen.queryByRole('checkbox', { name: /Allow page changes/ })).not.toBeInTheDocument();
+  for (const body of ['Go to projects page', 'Now open trainings']) {
+    fireEvent.change(input, { target: { value: body } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        '/conversations/c1/messages',
+        expect.objectContaining({ body, screen: expect.objectContaining({ allowActions: true }) })
+      )
+    );
+    await waitFor(() => expect(input).toHaveValue(''));
+    await waitFor(() => expect(input).toBeEnabled());
+  }
 });

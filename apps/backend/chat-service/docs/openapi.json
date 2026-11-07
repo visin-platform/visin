@@ -151,9 +151,15 @@
                   },
                   "dailyTokenLimit": {
                     "type": "integer",
-                    "minimum": 160000,
+                    "minimum": 200000,
                     "maximum": 1000000000,
-                    "description": "Tokens one person may use a day, counting each question's reservation until its answer is in. Left out, it stays as it is."
+                    "description": "Tokens per person per day. Must cover one question at the chosen toolRounds, including the screen allowance. Left out, it stays as it is."
+                  },
+                  "toolRounds": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 16,
+                    "description": "Rounds per answer; defaults to 8, omitted preserves the saved value."
                   }
                 }
               }
@@ -240,7 +246,7 @@
             "description": "The assistant provider could not be reached"
           }
         },
-        "description": "Administrators only. Answered questions in the last `days` UTC days (1 to 365, default 30; today counts as a day): their tokens in total and by day, model and person, and what they cost. Each question is costed at the price that was kept with it when it was answered, so a price changed later affects only later questions; `byModel[].pricesInPeriod` says when the questions of a model were asked at more than one price. A question asked before its model had a price has none and shows tokens only (`unpricedQuestions`, `unpricedTokens`) until an administrator prices it afterwards (POST /settings/assistant/prices/backfill), after which it is counted in `backfilledQuestions`. Where the prices in the period are in more than one currency `currency` is `MIXED` and there is no cost total. Only completed answers count, because only they report their tokens; `failedQuestions` says how many others did not finish. Cost is an estimate from token counts and those prices, not an invoice. `byModel[].price` is the price a question asked now would be costed at, and `prices` is every price entered, so the editor can send them back.",
+        "description": "Administrators only. Answered questions in the last `days` UTC days (1 to 365, default 30; today counts as a day): their tokens in total and by day, model and person, and what they cost. Each question is costed at the price that was kept with it when it was answered, so a price changed later affects only later questions; `byModel[].pricesInPeriod` says when the questions of a model were asked at more than one price. A question asked before its model had a price has none and shows tokens only (`unpricedQuestions`, `unpricedTokens`) until an administrator prices it afterwards (POST /settings/assistant/prices/backfill), after which it is counted in `backfilledQuestions`. Where the prices in the period are in more than one currency `currency` is `MIXED` and there is no cost total. Only completed answers count, because only they report their tokens; `failedQuestions` says how many others did not finish. Cost is an estimate from token counts and those prices, not an invoice. `byModel[].price` is the price a question asked now would be costed at, and `prices` is every price entered, so the editor can send them back. Input token totals include ordinary, cache-read and cache-write tokens exactly once. Optional cacheReadPerMillion and cacheWritePerMillion rates are saved with each run; a missing applicable rate leaves that question unpriced. performance reports cacheReadTokens, cacheWriteTokens, providerRequests, toolCalls and total durationMs for completed questions. performance.measuredQuestions counts timed answers, so legacy records are excluded from average latency.",
         "parameters": [
           {
             "name": "days",
@@ -338,6 +344,18 @@
                           "format": "date-time",
                           "default": null,
                           "description": "When a fetched price was fetched."
+                        },
+                        "cacheReadPerMillion": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100000,
+                          "description": "Optional model-specific cache price per million tokens. A cached question without the applicable rate remains unpriced."
+                        },
+                        "cacheWritePerMillion": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100000,
+                          "description": "Optional model-specific cache price per million tokens. A cached question without the applicable rate remains unpriced."
                         }
                       }
                     }
@@ -410,7 +428,7 @@
             "description": "An authorization dependency is unavailable"
           }
         },
-        "description": "Administrators only. Prices answered questions that were asked before their model had a price, at the price in the table now, and marks each as backfilled. It is an estimate (the price then may have been different) and is never done on its own. Questions that already have a price are left exactly as they are, so repeating it changes nothing. Returns how many questions were priced, by model."
+        "description": "Administrators only. Prices answered questions that were asked before their model had a price, at the price in the table now, and marks each as backfilled. It is an estimate (the price then may have been different) and is never done on its own. Questions that already have a price are left exactly as they are, so repeating it changes nothing. Returns how many questions were priced, by model. Also fills missing applicable cache rates for previously priced questions in the same currency, retaining their original input/output prices and any existing cache prices. Such additions are marked as backfilled estimates."
       }
     },
     "/settings/assistant/keys/{provider}": {
@@ -1250,7 +1268,7 @@
         "tags": ["Chat"],
         "x-internal": true,
         "operationId": "chatEvents",
-        "summary": "Replay persisted messages and current job state over SSE",
+        "summary": "Replay persisted messages and current job state over SSE, plus screen calls for the asking tab",
         "responses": {
           "200": {
             "description": "Success",
@@ -1306,8 +1324,18 @@
               "type": "integer",
               "minimum": 0
             }
+          },
+          {
+            "name": "tab",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,64}$"
+            },
+            "description": "The asking browser tab. Only a stream with a tab is sent `screen` events, for that tab's calls, and it polls faster while the tab's run is working."
           }
-        ]
+        ],
+        "description": "Streams message state and run progress. Private threads also emit selection events with trainingIds and trainingLabels, initially and whenever their selected runs change. Screen events are sent only to the asking user and tab."
       }
     },
     "/contacts": {
@@ -1347,6 +1375,100 @@
           },
           "503": {
             "description": "Project access cannot be verified"
+          }
+        }
+      }
+    },
+    "/screen-calls/{id}/result": {
+      "post": {
+        "tags": ["Chat"],
+        "x-internal": true,
+        "operationId": "answerChatScreenCall",
+        "summary": "Report what the page did for a screen call, once, while it is pending",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Screen call not found, already answered or expired"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      }
+    },
+    "/conversations/{id}/screen-calls": {
+      "get": {
+        "tags": ["Chat"],
+        "x-internal": true,
+        "operationId": "listChatScreenCalls",
+        "summary": "Poll pending page calls for the asking tab when streaming is unavailable",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          },
+          {
+            "name": "tab",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending calls for this conversation, user and tab; no calls for shared conversations"
+          },
+          "400": {
+            "description": "Invalid tab identifier"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Conversation unavailable"
           }
         }
       }
@@ -1433,6 +1555,75 @@
           "replyTo": {
             "type": "string",
             "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          "screen": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tabId", "path"],
+            "description": "The asking private panel's page hint, verified with project-scoped tools before use. Optional actions advertise frames currently loaded by the page. Stored only in the pending job outbox and run, not in public message content.",
+            "properties": {
+              "tabId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{8,64}$"
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 500,
+                "pattern": "^/"
+              },
+              "actions": {
+                "type": "array",
+                "maxItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "ids"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "enum": ["open_frame"]
+                    },
+                    "ids": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(?:[a-fA-F0-9]{24}|[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$"
+                      }
+                    },
+                    "labels": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "description": "Optional frame names, in the same order as ids. Untrusted display labels."
+                    }
+                  }
+                }
+              },
+              "allowActions": {
+                "type": "boolean",
+                "default": false,
+                "description": "The desktop side panel sends true by default. Without true, the page is read-only context and no navigation/action tool is offered."
+              }
+            }
+          }
+        }
+      },
+      "ScreenResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ok"],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "What the page did, or why it could not."
           }
         }
       }

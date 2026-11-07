@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 vi.mock('../../services/analyst', async () => {
   const module = await (() => ({
     RESERVATION: 160000,
+    reservationFor: (screen: boolean) => (screen ? 280000 : 160000),
     analyze: vi.fn(async function () {
       return {
         text: 'Validation peaked at epoch 42.',

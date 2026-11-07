@@ -1,6 +1,7 @@
 import { ConflictError } from '@visin/backend-core';
 import { flushMembershipEvents } from './membershipAudit';
 import { Conversation } from '../models/Conversation';
+import type { ScreenContext } from './screen';
 import { Message } from '../models/Message';
 
 export async function appendMessage(input: {
@@ -21,6 +22,7 @@ export async function appendMessage(input: {
     assistantId?: string;
     assistantName?: string;
     personality?: string;
+    screen?: ScreenContext;
   };
   evidence?: { tool: string; input: unknown; at: Date }[];
 }) {
@@ -44,7 +46,18 @@ export async function appendMessage(input: {
   );
   if (!conversation) throw new ConflictError('Conversation changed; reload before sending');
   try {
-    const message = await Message.create({ ...input, seq: conversation.seq });
+    // Screen-aware work uses its own outbox field so a worker without screen support
+    // cannot consume the request and silently discard its context.
+    const { assistantRequest, ...messageInput } = input;
+    const message = await Message.create({
+      ...messageInput,
+      ...(assistantRequest
+        ? assistantRequest.screen
+          ? { screenRequest: assistantRequest }
+          : { assistantRequest }
+        : {}),
+      seq: conversation.seq
+    });
     await Conversation.updateOne(
       { _id: input.conversationId, lastMessageSeq: { $lt: message.seq } },
       { $max: { lastMessageSeq: message.seq } }
