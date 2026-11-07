@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.7.0](https://github.com/visin-platform/visin/compare/v2.6.0...v2.7.0) (2026-11-07)
+
+### Features
+
+* let the chat analyst change the page beside the chat ([0588b1e](https://github.com/visin-platform/visin/commit/0588b1e2220a157b10c5f35edf6f18eb916a4aeb))
+
 ## [2.6.0](https://github.com/visin-platform/visin/compare/v2.5.0...v2.6.0) (2026-11-04)
 
 ### Features
