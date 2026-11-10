@@ -179,16 +179,14 @@ describe('platform user administration', () => {
   });
   it('returns safe account history, sessions, keys and memberships', async () => {
     const keyId = new mongoose.Types.ObjectId();
-    await mongoose.connection
-      .collection('api_keys')
-      .insertOne({
-        _id: keyId,
-        userId,
-        name: 'Pipeline',
-        hash: 'never-expose-hash',
-        sealedCiphertext: 'never-expose-ciphertext',
-        scopes: ['vision:read']
-      });
+    await mongoose.connection.collection('api_keys').insertOne({
+      _id: keyId,
+      userId,
+      name: 'Pipeline',
+      hash: 'never-expose-hash',
+      sealedCiphertext: 'never-expose-ciphertext',
+      scopes: ['vision:read']
+    });
     await mongoose.connection.collection('groups').insertOne({
       name: 'Research',
       members: [
@@ -270,7 +268,12 @@ describe('platform user administration', () => {
   });
   it('waits for a live edit lease and takes over an expired one', async () => {
     const locks = mongoose.connection.collection('adminmutationlocks');
-    await locks.insertOne({ _id: 'users' as never, held: true, holder: 'other', expiresAt: new Date(Date.now() + 60000) });
+    await locks.insertOne({
+      _id: 'users' as never,
+      held: true,
+      holder: 'other',
+      expiresAt: new Date(Date.now() + 60000)
+    });
     expect(
       (await request(`/users/${userId}`, 'PUT', { revision: 0, reason: 'Blocked', status: 'suspended' })).status
     ).toBe(409);
@@ -281,6 +284,17 @@ describe('platform user administration', () => {
       (await request(`/users/${userId}`, 'PUT', { revision: 0, reason: 'Lease lapsed', status: 'suspended' })).status
     ).toBe(200);
     expect(await locks.findOne({ _id: 'users' as never })).toMatchObject({ held: false });
+  });
+  it('does not report success before lease release finishes', async () => {
+    vi.spyOn(mongoose.models.AdminMutationLock, 'updateOne').mockRejectedValueOnce(new Error('release failed'));
+    const result = await request(`/users/${userId}`, 'PUT', {
+      revision: 0,
+      reason: 'Update name',
+      firstName: 'Updated'
+    });
+    expect(result.status).toBe(500);
+    // The write completed, but cleanup failed; never send a premature success response.
+    expect((await User.findById(userId))?.firstName).toBe('Updated');
   });
   it('reports a datastore failure while taking the edit lease without editing', async () => {
     vi.spyOn(mongoose.models.AdminMutationLock, 'findOneAndUpdate').mockRejectedValueOnce(new Error('not primary'));
@@ -312,9 +326,9 @@ describe('platform user administration', () => {
     expect(user?.tokenVersion).toBe(1);
     expect(user?.credentialsRevokedAt).toBeUndefined();
     expect(user?.adminHistory?.at(-1)?.changes).toEqual({ firstName: 'Corrected' });
-    expect((await request(`/users/${userId}`, 'PUT', { revision: 1, reason: 'Again', firstName: 'Corrected' })).status).toBe(
-      400
-    );
+    expect(
+      (await request(`/users/${userId}`, 'PUT', { revision: 1, reason: 'Again', firstName: 'Corrected' })).status
+    ).toBe(400);
   });
   it('reports datastore failure during account creation', async () => {
     vi.spyOn(User, 'create').mockRejectedValueOnce(new Error('simulated datastore failure'));

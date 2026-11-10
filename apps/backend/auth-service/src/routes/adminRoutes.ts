@@ -38,7 +38,14 @@ async function account(id: unknown) {
 const LOCK_LEASE_MS = 30_000;
 const AdminMutationLock = mongoose.model(
   'AdminMutationLock',
-  new mongoose.Schema({ _id: String, held: Boolean, holder: String, actorId: String, acquiredAt: Date, expiresAt: Date })
+  new mongoose.Schema({
+    _id: String,
+    held: Boolean,
+    holder: String,
+    actorId: String,
+    acquiredAt: Date,
+    expiresAt: Date
+  })
 );
 async function lockUsers(actorId: string): Promise<string> {
   const holder = randomBytes(16).toString('hex');
@@ -173,6 +180,7 @@ export function createAdminRoutes() {
   });
   router.put('/users/:id', async (req, res) => {
     const lock = await lockUsers(req.user!.id);
+    let updatedAccount: unknown;
     try {
       if (
         !(await User.exists({
@@ -240,10 +248,12 @@ export function createAdminRoutes() {
       ).select(fields);
       if (!updated) throw new ConflictError('Account changed; reload before editing');
       if (deactivating) await revokeAll(user.id);
-      res.json({ success: true, data: updated });
+      updatedAccount = updated;
     } finally {
       await unlockUsers(lock);
     }
+    // Success means the edit and its lease cleanup have both finished.
+    res.json({ success: true, data: updatedAccount });
   });
   router.post('/users/:id/password', async (req, res) => {
     const user = await account(req.params.id);
