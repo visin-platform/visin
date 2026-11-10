@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.9.0](https://github.com/visin-platform/visin/compare/v2.8.0...v2.9.0) (2026-11-10)
+
+### Features
+
+* add missing env vars ([a546377](https://github.com/visin-platform/visin/commit/a546377eee66f93b7128748e6f013f65d6744d13))
+
 ## [2.8.0](https://github.com/visin-platform/visin/compare/v2.7.0...v2.8.0) (2026-11-10)
 
 ### Features
