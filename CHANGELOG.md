@@ -1,5 +1,20 @@
 # Visin Changelog
 
+## [2.10.0](https://github.com/visin-platform/visin/compare/v2.9.0...v2.10.0) (2026-11-10)
+
+### Features
+
+* add admin management and public chat assistant ([a87ae24](https://github.com/visin-platform/visin/commit/a87ae241500764a99c36cf3ba0d18fb0610ab309))
+
+### Bug Fixes
+
+* **auth:** release admin edit lease before returning success ([a892185](https://github.com/visin-platform/visin/commit/a89218560a0408426bc12e1c3c566ff17099757c))
+
+### Chores
+
+* **release:** @visin/backend-core 1.20.0 ([93c4017](https://github.com/visin-platform/visin/commit/93c4017d6157975111a9d841962312506aa98b76))
+* **release:** @visin/frontend-core 1.24.0 ([19e3500](https://github.com/visin-platform/visin/commit/19e35002c92ea6b5d338033457a3bd06f0231382))
+
 ## [2.9.0](https://github.com/visin-platform/visin/compare/v2.8.0...v2.9.0) (2026-11-10)
 
 ### Features
