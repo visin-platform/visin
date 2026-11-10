@@ -20,7 +20,7 @@
     "docs:generate": "UPDATE_OPENAPI_SCHEMAS=1 vitest run src/__tests__/openapi"
   },
   "dependencies": {
-    "@visin/backend-core": "1.19.0",
+    "@visin/backend-core": "1.20.0",
     "bullmq": "^6.5.4",
     "express": "^5.3.0",
     "ioredis": "^6.0.0",
