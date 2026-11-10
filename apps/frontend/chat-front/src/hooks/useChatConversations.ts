@@ -21,6 +21,8 @@ export function useChatConversations({
 
   const [assistantModel, setAssistantModel] = useState<Capabilities['assistantModel']>();
 
+  const [attachmentsAvailable, setAttachmentsAvailable] = useState(false);
+
   const [enabled, setEnabled] = useState(false);
 
   const [sharedAvailable, setSharedAvailable] = useState(false);
@@ -32,6 +34,7 @@ export function useChatConversations({
     setGroups([]);
     setEnabled(false);
     setSharedAvailable(false);
+    setAttachmentsAvailable(false);
     setCanConfigure(false);
     setAssistantModel(undefined);
     setConversations([]);
@@ -62,6 +65,7 @@ export function useChatConversations({
         .capabilities(controller.signal)
         .then((capabilities) => {
           if (controller.signal.aborted) return;
+          setAttachmentsAvailable(Boolean(capabilities.attachments));
           setAssistantModel(capabilities.assistantModel);
           setEnabled(capabilities.assistant);
           setSharedAvailable(Boolean(capabilities.sharedAssistant));
@@ -98,6 +102,7 @@ export function useChatConversations({
     };
   }, [isAuthenticated, userId, setError]);
   return {
+    attachmentsAvailable,
     assistantModel,
     conversations,
     setConversations,

@@ -8,7 +8,6 @@ import {
   Typography,
   Box,
   Alert,
-  CircularProgress,
   Tab
 } from '@mui/material';
 import {
@@ -26,6 +25,7 @@ import BenchmarksComparisonTable from '../components/comparison/BenchmarksCompar
 import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
 import TrainingClassIoUTable from '../components/comparison/TrainingClassIoUTable';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { PageSkeleton } from '../components/common/PageSkeleton';
 import NumberFormattingControls from '../components/common/NumberFormattingControls';
 
 const TrainingComparisonPage: React.FC = () => {
@@ -109,14 +109,7 @@ const TrainingComparisonPage: React.FC = () => {
   );
 
   if (isLoading) {
-    return (
-      <Container maxWidth="lg" sx={{ pb: 4, textAlign: 'center' }}>
-        <CircularProgress />
-        <Typography variant="h6" sx={{ mt: 2 }}>
-          Loading training comparison...
-        </Typography>
-      </Container>
-    );
+    return <PageSkeleton label="Loading training comparison" />;
   }
 
   if (error) {

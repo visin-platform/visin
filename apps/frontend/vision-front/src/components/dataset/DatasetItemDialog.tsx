@@ -3,7 +3,8 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
+  Skeleton,
+  Alert,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -38,7 +39,7 @@ const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => setSelectedId(item?._id ?? null), [item]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['dataset-stem', datasetId, item?.stem],
     queryFn: () => listItems(datasetId, { stem: item!.stem, limit: 200 }),
     enabled: Boolean(item)
@@ -60,11 +61,14 @@ const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, 
       </DialogTitle>
       <DialogContent>
         {isLoading ? (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <CircularProgress />
-          </Box>
+          <Skeleton role="status" aria-label="Loading frame" variant="rounded" height="60vh" />
+        ) : error ? (
+          <Alert severity="error">Could not load this frame. Close it and try opening it again.</Alert>
         ) : (
           <>
+            {!selected && (
+              <Alert severity="info">No image is available for this frame. Close it and choose another image.</Alert>
+            )}
             <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap', mb: 2 }}>
               {images.map((entry) => (
                 <Chip
@@ -77,12 +81,24 @@ const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, 
             </Stack>
             {selected && (
               <Box sx={{ bgcolor: 'grey.900', borderRadius: 1, display: 'flex', justifyContent: 'center', mb: 1 }}>
-                <Box component="img" src={selected.url} alt={selected.path} sx={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain' }} />
+                <Box
+                  component="img"
+                  src={selected.url}
+                  alt={selected.path}
+                  sx={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain' }}
+                />
               </Box>
             )}
             {selected && (
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', minWidth: 0, overflowWrap: 'anywhere' }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 2 }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: 'text.secondary', fontFamily: 'monospace', minWidth: 0, overflowWrap: 'anywhere' }}
+                >
                   {selected.path}
                   {selected.width && selected.height ? ` · ${selected.width}×${selected.height}` : ''}
                 </Typography>
@@ -95,7 +111,14 @@ const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, 
                       </Button>
                     </Stack>
                   ) : (
-                    <Button size="small" variant="outlined" startIcon={<CoverIcon />} onClick={() => cover.onChange(selected)} disabled={cover.busy} sx={{ flexShrink: 0 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<CoverIcon />}
+                      onClick={() => cover.onChange(selected)}
+                      disabled={cover.busy}
+                      sx={{ flexShrink: 0 }}
+                    >
                       Use as cover
                     </Button>
                   ))}
@@ -106,7 +129,18 @@ const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, 
                 <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
                   {entry.path}
                 </Typography>
-                <Box component="pre" sx={{ m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: 1, maxHeight: 320, overflow: 'auto', fontSize: '0.75rem' }}>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    p: 1.5,
+                    bgcolor: 'action.hover',
+                    borderRadius: 1,
+                    maxHeight: 320,
+                    overflow: 'auto',
+                    fontSize: '0.75rem'
+                  }}
+                >
                   {JSON.stringify(entry.data, null, 2)}
                 </Box>
               </Box>

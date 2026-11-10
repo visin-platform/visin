@@ -1,12 +1,32 @@
-import { Fragment, useState } from 'react';
-import { Refresh, Stop } from '@mui/icons-material';
-import { Alert, Box, Button, Chip, CircularProgress, IconButton, Snackbar, Stack, Typography } from '@mui/material';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Refresh } from '@mui/icons-material';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Snackbar,
+  TextField
+} from '@mui/material';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { chatService } from '../../services/chatService';
 import { MessageBubble } from './MessageBubble';
+import { AnalysisSteps } from './AnalysisSteps';
+import { StreamingMessage } from './StreamingMessage';
+import { visibleDrafts } from '../../utils/drafts';
+import { followUps } from '../../utils/followUps';
+import { FollowUps } from './FollowUps';
 
-import { PAGE, mergeMessages } from '../../utils/messages';
+import { PAGE, mergeMessages, applyMessageUpdates } from '../../utils/messages';
 import { AnalysisStarters } from './AnalysisStarters';
+
+/** A message this young eases in as it arrives. */
+const FRESH_MS = 8000;
 
 function messageDay(value: string) {
   const date = new Date(value);
@@ -20,6 +40,7 @@ function messageDay(value: string) {
 
 export function MessageList() {
   const [copied, setCopied] = useState(false);
+  const [manualCopy, setManualCopy] = useState<{ messageId: string; text: string }>();
   const {
     scroller,
     atBottom,
@@ -31,7 +52,6 @@ export function MessageList() {
     setMessages,
     setFinding,
     running,
-    selected,
     latestRun,
     failedQuestion,
     enabled,
@@ -39,14 +59,35 @@ export function MessageList() {
     post,
     ask,
     setReplyTarget,
+    replyTarget,
     setSharedTarget,
     composerInput,
     runs,
+    drafts,
     user
   } = useChatWorkspaceContext();
+  // Keeps the end in view for someone reading at the end, and leaves alone anyone who scrolled up.
+  const followEnd = useCallback(() => {
+    const box = scroller.current;
+    if (box && atBottom.current) box.scrollTop = box.scrollHeight;
+  }, [scroller, atBottom]);
+  useEffect(() => {
+    window.addEventListener('visin:chat-media-loaded', followEnd);
+    return () => window.removeEventListener('visin:chat-media-loaded', followEnd);
+  }, [followEnd]);
+  useEffect(() => {
+    if (replyTarget && messages.some((message) => message._id === replyTarget._id && message.unsentAt))
+      setReplyTarget(undefined);
+  }, [messages, replyTarget, setReplyTarget]);
+  useEffect(() => {
+    if (manualCopy && messages.some((message) => message._id === manualCopy.messageId && message.unsentAt))
+      setManualCopy(undefined);
+  }, [messages, manualCopy]);
   if (!c) return null;
   const ownRun = (run: (typeof runs)[number]) => c.kind === 'assistant' || run.userId === user?.id;
-  const canStop = runs.some((run) => ['queued', 'running'].includes(run.state) && (run.canCancel ?? ownRun(run)));
+  // The answer being written, shown until it is a message. Only in the asker's own analyst thread, which is all the
+  // server sends drafts for.
+  const writing = c.kind === 'assistant' ? visibleDrafts(drafts, messages) : [];
 
   return (
     <Box
@@ -86,6 +127,7 @@ export function MessageList() {
           <MessageBubble
             key={message._id}
             message={message}
+            conversationId={c._id}
             own={
               message.kind === 'person' &&
               (message.senderId === user?.id || (!message.senderId && c.kind === 'assistant'))
@@ -96,48 +138,59 @@ export function MessageList() {
                 ? c.profile
                 : undefined
             }
+            labels={c.trainingLabels}
+            fresh={Date.now() - Date.parse(message.createdAt) < FRESH_MS}
             canSave={c.kind === 'assistant' && Boolean(c.projectId)}
             onSave={setFinding}
+            userId={user?.id}
+            onReact={(target, emoji) =>
+              perform(async () => {
+                const updated = await chatService.react(c._id, target._id, emoji);
+                setMessages((rows) => applyMessageUpdates(rows, [updated]));
+              })
+            }
+            onUnsend={(target) =>
+              perform(async () => {
+                const updated = await chatService.unsend(c._id, target._id);
+                setMessages((rows) => applyMessageUpdates(rows, [updated]));
+                if (replyTarget?._id === target._id) setReplyTarget(undefined);
+              })
+            }
             onReply={(message) => {
               setReplyTarget(message);
               setSharedTarget('');
               composerInput.current?.focus();
             }}
-            onCopy={(body) =>
-              void perform(async () => {
-                await navigator.clipboard.writeText(body);
-                setCopied(true);
-              })
-            }
+            onCopy={(body) => {
+              void (async () => {
+                try {
+                  await navigator.clipboard.writeText(body);
+                  setCopied(true);
+                } catch {
+                  setManualCopy({ messageId: message._id, text: body });
+                }
+              })();
+            }}
           />
         </Fragment>
       ))}
-      {running && (
-        <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-          <CircularProgress size={16} />
-          <Stack>
-            {runs
-              .filter((run) => ['queued', 'running'].includes(run.state))
-              .map((run) => (
-                <Typography key={run._id} variant="body2">
-                  {run.assistantName ? `${run.assistantName} · ` : ''}
-                  {run.activity || 'Waiting for analyst…'}
-                </Typography>
-              ))}
-          </Stack>
-          {canStop && (
-            <IconButton
-              aria-label="Stop analysis"
-              onClick={() =>
-                void perform(async () => {
-                  await chatService.cancel(selected!);
-                })
-              }
-            >
-              <Stop />
-            </IconButton>
-          )}
-        </Stack>
+      {writing.map((draft) => (
+        <StreamingMessage
+          key={draft.runId}
+          text={draft.text}
+          name={runs.find((run) => run._id === draft.runId)?.assistantName || c.profile?.name || 'Visin analyst'}
+          profile={c.profile}
+          onGrow={followEnd}
+        />
+      ))}
+      {running && writing.length === 0 && (
+        <Box>
+          {runs
+            .filter((run) => ['queued', 'running'].includes(run.state))
+            .map((run) => (
+              <AnalysisSteps key={run._id} run={run} assistantName={run.assistantName} />
+            ))}
+        </Box>
       )}
       {latestRun?.state === 'failed' && !running && (
         <Alert
@@ -162,13 +215,43 @@ export function MessageList() {
           {latestRun.error || 'The analysis failed.'}
         </Alert>
       )}
-      <Snackbar
-        open={copied}
-        autoHideDuration={2000}
-        onClose={() => setCopied(false)}
-        message="Message copied"
-      />
+      <Dialog
+        open={manualCopy !== undefined}
+        onClose={() => setManualCopy(undefined)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="copy-message-title"
+      >
+        <DialogTitle id="copy-message-title">Copy message</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 1 }}>Select the text and use your device’s Copy command.</DialogContentText>
+          <TextField
+            label="Message text"
+            value={manualCopy?.text ?? ''}
+            autoFocus
+            fullWidth
+            multiline
+            minRows={3}
+            maxRows={8}
+            slotProps={{ htmlInput: { readOnly: true } }}
+            onFocus={(event) => (event.target as HTMLTextAreaElement).select()}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManualCopy(undefined)}>Done</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar open={copied} autoHideDuration={2000} onClose={() => setCopied(false)} message="Message copied" />
       {c.kind === 'assistant' && !messages.length && <AnalysisStarters context={c} onAsk={ask} />}
+      {c.kind === 'assistant' && enabled && !running && messages.at(-1)?.kind === 'assistant' && (
+        <FollowUps
+          questions={followUps(
+            c,
+            messages.filter((m) => m.kind === 'person').map((m) => m.body)
+          )}
+          onAsk={ask}
+        />
+      )}
     </Box>
   );
 }

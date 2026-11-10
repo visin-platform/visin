@@ -32,6 +32,17 @@ vi.mock('../../clients/projectGroupsClient', async () => {
   return Object.assign({ default: module }, module);
 });
 
+vi.mock('../../clients/fileServiceClient', async () => {
+  const actual = await vi.importActual<typeof import('../../clients/fileServiceClient')>(
+    '../../clients/fileServiceClient'
+  );
+  return {
+    ...actual,
+    getSignedUrl: vi.fn(async (fileId: string) => ({ signedUrl: `https://files.example.test/${fileId}` }))
+  };
+});
+vi.mock('../../clients/datasetCoversClient', () => ({ fetchDatasetCovers: vi.fn(async () => ({})) }));
+
 vi.mock('@visin/backend-core', async () => {
   const module = await (async () => ({
     ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
@@ -1228,6 +1239,22 @@ describe('the model registry with in-memory MongoDB', () => {
     });
     expect(repos((await list('', '')).data)).toEqual(['open/model']);
     expect(repos((await list('', STRANGER)).data)).toEqual(['secret/model', 'open/model']);
+  });
+
+  it('gives each model its project’s chosen cover, and none when the project has no picture', async () => {
+    const pictured = await project({
+      slug: 'pictured',
+      cover: { visualizationUuid: 'viz-1', fileId: 'files/chosen.png' }
+    });
+    const plain = await project({ slug: 'plain' });
+    await run(pictured, 'with cover', [{ repo: 'acme/pictured' }]);
+    await run(plain, 'without', [{ repo: 'acme/plain' }]);
+
+    const { data } = await list();
+    const byRepo = (repo: string) => data.models.find((row: { model: { repo?: string } }) => row.model.repo === repo);
+
+    expect(byRepo('acme/pictured').project.coverUrl).toBe('https://files.example.test/files/chosen.png');
+    expect(byRepo('acme/plain').project).not.toHaveProperty('coverUrl');
   });
 
   it('narrows to a project by slug or id, and says when it may not be seen', async () => {

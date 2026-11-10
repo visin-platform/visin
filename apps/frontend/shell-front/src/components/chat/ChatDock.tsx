@@ -16,7 +16,8 @@ import { useConfig } from '../../config/ConfigProvider';
 import { useAuth } from '../../contexts/AuthContext';
 import { forgetChatPanel, remoteChatPanel } from '../../remotes';
 import { RemoteBoundary } from '../RemoteBoundary';
-import { useScreenCalls } from './useScreenCalls';
+import { useScreenCalls, type ScreenCue } from './useScreenCalls';
+import { useNotificationNavigation } from './notifications';
 import { ChatDockContext, PANEL_WIDTH, clampWidth, useChatDock, type ChatRequest } from './chatDock';
 
 const OPEN_KEY = 'visin.chat.open';
@@ -86,30 +87,59 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Not on the chat page itself, which would be the same conversation twice; not on a phone, which has no room.
   const panelOpen = available && open && !onChatPage && !compact;
-  useScreenCalls(panelOpen);
+  const [screenCue, setScreenCue] = useState<ScreenCue | null>(null);
+  const dismissScreenCue = useCallback(() => setScreenCue(null), []);
+  useScreenCalls(panelOpen, setScreenCue);
+  useNotificationNavigation();
+  const toggle = useCallback(() => {
+    if (compact || onChatPage) navigate('/chat');
+    else setOpen((current) => !current);
+  }, [compact, onChatPage, navigate]);
+
+  // Ctrl+J, or Command+J on a Mac, opens and closes chat from anywhere. Another modifier makes it a different shortcut
+  // (Ctrl+Shift+J is the browser's console), and a key press that something has already taken is left to it.
+  useEffect(() => {
+    if (!available) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+        event.preventDefault();
+        toggle();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [available, toggle]);
+
   const value = useMemo(
     () => ({
       available,
       open: panelOpen,
-      toggle: () => {
-        if (compact || onChatPage) navigate('/chat');
-        else setOpen((current) => !current);
-      },
+      toggle,
       close: () => setOpen(false),
       openWith,
-      conversationId
+      conversationId,
+      screenCue,
+      dismissScreenCue,
+      undoScreenCue: () => {
+        if (screenCue?.undoTo) navigate(screenCue.undoTo);
+        setScreenCue(null);
+      }
     }),
-    [available, panelOpen, compact, onChatPage, navigate, openWith, conversationId]
+    [available, panelOpen, toggle, navigate, openWith, conversationId, screenCue, dismissScreenCue]
   );
   return <ChatDockContext.Provider value={value}>{children}</ChatDockContext.Provider>;
 }
+
+/** The keys that toggle chat, as this computer calls them. */
+const SHORTCUT = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform) ? '⌘J' : 'Ctrl+J';
 
 /** Chat's place in the top bar, beside the other icons. */
 export function ChatButton() {
   const dock = useChatDock();
   if (!dock.available) return null;
   return (
-    <Tooltip title={dock.open ? 'Close chat' : 'Chat'}>
+    <Tooltip title={`${dock.open ? 'Close chat' : 'Chat'} (${SHORTCUT})`}>
       <IconButton
         onClick={dock.toggle}
         aria-label="Chat"

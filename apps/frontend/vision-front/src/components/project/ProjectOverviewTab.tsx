@@ -1,8 +1,5 @@
 import React from 'react';
-import { Box, Button, Paper, Skeleton, Typography } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import type { AuthUser } from '@visin/frontend-core';
+import { Box, Paper, Skeleton, Typography } from '@mui/material';
 import { TrainingStats } from '../../services/trainingService';
 import { ProjectDashboardStats } from '../../services/projectService';
 import { useCosting, useFormatCost } from '../../costing/useCosting';
@@ -14,8 +11,6 @@ interface ProjectOverviewTabProps {
   stats: ProjectOverviewStats | undefined;
   /** the totals are still being read: show the strip as loading, not as zeros */
   isLoading?: boolean;
-  isAuthenticated: boolean;
-  user: AuthUser | null;
 }
 
 interface Figure {
@@ -28,8 +23,7 @@ interface Figure {
  * and benchmarks live on their own tabs, and what the best run reached is
  * the card above this.
  */
-const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoading, isAuthenticated, user }) => {
-  const navigate = useNavigate();
+const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoading }) => {
   const costing = useCosting();
   const formatCost = useFormatCost();
 
@@ -87,33 +81,6 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoadin
           </Box>
         ))}
       </Paper>
-      {!isAuthenticated && (
-        <Box sx={{ px: { xs: 0, sm: 3 }, py: { xs: 2, sm: 4 } }}>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="h6" gutterBottom>
-              Project Overview
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{
-                color: "text.secondary",
-                mb: 3
-              }}>
-              Monitor your machine learning project's progress and results.
-            </Typography>
-            {user && (
-              <Button 
-                variant="contained" 
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/trainings')}
-                size="large"
-              >
-                Start New Training
-              </Button>
-            )}
-          </Box>
-        </Box>
-      )}
     </>
   );
 };

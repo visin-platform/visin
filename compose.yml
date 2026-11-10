@@ -243,7 +243,9 @@ services:
     ports: ['${COMPOSE_BIND:-0.0.0.0}:5012:5012']
     depends_on: *needs-mongo
     environment:
-      <<: *app-env
+      <<: [*app-env, *file-creds]
+      # Files in messages go to the file service, which the browser then uploads to directly.
+      FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       PORT: 5012
       SERVICE_NAME: chat-service
       AUTH_SERVICE_URL: http://auth-service:5001
@@ -251,6 +253,48 @@ services:
       VISION_SERVICE_URL: http://vision-service:4010
       MCP_INTERNAL_URL: http://mcp-service:5009/mcp
       API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      # Calls and notifications need nothing set, and chat works without either. Notifications sign themselves
+      # with keys the service makes on first start. Calls connect on one local network as they are; a STUN server
+      # widens that to most home and mobile networks, and a relay (TURN) to all of them. The STUN default below is
+      # Cloudflare's free public server, which sees the callers' addresses: `STUN_URLS=` (set but empty) turns it off.
+      CALLS_ENABLED: ${CALLS_ENABLED:-true}
+      STUN_URLS: ${STUN_URLS-stun:stun.cloudflare.com:3478}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      CLOUDFLARE_TURN_KEY_ID: ${CLOUDFLARE_TURN_KEY_ID:-}
+      CLOUDFLARE_TURN_API_TOKEN: ${CLOUDFLARE_TURN_API_TOKEN:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+
+  # Optional relay for calls between networks that cannot reach each other directly (the same job as
+  # Cloudflare's hosted relay, which needs no server of yours). Not started by default:
+  #   1. set TURN_SECRET (any long random string) and TURN_URLS=turn:<this host's public name>:3478 in .env
+  #   2. open UDP/TCP 3478 and UDP 49160-49200 to this host
+  #   3. docker compose --profile calls up -d
+  # It runs on the host's network because a relay needs real ports. Private address ranges are refused as relay
+  # targets, so it cannot be used to reach the network it sits in. Behind NAT, add `--external-ip=<public ip>`.
+  coturn:
+    image: coturn/coturn:4.6.3
+    profiles: [calls]
+    <<: *common
+    network_mode: host
+    command:
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:-}
+      - --realm=${TURN_REALM:-visin}
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --fingerprint
+      - --no-cli
+      - --no-multicast-peers
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --log-file=stdout
 
   chat-front:
     build: ./apps/frontend/chat-front

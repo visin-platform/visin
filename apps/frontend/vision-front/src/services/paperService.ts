@@ -6,6 +6,7 @@ import type {
   CreatePaperInput,
   Paper,
   PaperCard,
+  PaperDocumentState,
   PaperInput,
   PaperPage,
   PersonResult,
@@ -30,6 +31,24 @@ export const paperService = {
   async get(id: string): Promise<Paper> {
     const response = await visionApi.get(`/papers/${encodeURIComponent(id)}`);
     return (response.data as ApiResponse<Paper>).data;
+  },
+
+  /** Whether the PDF behind the paper's address has been read, so it can be shown and searched. */
+  async document(id: string): Promise<PaperDocumentState> {
+    const response = await visionApi.get(`/papers/${encodeURIComponent(id)}/document`);
+    return (response.data as ApiResponse<PaperDocumentState>).data;
+  },
+
+  /** The stored copy of the paper's PDF, fetched with the session so a draft stays the owner's. */
+  async pdf(id: string): Promise<Blob> {
+    const { blob } = await visionApi.download(`/papers/${encodeURIComponent(id)}/pdf`);
+    return blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  },
+
+  /** Asks for the PDF to be read again, after its address was corrected or the file replaced. */
+  async refreshDocument(id: string): Promise<PaperDocumentState> {
+    const response = await visionApi.post(`/papers/${encodeURIComponent(id)}/document/refresh`);
+    return (response.data as ApiResponse<PaperDocumentState>).data;
   },
 
   async create(body: CreatePaperInput): Promise<Paper> {

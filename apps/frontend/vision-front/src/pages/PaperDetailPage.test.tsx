@@ -4,7 +4,15 @@ import { screen, waitFor } from '@testing-library/react';
 
 const auth = vi.hoisted(() => ({ user: null as { id: string } | null, isAuthenticated: false }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
-const service = vi.hoisted(() => ({ get: vi.fn(), trash: vi.fn(), answerAuthorship: vi.fn(), shareUrl: (id: string) => `https://api.test/share/${id}` }));
+const service = vi.hoisted(() => ({
+  get: vi.fn(),
+  trash: vi.fn(),
+  answerAuthorship: vi.fn(),
+  document: vi.fn(),
+  pdf: vi.fn(),
+  refreshDocument: vi.fn(),
+  shareUrl: (id: string) => `https://api.test/share/${id}`
+}));
 vi.mock('../services/paperService', () => ({ paperService: service }));
 
 import PaperDetailPage from './PaperDetailPage';
@@ -38,6 +46,8 @@ beforeEach(() => {
   auth.user = null;
   auth.isAuthenticated = false;
   service.get.mockResolvedValue(paper());
+  // Most papers in these tests have no PDF address.
+  service.document.mockResolvedValue({ status: 'none', viewable: false });
 });
 
 describe('PaperDetailPage', () => {
@@ -47,7 +57,10 @@ describe('PaperDetailPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Night segmentation' })).toBeInTheDocument();
     expect(screen.getByText(/Ann Lee, Bo Wu/)).toBeInTheDocument();
     expect(screen.getByText('CVPR · 2025')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /arXiv:2401.01234/ })).toHaveAttribute('href', 'https://arxiv.org/abs/2401.01234');
+    expect(screen.getByRole('link', { name: /arXiv:2401.01234/ })).toHaveAttribute(
+      'href',
+      'https://arxiv.org/abs/2401.01234'
+    );
     expect(screen.getByText('We measure how segmentation holds up in the dark.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Night seg' })).toHaveAttribute('href', '/projects/p1');
     expect(screen.getByText('Project no longer public')).toBeInTheDocument();
@@ -59,7 +72,17 @@ describe('PaperDetailPage', () => {
   });
 
   it('says so when a paper cites nothing, and leaves out what it does not have', async () => {
-    service.get.mockResolvedValue(paper({ results: [], abstract: undefined, venue: undefined, year: undefined, tags: [], arxivId: undefined, url: undefined }));
+    service.get.mockResolvedValue(
+      paper({
+        results: [],
+        abstract: undefined,
+        venue: undefined,
+        year: undefined,
+        tags: [],
+        arxivId: undefined,
+        url: undefined
+      })
+    );
     open();
 
     expect(await screen.findByText('This paper does not cite any results recorded on Visin.')).toBeInTheDocument();
@@ -77,7 +100,9 @@ describe('PaperDetailPage', () => {
   it('lets someone who manages it edit it and move it to the trash', async () => {
     auth.user = { id: 'u1' };
     auth.isAuthenticated = true;
-    service.get.mockResolvedValue(paper({ visibility: 'private', permissions: { read: true, contribute: true, manage: true, own: true } }));
+    service.get.mockResolvedValue(
+      paper({ visibility: 'private', permissions: { read: true, contribute: true, manage: true, own: true } })
+    );
     service.trash.mockResolvedValue(undefined);
     open();
 
@@ -94,7 +119,13 @@ describe('PaperDetailPage', () => {
 
   it('says the draft belongs to a group when it does', async () => {
     auth.user = { id: 'u1' };
-    service.get.mockResolvedValue(paper({ visibility: 'private', owner: { kind: 'group', id: 'g1' }, permissions: { read: true, contribute: true, manage: false, own: false } }));
+    service.get.mockResolvedValue(
+      paper({
+        visibility: 'private',
+        owner: { kind: 'group', id: 'g1' },
+        permissions: { read: true, contribute: true, manage: false, own: false }
+      })
+    );
     open();
 
     expect(await screen.findByText(/and your group’s members/)).toBeInTheDocument();
@@ -133,7 +164,9 @@ describe('PaperDetailPage', () => {
     });
 
     it('lets a confirmed author take their name off', async () => {
-      service.get.mockResolvedValue(paper({ authors: [{ name: 'M. Roe', status: 'confirmed', user: { id: 'me1', handle: 'mia' } }] }));
+      service.get.mockResolvedValue(
+        paper({ authors: [{ name: 'M. Roe', status: 'confirmed', user: { id: 'me1', handle: 'mia' } }] })
+      );
       open();
 
       expect(await screen.findByText(/this paper is on your page/)).toBeInTheDocument();
@@ -150,5 +183,31 @@ describe('PaperDetailPage', () => {
 
       expect(await screen.findByText('Could not save your answer')).toBeInTheDocument();
     });
+  });
+
+  it('shows the PDF beside the abstract and results for a paper that has one', async () => {
+    service.document.mockResolvedValue({ status: 'ready', viewable: true, pageCount: 8 });
+    service.pdf.mockResolvedValue(new Blob(['%PDF-'], { type: 'application/pdf' }));
+    URL.createObjectURL = vi.fn(() => 'blob:pdf-1');
+    URL.revokeObjectURL = vi.fn();
+    open();
+
+    expect(await screen.findByTitle('PDF of Night segmentation')).toBeInTheDocument();
+    expect(screen.getByText('We measure how segmentation holds up in the dark.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Night seg' })).toBeInTheDocument();
+  });
+
+  it('offers to ask the analyst about the paper to someone signed in, and not to a visitor', async () => {
+    auth.user = { id: 'u2' };
+    auth.isAuthenticated = true;
+    open();
+    expect(await screen.findByRole('button', { name: 'Ask about this paper' })).toBeInTheDocument();
+  });
+
+  it('leaves the narrow page alone for a paper with no PDF', async () => {
+    open();
+    await screen.findByRole('heading', { level: 1, name: 'Night segmentation' });
+    expect(screen.queryByTitle('PDF of Night segmentation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: /Reading the paper/ })).not.toBeInTheDocument();
   });
 });

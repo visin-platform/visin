@@ -1,4 +1,4 @@
-import { fitProviderContext } from '../../services/providerContext';
+import { fitProviderContext, headText, tailText } from '../../services/providerContext';
 
 it('leaves small payloads byte-for-byte unchanged', () => {
   const payload = JSON.stringify({ messages: [{ role: 'user', content: 'Current question' }] });
@@ -89,4 +89,36 @@ it('retains an oversized current question and schemas for the caller to reject',
     messages: [{ role: 'user', content: 'q'.repeat(2000) }]
   });
   expect(fitProviderContext(payload, 1000)).toBe(payload);
+});
+
+describe('cutting text', () => {
+  const rocket = '🚀'; // two UTF-16 units: cutting between them leaves a half the provider cannot read
+
+  it('never ends or starts in the middle of a character that takes two units', () => {
+    expect(headText(`ab${rocket}cd`, 3)).toBe('ab');
+    expect(headText(`ab${rocket}cd`, 4)).toBe(`ab${rocket}`);
+    expect(headText('abcd', 2)).toBe('ab');
+    expect(tailText(`ab${rocket}cd`, 3)).toBe('cd');
+    expect(tailText(`ab${rocket}cd`, 4)).toBe(`${rocket}cd`);
+    expect(tailText('abcd', 2)).toBe('cd');
+    expect(tailText('abcd', 0)).toBe('');
+  });
+
+  it('keeps every shortened result well formed, whatever the text holds and wherever it is cut', () => {
+    const body = rocket.repeat(8000);
+    const payload = JSON.stringify({
+      messages: [
+        { role: 'user', content: 'Context' },
+        { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'x', input: {} }] },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: body }] },
+        { role: 'user', content: 'Question' }
+      ]
+    });
+    for (const limit of [20000, 19001, 15003, 12007]) {
+      const fitted = fitProviderContext(payload, limit);
+      // A lone surrogate is written as an escape: none may be left in what is sent.
+      expect(fitted).not.toMatch(/\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])/i);
+      expect(fitted).not.toMatch(/(?<!\\ud[89ab][0-9a-f]{2})\\ud[c-f][0-9a-f]{2}/i);
+    }
+  });
 });

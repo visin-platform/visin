@@ -3,12 +3,26 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const { config } = vi.hoisted(() => ({ config: {} as Record<string, string | undefined> }));
+const { config, dock } = vi.hoisted(() => ({
+  config: {} as Record<string, string | undefined>,
+  dock: { available: false, openWith: vi.fn() }
+}));
+vi.mock('../components/chat/chatDock', () => ({ useChatDock: () => dock }));
 
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../services/homeApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/homeApi')>()),
-  homeApi: { trainings: vi.fn(), projects: vi.fn(), jobs: vi.fn(), findings: vi.fn(), myProjects: vi.fn(), myGroups: vi.fn(), invitations: vi.fn(), answerInvitation: vi.fn() },
+  homeApi: {
+    trainingStats: vi.fn(),
+    trainings: vi.fn(),
+    projects: vi.fn(),
+    jobs: vi.fn(),
+    findings: vi.fn(),
+    myProjects: vi.fn(),
+    myGroups: vi.fn(),
+    invitations: vi.fn(),
+    answerInvitation: vi.fn()
+  }
 }));
 
 import { HomePage } from './HomePage';
@@ -20,15 +34,27 @@ const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3600 * 1000
 
 const trainings = [
   { _id: 't1', name: 'Detector v2', projectId: 'p1', status: 'running' as const, updatedAt: hoursAgo(3) },
-  { _id: 't2', name: 'Segmenter', status: 'failed' as const, updatedAt: hoursAgo(24) },
+  { _id: 't2', name: 'Segmenter', status: 'failed' as const, updatedAt: hoursAgo(24) }
 ];
 const projects = [
-  { _id: 'p1', name: 'Harbour cameras', slug: 'harbour-cameras', visibility: 'private' as const, updatedAt: hoursAgo(5) },
-  { _id: 'p2', name: 'Orchard drones', visibility: 'public' as const, updatedAt: hoursAgo(48) },
+  {
+    _id: 'p1',
+    name: 'Harbour cameras',
+    slug: 'harbour-cameras',
+    visibility: 'private' as const,
+    updatedAt: hoursAgo(5)
+  },
+  { _id: 'p2', name: 'Orchard drones', visibility: 'public' as const, updatedAt: hoursAgo(48) }
 ];
 const jobs = [
-  { _id: 'j1', name: 'Crate outlines', tasksCount: 100, progress: { tasks: 100, completed: 40 }, updatedAt: hoursAgo(1) },
-  { _id: 'j2', name: 'Blossom masks', tasksCount: 20, updatedAt: hoursAgo(2) },
+  {
+    _id: 'j1',
+    name: 'Crate outlines',
+    tasksCount: 100,
+    progress: { tasks: 100, completed: 40 },
+    updatedAt: hoursAgo(1)
+  },
+  { _id: 'j2', name: 'Blossom masks', tasksCount: 20, updatedAt: hoursAgo(2) }
 ];
 const findings = [
   {
@@ -38,7 +64,7 @@ const findings = [
     title: 'Augmentation helps small crates',
     authorKind: 'assistant' as const,
     authorLabel: 'Claude',
-    createdAt: hoursAgo(2),
+    createdAt: hoursAgo(2)
   },
   {
     _id: 'f2',
@@ -46,8 +72,8 @@ const findings = [
     title: 'Night frames need their own split',
     authorKind: 'person' as const,
     authorLabel: 'Jane Doe',
-    createdAt: hoursAgo(26),
-  },
+    createdAt: hoursAgo(26)
+  }
 ];
 
 const renderHome = (userName: string | undefined = 'Jane Doe', path = '/') =>
@@ -63,15 +89,17 @@ const section = (name: string) => within(screen.getByRole('region', { name }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  dock.available = false;
   Object.assign(config, {
     VISION_API_URL: 'https://vision-api.test',
     LABEL_SERVICE_URL: 'https://label-api.test',
     VISION_FRONT_URL: 'https://vision.test',
-    LABEL_FRONT_URL: 'https://label.test',
+    LABEL_FRONT_URL: 'https://label.test'
   });
   api.trainings.mockImplementation(async ({ status }) =>
     status === 'running' ? { trainings: [trainings[0]], total: 1 } : { trainings, total: 12 }
   );
+  api.trainingStats.mockResolvedValue({ totalHours: 8.5, weekly: [] });
   api.projects.mockResolvedValue(projects);
   api.jobs.mockResolvedValue(jobs);
   api.findings.mockResolvedValue(findings);
@@ -82,7 +110,14 @@ beforeEach(() => {
 });
 
 describe('Invitations', () => {
-  const invitation = { id: 'i1', groupId: 'g1', groupName: 'Road team', role: 'admin' as const, invitedBy: 'owner@example.test', expiresAt: hoursAgo(-24) };
+  const invitation = {
+    id: 'i1',
+    groupId: 'g1',
+    groupName: 'Road team',
+    role: 'admin' as const,
+    invitedBy: 'owner@example.test',
+    expiresAt: hoursAgo(-24)
+  };
 
   it('shows invitations first, and joins one from the home page', async () => {
     config.GROUP_SERVICE_URL = 'https://group-api.test';
@@ -188,11 +223,12 @@ describe('HomePage', () => {
     const summary = within(screen.getByRole('region', { name: 'Summary' }));
     const tile = (label: string) => summary.getByText(label).closest('a')!;
     await waitFor(() => {
-      expect(tile('Projects')).toHaveTextContent('2');
-      expect(tile('Trainings')).toHaveTextContent('12');
-      expect(tile('Running now')).toHaveTextContent('1');
+      expect(within(tile('Projects')).getByLabelText('2')).toBeInTheDocument();
+      expect(within(tile('Trainings')).getByLabelText('12')).toBeInTheDocument();
+      expect(within(tile('Running now')).getByLabelText('1')).toBeInTheDocument();
+      expect(within(tile('Training hours')).getByLabelText('8.5')).toBeInTheDocument();
       // 60 left of the first job, all 20 of the second.
-      expect(tile('Tasks to label')).toHaveTextContent('80');
+      expect(within(tile('Tasks to label')).getByLabelText('80')).toBeInTheDocument();
     });
     expect(tile('Tasks to label')).toHaveAttribute('href', '/jobs');
   });
@@ -281,4 +317,95 @@ describe('HomePage', () => {
     expect(screen.queryByRole('region', { name: 'Projects' })).not.toBeInTheDocument();
     expect(api.trainings).not.toHaveBeenCalled();
   });
+});
+
+describe('a run that is training', () => {
+  const calls = (running: boolean) =>
+    api.trainings.mock.calls.filter(([options]) => (options.status === 'running') === running).length;
+
+  it('shows a pulsing dot on that run only', async () => {
+    renderHome();
+    const trainingsSection = section('Recent trainings');
+    const detector = (await trainingsSection.findByText('Detector v2')).closest('a')!;
+    expect(within(detector).getByTestId('live-dot')).toBeInTheDocument();
+    const segmenter = trainingsSection.getByText('Segmenter').closest('a')!;
+    expect(within(segmenter).queryByTestId('live-dot')).not.toBeInTheDocument();
+  });
+
+  it('is read again as it goes, while one is running', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderHome();
+      await screen.findByText('Detector v2');
+      const before = calls(false);
+      await vi.advanceTimersByTimeAsync(5100);
+      await waitFor(() => expect(calls(false)).toBeGreaterThan(before));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a quiet page quiet: only a cheap look for a run starting, now and then', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      api.trainings.mockImplementation(async ({ status }) =>
+        status === 'running' ? { trainings: [], total: 0 } : { trainings: [trainings[1]], total: 1 }
+      );
+      renderHome();
+      await screen.findByText('Segmenter');
+      const listBefore = calls(false);
+      const lookBefore = calls(true);
+      await vi.advanceTimersByTimeAsync(14_000);
+      expect(calls(true)).toBe(lookBefore);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await waitFor(() => expect(calls(true)).toBeGreaterThan(lookBefore));
+      // The list is not read again for a look that found nothing.
+      expect(calls(false)).toBe(listBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('starts reading the list quickly once the look finds a run', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let started = false;
+      api.trainings.mockImplementation(async ({ status }) => {
+        if (status === 'running')
+          return started ? { trainings: [trainings[0]], total: 1 } : { trainings: [], total: 0 };
+        return { trainings: started ? [trainings[0]] : [trainings[1]], total: 1 };
+      });
+      renderHome();
+      await screen.findByText('Segmenter');
+      started = true;
+      // The look (within 15 s) finds the run; the list, which polls only while there is one, then follows (5 s).
+      await vi.advanceTimersByTimeAsync(15_100);
+      await waitFor(() => expect(calls(true)).toBeGreaterThan(1));
+      await vi.advanceTimersByTimeAsync(5_100);
+      await screen.findByText('Detector v2');
+      expect(within(screen.getByText('Detector v2').closest('a')!).getByTestId('live-dot')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+it('opens the analyst on the latest run with the existing summary starters', async () => {
+  dock.available = true;
+  renderHome();
+  fireEvent.click(await screen.findByRole('button', { name: 'Ask the analyst' }));
+  expect(dock.openWith).toHaveBeenCalledWith({
+    kind: 'assistant',
+    projectId: 'p1',
+    trainingIds: ['t1'],
+    title: 'Detector v2'
+  });
+  expect(screen.getByText('Summarize Detector v2')).toBeInTheDocument();
+});
+it('does not suggest an analyst context before any run is available', async () => {
+  dock.available = true;
+  api.trainings.mockResolvedValue({ trainings: [], total: 0 });
+  renderHome();
+  await screen.findByText('No trainings yet. A run shows up here once its pipeline reports it.');
+  expect(screen.queryByRole('button', { name: 'Ask the analyst' })).not.toBeInTheDocument();
 });

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
+test.use({ timezoneId: 'Europe/Tallinn', locale: 'en-US' });
 test('human chat works without a provider and stays usable on mobile', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.emulateMedia({ colorScheme: test.info().project.name === 'desktop' ? 'dark' : 'light' });
   const messages: Record<string, unknown>[] = [];
   const errors: string[] = [];
@@ -34,7 +36,28 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
     let data: unknown = [];
     if (url.pathname.endsWith('/capabilities')) data = { assistant: false };
     else if (url.pathname.endsWith('/conversations')) data = [conversation];
-    else if (url.pathname.endsWith('/messages')) {
+    else if (/\/messages\/[^/]+\/(reaction|unsend)$/.test(url.pathname)) {
+      const messageId = url.pathname.split('/').at(-2);
+      const target = messages.find((message) => message._id === messageId)!;
+      target.revision = Number(target.revision || 0) + 1;
+      if (url.pathname.endsWith('/reaction')) {
+        const emoji = req.postDataJSON().emoji;
+        target.reactions = emoji ? [{ userId: 'alice', emoji }] : [];
+      } else {
+        target.body = '';
+        target.unsentAt = new Date().toISOString();
+        target.reactions = [];
+        for (const message of messages) {
+          const quote = message.quote as { messageId: string; body: string; unsent?: boolean } | undefined;
+          if (quote && quote.messageId === messageId) {
+            quote.body = 'Message unsent';
+            quote.unsent = true;
+            message.revision = Number(message.revision || 0) + 1;
+          }
+        }
+      }
+      data = target;
+    } else if (url.pathname.endsWith('/messages')) {
       if (req.method() === 'POST') {
         const input = req.postDataJSON();
         const source = messages.find((message) => message._id === input.replyTo);
@@ -42,6 +65,7 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
           _id: `message${messages.length + 1}`,
           kind: 'person',
           senderName: 'Alice',
+          senderId: 'alice',
           body: input.body,
           replyTo: input.replyTo,
           ...(source
@@ -52,13 +76,45 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
           evidence: []
         });
         data = messages.at(-1);
-      } else data = messages;
+      } else
+        data = messages.filter(
+          (message) => !url.searchParams.has('before') || Number(message.seq) < Number(url.searchParams.get('before'))
+        );
     }
     return route.fulfill({ headers, json: { success: true, data } });
   });
   await page.goto('/chat');
   await page.getByText('Experiment discussion', { exact: true }).click();
   await expect(page.getByLabel('Message', { exact: true })).toBeVisible();
+  const field = page.getByLabel('Message', { exact: true }).locator('..');
+  await expect(field.getByRole('button', { name: 'Choose emoji' })).toBeVisible();
+  await page.getByRole('button', { name: 'Conversation settings' }).click();
+  await page.getByRole('menuitem', { name: 'Appearance', exact: true }).click();
+  const appearance = page.getByRole('dialog', { name: 'Chat appearance' });
+  await appearance.getByRole('radio', { name: 'Forest' }).click();
+  const selectedBubbleColor = await appearance
+    .getByText('Show me something interesting.', { exact: true })
+    .locator('..')
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  await expect(appearance.getByRole('button', { name: 'Done' })).toHaveCSS('background-color', selectedBubbleColor);
+  await expect(appearance.getByRole('switch')).toHaveCount(0);
+  await appearance.screenshot({
+    path: `/tmp/visin-appearance-${test.info().project.name}.png`,
+    animations: 'disabled'
+  });
+  await appearance.getByRole('button', { name: 'Done' }).click();
+  await page.reload();
+  await expect(page.getByLabel('Message', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Conversation settings' }).click();
+  await page.getByRole('menuitem', { name: 'Appearance', exact: true }).click();
+  await expect(appearance.getByRole('radio', { name: 'Forest' })).toHaveAttribute('aria-checked', 'true');
+  await expect(appearance.getByRole('switch')).toHaveCount(0);
+  await appearance.getByRole('button', { name: 'Done' }).click();
+  const workspaceStyle = await page.getByRole('region', { name: 'Chat workspace' }).evaluate((element) => ({
+    blur: getComputedStyle(element).getPropertyValue('--chat-blur').trim(),
+    gap: getComputedStyle(element).getPropertyValue('--chat-message-gap').trim()
+  }));
+  expect(workspaceStyle).toEqual({ blur: 'blur(18px) saturate(140%)', gap: '10px' });
   await page.getByRole('button', { name: 'Conversation settings' }).click();
   await page.getByRole('menuitem', { name: 'People', exact: true }).click();
   const people = page.getByRole('dialog', { name: 'People', exact: true });
@@ -71,13 +127,53 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
   await page.getByLabel('Message', { exact: true }).fill('Can we compare validation peaks?');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByText('Can we compare validation peaks?', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Reply to Alice' }).click();
+  await expect(page.locator('time').first()).toHaveText(/^\d{2}:\d{2}$/);
+  await page.screenshot({ path: `/tmp/visin-input-regional-${test.info().project.name}.png` });
+  const original = page.locator('[data-message-id="message1"]');
+  if (test.info().project.name === 'desktop') {
+    await page.mouse.move(0, 0);
+    await expect(original.locator('.message-actions')).toHaveCSS('opacity', '0');
+    await original.hover();
+  }
+  await expect(original.locator('.message-actions')).toHaveCSS('opacity', '1');
+  await original.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(page.getByText('Message copied', { exact: true })).toBeVisible();
+  await original.getByRole('button', { name: 'React to message' }).click();
+  await page.getByRole('button', { name: 'React ❤️' }).click();
+  await expect(original.getByRole('button', { name: '❤️: 1 reaction, including yours' })).toBeVisible();
+  await original.getByRole('button', { name: 'Reply to Alice' }).click();
   await expect(page.getByText('Replying to Alice')).toBeVisible();
   await page.getByLabel('Message', { exact: true }).fill('Here is a quoted reply');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => messages.at(-1)?.replyTo).toBe('message1');
   await expect(page.locator('blockquote')).toContainText('Can we compare validation peaks?');
   await expect(page.getByRole('button', { name: 'Cancel reply' })).toHaveCount(0);
+  await original.hover();
+  await original.getByRole('button', { name: 'Message actions' }).click();
+  await page.getByRole('menuitem', { name: 'Unsend', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Unsend message?' })
+    .getByRole('button', { name: 'Unsend', exact: true })
+    .click();
+  await expect(original.getByText('Message unsent')).toBeVisible();
+  await expect(page.locator('blockquote')).toContainText('Message unsent');
+  await expect(page.getByText('Can we compare validation peaks?', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Conversation settings' }).click();
+  await page.getByRole('menuitem', { name: 'Export as Markdown' }).click();
+  const exportDialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
+  await expect(exportDialog.getByRole('status')).toHaveText('2 messages ready to save as Markdown.');
+  const downloadButton = exportDialog.getByRole('link', { name: 'Download Markdown' });
+  const markdown = await downloadButton.evaluate(async (element) =>
+    (await fetch((element as HTMLAnchorElement).href)).text()
+  );
+  expect(markdown).toContain('# Experiment discussion');
+  expect(markdown).toContain('Here is a quoted reply');
+  expect(markdown).toContain('Message unsent');
+  expect(markdown).not.toContain('Can we compare validation peaks?');
+  const downloaded = page.waitForEvent('download');
+  await downloadButton.click();
+  expect((await downloaded).suggestedFilename()).toBe('Experiment discussion.md');
+  await exportDialog.getByRole('button', { name: 'Close', exact: true }).click();
   if (test.info().project.name === 'mobile') {
     await page.getByRole('button', { name: 'Conversation list' }).click();
     await page.getByText('Experiment discussion', { exact: true }).click();
@@ -85,7 +181,11 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
   }
   expect(errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: `/tmp/visin-chat-${test.info().project.name}.png`, fullPage: true });
+  await page.screenshot({
+    path: `/tmp/visin-chat-${test.info().project.name}.png`,
+    fullPage: true,
+    animations: 'disabled'
+  });
 });
 
 test('the shell loads the real chat panel and expands the selected conversation', async ({ page }) => {
@@ -330,4 +430,10 @@ for (const transport of ['polling', 'stream'])
     await expect.poll(() => answer?.ok).toBe(true);
     expect(polls).toBeGreaterThan(0);
     await expect(panel.getByLabel('Ask a follow-up')).toBeVisible();
+    // The page changed because the analyst asked: the person is told so, and can take it back.
+    await expect(page.getByRole('status').filter({ hasText: 'Analyst opened the projects' })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath('analyst-cue.png') });
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page).toHaveURL('http://localhost:3010/nowhere');
+    await expect(page.getByRole('status').filter({ hasText: 'Analyst opened' })).toHaveCount(0);
   });

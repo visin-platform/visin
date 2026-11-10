@@ -22,3 +22,13 @@ export async function api<T>(path: string, body?: unknown, signal?: AbortSignal)
     throw error;
   }
 }
+
+/** DELETE with a JSON body, which `api` (GET and POST) does not cover. */
+export async function apiDelete(path: string, body: unknown, signal?: AbortSignal): Promise<void> {
+  await client.delete(path, { body: JSON.stringify(body), signal });
+}
+
+/** POST where the answer is nothing (a 204): `api` expects a body to unwrap. */
+export async function apiSend(path: string, body: unknown, signal?: AbortSignal): Promise<void> {
+  await client.post(path, body, { signal });
+}

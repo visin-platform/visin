@@ -1,11 +1,11 @@
 import { ApiError } from '@visin/frontend-core';
 import type { Dispatch, SetStateAction } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getGlobalConfig } from '../config/ConfigProvider';
 import { chatService } from '../services/chatService';
 
-import type { Conversation, Message, Run } from '../types/chat';
-import { PAGE, mergeMessages } from '../utils/messages';
+import type { Conversation, Draft, Message, MessageUpdate, Run } from '../types/chat';
+import { PAGE, mergeMessages, applyMessageUpdates } from '../utils/messages';
 import { TAB_ID, parseScreenCalls, showOnScreen, type ScreenCall, type ScreenResult } from '../utils/screen';
 import { useConversationRows } from './useConversationRows';
 
@@ -25,9 +25,25 @@ export function useChatThread({
   setError: (error: string) => void;
   setConversations: Dispatch<SetStateAction<Conversation[]>>;
 }) {
-  const [messages, setMessages] = useConversationRows<Message>(`${userId}:${selected}`);
+  const threadKey = `${userId}:${selected}`;
+  const [messages, setMessageRows] = useConversationRows<Message>(threadKey);
+  const mutationCache = useRef({ key: threadKey, updates: new Map<string, MessageUpdate>() });
+  if (mutationCache.current.key !== threadKey) mutationCache.current = { key: threadKey, updates: new Map() };
+  const setMessages = useCallback<Dispatch<SetStateAction<Message[]>>>(
+    (next) =>
+      setMessageRows((rows) => {
+        const result = typeof next === 'function' ? next(rows) : next;
+        return applyMessageUpdates(
+          result,
+          mutationCache.current.key === threadKey ? [...mutationCache.current.updates.values()] : []
+        );
+      }),
+    [threadKey, setMessageRows]
+  );
 
   const [runs, setRuns] = useConversationRows<Run>(`${userId}:${selected}`);
+
+  const [drafts, setDrafts] = useConversationRows<Draft>(`${userId}:${selected}`);
 
   const [selections, setSelections] = useConversationRows<Pick<Conversation, 'trainingIds' | 'trainingLabels'>>(
     `${userId}:${selected}`
@@ -45,11 +61,13 @@ export function useChatThread({
     if (!selected || !isAuthenticated) {
       setMessages([]);
       setRuns([]);
+      setDrafts([]);
       return;
     }
     const controller = new AbortController();
     setMessages([]);
     setRuns([]);
+    setDrafts([]);
     setHasOlder(false);
     setError('');
     const streamBase = getGlobalConfig().CHAT_SERVICE_URL;
@@ -176,6 +194,52 @@ export function useChatThread({
           /* Ignore malformed frames; the next connection replays the selection. */
         }
       });
+      // The analyst's answer as written so far. Empty text means the draft is over (the answer is a message now, or
+      // the run failed). Not an event that moves the replay cursor: a draft is only ever the latest word.
+      stream.addEventListener('draft', (event) => {
+        if (controller.signal.aborted || source !== stream) return;
+        try {
+          const draft = JSON.parse((event as MessageEvent).data) as Draft;
+          if (typeof draft.runId !== 'string' || typeof draft.messageId !== 'string' || typeof draft.text !== 'string')
+            return;
+          lastEvent = Date.now();
+          setDrafts((rows) => {
+            const others = rows.filter((row) => row.runId !== draft.runId);
+            return draft.text ? [...others, draft] : others;
+          });
+        } catch {
+          /* A frame that is not a draft is skipped; the next one carries the whole text again. */
+        }
+      });
+      stream.addEventListener('message-updates', (event) => {
+        if (controller.signal.aborted || source !== stream) return;
+        try {
+          const updates = JSON.parse((event as MessageEvent).data) as MessageUpdate[];
+          if (
+            !Array.isArray(updates) ||
+            !updates.every(
+              (update) =>
+                typeof update._id === 'string' &&
+                Number.isSafeInteger(update.revision) &&
+                Array.isArray(update.reactions) &&
+                update.reactions.every(
+                  (reaction) => reaction && typeof reaction.userId === 'string' && typeof reaction.emoji === 'string'
+                )
+            )
+          )
+            return;
+          lastEvent = Date.now();
+          revision++;
+          for (const update of updates) {
+            const previous = mutationCache.current.updates.get(update._id);
+            if ((update.revision ?? 0) >= (previous?.revision ?? 0))
+              mutationCache.current.updates.set(update._id, update);
+          }
+          setMessages((rows) => applyMessageUpdates(rows, updates));
+        } catch {
+          /* Reconciliation replays persisted message mutations after reconnect. */
+        }
+      });
       stream.addEventListener('state', (event) => {
         if (controller.signal.aborted || source !== stream) return;
         try {
@@ -286,7 +350,18 @@ export function useChatThread({
       clearInterval(timer);
       clearInterval(screenTimer);
     };
-  }, [selected, userId, isAuthenticated, panel, setMessages, setRuns, setError, setConversations, setSelections]);
+  }, [
+    selected,
+    userId,
+    isAuthenticated,
+    panel,
+    setMessages,
+    setRuns,
+    setDrafts,
+    setError,
+    setConversations,
+    setSelections
+  ]);
 
   const lastSeq = messages.at(-1)?.seq;
 
@@ -338,10 +413,13 @@ export function useChatThread({
     atBottom.current = true;
   }, [selected]);
 
+  // The answer growing keeps the end in view for someone who is reading at the end, and does not drag anyone back
+  // who scrolled up.
+  const draftLength = drafts.reduce((total, draft) => total + draft.text.length, 0);
   useEffect(() => {
     const box = scroller.current;
     if (box && atBottom.current) box.scrollTop = box.scrollHeight;
-  }, [lastSeq, activity, running]);
+  }, [lastSeq, activity, running, draftLength]);
   return {
     connection,
     selection: selections[0],
@@ -349,6 +427,7 @@ export function useChatThread({
     setMessages,
     runs,
     setRuns,
+    drafts,
     hasOlder,
     setHasOlder,
     running,

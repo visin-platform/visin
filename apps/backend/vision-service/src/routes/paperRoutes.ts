@@ -10,6 +10,7 @@ import {
   restorePaper,
   updatePaper
 } from '../controllers/paperController';
+import { getPaperDocument, refreshPaperDocument, streamPaperPdf } from '../controllers/paperDocumentController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import {
   authorshipBodySchema,
@@ -26,6 +27,9 @@ router.get('/', authMiddleware, validateRequest({ query: myPapersQuerySchema }),
 // Before /:id, which would take these for ids.
 router.get('/authorship-requests', authMiddleware, getAuthorshipRequests);
 router.get('/:id', optionalAuthMiddleware, getPaper);
+router.get('/:id/document', optionalAuthMiddleware, getPaperDocument);
+router.get('/:id/pdf', optionalAuthMiddleware, streamPaperPdf);
+router.post('/:id/document/refresh', authMiddleware, refreshPaperDocument);
 router.post('/', authMiddleware, validateRequest({ body: createPaperBodySchema }), createPaper);
 router.put('/:id', authMiddleware, validateRequest({ body: updatePaperBodySchema }), updatePaper);
 router.delete('/:id', authMiddleware, deletePaper);

@@ -9,9 +9,12 @@ const base: ExploreModel = {
   training: { _id: 't1', name: 'Iseauto run' },
   project: { _id: 'p1', name: 'Road models' }
 };
-const card = (model: Partial<ExploreModel['model']>, project = base.project) => render(
-  <MemoryRouter><ModelCard row={{ ...base, project, model: { ...base.model, ...model } }} /></MemoryRouter>
-);
+const card = (model: Partial<ExploreModel['model']>, project = base.project) =>
+  render(
+    <MemoryRouter>
+      <ModelCard row={{ ...base, project, model: { ...base.model, ...model } }} />
+    </MemoryRouter>
+  );
 
 describe('public model cards', () => {
   it('states when a ready checkpoint has no declared licence', () => {
@@ -44,8 +47,38 @@ describe('public model cards', () => {
     expect(screen.getByRole('link', { name: 'team/clft' })).toBeInTheDocument();
     expect(screen.getByText('Hugging Face')).toBeInTheDocument();
     view.unmount();
-    render(<MemoryRouter><ModelCard row={{ ...base, project: undefined, model: { ...base.model, provider: 'hf' } }} /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <ModelCard row={{ ...base, project: undefined, model: { ...base.model, provider: 'hf' } }} />
+      </MemoryRouter>
+    );
     expect(screen.getByRole('link', { name: 'Hub model' })).toBeInTheDocument();
     expect(screen.queryByText('Road models')).not.toBeInTheDocument();
+  });
+});
+
+describe('model card pictures and formats', () => {
+  it('shows the project’s picture behind the model chip, and the plain tile when there is none', () => {
+    const view = card({}, { _id: 'p1', name: 'Road models', coverUrl: 'https://files.example.test/cover.png' });
+    expect(view.container.querySelector('img')).toHaveAttribute('src', 'https://files.example.test/cover.png');
+    view.unmount();
+    const plain = card({});
+    expect(plain.container.querySelector('img')).toBeNull();
+  });
+
+  it('names every format of a checkpoint stored more than once, under its file name without a format', () => {
+    render(
+      <MemoryRouter>
+        <ModelCard
+          row={{
+            ...base,
+            model: { ...base.model, filename: 'net-epoch176.onnx', format: 'onnx', license: { id: 'cc-by-4.0' } }
+          }}
+          formats={['onnx', 'pth']}
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('link', { name: 'net-epoch176' })).toBeInTheDocument();
+    expect(screen.getByText(/Visin · \.onnx · \.pth · cc-by-4\.0/)).toBeInTheDocument();
   });
 });

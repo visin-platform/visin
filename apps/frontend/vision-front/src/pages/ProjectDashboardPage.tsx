@@ -2,7 +2,7 @@ import AnalyzeButton from '../components/analysis/AnalyzeButton';
 import { usePageChatContext } from '../hooks/usePageChatContext';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Box, Container, CircularProgress, Alert, Button } from '@mui/material';
+import { Alert, Box, Button, Container } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTrackVisit } from '@visin/frontend-core';
@@ -22,13 +22,14 @@ import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 // Custom hook
 import { useProjectDashboard } from '../hooks/useProjectDashboard';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { PageSkeleton } from '../components/common/PageSkeleton';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 const ProjectDashboardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -101,11 +102,7 @@ const ProjectDashboardPage: React.FC = () => {
 
   // Only the project itself holds the page back: its totals arrive after the header, the readme and the tabs.
   if (isProjectLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <PageSkeleton label="Loading project" />;
   }
 
   if (projectError || !project) {
@@ -134,7 +131,14 @@ const ProjectDashboardPage: React.FC = () => {
           />
 
           <ProjectHeader project={project} />
-          <AnalyzeButton projectId={project._id} trainingIds={[]} title={`${project.name} discussion`} discussion />
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+            {/* The analyst reads the project's runs and answers. A discussion is a room for the people who share the
+                project: for a project that is one person's, there is no one else in it. */}
+            <AnalyzeButton projectId={project._id} trainingIds={[]} title={project.name} />
+            {project.owner.kind === 'group' && (
+              <AnalyzeButton projectId={project._id} trainingIds={[]} title={`${project.name} discussion`} discussion />
+            )}
+          </Box>
 
           <CitedInPapers projectId={project._id} />
 
@@ -148,7 +152,6 @@ const ProjectDashboardPage: React.FC = () => {
             stats={stats}
             dashboardStats={dashboardStats}
             isAuthenticated={isAuthenticated}
-            user={user}
             trainings={fullTrainings?.trainings || []}
             isFullTrainingsLoading={isFullTrainingsLoading}
             page={page}

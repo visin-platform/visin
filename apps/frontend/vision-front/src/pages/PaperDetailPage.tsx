@@ -18,15 +18,22 @@ import { Article as ArticleIcon, Delete as DeleteIcon, Edit as EditIcon } from '
 import { EmptyState, OwnerChip, ShareButton } from '@visin/frontend-core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PaperAuthors from '../components/papers/PaperAuthors';
+import AskAboutPaper from '../components/papers/AskAboutPaper';
 import PaperLinks from '../components/papers/PaperLinks';
+import PaperReader from '../components/papers/PaperReader';
 import PaperResultsList from '../components/papers/PaperResultsList';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { usePaperDocument } from '../hooks/usePaperDocument';
 import { paperService } from '../services/paperService';
 import { formatDate } from '../utils';
 
 /** The caller is named on the paper: asks them to confirm it, or lets them take their name off. */
-const AuthorshipPanel: React.FC<{ paperId: string; status: 'confirmed' | 'pending'; name: string }> = ({ paperId, status, name }) => {
+const AuthorshipPanel: React.FC<{ paperId: string; status: 'confirmed' | 'pending'; name: string }> = ({
+  paperId,
+  status,
+  name
+}) => {
   const queryClient = useQueryClient();
   const answer = useMutation({
     mutationFn: (linked: boolean) => paperService.answerAuthorship(paperId, linked),
@@ -72,8 +79,13 @@ const PaperDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const { data: paper, isLoading, isError } = useQuery({ queryKey: ['papers', 'one', id, user?.id], queryFn: () => paperService.get(id), retry: false });
+  const {
+    data: paper,
+    isLoading,
+    isError
+  } = useQuery({ queryKey: ['papers', 'one', id, user?.id], queryFn: () => paperService.get(id), retry: false });
   usePageTitle(paper?.title ?? 'Paper');
+  const pdf = usePaperDocument(paper ? id : '');
   const trash = useMutation({
     mutationFn: () => paperService.trash(id),
     onSuccess: async () => {
@@ -90,7 +102,11 @@ const PaperDetailPage: React.FC = () => {
           icon={<ArticleIcon />}
           title="Paper not found"
           description="It may be a draft, or it may have been removed."
-          action={<Button component={RouterLink} to="/papers">All papers</Button>}
+          action={
+            <Button component={RouterLink} to="/papers">
+              All papers
+            </Button>
+          }
         />
       </Container>
     );
@@ -99,21 +115,38 @@ const PaperDetailPage: React.FC = () => {
   const me = paper.authors.find((author) => user && author.user?.id === user.id);
   const where = [paper.venue, paper.year].filter(Boolean).join(' · ');
   const manage = paper.permissions?.manage === true;
+  // A paper with a PDF to show gives the page a second column; one without keeps the narrow page it always had.
+  const reading = pdf.data !== undefined && pdf.data.status !== 'none';
 
   return (
-    <Container maxWidth="md" sx={{ pb: 4 }}>
+    <Container maxWidth={reading ? 'xl' : 'md'} sx={{ pb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 2 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 700, fontSize: { xs: '1.5rem', sm: '2rem' }, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 700, fontSize: { xs: '1.5rem', sm: '2rem' }, lineHeight: 1.25, overflowWrap: 'anywhere' }}
+        >
           {paper.title}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           {paper.visibility === 'public' && <ShareButton url={paperService.shareUrl(paper.id)} />}
           {manage && (
             <>
-              <IconButton aria-label="Edit paper" color="primary" size="small" component={RouterLink} to={`/papers/${paper.id}/edit`}>
+              <IconButton
+                aria-label="Edit paper"
+                color="primary"
+                size="small"
+                component={RouterLink}
+                to={`/papers/${paper.id}/edit`}
+              >
                 <EditIcon fontSize="small" />
               </IconButton>
-              <IconButton aria-label="Move paper to trash" color="error" size="small" onClick={() => setConfirmDelete(true)}>
+              <IconButton
+                aria-label="Move paper to trash"
+                color="error"
+                size="small"
+                onClick={() => setConfirmDelete(true)}
+              >
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </>
@@ -123,7 +156,8 @@ const PaperDetailPage: React.FC = () => {
 
       {paper.visibility === 'private' && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          This is a draft: only you{paper.owner.kind === 'group' ? ' and your group’s members' : ''} can see it. Edit it to make it public once it cites a result that is public on Visin.
+          This is a draft: only you{paper.owner.kind === 'group' ? ' and your group’s members' : ''} can see it. Edit it
+          to make it public once it cites a result that is public on Visin.
         </Alert>
       )}
       {me?.status && <AuthorshipPanel paperId={paper.id} status={me.status} name={me.name} />}
@@ -131,7 +165,10 @@ const PaperDetailPage: React.FC = () => {
       <Box sx={{ display: 'grid', gap: 1.5, mb: 3 }}>
         <PaperAuthors authors={paper.authors} variant="body1" />
         {where && <Typography sx={{ color: 'text.secondary' }}>{where}</Typography>}
-        <PaperLinks arxivId={paper.arxivId} doi={paper.doi} url={paper.url} pdfUrl={paper.pdfUrl} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <AskAboutPaper paperId={paper.id} title={paper.title} />
+          <PaperLinks arxivId={paper.arxivId} doi={paper.doi} url={paper.url} pdfUrl={paper.pdfUrl} />
+        </Box>
         {paper.tags.length > 0 && (
           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
             {paper.tags.map((tag) => (
@@ -141,43 +178,73 @@ const PaperDetailPage: React.FC = () => {
         )}
       </Box>
 
-      {paper.abstract && (
-        <Box component="section" aria-labelledby="paper-abstract" sx={{ mb: 3 }}>
-          <Typography id="paper-abstract" variant="h6" component="h2" gutterBottom>
-            Abstract
-          </Typography>
-          <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{paper.abstract}</Typography>
-        </Box>
-      )}
-
-      <Box component="section" aria-labelledby="paper-results" sx={{ mb: 3 }}>
-        <Typography id="paper-results" variant="h6" component="h2" gutterBottom>
-          Results on Visin
-        </Typography>
-        {paper.results.length === 0 ? (
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            This paper does not cite any results recorded on Visin.
-          </Typography>
-        ) : (
-          <PaperResultsList results={paper.results} />
+      <Box
+        sx={{
+          display: 'grid',
+          gap: { xs: 3, lg: 4 },
+          alignItems: 'start',
+          gridTemplateColumns: reading
+            ? { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 3fr) minmax(0, 2fr)' }
+            : 'minmax(0, 1fr)'
+        }}
+      >
+        {reading && (
+          <Box sx={{ order: { xs: 2, lg: 1 }, position: { lg: 'sticky' }, top: { lg: 72 }, minWidth: 0 }}>
+            <PaperReader
+              paperId={paper.id}
+              title={paper.title}
+              canManage={manage}
+              sourceUrl={paper.pdfUrl ?? (paper.arxivId ? `https://arxiv.org/abs/${paper.arxivId}` : paper.url)}
+            />
+          </Box>
         )}
-        <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
-          Each result is recorded by the people who ran it. Visin shows what was recorded, and that a result is still public; it has not re-run it.
-        </Typography>
-      </Box>
+        <Box sx={{ order: { xs: 1, lg: 2 }, minWidth: 0 }}>
+          {paper.abstract && (
+            <Box component="section" aria-labelledby="paper-abstract" sx={{ mb: 3 }}>
+              <Typography id="paper-abstract" variant="h6" component="h2" gutterBottom>
+                Abstract
+              </Typography>
+              <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{paper.abstract}</Typography>
+            </Box>
+          )}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-        <OwnerChip owner={paper.owner} userId={user?.id} groups={[]} ownerName={paper.owner.name} />
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Added {formatDate(paper.createdAt)}
-        </Typography>
+          <Box component="section" aria-labelledby="paper-results" sx={{ mb: 3 }}>
+            <Typography id="paper-results" variant="h6" component="h2" gutterBottom>
+              Results on Visin
+            </Typography>
+            {paper.results.length === 0 ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                This paper does not cite any results recorded on Visin.
+              </Typography>
+            ) : (
+              <PaperResultsList results={paper.results} />
+            )}
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+              Each result is recorded by the people who ran it. Visin shows what was recorded, and that a result is
+              still public; it has not re-run it.
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <OwnerChip owner={paper.owner} userId={user?.id} groups={[]} ownerName={paper.owner.name} />
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Added {formatDate(paper.createdAt)}
+            </Typography>
+          </Box>
+        </Box>
       </Box>
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete paper</DialogTitle>
         <DialogContent>
-          <Typography>Move this paper to the trash? Its owner can restore it for 30 days. After that it is permanently deleted.</Typography>
-          {trash.isError && <Alert severity="error" sx={{ mt: 1 }}>{trash.error instanceof Error ? trash.error.message : 'Could not delete the paper'}</Alert>}
+          <Typography>
+            Move this paper to the trash? Its owner can restore it for 30 days. After that it is permanently deleted.
+          </Typography>
+          {trash.isError && (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {trash.error instanceof Error ? trash.error.message : 'Could not delete the paper'}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>

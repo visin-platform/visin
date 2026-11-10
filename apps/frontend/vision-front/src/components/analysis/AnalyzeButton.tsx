@@ -29,7 +29,13 @@ export default function AnalyzeButton({
   if (!isAuthenticated || !projectId) return null;
   return (
     <Button startIcon={<AutoAwesome />} onClick={open}>
-      {discussion ? 'Discuss project' : trainingIds.length > 1 ? 'Analyze comparison' : 'Analyze this run'}
+      {discussion
+        ? 'Discuss project'
+        : trainingIds.length > 1
+          ? 'Analyze comparison'
+          : trainingIds.length === 1
+            ? 'Analyze this run'
+            : 'Ask about this project'}
     </Button>
   );
 }

@@ -29,10 +29,16 @@ beforeEach(() => {
   putImageData.mockClear();
   refresh.mockReset();
   refresh.mockResolvedValue({ success: true, data: { signedUrl: 'https://files.example.test/fresh.png' } } as never);
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => new Blob() })));
-  vi.stubGlobal('createImageBitmap', vi.fn(async (source: { width?: number }, options?: { resizeWidth?: number }) =>
-    options?.resizeWidth ? { width: options.resizeWidth, height: 1 } : { width: source.width ?? 2, height: 1 }
-  ));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, blob: async () => new Blob() }))
+  );
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async (source: { width?: number }, options?: { resizeWidth?: number }) =>
+      options?.resizeWidth ? { width: options.resizeWidth, height: 1 } : { width: source.width ?? 2, height: 1 }
+    )
+  );
   vi.stubGlobal(
     'ImageData',
     class {
@@ -67,7 +73,10 @@ const painted = () => [...(putImageData.mock.calls.at(-1)![0] as { data: Uint8Cl
 describe('OutputImage', () => {
   it('shows a picture as the image it is, with no query to make', () => {
     render(<OutputImage visualization={image('segment')} />);
-    expect(screen.getByRole('img', { name: 'segment.png' })).toHaveAttribute('src', 'https://files.example.test/segment.png');
+    expect(screen.getByRole('img', { name: 'segment.png' })).toHaveAttribute(
+      'src',
+      'https://files.example.test/segment.png'
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -77,7 +86,10 @@ describe('OutputImage', () => {
     renderWithClient(
       <OutputImage
         visualization={image('mask')}
-        classes={[{ index: 0, name: 'road' }, { index: 1, name: 'car' }]}
+        classes={[
+          { index: 0, name: 'road' },
+          { index: 1, name: 'car' }
+        ]}
         onDecoded={onDecoded}
         onPixel={onPixel}
       />
@@ -100,7 +112,15 @@ describe('OutputImage', () => {
 
   it('paints confidence on the ramp, stretched from one over the class count', async () => {
     pixels = grey(127, 255);
-    renderWithClient(<OutputImage visualization={image('confidence')} classes={[{ index: 0, name: 'a' }, { index: 1, name: 'b' }]} />);
+    renderWithClient(
+      <OutputImage
+        visualization={image('confidence')}
+        classes={[
+          { index: 0, name: 'a' },
+          { index: 1, name: 'b' }
+        ]}
+      />
+    );
     await waitFor(() => expect(putImageData).toHaveBeenCalled());
     const lut = rampLut();
     expect(painted()).toEqual([...lut[0], 255, ...lut[255], 255]);
@@ -116,11 +136,16 @@ describe('OutputImage', () => {
   it('decodes a thumbnail no wider than it needs', async () => {
     renderWithClient(<OutputImage visualization={image('mask')} maxWidth={1} />);
     await waitFor(() => expect(putImageData).toHaveBeenCalled());
-    expect(createImageBitmap).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ resizeWidth: 1, resizeQuality: 'pixelated' }));
+    expect(createImageBitmap).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ resizeWidth: 1, resizeQuality: 'pixelated' })
+    );
   });
 
   it('asks for a new link when the one it has is about to expire', async () => {
-    renderWithClient(<OutputImage visualization={{ ...image('mask'), urlExpiresAt: new Date(Date.now() + 1000).toISOString() }} />);
+    renderWithClient(
+      <OutputImage visualization={{ ...image('mask'), urlExpiresAt: new Date(Date.now() + 1000).toISOString() }} />
+    );
     await waitFor(() => expect(putImageData).toHaveBeenCalled());
     expect(refresh).toHaveBeenCalledWith('mask-1');
     expect(fetch).toHaveBeenCalledWith('https://files.example.test/fresh.png');
@@ -129,15 +154,22 @@ describe('OutputImage', () => {
   it('asks for a new link once when the file refuses the old one', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => (url.endsWith('fresh.png') ? { ok: true, blob: async () => new Blob() } : { ok: false, status: 403 }))
+      vi.fn(async (url: string) =>
+        url.endsWith('fresh.png') ? { ok: true, blob: async () => new Blob() } : { ok: false, status: 403 }
+      )
     );
-    renderWithClient(<OutputImage visualization={{ ...image('mask'), urlExpiresAt: new Date(Date.now() + 60_000).toISOString() }} />);
+    renderWithClient(
+      <OutputImage visualization={{ ...image('mask'), urlExpiresAt: new Date(Date.now() + 60_000).toISOString() }} />
+    );
     await waitFor(() => expect(putImageData).toHaveBeenCalled());
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('falls back to the plain image when the pixels cannot be read', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 403 }))
+    );
     renderWithClient(<OutputImage visualization={image('mask')} alt="Mask of frame 1" />);
     await waitFor(() => expect(screen.getByRole('img', { name: 'Mask of frame 1' }).tagName).toBe('IMG'));
   });
@@ -172,4 +204,13 @@ describe('OutputImage', () => {
     await waitFor(() => expect(putImageData).toHaveBeenCalled());
     expect(disconnect).toHaveBeenCalled();
   });
+});
+
+it('reports a failed frame instead of waiting forever when refreshing returns the same broken URL', async () => {
+  const status = vi.fn();
+  const frame = image('segment');
+  vi.mocked(visualizationService.getVisualizationByUuid).mockResolvedValueOnce({ data: frame } as never);
+  render(<OutputImage visualization={frame} onStatus={status} />);
+  fireEvent.error(screen.getByRole('img'));
+  await waitFor(() => expect(status).toHaveBeenCalledWith('error'));
 });

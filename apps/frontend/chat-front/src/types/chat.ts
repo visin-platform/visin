@@ -3,6 +3,8 @@ export interface PageContext {
   assistantId?: string;
   projectId?: string;
   trainingIds?: string[];
+  /** A research paper to analyse on its own: never together with a project. */
+  paperId?: string;
   title?: string;
   /** For showing only; the conversation is named from the project itself. */
   projectName?: string;
@@ -35,6 +37,9 @@ export interface Conversation {
   participants: Participant[];
   projectId?: string;
   groupId?: string;
+  /** the paper a private analysis is about, shown by its title */
+  paperId?: string;
+  paperTitle?: string;
   trainingIds: string[];
   projectName?: string;
   trainingLabels?: { id: string; name: string }[];
@@ -43,13 +48,29 @@ export interface Conversation {
 }
 
 export interface ReplyQuote {
+  unsent?: boolean;
   messageId: string;
   senderName: string;
   body: string;
   kind: 'person' | 'assistant' | 'system';
 }
 
+export interface Attachment {
+  fileId: string;
+  name: string;
+  mime: string;
+  size: number;
+  kind: 'image' | 'video' | 'audio' | 'file';
+}
+
+export type AttachmentRef = Pick<Attachment, 'fileId' | 'name' | 'mime'>;
+
 export interface Message {
+  unsentAt?: string | null;
+  revision?: number;
+  reactions?: { userId: string; emoji: string }[];
+  conversationId?: string;
+  attachments?: Attachment[];
   senderId?: string;
   _id: string;
   kind: 'person' | 'assistant' | 'system';
@@ -75,9 +96,20 @@ export interface Run {
   state: string;
   activity: string;
   error?: string;
+  /** What the analyst has done so far, in order, while it works. Only in the asker's own analyst thread. */
+  steps?: { tool: string; startedAt: string; endedAt?: string }[];
+}
+
+/** An answer as the analyst has written it so far, before it is a message. */
+export interface Draft {
+  runId: string;
+  /** The question this answers: the draft gives way to the answer message that replies to it. */
+  messageId: string;
+  text: string;
 }
 
 export interface Capabilities {
+  attachments?: boolean;
   assistantModel?: { provider: string; model: string; ready: boolean };
   /** The analyst is on and ready to answer. */
   assistant: boolean;
@@ -106,6 +138,7 @@ export interface CreateConversationInput {
   title: string;
   assistantId?: string;
   projectId?: string;
+  paperId?: string;
   trainingIds?: string[];
   handles?: string[];
   userIds?: string[];
@@ -113,6 +146,7 @@ export interface CreateConversationInput {
 }
 
 export interface SendMessageInput {
+  attachments?: AttachmentRef[];
   body: string;
   clientId: string;
   assistantId?: string;
@@ -132,3 +166,5 @@ export interface FindingInput {
   body: string;
   recommendations?: string;
 }
+
+export type MessageUpdate = Pick<Message, '_id' | 'revision' | 'unsentAt' | 'reactions'>;

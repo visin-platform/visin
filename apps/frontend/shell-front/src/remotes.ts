@@ -125,3 +125,18 @@ export function remoteChatPanel(): LazyExoticComponent<ComponentType> {
 export function forgetChatPanel(): void {
   chatPanel = undefined;
 }
+
+let chatCalls: LazyExoticComponent<ComponentType> | undefined;
+/**
+ * Chat's always-on part (`chat/Calls`): notification upkeep, and incoming calls. Rendered once for the whole session,
+ * with nothing visible of its own.
+ */
+export function remoteChatCalls(): LazyExoticComponent<ComponentType> {
+  chatCalls ??= lazy(async () => {
+    ensureRemotesRegistered();
+    const module = await loadRemote<{ default: ComponentType }>('chat/Calls');
+    if (!module) throw new Error('Chat did not provide its background part.');
+    return module;
+  });
+  return chatCalls;
+}

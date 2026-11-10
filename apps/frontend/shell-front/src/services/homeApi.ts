@@ -1,3 +1,4 @@
+import type { ActivityWeek } from '../components/home/activity';
 import { createApiClient } from '@visin/frontend-core';
 import { getGlobalConfig } from '../config/ConfigProvider';
 
@@ -72,6 +73,9 @@ const labelApi = createApiClient({
 });
 
 export const homeApi = {
+  async trainingStats(): Promise<{ totalHours: number; weekly: ActivityWeek[] }> {
+    return (await visionApi.get<Envelope<{ totalHours: number; weekly: ActivityWeek[] }>>('/trainings/stats')).data;
+  },
   /** Most recently updated first — the server's order — with the total across every page. */
   async trainings(options: {
     limit: number;
@@ -81,9 +85,9 @@ export const homeApi = {
     if (options.status) {
       query.set('status', options.status);
     }
-    const { data } = await visionApi.get<
-      Envelope<{ trainings: HomeTraining[]; pagination?: { total: number } }>
-    >(`/trainings?${query}`);
+    const { data } = await visionApi.get<Envelope<{ trainings: HomeTraining[]; pagination?: { total: number } }>>(
+      `/trainings?${query}`
+    );
     return { trainings: data.trainings, total: data.pagination?.total ?? data.trainings.length };
   },
 
@@ -94,9 +98,8 @@ export const homeApi = {
 
   /** Projects the viewer can write to (their own, and those their groups edit), newest first. */
   async myProjects(): Promise<HomeProject[]> {
-    return (
-      await visionApi.get<Envelope<HomeProject[]>>('/projects?access=contribute&sortBy=updatedAt&sortOrder=desc')
-    ).data;
+    return (await visionApi.get<Envelope<HomeProject[]>>('/projects?access=contribute&sortBy=updatedAt&sortOrder=desc'))
+      .data;
   },
 
   /** The groups the viewer is in, as vision-service knows them. */

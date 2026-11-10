@@ -17,8 +17,10 @@ import {
   sharedContacts,
   type Project
 } from './access';
+import { attachmentSummary } from './attachments';
 import { actorName } from '../utils/request';
 import { id } from '../validation/commonSchemas';
+import { defaultAssistantFor } from './assistantService';
 import { createSchema } from '../validation/conversationSchemas';
 import { parsed } from '../validation/parse';
 
@@ -66,14 +68,19 @@ export async function listConversations(req: Request) {
         return userId ? [{ kind: 'user' as const, id: userId }] : [];
       })
     ),
-    Message.aggregate<{ _id: string; body: string; createdAt: Date }>([
+    Message.aggregate<{ _id: string; body: string; createdAt: Date; files: number; firstKind?: string }>([
       { $match: { $or: visible.map((c) => ({ conversationId: c.id, ...historyFilter(c, actor) })) } },
       { $sort: { conversationId: 1, seq: -1 } },
       {
         $group: {
           _id: '$conversationId',
-          body: { $first: { $substrCP: ['$body', 0, 180] } },
-          createdAt: { $first: '$createdAt' }
+          body: {
+            $first: { $cond: [{ $ifNull: ['$unsentAt', false] }, 'Message unsent', { $substrCP: ['$body', 0, 180] }] }
+          },
+          createdAt: { $first: '$createdAt' },
+          // A message of only files has no text to show: it is described by what it carries.
+          files: { $first: { $size: { $ifNull: ['$attachments', []] } } },
+          firstKind: { $first: { $arrayElemAt: [{ $ifNull: ['$attachments.kind', []] }, 0] } }
         }
       }
     ])
@@ -85,7 +92,16 @@ export async function listConversations(req: Request) {
     return {
       ...c.toObject(),
       ...(identity?.handle ? { profile: identity } : {}),
-      ...(preview ? { latestMessage: { body: preview.body, createdAt: preview.createdAt } } : {})
+      ...(preview
+        ? {
+            latestMessage: {
+              body:
+                preview.body ||
+                attachmentSummary(Array.from({ length: preview.files }, () => ({ kind: preview.firstKind }))),
+              createdAt: preview.createdAt
+            }
+          }
+        : {})
     };
   });
 }
@@ -103,6 +119,11 @@ export async function createConversation(req: Request, body: unknown) {
       input.handles = [];
       input.title = person.name;
     }
+  }
+  // A private analysis with no assistant named starts with the one this person made their default, if they did.
+  if (input.kind === 'assistant' && !input.assistantId) {
+    const preferred = await defaultAssistantFor(actor);
+    if (preferred) input.assistantId = preferred.id;
   }
   if (input.assistantId) {
     if (input.kind !== 'assistant') throw new BadRequestError('Assistants are only available in private analysis');
@@ -168,6 +189,7 @@ export async function createConversation(req: Request, body: unknown) {
     }
   }
   let projectName: string | undefined;
+  let paperId: string | undefined, paperTitle: string | undefined;
   const trainingLabels: { id: string; name: string }[] = [];
   let groupId: string | undefined, projectId: string | undefined;
   if (input.kind === 'group') {
@@ -196,7 +218,15 @@ export async function createConversation(req: Request, body: unknown) {
         trainingLabels.push({ id: training, name: run.name });
       }
     } else if (input.trainingIds.length) throw new BadRequestError('Select a project for these runs');
-  } else if (input.projectId || input.groupId || input.trainingIds.length)
+    if (input.paperId) {
+      // A paper is read in a private chat of its own, never mixed with a project's runs, and only if the asker may read it.
+      if (input.kind !== 'assistant') throw new BadRequestError('A paper is analysed in a private chat');
+      if (input.projectId || input.trainingIds.length) throw new BadRequestError('Analyse a paper on its own, not with a project');
+      const paper = await peer<{ id: string; title: string }>('VISION', `/api/papers/${input.paperId}`, req);
+      paperId = paper.id;
+      paperTitle = paper.title;
+    }
+  } else if (input.projectId || input.groupId || input.paperId || input.trainingIds.length)
     throw new BadRequestError('Attach protected results through a project analysis chat');
   const directKey =
     input.kind === 'direct'
@@ -220,6 +250,8 @@ export async function createConversation(req: Request, body: unknown) {
       groupId,
       projectId,
       projectName,
+      paperId,
+      paperTitle,
       trainingLabels,
       directKey,
       bindingKey

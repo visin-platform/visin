@@ -212,3 +212,21 @@ export const getFileStream = async (fileId: string, range?: { start: number; end
   }
   return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
 };
+
+/** Stores bytes at a file id, server to server. For what this service made itself, such as a paper's cached PDF. */
+export const putFile = async (fileId: string, bytes: Buffer, mimetype: string): Promise<void> => {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
+      method: 'PUT',
+      headers: { ...fileServiceAuthHeaders(), 'Content-Type': mimetype, 'Content-Length': String(bytes.length) },
+      body: new Uint8Array(bytes),
+      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+      serviceName: 'file-service'
+    });
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new BadGatewayError('File write failed');
+  }
+  if (!response.ok) throw new BadGatewayError(`File write failed: file-service answered ${response.status}`);
+};

@@ -1,16 +1,22 @@
+import { defaultAssistantFor } from './assistantService';
 import { usableAssistant } from './assistantAvailability';
 import { flushMembershipEvents } from './membershipAudit';
-import { BadRequestError, ForbiddenError } from '@visin/backend-core';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import { type Request } from 'express';
 import { Assistant } from '../models/Assistant';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { authorize, historyFilter } from './access';
+import { AssistantRun } from '../models/AssistantRun';
+import { id } from '../validation/commonSchemas';
+import { attachmentSummary } from './attachments';
+import { verifyAttachments } from './attachments';
 import { appendMessage } from './messages';
+import { notifyNewMessage } from './pushNotify';
 import { assistantStatus } from './settings';
 import { requireSharedBot, sharedEnabled } from './sharedAssistants';
 import { actorName } from '../utils/request';
-import { messageCursorSchema, readSequenceSchema, sendSchema } from '../validation/messageSchemas';
+import { messageCursorSchema, readSequenceSchema, sendSchema, reactionSchema } from '../validation/messageSchemas';
 import { parsed } from '../validation/parse';
 
 export async function listMessages(req: Request, conversationId: string, beforeValue: unknown) {
@@ -23,6 +29,7 @@ export async function listMessages(req: Request, conversationId: string, beforeV
   })
     .sort({ seq: -1 })
     .limit(50);
+  await redactQuotes(rows);
   return rows.reverse();
 }
 
@@ -31,6 +38,7 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     input = parsed(sendSchema, body);
   const existing = await Message.findOne({ conversationId: c.id, clientId: input.clientId, senderId: req.user!.id });
   if (existing) {
+    await redactQuotes([existing]);
     return { message: existing, created: false };
   }
   if (await Message.exists({ conversationId: c.id, clientId: input.clientId }))
@@ -43,7 +51,12 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     if (!claimed.matchedCount) throw new ForbiddenError('Wait for the message request to be accepted');
   }
   const reply = input.replyTo
-    ? await Message.findOne({ _id: input.replyTo, conversationId: c.id, ...historyFilter(c, req.user!.id) })
+    ? await Message.findOne({
+        _id: input.replyTo,
+        conversationId: c.id,
+        unsentAt: null,
+        ...historyFilter(c, req.user!.id)
+      })
     : null;
   if (input.replyTo && !reply) throw new BadRequestError('Reply is not in your visible conversation');
   // A quoted snapshot is newly published content: every current room reader must be able to see its source.
@@ -62,11 +75,26 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     throw new ForbiddenError('Shared assistants require agreement or administrator enablement');
   if ((c.kind === 'assistant' || sharedBot) && !(await assistantStatus()).ready)
     throw new BadRequestError('The assistant is not configured. Human messaging is available.');
+  // Older generic analysis threads adopt the effective default on their next question.
+  // The conditional write pins it once, so a later preference change cannot silently replace this thread's bot.
+  if (c.kind === 'assistant' && !c.assistantId) {
+    const preferred = await defaultAssistantFor(req.user!.id);
+    if (preferred) {
+      const bound = await Conversation.findOneAndUpdate(
+        { _id: c.id, assistantId: null, deletedAt: null },
+        { $set: { assistantId: preferred.id } },
+        { returnDocument: 'after' }
+      ).select('assistantId');
+      c.assistantId = (bound ?? (await Conversation.findById(c.id).select('assistantId')))?.assistantId;
+    }
+  }
   const selectedAssistant = c.assistantId
     ? await Assistant.findOne({ _id: c.assistantId, ...usableAssistant(req.user!.id) })
     : null;
   if (c.assistantId && !selectedAssistant) throw new BadRequestError('This assistant is paused or removed');
-  const { assistantId: _invocation, screen, ...messageInput } = input;
+  const { assistantId: _invocation, screen, attachments: refs, ...messageInput } = input;
+  // Described from what file-service holds, not from what the browser said.
+  const attachments = await verifyAttachments(c.id, c.kind, refs ?? []);
   const message = await appendMessage({
     expectedMembershipVersion: c.membershipVersion,
     conversationId: c.id,
@@ -74,9 +102,15 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     senderName: actorName(req),
     kind: 'person',
     ...messageInput,
+    ...(attachments.length ? { attachments } : {}),
     ...(reply
       ? {
-          quote: { messageId: reply.id, senderName: reply.senderName, body: reply.body.slice(0, 500), kind: reply.kind }
+          quote: {
+            messageId: reply.id,
+            senderName: reply.senderName,
+            body: (reply.body || attachmentSummary(reply.attachments ?? []) || 'Message').slice(0, 500),
+            kind: reply.kind
+          }
         }
       : {}),
     ...(c.kind === 'assistant' || sharedBot
@@ -101,6 +135,16 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     assistantCancelled: _cancelled,
     ...view
   } = message.toObject();
+  // Not awaited: the message is stored, and a notification must never slow or fail the send.
+  void notifyNewMessage(c, {
+    conversationId: c.id,
+    senderId: req.user!.id,
+    senderName: actorName(req),
+    body: message.body,
+    attachments: message.attachments ?? [],
+    seq: message.seq,
+    createdAt: message.createdAt
+  });
   return { message: view, created: true };
 }
 
@@ -129,4 +173,103 @@ export async function markRead(req: Request, conversationId: string, seqValue: u
     { $max: { 'participants.$.readSeq': seq } }
   );
   return;
+}
+
+/** Redact quoted snapshots at read time too, including replies racing an unsend. */
+export async function redactQuotes(
+  rows: { conversationId: string; quote?: { messageId: string; body: string; unsent?: boolean | null } | null }[]
+) {
+  const ids = [...new Set(rows.flatMap((row) => (row.quote ? [row.quote.messageId] : [])))];
+  if (!ids.length) return;
+  const removed = new Set(
+    (
+      await Message.find({ conversationId: rows[0].conversationId, _id: { $in: ids }, unsentAt: { $ne: null } })
+        .select('_id')
+        .lean()
+    ).map((row) => String(row._id))
+  );
+  for (const row of rows)
+    if (row.quote && removed.has(row.quote.messageId)) {
+      row.quote.body = 'Message unsent';
+      row.quote.unsent = true;
+    }
+}
+
+async function visibleMessage(req: Request, conversationId: string, messageId: unknown) {
+  const conversation = await authorize(req, conversationId, true);
+  const message = await Message.findOne({
+    _id: parsed(id, messageId),
+    conversationId: conversation.id,
+    ...historyFilter(conversation, req.user!.id)
+  });
+  if (!message) throw new NotFoundError('Message not found');
+  return { conversation, message };
+}
+
+export async function react(req: Request, conversationId: string, messageId: unknown, body: unknown) {
+  const { emoji } = parsed(reactionSchema, body);
+  const { conversation, message } = await visibleMessage(req, conversationId, messageId);
+  const others = {
+    $filter: {
+      input: { $ifNull: ['$reactions', []] },
+      as: 'reaction',
+      cond: { $ne: ['$$reaction.userId', req.user!.id] }
+    }
+  };
+  const updated = await Message.findOneAndUpdate(
+    {
+      _id: message._id,
+      unsentAt: null,
+      kind: { $ne: 'system' },
+      ...(emoji ? { $expr: { $lt: [{ $size: others }, 200] } } : {})
+    },
+    [
+      {
+        $set: {
+          reactions: { $concatArrays: [others, emoji ? [{ userId: req.user!.id, emoji }] : []] },
+          revision: { $add: [{ $ifNull: ['$revision', 0] }, 1] }
+        }
+      }
+    ],
+    { returnDocument: 'after', updatePipeline: true }
+  );
+  if (!updated) throw new BadRequestError('This message cannot receive that reaction');
+  await Conversation.updateOne({ _id: conversation._id }, { $inc: { messageVersion: 1 } });
+  await redactQuotes([updated]);
+  return updated;
+}
+
+export async function unsend(req: Request, conversationId: string, messageId: unknown) {
+  const { conversation, message } = await visibleMessage(req, conversationId, messageId);
+  if (message.kind !== 'person' || message.senderId !== req.user!.id)
+    throw new ForbiddenError('You can only unsend your own messages');
+  await Message.updateOne(
+    { _id: message._id, unsentAt: null },
+    {
+      $set: { unsentAt: new Date(), body: '', reactions: [], evidence: [], assistantCancelled: true },
+      $unset: { attachments: 1, quote: 1, assistantRequest: 1, screenRequest: 1 },
+      $inc: { revision: 1 }
+    }
+  );
+  await AssistantRun.updateMany(
+    {
+      conversationId: conversation.id,
+      messageId: message.id,
+      state: { $in: ['queued', 'screen_queued', 'running', 'completed'] },
+      published: { $ne: true }
+    },
+    {
+      $set: { state: 'cancelled', finishedAt: new Date(), activity: 'Question unsent' },
+      $unset: { draft: 1, result: 1 }
+    }
+  );
+  await Message.updateMany(
+    { conversationId: conversation.id, 'quote.messageId': message.id, 'quote.unsent': { $ne: true } },
+    {
+      $set: { 'quote.body': 'Message unsent', 'quote.unsent': true },
+      $inc: { revision: 1 }
+    }
+  );
+  await Conversation.updateOne({ _id: conversation._id }, { $inc: { messageVersion: 1 } });
+  return await Message.findById(message._id);
 }

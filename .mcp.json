@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.84", "--config", "playwright.mcp.json"]
+    },
+    "playwright-mobile": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.84", "--config", "playwright.mcp.json", "--mobile"]
+    }
+  }
+}

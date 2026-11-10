@@ -10,7 +10,9 @@ import type { HomeFinding } from '../services/homeApi';
 import { cardGridSx } from '../components/explore/cardGrid';
 import { CardSkeletons, DatasetCard, ProjectCard } from '../components/explore/cards';
 import { ModelCard } from '../components/explore/ModelCard';
+import { groupFormats } from '../components/explore/modelGroups';
 import { LeaderboardPanel } from '../components/explore/LeaderboardPanel';
+import { catalogueFigures } from '../components/explore/catalogueFigures';
 import { VisitorBanner } from '../components/explore/VisitorBanner';
 import { FindingsSection } from '../components/home/FindingsSection';
 
@@ -221,10 +223,18 @@ export function ExplorePage({ now }: ExplorePageProps) {
     0,
     everything ? Infinity : OVERVIEW_COUNT
   );
-  const modelCards = (models.data?.pages.flatMap((page) => page.models) ?? []).slice(
+  const modelCards = groupFormats(models.data?.pages.flatMap((page) => page.models) ?? []).slice(
     0,
     everything ? Infinity : OVERVIEW_COUNT
   );
+  const figures = catalogueFigures({
+    projects: projects.data?.pages.flatMap((page) => page.projects) ?? [],
+    projectTotal: !projects.isError ? projects.data?.pages[0]?.pagination.total : undefined,
+    datasets: datasets.data?.pages.flatMap((page) => page.datasets) ?? [],
+    datasetTotal: !datasets.isError ? datasets.data?.pages[0]?.pagination.total : undefined,
+    modelTotal: !models.isError ? models.data?.pages[0]?.pagination.total : undefined
+  });
+  const preview = !datasets.isError ? datasetCards.find((dataset) => dataset.coverUrl) : undefined;
   const landing = config.LANDING_FRONT_URL?.replace(/\/$/, '');
   const seeAll = (value: Kind) => `?${new URLSearchParams({ ...(search ? { q: search } : {}), type: value })}`;
   const none = search
@@ -235,7 +245,7 @@ export function ExplorePage({ now }: ExplorePageProps) {
     <Box
       sx={{
         width: '100%',
-        maxWidth: 1200,
+        maxWidth: 1440,
         mx: 'auto',
         display: 'flex',
         flexDirection: 'column',
@@ -245,13 +255,20 @@ export function ExplorePage({ now }: ExplorePageProps) {
     >
       {/* Not while the session is still being checked: it would flash for someone signed in. */}
       {!isLoading && !isAuthenticated && (
-        <VisitorBanner onSignup={signup} aboutUrl={landing ? `${landing}/about` : undefined} />
+        <VisitorBanner
+          onSignup={signup}
+          aboutUrl={landing ? `${landing}/about` : undefined}
+          expanded={kind === 'all' && !search}
+          figures={figures}
+          preview={preview}
+          onExplore={vision ? () => update({ type: 'projects' }) : undefined}
+        />
       )}
 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 340px' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 320px' },
           gap: { xs: 3, md: 4 },
           alignItems: 'start'
         }}
@@ -385,8 +402,8 @@ export function ExplorePage({ now }: ExplorePageProps) {
                   : undefined
               }
             >
-              {modelCards.map((row) => (
-                <ModelCard key={`${row.training._id}:${row.model._id}`} row={row} />
+              {modelCards.map(({ row, formats }) => (
+                <ModelCard key={`${row.training._id}:${row.model._id}`} row={row} formats={formats} />
               ))}
             </Shelf>
           )}

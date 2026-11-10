@@ -158,7 +158,8 @@ export interface ExploreModel {
     addedAt: string;
   };
   training: { _id: string; name: string };
-  project?: { _id: string; name: string; slug?: string };
+  /** `coverUrl`: the project's picture (chosen, or its dataset's), which a model has no picture of its own to show beside */
+  project?: { _id: string; name: string; slug?: string; coverUrl?: string };
 }
 
 /** A paper as a list shows it: the fields of vision-service's public paper catalogue the rows read. */

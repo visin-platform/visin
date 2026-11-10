@@ -70,7 +70,7 @@ describe('TrainingComparisonPage', () => {
   it('shows a loading spinner while fetching the comparison', () => {
     compareTrainingsMock.mockReturnValue(new Promise(() => {}));
     renderWithProviders('/trainings/compare?ids=t1,t2');
-    expect(screen.getByText(/Loading training comparison/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Loading training comparison' })).toBeInTheDocument();
   });
 
   it('shows an error message when the query fails', async () => {

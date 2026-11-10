@@ -15,6 +15,7 @@ import { visitIcon, visitLabel } from './home/visitKinds';
 import { ChatButton, ChatSidePanel } from './chat/ChatDock';
 import { useChatDock } from './chat/chatDock';
 import { useCanConfigureAnalyst } from '../hooks/useCanConfigureAnalyst';
+import { beforeLogout } from './chat/notifications';
 
 /** Outside any app's routes (Home, Explore, the not-found page): the widest frame, no header. */
 const NO_APP_LAYOUT = { maxContentWidth: 1600, showPageHeader: false };
@@ -93,7 +94,7 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       authPending={isLoading}
       onLogin={login}
       onSignup={signup}
-      onLogout={logout}
+      onLogout={() => void beforeLogout().then(() => logout())}
       onSearch={(query) => navigate(`/search?q=${encodeURIComponent(query)}`)}
       searchPlaceholder="Search Visin…"
       recent={recent}

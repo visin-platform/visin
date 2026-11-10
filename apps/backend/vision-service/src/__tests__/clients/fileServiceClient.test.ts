@@ -13,7 +13,8 @@ import {
   deleteFile,
   deleteFiles,
   getFileMetadata,
-  getFileStream
+  getFileStream,
+  putFile
 } from '../../clients/fileServiceClient';
 import { BadGatewayError, GatewayTimeoutError, NotFoundError } from '@visin/backend-core';
 
@@ -213,5 +214,35 @@ describe('getFileStream', () => {
 
     mockFetch.mockRejectedValue(new TypeError('fetch failed'));
     await expect(getFileStream('f')).rejects.toMatchObject({ statusCode: 502, message: 'File read failed' });
+  });
+});
+
+describe('putFile', () => {
+  it('stores bytes under a file id with the service’s credential, and says how large they are', async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    await putFile('papers/p1/a.pdf', Buffer.from('%PDF-1.4'), 'application/pdf');
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('http://files:5002/internal/files/papers/p1/a.pdf');
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toMatchObject({ 'Content-Type': 'application/pdf', 'Content-Length': '8' });
+    expect(Buffer.from(init.body).toString()).toBe('%PDF-1.4');
+  });
+
+  it('names a refusal and a failed request, rather than letting a half-stored file pass', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 413 });
+    await expect(putFile('f', Buffer.from('x'), 'application/pdf')).rejects.toMatchObject({
+      statusCode: 502,
+      message: expect.stringContaining('413')
+    });
+
+    mockFetch.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(putFile('f', Buffer.from('x'), 'application/pdf')).rejects.toMatchObject({
+      statusCode: 502,
+      message: 'File write failed'
+    });
+
+    mockFetch.mockRejectedValue(new GatewayTimeoutError('file-service timed out'));
+    await expect(putFile('f', Buffer.from('x'), 'application/pdf')).rejects.toMatchObject({ statusCode: 504 });
   });
 });

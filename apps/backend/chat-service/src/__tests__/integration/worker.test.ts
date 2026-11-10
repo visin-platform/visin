@@ -1,14 +1,17 @@
 import '../helpers/mocks';
-import { type Mock } from 'vitest';
+import { vi, type Mock } from 'vitest';
+import { createApiKey, fetchWithTimeout } from '@visin/backend-core';
 import { AssistantRun } from '../../models/AssistantRun';
 import { Budget } from '../../models/Budget';
 import { Conversation } from '../../models/Conversation';
 import { Message } from '../../models/Message';
+import { peer } from '../../services/access';
 import { analyze } from '../../services/analyst';
 import { appendMessage } from '../../services/messages';
+import { ProviderRequestError, PROVIDER_REPLAY_VERSION } from '../../services/providers';
 import { startWorker } from '../../services/worker';
 import { enableAnalyst } from '../helpers/analystFixtures';
-import { create, request, setupChatTests } from '../helpers/testServer';
+import { base, create, request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
 
@@ -208,4 +211,123 @@ it('includes an authorized quoted conclusion as reference context for the curren
     question: 'Explain this conclusion',
     quote: { body: 'A previous measured conclusion', senderName: 'Analyst' }
   });
+});
+
+it('includes authorized image references and marks their content as available', async () => {
+  await enableAnalyst();
+  const id = await create('assistant', []);
+  await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'Alice',
+    kind: 'person',
+    body: 'What is in this file?',
+    clientId: 'attachment-context-1',
+    attachments: [{ fileId: `chat/${id}/test.png`, name: 'test.png', mime: 'image/png', size: 123, kind: 'image' }],
+    assistantRequest: {
+      userId: 'alice',
+      email: 'alice@test.invalid',
+      name: 'Alice',
+      membershipVersion: (await Conversation.findById(id))!.membershipVersion
+    }
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect(analyze).toHaveBeenCalled();
+  const input = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(JSON.parse(input.history.at(-1).content)).toMatchObject({
+    question: 'What is in this file?',
+    attachments: [{ name: 'test.png', contentAvailable: true }]
+  });
+  expect(input.history.at(-1).content).not.toContain('fileId');
+  expect(input.history.at(-1).imageRefs).toEqual([expect.objectContaining({ fileId: `chat/${id}/test.png` })]);
+});
+
+it('describes image-only posts and retains their images for the next follow-up', async () => {
+  await enableAnalyst();
+  const id = await create('assistant', []);
+  const membershipVersion = (await Conversation.findById(id))!.membershipVersion;
+  await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'Alice',
+    kind: 'person',
+    body: '',
+    clientId: 'image-only-1',
+    attachments: [{ fileId: `chat/${id}/photo.png`, name: 'photo.png', mime: 'image/png', size: 123, kind: 'image' }],
+    assistantRequest: { userId: 'alice', email: 'alice@test.invalid', name: 'Alice', membershipVersion }
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect(analyze).toHaveBeenCalled();
+  const first = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(JSON.parse(first.history.at(-1).content).question).toBe('Describe what you see in the attached images.');
+  expect(first.history.at(-1).imageRefs).toHaveLength(1);
+  await worker.tick();
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'What color is it?', clientId: 'image-follow-up-1' });
+  await worker.tick();
+  const followup = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(followup.history.flatMap((turn: { imageRefs?: unknown[] }) => turn.imageRefs ?? [])).toHaveLength(1);
+  expect(followup.history.at(-1).content).toBe('What color is it?');
+});
+
+it('answers a question about a paper with the paper and an unscoped read-only key', async () => {
+  await enableAnalyst();
+  const paperId = '222222222222222222222222';
+  vi.mocked(peer).mockResolvedValueOnce({ id: paperId, title: 'CLFTv2: fusion' });
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'CLFTv2: fusion', paperId });
+  expect(created.status).toBe(201);
+  (fetchWithTimeout as Mock).mockResolvedValue(new Response(JSON.stringify({ success: true, data: { id: paperId } })));
+  vi.mocked(createApiKey).mockClear();
+
+  const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
+    body: 'Summarize this paper',
+    clientId: 'paper-question-001'
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+
+  const input = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(input).toMatchObject({ paperId, projectId: undefined, trainingIds: [] });
+  // Not limited to a project, since a paper belongs to none, and never able to write.
+  const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
+  expect(key).toMatchObject({ scopes: ['vision:read', 'analysis:read'], userId: 'alice' });
+  expect(key).not.toHaveProperty('project');
+});
+
+it('records safe provider diagnostics privately and identifies the running replay handler', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'Summarize', clientId: 'diagnostic-reply' });
+  vi.mocked(analyze).mockRejectedValueOnce(
+    new ProviderRequestError('Provider format rejected (400). Reference: req_test.', {
+      status: 400,
+      type: 'invalid_request_error',
+      reason: 'empty_text',
+      requestId: 'req_test'
+    })
+  );
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  const run = await AssistantRun.findOne({ conversationId: id })
+    .select('+providerFailure +providerReplayVersion')
+    .lean();
+  expect(run?.state).toBe('failed');
+  expect(run?.providerFailure).toEqual({
+    status: 400,
+    type: 'invalid_request_error',
+    reason: 'empty_text',
+    requestId: 'req_test'
+  });
+  expect(run?.providerReplayVersion).toBe(PROVIDER_REPLAY_VERSION);
+  const visible = (await request(`/conversations/${id}/runs`)).body.data;
+  expect(JSON.stringify(visible)).not.toContain('providerFailure');
+  expect(JSON.stringify(visible)).not.toContain('providerReplayVersion');
+  const health = await fetch(`${base}/health`);
+  expect(health.headers.get('x-visin-chat-replay')).toBe(PROVIDER_REPLAY_VERSION);
 });

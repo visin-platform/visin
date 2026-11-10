@@ -115,3 +115,25 @@ describe('TrainValChart gaps and order', () => {
     expect(train.data).toEqual([0.9, 0.5]);
   });
 });
+
+describe('TrainValChart best epoch', () => {
+  it('names the best validation epoch in the metric’s direction, and says when the run ended far from it', () => {
+    render(
+      <TrainValChart
+        epochs={[0.9, 0.3, 0.6].map((loss, i) => makeEpoch(i + 1, { train: { loss: loss + 0.1 }, val: { loss } }))}
+        metric="loss"
+        label="Loss"
+        direction="lower"
+      />
+    );
+    expect(screen.getByText(/Best validation Loss 0.3 at epoch 2/)).toHaveTextContent('ended at 0.6 (epoch 3)');
+    expect(screen.getByText(/shaded: past the best/)).toBeInTheDocument();
+  });
+
+  it('falls back to the training readings when the run reports no validation', () => {
+    render(
+      <TrainValChart epochs={[0.5, 0.7].map((v, i) => makeEpoch(i + 1, { train: { mean_iou: v } }))} metric="mean_iou" label="MIoU" />
+    );
+    expect(screen.getByText(/Best training MIoU 0.7 at epoch 2/)).not.toHaveTextContent('ended at');
+  });
+});

@@ -4,8 +4,6 @@ import {
   CardContent,
   Typography,
   Box,
-  Chip,
-  Divider,
   Paper,
   Grid,
   Stack,
@@ -29,7 +27,6 @@ import {
 import { livePalette, tint } from '@visin/frontend-core';
 import { Training, Epoch } from '../types';
 import type { HubModelReference } from '../types/training';
-import { trainingStatusLabel } from '../utils/trainingStatus';
 import ModelCardDialog from './models/ModelCardDialog';
 import ModelTryDialog from './models/ModelTryDialog';
 import StoredModelDownloads from './models/StoredModelDownloads';
@@ -88,22 +85,6 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
 
     // CPU and GPU are billed for the same wall-clock hours; they differ only in rate.
     return { totalHours, cpuHours: totalHours, gpuHours: totalHours, cpuCost, gpuCost, totalCost };
-  };
-
-  const getStatusColor = (status: Training['status']): 'success' | 'error' | 'default' | 'warning' | 'info' => {
-    switch (status) {
-      case 'completed':
-        return 'success';
-      case 'running':
-        return 'info';
-      case 'failed':
-        return 'error';
-      case 'stalled':
-      case 'pending':
-        return 'warning';
-      default:
-        return 'default';
-    }
   };
 
   const costData = calculateTrainingCost();
@@ -212,36 +193,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
           {/* Left Column: Info & Metadata */}
           <Grid size={{ xs: 12, md: 4 }}>
             <Stack spacing={3}>
-              <Box>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    mb: 1
-                  }}>
-                  <Typography variant="h6" sx={{
-                    fontWeight: 700
-                  }}>
-                    {training.name}
-                  </Typography>
-                  <Chip
-                    label={trainingStatusLabel(training)}
-                    color={getStatusColor(training.status)}
-                    size="small"
-                    sx={{ fontWeight: 600, textTransform: 'capitalize', height: 24 }}
-                  />
-                </Box>
-                {training.description && (
-                  <Typography variant="body2" sx={{
-                    color: "text.secondary"
-                  }}>
-                    {training.description}
-                  </Typography>
-                )}
-              </Box>
-
-              <Divider />
+              {/* The run's name, state and description are the page header's: said once. */}
 
               <Stack spacing={2}>
                 <InfoItem 

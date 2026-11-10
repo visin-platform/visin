@@ -19,6 +19,20 @@ services:
       VISION_SERVICE_URL: ${VISION_SERVICE_URL}
       MCP_INTERNAL_URL: ${MCP_INTERNAL_URL:-}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      # File sharing is enabled by default and uses the existing file-service credential.
+      FILE_SERVICE_INTERNAL_URL: ${FILE_SERVICE_INTERNAL_URL:-}
+      FILE_SERVICE_URL: ${FILE_SERVICE_URL:-http://file-service:5002}
+      FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:?Set the same FILE_SERVICE_API_KEY as file-service}
+      # Optional, and chat works without any of them. See .env.example.
+      CALLS_ENABLED: ${CALLS_ENABLED:-true}
+      STUN_URLS: ${STUN_URLS:-}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      CLOUDFLARE_TURN_KEY_ID: ${CLOUDFLARE_TURN_KEY_ID:-}
+      CLOUDFLARE_TURN_API_TOKEN: ${CLOUDFLARE_TURN_API_TOKEN:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     networks: [visinnet]
 networks:
   visinnet:

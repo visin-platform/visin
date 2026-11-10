@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Box, Button } from '@mui/material';
-import { Assignment, Folder, ModelTraining, PlayArrow, School } from '@mui/icons-material';
+import { Assignment, AutoAwesome, TimerOutlined, Folder, ModelTraining, PlayArrow, School } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { useConfig } from '../config/ConfigProvider';
@@ -14,10 +14,15 @@ import { LabelingSection } from '../components/home/LabelingSection';
 import { FindingsSection } from '../components/home/FindingsSection';
 import { GetStarted } from '../components/home/GetStarted';
 import { InvitationsCard } from '../components/home/InvitationsCard';
+import { useChatDock } from '../components/chat/chatDock';
+import { activityWeeks } from '../components/home/activity';
 import { RecentSection } from '../components/home/RecentSection';
 
 const RECENT_TRAININGS = 5;
 const RECENT_FINDINGS = 4;
+/** How often the home page re-reads while a run is training, and how often it looks for one starting. */
+const WATCH_MS = 5000;
+const IDLE_LOOK_MS = 15000;
 
 interface HomePageProps {
   userName?: string;
@@ -36,21 +41,41 @@ interface HomePageProps {
  */
 export function HomePage({ userName, now }: HomePageProps) {
   const config = useConfig();
+  const chat = useChatDock();
   const vision = Boolean(config.VISION_API_URL);
   const label = Boolean(config.LABEL_SERVICE_URL);
   const groups = Boolean(config.GROUP_SERVICE_URL);
   const today = useMemo(() => now ?? new Date(), [now]);
 
-  const recent = useQuery({
-    queryKey: ['home', 'trainings', 'recent'],
-    queryFn: () => homeApi.trainings({ limit: RECENT_TRAININGS }),
-    enabled: vision
-  });
+  // A cheap look, now and then, for a run that has started; the list itself is read again quickly only while there
+  // is one to watch, so a quiet home page stays quiet.
   const running = useQuery({
     queryKey: ['home', 'trainings', 'running'],
     queryFn: () => homeApi.trainings({ limit: 1, status: 'running' }),
-    enabled: vision
+    enabled: vision,
+    refetchInterval: (query) => ((query.state.data?.total ?? 0) > 0 ? WATCH_MS : IDLE_LOOK_MS)
   });
+  const recent = useQuery({
+    queryKey: ['home', 'trainings', 'recent'],
+    queryFn: () => homeApi.trainings({ limit: RECENT_TRAININGS }),
+    enabled: vision,
+    refetchInterval: (query) =>
+      query.state.data?.trainings.some((training) => training.status === 'running') || (running.data?.total ?? 0) > 0
+        ? WATCH_MS
+        : false
+  });
+  const stats = useQuery({
+    queryKey: ['home', 'training-stats'],
+    queryFn: homeApi.trainingStats,
+    enabled: vision,
+    staleTime: 60_000,
+    refetchInterval: (running.data?.total ?? 0) > 0 ? 30_000 : false
+  });
+  const weeks = useMemo(
+    () => (stats.data?.weekly ? activityWeeks(stats.data.weekly, now ?? new Date()) : undefined),
+    [stats.data, now]
+  );
+  const latest = recent.data?.trainings.find((training) => training.projectId);
   const projects = useQuery({ queryKey: ['home', 'projects'], queryFn: homeApi.projects, enabled: vision });
   const invitations = useQuery({ queryKey: ['home', 'invitations'], queryFn: homeApi.invitations, enabled: groups });
   // "Get started" is for someone with nothing yet: no project of their own and no group.
@@ -99,7 +124,18 @@ export function HomePage({ userName, now }: HomePageProps) {
             icon: <ModelTraining />,
             value: recent.data?.total,
             loading: recent.isPending,
-            failed: recent.isError
+            failed: recent.isError,
+            trend: !stats.isError && weeks ? { weeks, metric: 'trainings' as const } : undefined
+          },
+          {
+            label: 'Training hours',
+            to: '/trainings',
+            icon: <TimerOutlined />,
+            value: stats.data?.totalHours,
+            decimals: 1,
+            loading: stats.isPending,
+            failed: stats.isError,
+            trend: weeks ? { weeks, metric: 'hours' as const } : undefined
           },
           {
             label: 'Running now',
@@ -132,6 +168,27 @@ export function HomePage({ userName, now }: HomePageProps) {
       <GreetingHeader name={userName} now={today} />
 
       <QuickActions apps={{ vision: Boolean(config.VISION_FRONT_URL) }} />
+      {chat.available && latest && (
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<AutoAwesome />}
+            onClick={() =>
+              chat.openWith({
+                kind: 'assistant',
+                projectId: latest.projectId,
+                trainingIds: [latest._id],
+                title: latest.name
+              })
+            }
+          >
+            Ask the analyst
+          </Button>
+          <Box component="span" sx={{ color: 'text.secondary', fontSize: 14 }}>
+            Summarize {latest.name}
+          </Box>
+        </Box>
+      )}
 
       <InvitationsCard query={invitations} />
 

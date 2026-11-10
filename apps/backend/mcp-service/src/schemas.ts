@@ -726,3 +726,64 @@ export function parseResponse<T>(schema: z.ZodType<T>, path: string, body: unkno
   const where = issue.path.length > 0 ? issue.path.join('.') : '(root)';
   throw new ShapeError(path, `${where}: ${issue.message}`);
 }
+
+/** The paper as vision-service shows it to the person the key acts for, and whether its text can be searched. */
+export const paperForAssistantSchema = z
+  .object({
+    paper: z
+      .object({
+        id: z.string(),
+        title: z.string(),
+        abstract: z.string().optional(),
+        authors: z.array(z.object({ name: z.string() }).loose()).catch([]),
+        venue: z.string().optional(),
+        year: z.number().optional(),
+        arxivId: z.string().optional(),
+        doi: z.string().optional(),
+        url: z.string().optional(),
+        tags: z.array(z.string()).catch([]),
+        results: z
+          .array(
+            z
+              .object({
+                kind: z.enum(['project', 'training', 'leaderboard']),
+                available: z.boolean().catch(false),
+                ref: z.string().optional(),
+                name: z.string().optional(),
+                note: z.string().optional(),
+                project: z.object({ name: z.string().optional(), slug: z.string().optional() }).loose().optional()
+              })
+              .loose()
+          )
+          .catch([])
+      })
+      .loose(),
+    document: z
+      .object({
+        status: z.enum(['none', 'pending', 'ready', 'failed']).catch('failed'),
+        pageCount: z.number().optional(),
+        truncated: z.boolean().optional(),
+        error: z.string().optional()
+      })
+      .loose()
+  })
+  .loose();
+export type PaperForAssistant = z.infer<typeof paperForAssistantSchema>;
+
+export const paperSearchSchema = z
+  .object({
+    query: z.string(),
+    pageCount: z.number().catch(0),
+    hits: z.array(z.object({ page: z.number(), score: z.number().catch(0), snippets: z.array(z.string()).catch([]) }))
+  })
+  .loose();
+export type PaperSearch = z.infer<typeof paperSearchSchema>;
+
+export const paperPagesSchema = z
+  .object({
+    pageCount: z.number().catch(0),
+    next: z.number().optional(),
+    pages: z.array(z.object({ page: z.number(), text: z.string(), cut: z.boolean().optional() }))
+  })
+  .loose();
+export type PaperPages = z.infer<typeof paperPagesSchema>;

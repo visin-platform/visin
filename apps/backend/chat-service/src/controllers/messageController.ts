@@ -16,3 +16,10 @@ export async function markRead(req: Request, res: Response): Promise<void> {
   await service.markRead(req, paramId(req), req.body?.seq);
   res.json({ success: true });
 }
+
+export async function react(req: Request, res: Response): Promise<void> {
+  res.json({ success: true, data: await service.react(req, paramId(req), req.params.messageId, req.body) });
+}
+export async function unsend(req: Request, res: Response): Promise<void> {
+  res.json({ success: true, data: await service.unsend(req, paramId(req), req.params.messageId) });
+}

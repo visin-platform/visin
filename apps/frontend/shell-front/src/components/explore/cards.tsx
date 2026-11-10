@@ -107,7 +107,18 @@ export function ProjectCard({ project, now }: { project: ExploreProject; now: Da
           />
         ) : (
           <IconTile>
-            <Folder fontSize="large" />
+            {project.runs !== undefined ? (
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography sx={{ fontSize: 36, fontWeight: 750, lineHeight: 1.1 }}>
+                  {formatCount(project.runs)}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  recorded {project.runs === 1 ? 'run' : 'runs'}
+                </Typography>
+              </Box>
+            ) : (
+              <Folder fontSize="large" />
+            )}
           </IconTile>
         )
       }

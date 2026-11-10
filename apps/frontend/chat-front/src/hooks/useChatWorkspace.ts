@@ -1,3 +1,4 @@
+import { useChatAppearance } from '../appearance/useChatAppearance';
 import { useCallback, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Message } from '../types/chat';
@@ -10,6 +11,8 @@ import { usePageChatContext } from './usePageChatContext';
 export function useChatWorkspace({ panel }: { panel: boolean }) {
   const { user, isAuthenticated, isLoading, login } = useAuth();
 
+  const appearance = useChatAppearance(isAuthenticated ? user?.id : undefined);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [error, setError] = useState('');
 
   const [showPeople, setShowPeople] = useState(false);
@@ -60,6 +63,9 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     analyze: navigation.analyze
   });
   return {
+    appearance,
+    appearanceOpen,
+    setAppearanceOpen,
     user,
     isAuthenticated,
     isLoading,

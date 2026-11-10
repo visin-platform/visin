@@ -16,7 +16,10 @@ import {
   type Rgb
 } from '../../utils/outputPixels';
 
-type ShownVisualization = Pick<Visualization, 'visualization_uuid' | 'type' | 'filename' | 'signedUrl' | 'urlExpiresAt'>;
+type ShownVisualization = Pick<
+  Visualization,
+  'visualization_uuid' | 'type' | 'filename' | 'signedUrl' | 'urlExpiresAt'
+>;
 
 interface Decoded {
   width: number;
@@ -101,15 +104,13 @@ interface OutputImageProps {
   onPixel?: (reading: string | null) => void;
   /** the class indices a mask was found to use, once decoded */
   onDecoded?: (present: number[]) => void;
+  onStatus?: (status: 'ready' | 'error') => void;
 }
 
 /** A picture shown as it is. A link that has expired by the time the browser asks is replaced, once. */
-const PlainImage: React.FC<Pick<OutputImageProps, 'visualization' | 'sx' | 'onClick'> & { alt: string }> = ({
-  visualization,
-  alt,
-  sx,
-  onClick
-}) => {
+const PlainImage: React.FC<
+  Pick<OutputImageProps, 'visualization' | 'sx' | 'onClick' | 'onStatus'> & { alt: string }
+> = ({ visualization, alt, sx, onClick, onStatus }) => {
   const [src, setSrc] = useState(visualization.signedUrl || '');
   const [retried, setRetried] = useState(false);
   return (
@@ -119,10 +120,20 @@ const PlainImage: React.FC<Pick<OutputImageProps, 'visualization' | 'sx' | 'onCl
       alt={alt}
       loading="lazy"
       onClick={onClick}
+      onLoad={() => onStatus?.('ready')}
       onError={() => {
-        if (retried) return;
+        if (retried) {
+          onStatus?.('error');
+          return;
+        }
         setRetried(true);
-        freshImageUrl(visualization, true).then(setSrc, () => undefined);
+        freshImageUrl(visualization, true).then(
+          (next) => {
+            if (next === src) onStatus?.('error');
+            else setSrc(next);
+          },
+          () => onStatus?.('error')
+        );
       }}
       sx={sx}
     />
@@ -146,6 +157,7 @@ const OutputImage: React.FC<OutputImageProps> = (props) => {
       alt={alt}
       sx={sx}
       onClick={onClick}
+      onStatus={props.onStatus}
     />
   );
 };
@@ -159,7 +171,8 @@ const DecodedOutput: React.FC<OutputImageProps & { kind: 'mask' | 'confidence'; 
   sx,
   onClick,
   onPixel,
-  onDecoded
+  onDecoded,
+  onStatus
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const near = useNearViewport(canvasRef);
@@ -192,7 +205,8 @@ const DecodedOutput: React.FC<OutputImageProps & { kind: 'mask' | 'confidence'; 
       : data.rgba!;
     context.putImageData(new ImageData(new Uint8ClampedArray(pixels), data.width, data.height), 0, 0);
     decodedRef.current?.(data.present);
-  }, [data, kind, colourOf, lut, floor]);
+    onStatus?.('ready');
+  }, [data, kind, colourOf, lut, floor, onStatus]);
 
   const readPixel = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onPixel || !data?.values) return;
@@ -205,7 +219,8 @@ const DecodedOutput: React.FC<OutputImageProps & { kind: 'mask' | 'confidence'; 
     onPixel(describePixel(kind, data.values[y * data.width + x], classes));
   };
 
-  if (isError) return <PlainImage visualization={visualization} alt={alt} sx={sx} onClick={onClick} />;
+  if (isError)
+    return <PlainImage visualization={visualization} alt={alt} sx={sx} onClick={onClick} onStatus={onStatus} />;
   return (
     <Box
       component="canvas"

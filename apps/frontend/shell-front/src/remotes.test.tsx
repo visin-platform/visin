@@ -176,3 +176,22 @@ describe('chat panel remote', () => {
     log.mockRestore();
   });
 });
+
+describe('chat background remote', () => {
+  it('loads and caches chat’s always-on part', async () => {
+    const { remoteChatCalls } = await freshRemotes();
+    const Background = remoteChatCalls();
+    expect(remoteChatCalls()).toBe(Background);
+    renderRemote(Background);
+    await screen.findByText('vision pages');
+    expect(mockedLoad).toHaveBeenCalledWith('chat/Calls');
+  });
+  it('reports a missing export', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockedLoad.mockResolvedValue(null);
+    const { remoteChatCalls } = await freshRemotes();
+    renderRemote(remoteChatCalls());
+    expect(await screen.findByText(/Chat did not provide its background part/)).toBeInTheDocument();
+    log.mockRestore();
+  });
+});

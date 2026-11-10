@@ -147,17 +147,15 @@ describe('ExplorePage', () => {
       },
       training: { _id: 't1', name: 'CLFT run' }
     };
-    api.publicModels
-      .mockResolvedValueOnce({ models: [stored], pagination: page(1, 2, 2) })
-      .mockResolvedValueOnce({
-        models: [
-          {
-            model: { _id: 'm2', provider: 'hf', repo: 'team/clft', revision: 'abcdef123456', addedAt: hoursAgo(2) },
-            training: { _id: 't2', name: 'Hub run' }
-          }
-        ],
-        pagination: page(2, 2, 2)
-      });
+    api.publicModels.mockResolvedValueOnce({ models: [stored], pagination: page(1, 2, 2) }).mockResolvedValueOnce({
+      models: [
+        {
+          model: { _id: 'm2', provider: 'hf', repo: 'team/clft', revision: 'abcdef123456', addedAt: hoursAgo(2) },
+          training: { _id: 't2', name: 'Hub run' }
+        }
+      ],
+      pagination: page(2, 2, 2)
+    });
     renderPage('/?type=models&q=clft');
     expect(await screen.findByRole('link', { name: 'clft.pth' })).toHaveAttribute('href', '/trainings/t1');
     expect(screen.getByRole('button', { name: 'Models' })).toHaveAttribute('aria-pressed', 'true');
@@ -202,7 +200,7 @@ describe('ExplorePage', () => {
     expect(within(dataset.closest('article')!).getByText(/4,110 images · 1 group/)).toBeInTheDocument();
   });
 
-  it('shows a project\'s picture on its card where it has one, else the folder tile', async () => {
+  it("shows a project's picture on its card where it has one, else the folder tile", async () => {
     api.publicProjects.mockResolvedValue(
       projectPage([{ ...projects[0], coverUrl: 'https://files.example.test/cover.jpg' }, projects[1]])
     );
@@ -565,4 +563,32 @@ describe('ExplorePage', () => {
       expect(within(banner).queryByRole('link', { name: 'About' })).not.toBeInTheDocument();
     });
   });
+});
+
+it('leads the visitor overview with public evidence and opens the project catalogue', async () => {
+  renderPage();
+  const intro = await screen.findByRole('region', { name: 'About Visin' });
+  expect(within(intro).getByRole('heading', { level: 1 })).toHaveTextContent('Explore computer vision in action.');
+  expect(await within(intro).findByRole('img', { name: 'Public dataset preview: Harbour frames' })).toBeInTheDocument();
+  expect(within(intro).getByRole('link', { name: 'Explore Harbour frames' })).toHaveAttribute('href', '/datasets/d1');
+  expect(within(intro).getByText('Public projects')).toBeInTheDocument();
+  fireEvent.click(within(intro).getByRole('button', { name: 'Explore projects' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('heading', { name: 'Explore computer vision in action.' })).not.toBeInTheDocument()
+  );
+});
+it('replaces a failed preview with useful context without a broken image', async () => {
+  renderPage();
+  const intro = await screen.findByRole('region', { name: 'About Visin' });
+  fireEvent.error(await within(intro).findByRole('img', { name: 'Public dataset preview: Harbour frames' }));
+  expect(within(intro).queryByRole('img')).not.toBeInTheDocument();
+  expect(within(intro).getByText('From experiments to evidence.')).toBeInTheDocument();
+});
+
+it('keeps the compact welcome dismissible while filtering the catalogue', async () => {
+  renderPage('/?type=projects');
+  const intro = await screen.findByRole('region', { name: 'About Visin' });
+  expect(within(intro).queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+  fireEvent.click(within(intro).getByRole('button', { name: 'Dismiss' }));
+  expect(screen.queryByRole('region', { name: 'About Visin' })).not.toBeInTheDocument();
 });

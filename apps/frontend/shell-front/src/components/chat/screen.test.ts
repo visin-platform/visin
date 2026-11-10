@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import visionTabs from '../../../../vision-front/src/components/training/trainingTabs.ts?raw';
-import { COMPARE_TABS, TRAINING_TABS, resolvePlace } from './screen';
+import { COMPARE_TABS, TRAINING_TABS, describePlace, resolvePlace } from './screen';
 
 const A = 'a'.repeat(24);
 const B = 'b'.repeat(24);
@@ -105,5 +105,42 @@ describe('refuses what is not a place', () => {
   it('always answers with a path inside Vision, never an outside link', () => {
     const outcome = resolvePlace({ place: 'training', id: A, tab: 'config' });
     expect(outcome.ok && outcome.path.startsWith('/') && !outcome.path.startsWith('//')).toBe(true);
+  });
+});
+
+
+describe('describePlace', () => {
+  const id = 'a'.repeat(24);
+  it('says what opened in words, never an id or an address', () => {
+    expect(describePlace('training', { id, tab: 'epochs' })).toBe('the run’s Epochs tab');
+    expect(describePlace('training', { id, tab: 'system-info' })).toBe('the run’s System info tab');
+    expect(describePlace('training', { id })).toBe('a run');
+    expect(describePlace('training', { id, model: id })).toBe('a run’s model');
+    expect(describePlace('compare', { ids: [id, id, id] })).toBe('a comparison of 3 runs');
+    expect(describePlace('compare', { ids: [id, id], tab: 'benchmarks' })).toBe('a comparison of 2 runs, Benchmarks');
+    expect(describePlace('visualizations', { ids: [id, id] })).toBe('the frames of 2 runs');
+    expect(describePlace('trainings', { project: id })).toBe('the project’s runs');
+    expect(describePlace('trainings', {})).toBe('the runs');
+    expect(describePlace('suite', { slug: 'road-scenes', version: '1.0' })).toBe('the road-scenes suite');
+    expect(describePlace('action', { action: 'open_frame', id })).toBe('a frame');
+    for (const text of [describePlace('training', { id, tab: 'epochs' }), describePlace('compare', { ids: [id, id] })])
+      expect(text).not.toContain(id);
+  });
+
+  it('has words for every place the analyst can open', () => {
+    const named = {
+      projects: 'the projects', project: 'a project', datasets: 'the datasets', dataset: 'a dataset', models: 'the models',
+      benchmarks: 'the benchmarks', evaluation: 'an evaluation', paper: 'a paper'
+    };
+    for (const [place, text] of Object.entries(named)) expect(describePlace(place, {})).toBe(text);
+  });
+
+  it('copes with anything: a missing count, a missing slug, a stranger, parameters that are not an object', () => {
+    expect(describePlace('compare', {})).toBe('a comparison of some runs');
+    expect(describePlace('visualizations', undefined)).toBe('the frames of some runs');
+    expect(describePlace('suite', {})).toBe('a suite');
+    expect(describePlace('somewhere-else', {})).toBe('a page');
+    expect(describePlace('training', 'nonsense')).toBe('a run');
+    expect(describePlace(undefined, null)).toBe('a page');
   });
 });

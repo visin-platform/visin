@@ -1,6 +1,6 @@
 import { BadRequestError } from '../errors/HttpError';
 
-export type UploadFormat = 'zip' | 'gzip' | 'tar' | 'png' | 'jpeg' | 'gif' | 'webp' | 'mp4' | 'mov' | 'pdf' | 'pth' | 'onnx';
+export type UploadFormat = 'zip' | 'gzip' | 'tar' | 'png' | 'jpeg' | 'gif' | 'webp' | 'mp4' | 'mov' | 'pdf' | 'weba' | 'ogg' | 'm4a' | 'pth' | 'onnx';
 export type UploadKind = 'archive' | 'image' | 'visualization' | 'checkpoint';
 /** What a trained model's weights are stored as. */
 const CHECKPOINT_FORMATS: UploadFormat[] = ['pth', 'onnx'];
@@ -22,6 +22,9 @@ const formats: Record<string, { format: UploadFormat; mime: string[]; maxBytes: 
   webp: { format: 'webp', mime: ['image/webp'], maxBytes: 50 * MiB },
   mp4: { format: 'mp4', mime: ['video/mp4'], maxBytes: 1024 * MiB },
   mov: { format: 'mov', mime: ['video/quicktime'], maxBytes: 1024 * MiB },
+  weba: { format: 'weba', mime: ['audio/webm'], maxBytes: 50 * MiB },
+  ogg: { format: 'ogg', mime: ['audio/ogg'], maxBytes: 50 * MiB },
+  m4a: { format: 'm4a', mime: ['audio/mp4', 'audio/x-m4a'], maxBytes: 50 * MiB },
   pdf: { format: 'pdf', mime: ['application/pdf'], maxBytes: 50 * MiB },
   // A service narrows this when it reserves the upload (vision-service allows a checkpoint 4 GiB); this is the most
   // any caller may ask for.
@@ -38,7 +41,7 @@ export function getUploadPolicy(fileId: string, mimetype = 'application/octet-st
   }
   if (kind === 'archive' && !['zip', 'gzip', 'tar'].includes(policy.format)) throw new BadRequestError('An archive is required');
   if (kind === 'image' && !['png', 'jpeg', 'gif', 'webp'].includes(policy.format)) throw new BadRequestError('A raster image is required');
-  if (kind === 'visualization' && ['zip', 'gzip', 'tar', ...CHECKPOINT_FORMATS].includes(policy.format)) throw new BadRequestError('Unsupported visualization type');
+  if (kind === 'visualization' && ['zip', 'gzip', 'tar', 'weba', 'ogg', 'm4a', ...CHECKPOINT_FORMATS].includes(policy.format)) throw new BadRequestError('Unsupported visualization type');
   if (kind === 'checkpoint' && !CHECKPOINT_FORMATS.includes(policy.format)) throw new BadRequestError('A model checkpoint (.pth or .onnx) is required');
   return { format: policy.format, maxBytes: policy.maxBytes };
 }

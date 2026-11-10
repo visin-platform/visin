@@ -769,9 +769,9 @@ files['context.svg'] = doc(
 // ---------------------------------------------------------------- research chat
 files['chat.svg'] = doc(
   800,
-  660,
+  730,
   'Visin: research chat',
-  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations and durable analyst jobs in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision.',
+  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations, durable analyst jobs and call state in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision. Optionally it sends Web Push notifications through the browsers\' push services and gives calls a STUN or TURN relay; the people on a call connect to each other directly.',
   [
     node.web({
       x: 20,
@@ -863,9 +863,29 @@ files['chat.svg'] = doc(
       [350, 300],
       [665, 400]
     ]),
+    node.external({
+      x: 20,
+      y: 525,
+      w: 760,
+      h: 95,
+      title: 'Push services and call relay (optional)',
+      lines: [
+        'Web Push to the browser vendors; STUN / TURN from your own coturn, Cloudflare, or none',
+        'Chat and one-to-one calls work without either; calls then reach one local network'
+      ]
+    }),
+    edge(
+      [
+        [20, 270],
+        [8, 270],
+        [8, 572],
+        [20, 572]
+      ],
+      { label: 'Web Push; relay credentials', at: [130, 508] }
+    ),
     texts({
       x: 20,
-      y: 550,
+      y: 660,
       w: 760,
       title: 'Conversation access does not grant project access',
       lines: [

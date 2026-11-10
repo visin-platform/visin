@@ -24,7 +24,9 @@ export default defineConfig(() => ({
             filename: VISIN_REMOTE_ENTRY,
             exposes: {
               [VISIN_REMOTE_MODULE]: './src/federation/RemoteApp.tsx',
-              './Panel': './src/federation/RemotePanel.tsx'
+              './Panel': './src/federation/RemotePanel.tsx',
+              // Mounted once by the shell above every page: notifications now, calls ringing anywhere next.
+              './Calls': './src/federation/CallHost.tsx'
             },
             shared: VISIN_FEDERATION_SHARED,
             dts: false
@@ -71,7 +73,7 @@ export default defineConfig(() => ({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/main.tsx', 'src/**/*.d.ts'],
       // Baseline for the first chat release; raise as UI coverage grows.
-      thresholds: { statements: 86, branches: 79, functions: 81, lines: 88 }
+      thresholds: { statements: 89, branches: 84, functions: 85, lines: 92 }
     }
   }
 }));

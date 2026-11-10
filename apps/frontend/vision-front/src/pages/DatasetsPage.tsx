@@ -1,3 +1,4 @@
+import { ContentSkeleton } from '../components/common/ContentSkeleton';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -301,9 +302,7 @@ export const DatasetsPage: React.FC = () => {
           )}
 
           {isLoading ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <CircularProgress />
-            </Box>
+            <ContentSkeleton label="Loading datasets" cards />
           ) : data && data.datasets.length === 0 ? (
             <Panel>
               <EmptyState
@@ -315,7 +314,18 @@ export const DatasetsPage: React.FC = () => {
                     : 'A dataset is a zip of images you can browse, share with a group and label.'
                 }
                 action={
-                  !search && !owner && isAuthenticated ? (
+                  search || owner ? (
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        setSearchInput('');
+                        setSearch('');
+                        setParam('owner', '');
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : isAuthenticated ? (
                     <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
                       Upload dataset
                     </Button>

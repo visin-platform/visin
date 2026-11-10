@@ -140,4 +140,64 @@ describe('useTrainingDetail', () => {
     expect(result.current.availableEpochs).toEqual([]);
     expect(result.current.selectedTestEpoch).toBeNull();
   });
+
+  describe('a run that is training', () => {
+    const response = (status: string, epochs: number) => ({
+      success: true,
+      data: { training: { _id: 't1', uuid: 'uuid-1', status } as any, epochs: Array.from({ length: epochs }, (_, i) => ({ epoch: i + 1 })) as any }
+    });
+
+    it('is read again as it goes, so its curves grow without a reload, and left alone once it finishes', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        mockedTraining.getTrainingWithEpochs
+          .mockResolvedValueOnce(response('running', 1))
+          .mockResolvedValueOnce(response('running', 2))
+          .mockResolvedValue(response('completed', 3));
+        const { result } = renderHook(() => useTrainingDetail('t1'), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.epochs).toHaveLength(1));
+
+        await act(async () => void vi.advanceTimersByTime(4100));
+        await waitFor(() => expect(result.current.epochs).toHaveLength(2));
+        await act(async () => void vi.advanceTimersByTime(4100));
+        await waitFor(() => expect(result.current.epochs).toHaveLength(3));
+        expect(result.current.training?.status).toBe('completed');
+
+        const calls = mockedTraining.getTrainingWithEpochs.mock.calls.length;
+        await act(async () => void vi.advanceTimersByTime(60_000));
+        expect(mockedTraining.getTrainingWithEpochs.mock.calls.length).toBe(calls);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('never polls a run that is not training', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        mockedTraining.getTrainingWithEpochs.mockResolvedValue(response('completed', 2));
+        const { result } = renderHook(() => useTrainingDetail('t1'), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.epochs).toHaveLength(2));
+        await act(async () => void vi.advanceTimersByTime(60_000));
+        expect(mockedTraining.getTrainingWithEpochs).toHaveBeenCalledTimes(1);
+        expect(mockedRunEvaluation.list).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('also looks for its test results as it goes', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        mockedTraining.getTrainingWithEpochs.mockResolvedValue(response('running', 1));
+        const { result } = renderHook(() => useTrainingDetail('t1'), { wrapper: makeWrapper() });
+        await waitFor(() => expect(mockedRunEvaluation.list).toHaveBeenCalledTimes(1));
+        await act(async () => void vi.advanceTimersByTime(8100));
+        await waitFor(() => expect(mockedRunEvaluation.list.mock.calls.length).toBeGreaterThan(1));
+        expect(result.current.training?.status).toBe('running');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
+

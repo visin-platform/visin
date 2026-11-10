@@ -31,7 +31,9 @@
   "paths": {
     "/capabilities": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatCapabilities",
         "summary": "Read deployment assistant availability",
@@ -63,7 +65,9 @@
     },
     "/settings/assistant": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "getAssistantSettings",
         "summary": "Read the analyst settings",
@@ -96,7 +100,9 @@
         "description": "Whether the analyst is on, its provider (Anthropic or OpenAI), model and daily token limit per person, where those came from (an administrator, or the defaults until one saves: on, with whichever provider has a key, and no model), the tokens one question reserves of that limit (`tokenReservation`), the server settings still missing that only its operator can add, by name only, and the providers the page offers with whether each has a key (and its last characters). Keys themselves are never returned."
       },
       "put": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "updateAssistantSettings",
         "summary": "Turn the analyst on or off and choose its provider and model",
@@ -133,7 +139,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["enabled", "provider", "model"],
+                "required": [
+                  "enabled",
+                  "provider",
+                  "model"
+                ],
                 "additionalProperties": false,
                 "properties": {
                   "enabled": {
@@ -142,7 +152,10 @@
                   },
                   "provider": {
                     "type": "string",
-                    "enum": ["anthropic", "openai"]
+                    "enum": [
+                      "anthropic",
+                      "openai"
+                    ]
                   },
                   "model": {
                     "type": "string",
@@ -170,7 +183,9 @@
     },
     "/settings/assistant/models": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "listAssistantModels",
         "summary": "List the models a provider offers",
@@ -208,7 +223,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["anthropic", "openai"]
+              "enum": [
+                "anthropic",
+                "openai"
+              ]
             }
           }
         ]
@@ -216,7 +234,9 @@
     },
     "/settings/assistant/usage": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "getAssistantUsage",
         "summary": "Read what the analyst has used, and what that costs",
@@ -264,7 +284,9 @@
     },
     "/settings/assistant/prices": {
       "put": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "updateAssistantPrices",
         "summary": "Set what each model costs",
@@ -298,7 +320,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["currency", "entries"],
+                "required": [
+                  "currency",
+                  "entries"
+                ],
                 "additionalProperties": false,
                 "properties": {
                   "currency": {
@@ -311,12 +336,20 @@
                     "maxItems": 200,
                     "items": {
                       "type": "object",
-                      "required": ["provider", "model", "inputPerMillion", "outputPerMillion"],
+                      "required": [
+                        "provider",
+                        "model",
+                        "inputPerMillion",
+                        "outputPerMillion"
+                      ],
                       "additionalProperties": false,
                       "properties": {
                         "provider": {
                           "type": "string",
-                          "enum": ["anthropic", "openai"]
+                          "enum": [
+                            "anthropic",
+                            "openai"
+                          ]
                         },
                         "model": {
                           "type": "string",
@@ -335,12 +368,18 @@
                         },
                         "source": {
                           "type": "string",
-                          "enum": ["manual", "fetched"],
+                          "enum": [
+                            "manual",
+                            "fetched"
+                          ],
                           "default": "manual",
                           "description": "Typed by an administrator, which a refresh never overwrites, or fetched from the price list. Sent back as received so a fetched price stays marked until it is edited."
                         },
                         "fetchedAt": {
-                          "type": ["string", "null"],
+                          "type": [
+                            "string",
+                            "null"
+                          ],
                           "format": "date-time",
                           "default": null,
                           "description": "When a fetched price was fetched."
@@ -369,7 +408,9 @@
     },
     "/settings/assistant/prices/refresh": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "refreshAssistantPrices",
         "summary": "Fetch current prices from the price list",
@@ -401,7 +442,9 @@
     },
     "/settings/assistant/prices/backfill": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "backfillAssistantPrices",
         "summary": "Price earlier questions that have no price",
@@ -433,7 +476,9 @@
     },
     "/settings/assistant/keys/{provider}": {
       "put": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "saveAssistantKey",
         "summary": "Save the deployment key for a provider",
@@ -471,7 +516,10 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": ["anthropic", "openai"]
+              "enum": [
+                "anthropic",
+                "openai"
+              ]
             }
           }
         ],
@@ -481,7 +529,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["key"],
+                "required": [
+                  "key"
+                ],
                 "additionalProperties": false,
                 "properties": {
                   "key": {
@@ -498,7 +548,9 @@
         }
       },
       "delete": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "removeAssistantKey",
         "summary": "Remove the saved key for a provider",
@@ -536,7 +588,10 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": ["anthropic", "openai"]
+              "enum": [
+                "anthropic",
+                "openai"
+              ]
             }
           }
         ]
@@ -544,7 +599,9 @@
     },
     "/groups": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatGroups",
         "summary": "List current groups",
@@ -575,7 +632,9 @@
     },
     "/groups/{groupId}/channel": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "openGroupChannel",
         "summary": "Open a group's channel, creating it on first use",
@@ -618,7 +677,9 @@
     },
     "/people/{handle}": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatPublicPerson",
         "summary": "Look up a known public profile handle",
@@ -659,7 +720,9 @@
     },
     "/conversations": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatConversations",
         "summary": "List conversations the user may currently access",
@@ -688,7 +751,9 @@
         }
       },
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "createChatConversation",
         "summary": "Create or reopen a conversation",
@@ -729,7 +794,9 @@
     },
     "/conversations/{id}": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatConversation",
         "summary": "Read conversation metadata",
@@ -771,7 +838,9 @@
     },
     "/conversations/{id}/membership": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatMembership",
         "summary": "Accept, decline, leave or block",
@@ -815,11 +884,18 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["action"],
+                "required": [
+                  "action"
+                ],
                 "properties": {
                   "action": {
                     "type": "string",
-                    "enum": ["accept", "decline", "leave", "block"]
+                    "enum": [
+                      "accept",
+                      "decline",
+                      "leave",
+                      "block"
+                    ]
                   }
                 }
               }
@@ -830,7 +906,9 @@
     },
     "/conversations/{id}/participants": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "inviteChatParticipant",
         "summary": "Invite a public profile into a private room",
@@ -874,7 +952,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["handle"],
+                "required": [
+                  "handle"
+                ],
                 "properties": {
                   "handle": {
                     "type": "string"
@@ -888,7 +968,9 @@
     },
     "/conversations/{id}/remove-participant": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "removeChatParticipant",
         "summary": "Remove a private room participant",
@@ -932,7 +1014,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["userId"],
+                "required": [
+                  "userId"
+                ],
                 "properties": {
                   "userId": {
                     "type": "string"
@@ -946,7 +1030,9 @@
     },
     "/conversations/{id}/messages": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatMessages",
         "summary": "Read the most recent visible messages",
@@ -995,7 +1081,9 @@
         ]
       },
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "sendChatMessage",
         "summary": "Persist an idempotent message and analyst outbox request",
@@ -1047,7 +1135,9 @@
     },
     "/conversations/{id}/read": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "markChatRead",
         "summary": "Advance the current user read cursor",
@@ -1091,7 +1181,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["seq"],
+                "required": [
+                  "seq"
+                ],
                 "properties": {
                   "seq": {
                     "type": "integer",
@@ -1106,7 +1198,9 @@
     },
     "/conversations/{id}/runs": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatRuns",
         "summary": "Read current user analyst job status",
@@ -1148,7 +1242,9 @@
     },
     "/conversations/{id}/cancel": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "cancelChatAnalysis",
         "summary": "Cancel pending and running private analysis",
@@ -1190,7 +1286,9 @@
     },
     "/conversations/{id}/findings": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "saveChatFinding",
         "summary": "Save a reviewed assistant conclusion idempotently",
@@ -1237,7 +1335,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["messageId", "title", "body"],
+                "required": [
+                  "messageId",
+                  "title",
+                  "body"
+                ],
                 "additionalProperties": false,
                 "properties": {
                   "messageId": {
@@ -1265,7 +1367,9 @@
     },
     "/conversations/{id}/events": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatEvents",
         "summary": "Replay persisted messages and current job state over SSE, plus screen calls for the asking tab",
@@ -1335,12 +1439,14 @@
             "description": "The asking browser tab. Only a stream with a tab is sent `screen` events, for that tab's calls, and it polls faster while the tab's run is working."
           }
         ],
-        "description": "Streams message state and run progress. Private threads also emit selection events with trainingIds and trainingLabels, initially and whenever their selected runs change. Screen events are sent only to the asking user and tab."
+        "description": "Streams message state and run progress. Private threads also emit selection events with trainingIds and trainingLabels, initially and whenever their selected runs change. Screen events are sent only to the asking user and tab. Private analyst threads also send `draft` events, {runId, messageId, text}: the answer as written so far, for the asker only, sent when it changes (`text` is empty once the run is over). The draft stays until the answer is published as a message, so a reader can hold it up until a message replying to `messageId` arrives. The message-updates event carries revisioned patches for reactions and unsent messages, independently of the message sequence cursor. Reconnects replay persisted mutations."
       }
     },
     "/contacts": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatContacts",
         "summary": "List contacts from the current user group rosters",
@@ -1356,13 +1462,29 @@
           },
           "503": {
             "description": "Group membership cannot be verified"
+          },
+          "404": {
+            "description": "The requested group is not available to this user"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "query",
+            "required": false,
+            "description": "Limit contacts to this group. The caller must belong to it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/projects": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "chatProjects",
         "summary": "List currently readable projects for the chat context selector",
@@ -1381,7 +1503,9 @@
     },
     "/screen-calls/{id}/result": {
       "post": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "answerChatScreenCall",
         "summary": "Report what the page did for a screen call, once, while it is pending",
@@ -1433,7 +1557,9 @@
     },
     "/conversations/{id}/screen-calls": {
       "get": {
-        "tags": ["Chat"],
+        "tags": [
+          "Chat"
+        ],
         "x-internal": true,
         "operationId": "listChatScreenCalls",
         "summary": "Poll pending page calls for the asking tab when streaming is unavailable",
@@ -1472,6 +1598,1001 @@
           }
         }
       }
+    },
+    "/push/config": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "getPushConfig",
+        "summary": "Whether this server sends notifications, and the key to subscribe with",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PushConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Never cached. Keys are made by the server on first start and kept in its database, so nothing needs configuring."
+      }
+    },
+    "/push/unread": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "getPushUnread",
+        "summary": "Conversations with unread messages, and whether one still has some",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "unread": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "fresh": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Messages the person sent themselves do not count. Read by the service worker before it shows a notification that sat at the push service while the browser was closed.",
+        "parameters": [
+          {
+            "name": "conversation",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      }
+    },
+    "/push/subscriptions": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "savePushSubscription",
+        "summary": "Register this browser for notifications",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "configured": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Sent again on every app start: a browser can rotate its endpoint, and a device on a shared computer moves to whoever is signed in. `configured` is false when the server cannot send.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscription"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "deletePushSubscription",
+        "summary": "Stop notifications for this browser",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "endpoint"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls/config": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "getCallsConfig",
+        "summary": "Whether calls are on, and how far they reach",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CallsConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Calls need no configuration: with nothing set they connect on one local network, and a STUN or relay server widens that. Answers even where calls are turned off."
+      }
+    },
+    "/calls/ice-servers": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "getIceServers",
+        "summary": "ICE servers for a call, with fresh relay credentials",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IceConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Never cached. Cloudflare, then the operator's own relay, then STUN, then none: the first that is configured and answers."
+      }
+    },
+    "/calls/current": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "getCurrentCall",
+        "summary": "The call ringing or running for the signed-in person",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Call"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/conversations/{id}/calls": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "startCall",
+        "summary": "Call the other person in a direct message",
+        "responses": {
+          "201": {
+            "description": "Ringing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Call"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "409": {
+            "description": "The call is busy, already answered, or already over"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Only between two people in a direct message that both have joined. A person is in one call at a time.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deviceId"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "description": "Made up by the browser per page load; tells one person's tabs apart."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls/{callId}/accept": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "acceptCall",
+        "summary": "Answer a ringing call on this device",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Call"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "409": {
+            "description": "The call is busy, already answered, or already over"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deviceId"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "description": "Made up by the browser per page load; tells one person's tabs apart."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls/{callId}/decline": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "declineCall",
+        "summary": "Decline a ringing call",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Call"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "409": {
+            "description": "The call is busy, already answered, or already over"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      }
+    },
+    "/calls/{callId}/end": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "endCall",
+        "summary": "Hang up, or give up before an answer",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Call"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "409": {
+            "description": "The call is busy, already answered, or already over"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      }
+    },
+    "/calls/{callId}/signal": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "signalCall",
+        "summary": "Pass an offer, answer, ICE candidate or state change to the other device",
+        "responses": {
+          "204": {
+            "description": "Delivered"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "409": {
+            "description": "The call is busy, already answered, or already over"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Only the two devices in the call may signal, each as itself. Delivered in order, once, to the other device's event stream.",
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallSignal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "userEvents",
+        "summary": "Calls for this person, over SSE, for one browser tab",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        },
+        "description": "Events named `call` carry {type, conversationId, at, payload}, where type is call.ringing, call.accepted, call.ended or call.signal; `ready` and `heartbeat` events frame the stream. A reconnecting tab is told of a ringing call but not told again of an answered one.",
+        "parameters": [
+          {
+            "name": "device",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64,
+              "description": "Made up by the browser per page load; tells one person's tabs apart."
+            }
+          }
+        ]
+      }
+    },
+    "/conversations/{id}/attachments": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "reserveChatAttachment",
+        "summary": "Reserve a signed upload address for a chat file or voice recording",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "201": {
+            "description": "Success"
+          },
+          "502": {
+            "description": "File service unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "mime",
+                  "size"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "mime": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 26214400
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{id}/attachment-urls": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "signChatAttachments",
+        "summary": "Sign downloads for attachments in visible conversation messages",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "200": {
+            "description": "Success"
+          },
+          "502": {
+            "description": "File service unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fileIds"
+                ],
+                "properties": {
+                  "fileIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{id}/messages/{messageId}/reaction": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "reactToChatMessage",
+        "summary": "Set or remove your reaction on a visible message",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "200": {
+            "description": "Updated message, including revision, unsentAt and reactions. Unsent messages contain no original text or attachment references."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageReaction"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{id}/messages/{messageId}/unsend": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "unsendChatMessage",
+        "summary": "Unsend your own message and redact its quoted snapshots",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "200": {
+            "description": "Updated message, including revision, unsentAt and reactions. Unsent messages contain no original text or attachment references."
+          }
+        }
+      }
+    },
+    "/assistants/default": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "chatDefaultAssistant",
+        "summary": "Resolve the current user default assistant or the published platform fallback",
+        "responses": {
+          "200": {
+            "description": "Effective assistant ID and name, or null; no private instructions"
+          },
+          "401": {
+            "description": "Sign-in required"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1491,11 +2612,20 @@
       "CreateConversation": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "title"],
+        "required": [
+          "kind",
+          "title"
+        ],
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["assistant", "direct", "room", "group", "project"]
+            "enum": [
+              "assistant",
+              "direct",
+              "room",
+              "group",
+              "project"
+            ]
           },
           "title": {
             "type": "string",
@@ -1516,6 +2646,11 @@
           "projectId": {
             "type": "string",
             "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          "paperId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "description": "A research paper to analyse in a private (`assistant`) chat, on its own: not together with a project or runs. The caller must be able to read the paper, which is rechecked on every read of the conversation. The analyst reads the paper's text and the results it cites through read-only tools."
           },
           "trainingIds": {
             "type": "array",
@@ -1538,12 +2673,14 @@
       },
       "SendMessage": {
         "type": "object",
-        "required": ["body", "clientId"],
+        "required": [
+          "body",
+          "clientId"
+        ],
         "additionalProperties": false,
         "properties": {
           "body": {
             "type": "string",
-            "minLength": 1,
             "maxLength": 8000
           },
           "clientId": {
@@ -1559,7 +2696,10 @@
           "screen": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["tabId", "path"],
+            "required": [
+              "tabId",
+              "path"
+            ],
             "description": "The asking private panel's page hint, verified with project-scoped tools before use. Optional actions advertise frames currently loaded by the page. Stored only in the pending job outbox and run, not in public message content.",
             "properties": {
               "tabId": {
@@ -1577,11 +2717,16 @@
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["name", "ids"],
+                  "required": [
+                    "name",
+                    "ids"
+                  ],
                   "properties": {
                     "name": {
                       "type": "string",
-                      "enum": ["open_frame"]
+                      "enum": [
+                        "open_frame"
+                      ]
                     },
                     "ids": {
                       "type": "array",
@@ -1609,13 +2754,23 @@
                 "description": "The desktop side panel sends true by default. Without true, the page is read-only context and no navigation/action tool is offered."
               }
             }
+          },
+          "attachments": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/AttachmentRef"
+            }
           }
-        }
+        },
+        "description": "A message needs nonempty body text or at least one attachment. In assistant threads, image attachments are sent to the configured model for visual analysis; image-only messages ask it to describe what it sees. Other attachment types are supplied as metadata only."
       },
       "ScreenResult": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["ok"],
+        "required": [
+          "ok"
+        ],
         "properties": {
           "ok": {
             "type": "boolean"
@@ -1624,6 +2779,380 @@
             "type": "string",
             "maxLength": 200,
             "description": "What the page did, or why it could not."
+          }
+        }
+      },
+      "PushConfig": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "publicKey"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "publicKey": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The VAPID public key a browser subscribes with. Made by the server on first start unless the operator supplies one."
+          }
+        }
+      },
+      "PushSubscription": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "A public https push service address. Plain http, IP addresses and internal host names are refused."
+          },
+          "keys": {
+            "type": "object",
+            "required": [
+              "p256dh",
+              "auth"
+            ],
+            "properties": {
+              "p256dh": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "auth": {
+                "type": "string",
+                "maxLength": 64
+              }
+            }
+          },
+          "platform": {
+            "type": "string",
+            "maxLength": 40
+          }
+        }
+      },
+      "CallsConfig": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "mode",
+          "relay"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "cloudflare",
+              "turn",
+              "stun",
+              "local"
+            ],
+            "description": "How far calls reach on this server: a hosted relay, the operator's own relay, STUN only, or the local network only."
+          },
+          "relay": {
+            "type": "boolean",
+            "description": "False means calls between some networks will not connect."
+          }
+        }
+      },
+      "IceConfig": {
+        "type": "object",
+        "required": [
+          "iceServers",
+          "relay",
+          "mode",
+          "expiresAt"
+        ],
+        "properties": {
+          "iceServers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "urls"
+              ],
+              "properties": {
+                "urls": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
+                },
+                "username": {
+                  "type": "string"
+                },
+                "credential": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "relay": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "cloudflare",
+              "turn",
+              "stun",
+              "local"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Call": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversationId",
+          "caller",
+          "callees",
+          "callerDeviceId",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "caller": {
+            "type": "object",
+            "required": [
+              "userId",
+              "name",
+              "picture"
+            ],
+            "properties": {
+              "userId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "picture": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "callees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "userId",
+                "name",
+                "picture"
+              ],
+              "properties": {
+                "userId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "picture": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "callerDeviceId": {
+            "type": "string"
+          },
+          "answeredBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "answeredDeviceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ringing",
+              "active",
+              "ended"
+            ]
+          },
+          "endReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "hangup",
+              "declined",
+              "cancelled",
+              "missed",
+              "dropped",
+              null
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answeredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CallSignal": {
+        "type": "object",
+        "required": [
+          "deviceId",
+          "data"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 64,
+            "description": "Made up by the browser per page load; tells one person's tabs apart."
+          },
+          "data": {
+            "type": "object",
+            "description": "One of: a session description (offer or answer, at most 50,000 characters of SDP), an ICE candidate, or a state change (screen, camera, showing).",
+            "properties": {
+              "description": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "sdp"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "offer",
+                      "answer"
+                    ]
+                  },
+                  "sdp": {
+                    "type": "string",
+                    "maxLength": 50000
+                  }
+                }
+              },
+              "candidate": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "screen": {
+                "type": "boolean"
+              },
+              "camera": {
+                "type": "boolean"
+              },
+              "showing": {
+                "type": "string",
+                "enum": [
+                  "full",
+                  "small",
+                  "none"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "AttachmentRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "name",
+          "mime"
+        ],
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "mime": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "MessageReaction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "emoji"
+        ],
+        "properties": {
+          "emoji": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "\u2764\ufe0f",
+              "\ud83d\ude02",
+              "\ud83d\udc4d",
+              "\ud83d\ude2e",
+              "\ud83d\ude22",
+              "\ud83d\udd25",
+              null
+            ],
+            "description": "Set your reaction or null to remove it. One reaction per person per message."
           }
         }
       }

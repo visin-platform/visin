@@ -3,8 +3,16 @@ export interface Assistant {
   name: string;
   personality: string;
   paused: boolean;
+  /** the analyst a new private analysis starts with, for this person */
+  isDefault?: boolean;
 }
-export type AssistantInput = Omit<Assistant, '_id'>;
+export interface AssistantInput {
+  name: string;
+  personality: string;
+  paused: boolean;
+  /** make this the default analyst (true) or stop it being so (false); left out, it is not changed */
+  default?: boolean;
+}
 export interface SharedAssistant {
   id: string;
   name: string;

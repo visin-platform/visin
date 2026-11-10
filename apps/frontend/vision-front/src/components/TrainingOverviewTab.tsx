@@ -10,6 +10,7 @@ import ClassIoUOverEpochsChart from '../components/ClassIoUOverEpochsChart';
 import TrainingTimeMetrics from '../components/TrainingTimeMetrics';
 import TrainingOverviewCard from '../components/TrainingOverviewCard';
 import ProvenanceCard from '../components/training/ProvenanceCard';
+import RunStanding from '../components/training/RunStanding';
 import RunNotes from '../components/training/RunNotes';
 import ChartCard from '../components/training/ChartCard';
 import ClassPrecisionChart from '../components/ClassPrecisionChart';
@@ -51,6 +52,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
       <Stack spacing={3}>
         {/* Training Overview Card */}
         <TrainingOverviewCard training={training} epochs={epochs} />
+        {training.projectId && <RunStanding trainingId={training._id} projectId={training.projectId} />}
         <RunNotes notes={training.notes} canEdit={canEdit && Boolean(onSaveNotes)} onSave={onSaveNotes ?? (async () => undefined)} />
         {training.provenance && <ProvenanceCard provenance={training.provenance} />}
 
@@ -66,7 +68,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
                 color={CARD_COLORS[index % CARD_COLORS.length]}
                 dataGuide={`metric-${key}`}
               >
-                <TrainValChart epochs={epochs} metric={key} label={metric.label} />
+                <TrainValChart epochs={epochs} metric={key} label={metric.label} direction={metric.direction} />
               </ChartCard>
             );
           })}

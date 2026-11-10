@@ -37,3 +37,46 @@ it('edits pause state and requires a deliberate removal confirmation', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
   await waitFor(() => expect(api).toHaveBeenCalledWith('/assistants/a1/delete', {}));
 });
+
+const two = [
+  { _id: 'a1', name: 'Vivi', personality: 'Concise', paused: false, isDefault: true },
+  { _id: 'a2', name: 'Reviewer', personality: 'Careful', paused: false, isDefault: false }
+];
+
+it('shows which assistant answers new analyses, and makes another one the default without changing its settings', async () => {
+  state.rows = two as never;
+  render(<Assistants busy={false} onAnalysis={vi.fn()} />);
+
+  expect(await screen.findByRole('button', { name: 'Vivi (default analyst)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Stop using Vivi by default' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Use Reviewer by default' }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/assistants/a2', {
+      name: 'Reviewer',
+      personality: 'Careful',
+      paused: false,
+      default: true
+    })
+  );
+});
+
+it('goes back to the built-in analyst when the default is turned off', async () => {
+  state.rows = two as never;
+  render(<Assistants busy={false} onAnalysis={vi.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Stop using Vivi by default' }));
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith('/assistants/a1', {
+      name: 'Vivi',
+      personality: 'Concise',
+      paused: false,
+      default: false
+    })
+  );
+});
+
+it('does not offer a paused assistant as the default', async () => {
+  state.rows = [{ _id: 'a1', name: 'Vivi', personality: '', paused: true, isDefault: false }] as never;
+  render(<Assistants busy={false} onAnalysis={vi.fn()} />);
+  expect(await screen.findByRole('button', { name: 'Use Vivi by default' })).toBeDisabled();
+});

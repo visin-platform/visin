@@ -50,3 +50,10 @@ describe('ImageViewDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+it('holds the frame footprint with a skeleton until the image loads', () => {
+  render(<ImageViewDialog open onClose={vi.fn()} selectedImage={image} />);
+  expect(screen.getByRole('status', { name: 'Loading frame' })).toBeInTheDocument();
+  fireEvent.load(screen.getByRole('img'));
+  expect(screen.queryByRole('status', { name: 'Loading frame' })).not.toBeInTheDocument();
+});

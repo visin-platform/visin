@@ -5,10 +5,10 @@ import ProjectReadme from './ProjectReadme';
 import React from 'react';
 import ScrollableTabs from '../common/ScrollableTabs';
 import { Box, Paper, Tab } from '@mui/material';
-import type { AuthUser } from '@visin/frontend-core';
 
 // New Tab Components
 import BestRunCard from '../common/BestRunCard';
+import RunsOverview from './RunsOverview';
 import ProjectOverviewTab, {
   type ProjectOverviewStats,
   type ProjectOverviewDashboardStats
@@ -67,7 +67,6 @@ interface ProjectTabsProps {
   onMoveToTrash: () => void;
   dashboardStats: ProjectOverviewDashboardStats | undefined;
   isAuthenticated: boolean;
-  user: AuthUser | null;
   // Trainings tab props
   trainings: Training[];
   isFullTrainingsLoading: boolean;
@@ -100,7 +99,6 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   onMoveToTrash,
   dashboardStats,
   isAuthenticated,
-  user,
   trainings,
   isFullTrainingsLoading,
   page,
@@ -163,7 +161,8 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         {canWrite(project._id) && <FirstRunPanel project={project} />}
         <ProjectReadme project={project} />
         <BestRunCard projectId={project._id} />
-        <ProjectOverviewTab stats={stats} isLoading={isStatsLoading} isAuthenticated={isAuthenticated} user={user} />
+        <ProjectOverviewTab stats={stats} isLoading={isStatsLoading} />
+        <RunsOverview projectId={project._id} onSeeAll={() => onTabChange('trainings')} />
         {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
       </TabPanel>
 

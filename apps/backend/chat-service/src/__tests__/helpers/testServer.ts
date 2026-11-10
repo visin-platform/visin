@@ -9,14 +9,19 @@ import { Assistant } from '../../models/Assistant';
 import { AssistantRun } from '../../models/AssistantRun';
 import { Block } from '../../models/Block';
 import { Budget } from '../../models/Budget';
+import { Call } from '../../models/Call';
+import { CallSignal } from '../../models/CallSignal';
 import { Conversation } from '../../models/Conversation';
 import { ConversationAssistant } from '../../models/ConversationAssistant';
+import { DeploymentSecret } from '../../models/DeploymentSecret';
 import { Message } from '../../models/Message';
 import { Pricing } from '../../models/Pricing';
 import { ProviderKey } from '../../models/ProviderKey';
+import { PushSubscription } from '../../models/PushSubscription';
 import { ScreenCall } from '../../models/ScreenCall';
 import { Settings } from '../../models/Settings';
 import { groups } from '../../services/access';
+import { resetPushConfig } from '../../services/pushService';
 import { resetAssistantSettingsCache } from '../../services/settings';
 
 export let base: string;
@@ -66,7 +71,11 @@ export function setupChatTests() {
         Settings,
         ProviderKey,
         Pricing,
-        ScreenCall
+        ScreenCall,
+        PushSubscription,
+        DeploymentSecret,
+        Call,
+        CallSignal
       ].map((model) => model.init())
     );
     currentApp = createApp();
@@ -94,6 +103,11 @@ export function setupChatTests() {
     await ProviderKey.deleteMany({});
     await Pricing.deleteMany({});
     await ScreenCall.deleteMany({});
+    await PushSubscription.deleteMany({});
+    await DeploymentSecret.deleteMany({});
+    await Call.deleteMany({});
+    await CallSignal.deleteMany({});
+    resetPushConfig();
     await mongoose.connection.collection('users').deleteMany({});
     resetAssistantSettingsCache();
     (groups.getMyGroups as Mock).mockResolvedValue([]);

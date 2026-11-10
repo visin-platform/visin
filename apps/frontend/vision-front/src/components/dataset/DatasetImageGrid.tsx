@@ -1,3 +1,6 @@
+import { ContentSkeleton } from '../common/ContentSkeleton';
+import { EmptyState } from '@visin/frontend-core';
+import { ImageOutlined } from '@mui/icons-material';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -6,7 +9,7 @@ import {
   CardActionArea,
   CardMedia,
   Chip,
-  CircularProgress,
+  Button,
   Pagination,
   Stack,
   TextField,
@@ -57,7 +60,11 @@ const DatasetImageGrid: React.FC<DatasetImageGridProps> = ({ datasetId, groups, 
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2, alignItems: { sm: 'center' } }}>
         <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap', flexGrow: 1 }}>
-          <Chip label="All" color={group === undefined ? 'primary' : 'default'} onClick={() => selectGroup(undefined)} />
+          <Chip
+            label="All"
+            color={group === undefined ? 'primary' : 'default'}
+            onClick={() => selectGroup(undefined)}
+          />
           {imageGroups.map((option) => (
             <Chip
               key={option.name}
@@ -67,21 +74,45 @@ const DatasetImageGrid: React.FC<DatasetImageGridProps> = ({ datasetId, groups, 
             />
           ))}
         </Stack>
-        <TextField size="small" label="Search file name" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+        <TextField
+          size="small"
+          label="Search file name"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
       </Stack>
 
       {error && <Alert severity="error">{error instanceof Error ? error.message : 'Could not load images'}</Alert>}
       {isLoading ? (
-        <Box sx={{ textAlign: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
+        <ContentSkeleton label="Loading dataset images" cards />
       ) : data && data.items.length === 0 ? (
-        <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>No images match.</Typography>
+        <EmptyState
+          icon={<ImageOutlined />}
+          title="No images match."
+          description="Try a different file name or image group."
+          action={
+            <Button
+              variant="contained"
+              onClick={() => {
+                setSearchInput('');
+                setSearch('');
+                selectGroup(undefined);
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       ) : (
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(6, 1fr)' },
+            gridTemplateColumns: {
+              xs: 'repeat(2, 1fr)',
+              sm: 'repeat(3, 1fr)',
+              md: 'repeat(4, 1fr)',
+              lg: 'repeat(6, 1fr)'
+            },
             gap: 1.5,
             opacity: isFetching ? 0.6 : 1
           }}
@@ -89,7 +120,13 @@ const DatasetImageGrid: React.FC<DatasetImageGridProps> = ({ datasetId, groups, 
           {data?.items.map((item) => (
             <Card key={item._id} variant="outlined">
               <CardActionArea onClick={() => onOpen(item)}>
-                <CardMedia component="img" image={item.thumbnailUrl} alt={item.path} loading="lazy" sx={{ height: 120, objectFit: 'cover', bgcolor: 'action.hover' }} />
+                <CardMedia
+                  component="img"
+                  image={item.thumbnailUrl}
+                  alt={item.path}
+                  loading="lazy"
+                  sx={{ height: 120, objectFit: 'cover', bgcolor: 'action.hover' }}
+                />
                 <Box sx={{ px: 1, py: 0.5 }}>
                   <Typography variant="caption" noWrap title={item.path} sx={{ display: 'block' }}>
                     {item.path.slice(item.path.lastIndexOf('/') + 1)}
@@ -106,7 +143,12 @@ const DatasetImageGrid: React.FC<DatasetImageGridProps> = ({ datasetId, groups, 
       )}
       {data && data.pagination.pages > 1 && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Pagination count={data.pagination.pages} page={page} onChange={(_event, value) => setPage(value)} siblingCount={0} />
+          <Pagination
+            count={data.pagination.pages}
+            page={page}
+            onChange={(_event, value) => setPage(value)}
+            siblingCount={0}
+          />
         </Box>
       )}
     </Box>

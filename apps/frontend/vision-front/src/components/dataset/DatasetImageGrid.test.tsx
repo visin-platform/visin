@@ -45,3 +45,13 @@ describe('DatasetImageGrid', () => {
     expect(await screen.findByText('dataset-service down')).toBeInTheDocument();
   });
 });
+
+it('clears a filter from the empty state and restores the image list', async () => {
+  listItems.mockImplementation(async (_id, query) => ({ items: query.search ? [] : [item('frames/0001.png')], pagination: { page: 1, total: query.search ? 0 : 1, pages: 1 } }));
+  renderWithClient(<DatasetImageGrid datasetId="d1" groups={[]} onOpen={vi.fn()} />);
+  await screen.findByText('0001.png');
+  fireEvent.change(screen.getByLabelText('Search file name'), { target: { value: 'absent' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+  expect(screen.getByLabelText('Search file name')).toHaveValue('');
+  expect(await screen.findByText('0001.png')).toBeInTheDocument();
+});

@@ -1,5 +1,6 @@
 import { type Request } from 'express';
 import { groups, peer, publicPerson, sharedContacts, type Project } from './access';
+import { attachmentsEnabled } from './attachments';
 import { assistantStatus, isPlatformAdmin } from './settings';
 
 export async function getCapabilities(userId: string) {
@@ -11,6 +12,8 @@ export async function getCapabilities(userId: string) {
   return {
     assistant: status.ready,
     sharedAssistant: true,
+    // Whether files can be sent: this server has somewhere to keep them.
+    attachments: attachmentsEnabled(),
     assistantModel: { provider: status.settings.provider, model: status.settings.model, ready: status.ready },
     canConfigure
   };
@@ -26,7 +29,7 @@ export async function listProjects(req: Request) {
 }
 
 export async function listContacts(req: Request) {
-  return await sharedContacts(req);
+  return await sharedContacts(req, typeof req.query.groupId === 'string' ? req.query.groupId : undefined);
 }
 
 export async function getPerson(handleValue: unknown) {

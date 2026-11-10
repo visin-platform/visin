@@ -122,3 +122,14 @@ export interface PersonResult {
   name: string;
   picture?: string;
 }
+
+/** Where a paper's PDF stands: read into storage and text (`ready`), being read, failed with a reason, or not given. */
+export interface PaperDocumentState {
+  status: 'none' | 'pending' | 'ready' | 'failed';
+  /** the PDF can be shown here, from storage */
+  viewable: boolean;
+  pageCount?: number;
+  truncated?: boolean;
+  /** a short reason a read failed */
+  error?: string;
+}

@@ -96,3 +96,9 @@ describe('remainingTasks', () => {
     expect(remainingTasks({ ...job, progress: { tasks: 10, completed: 12 } })).toBe(0);
   });
 });
+
+it('reads authorized training totals and weekly activity', async () => {
+  get.mockResolvedValue({ data: { totalHours: 3, weekly: [] } });
+  await expect(homeApi.trainingStats()).resolves.toEqual({ totalHours: 3, weekly: [] });
+  expect(get).toHaveBeenCalledWith('https://vision-api.test/api/trainings/stats');
+});

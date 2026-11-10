@@ -1,7 +1,19 @@
 import { AutoAwesome } from '@mui/icons-material';
 import { useState } from 'react';
 import { AssistantProfileForm } from './AssistantProfileForm';
-import { Alert, Button, Checkbox, FormControlLabel, List, ListItemButton, ListItemIcon, ListItemText, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Stack,
+  TextField,
+  Typography
+} from '@mui/material';
 import { useAssistants } from '../../hooks/useAssistants';
 import type { PageContext } from '../../types/chat';
 export function Assistants({
@@ -31,11 +43,13 @@ export function Assistants({
     setConfirmDelete,
     empty,
     save,
-    remove
+    remove,
+    makeDefault
   } = useAssistants();
   if (compact) {
-    const bots = [...rows, ...catalog.filter((bot) => !rows.some((row) => row._id === bot._id))]
-      .filter((bot) => bot.name.toLowerCase().includes(search.trim().replace(/^@/, '').toLowerCase()));
+    const bots = [...rows, ...catalog.filter((bot) => !rows.some((row) => row._id === bot._id))].filter((bot) =>
+      bot.name.toLowerCase().includes(search.trim().replace(/^@/, '').toLowerCase())
+    );
     return (
       <List dense disablePadding aria-label="Assistants">
         {bots.map((bot) => (
@@ -45,8 +59,19 @@ export function Assistants({
             onClick={() => onAnalysis({ ...pageContext, assistantId: bot._id, title: bot.name })}
             sx={{ borderRadius: 1, minHeight: 56 }}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: 'primary.main' }}><AutoAwesome /></ListItemIcon>
-            <ListItemText primary={bot.name} secondary={bot.paused ? 'Paused' : 'Private assistant chat'} />
+            <ListItemIcon sx={{ minWidth: 40, color: 'primary.main' }}>
+              <AutoAwesome />
+            </ListItemIcon>
+            <ListItemText
+              primary={bot.name}
+              secondary={
+                bot.paused
+                  ? 'Paused'
+                  : rows.find((row) => row._id === bot._id)?.isDefault
+                    ? 'Default analyst'
+                    : 'Private assistant chat'
+              }
+            />
           </ListItemButton>
         ))}
         {error && <Alert severity="warning">Could not load your assistants.</Alert>}
@@ -80,7 +105,7 @@ export function Assistants({
             onClick={() => onAnalysis({ ...pageContext, assistantId: row._id, title: row.name })}
           >
             {row.name}
-            {row.paused ? ' (paused)' : ''}
+            {row.paused ? ' (paused)' : row.isDefault ? ' (default analyst)' : ''}
           </Button>
           <Button
             disabled={saving}
@@ -94,6 +119,15 @@ export function Assistants({
           <Button disabled={saving} onClick={() => setProfile({ id: row._id, name: row.name })}>
             Profile for {row.name}
           </Button>
+          {row.isDefault ? (
+            <Button disabled={saving} onClick={() => void makeDefault(row, false)}>
+              Stop using {row.name} by default
+            </Button>
+          ) : (
+            <Button disabled={saving || row.paused} onClick={() => void makeDefault(row, true)}>
+              Use {row.name} by default
+            </Button>
+          )}
           {confirmDelete === row._id ? (
             <>
               <Button color="error" disabled={saving} onClick={() => void remove(row._id)}>

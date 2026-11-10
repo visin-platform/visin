@@ -51,7 +51,14 @@ const fromPaper = (paper: Paper): FormState => ({
     newAuthorDraft({
       name: author.name,
       status: author.status,
-      person: author.user ? { id: author.user.id, handle: author.user.handle ?? '', name: author.user.name ?? author.name, picture: author.user.picture } : undefined
+      person: author.user
+        ? {
+            id: author.user.id,
+            handle: author.user.handle ?? '',
+            name: author.user.name ?? author.name,
+            picture: author.user.picture
+          }
+        : undefined
     })
   ),
   venue: paper.venue ?? '',
@@ -62,7 +69,17 @@ const fromPaper = (paper: Paper): FormState => ({
   pdfUrl: paper.pdfUrl ?? '',
   tags: paper.tags,
   results: paper.results.flatMap((result) =>
-    result.ref ? [{ kind: result.kind, ref: result.ref, note: result.note ?? '', name: result.name, available: result.available }] : []
+    result.ref
+      ? [
+          {
+            kind: result.kind,
+            ref: result.ref,
+            note: result.note ?? '',
+            name: result.name,
+            available: result.available
+          }
+        ]
+      : []
   ),
   visibility: paper.visibility
 });
@@ -80,7 +97,10 @@ function toPayload(form: FormState): { error: string } | { fields: Omit<CreatePa
     fields: {
       title: form.title.trim(),
       abstract: text(form.abstract),
-      authors: authors.map((author) => ({ name: author.name.trim(), ...(author.person ? { userId: author.person.id } : {}) })),
+      authors: authors.map((author) => ({
+        name: author.name.trim(),
+        ...(author.person ? { userId: author.person.id } : {})
+      })),
       venue: text(form.venue),
       year: form.year.trim() ? Number(form.year.trim()) : undefined,
       arxivId: text(form.arxivId),
@@ -88,7 +108,11 @@ function toPayload(form: FormState): { error: string } | { fields: Omit<CreatePa
       url: text(form.url),
       pdfUrl: text(form.pdfUrl),
       tags: form.tags,
-      results: form.results.map((result) => ({ kind: result.kind, ref: result.ref, ...(result.note.trim() ? { note: result.note.trim() } : {}) })),
+      results: form.results.map((result) => ({
+        kind: result.kind,
+        ref: result.ref,
+        ...(result.note.trim() ? { note: result.note.trim() } : {})
+      })),
       visibility: form.visibility
     }
   };
@@ -103,7 +127,12 @@ const PaperEditPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const groups = useProjectGroups(isAuthenticated);
-  const existing = useQuery({ queryKey: ['papers', 'one', id, user?.id], queryFn: () => paperService.get(id!), enabled: editing && isAuthenticated, retry: false });
+  const existing = useQuery({
+    queryKey: ['papers', 'one', id, user?.id],
+    queryFn: () => paperService.get(id!),
+    enabled: editing && isAuthenticated,
+    retry: false
+  });
   const [form, setForm] = useState<FormState>(blank);
   const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
   const [owner, setOwner] = useState<OwnerRef | null>(null);
@@ -117,7 +146,8 @@ const PaperEditPage: React.FC = () => {
     }
   }, [existing.data, loadedFrom]);
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -156,7 +186,11 @@ const PaperEditPage: React.FC = () => {
           icon={<ArticleIcon />}
           title="Sign in to add a paper"
           description="Papers belong to an account or a group, so only signed-in people can add them."
-          action={<Button variant="contained" onClick={login}>Sign in</Button>}
+          action={
+            <Button variant="contained" onClick={login}>
+              Sign in
+            </Button>
+          }
         />
       </Container>
     );
@@ -167,7 +201,11 @@ const PaperEditPage: React.FC = () => {
         <EmptyState
           icon={<ArticleIcon />}
           title={existing.isError || !existing.data ? 'Paper not found' : 'You cannot edit this paper'}
-          action={<Button component={RouterLink} to="/papers">All papers</Button>}
+          action={
+            <Button component={RouterLink} to="/papers">
+              All papers
+            </Button>
+          }
         />
       </Container>
     );
@@ -181,7 +219,10 @@ const PaperEditPage: React.FC = () => {
 
   return (
     <Container maxWidth="md" sx={{ pb: 4 }}>
-      <PageHeader title={editing ? 'Edit paper' : 'Add a paper'} subtitle="Where the paper lives, who wrote it, and which results on Visin it rests on." />
+      <PageHeader
+        title={editing ? 'Edit paper' : 'Add a paper'}
+        subtitle="Where the paper lives, who wrote it, and which results on Visin it rests on."
+      />
       <Box
         component="form"
         noValidate
@@ -194,26 +235,87 @@ const PaperEditPage: React.FC = () => {
       >
         {problem && <Alert severity="error">{problem}</Alert>}
 
-        <TextField label="Title" required fullWidth value={form.title} disabled={busy} onChange={(event) => set('title', event.target.value)} slotProps={{ htmlInput: { maxLength: 300 } }} />
+        <TextField
+          label="Title"
+          required
+          fullWidth
+          value={form.title}
+          disabled={busy}
+          onChange={(event) => set('title', event.target.value)}
+          slotProps={{ htmlInput: { maxLength: 300 } }}
+        />
         <AuthorsEditor value={form.authors} onChange={(next) => set('authors', next)} user={user} disabled={busy} />
-        <TextField label="Abstract" fullWidth multiline minRows={4} value={form.abstract} disabled={busy} onChange={(event) => set('abstract', event.target.value)} slotProps={{ htmlInput: { maxLength: 5000 } }} />
+        <TextField
+          label="Abstract"
+          fullWidth
+          multiline
+          minRows={4}
+          value={form.abstract}
+          disabled={busy}
+          onChange={(event) => set('abstract', event.target.value)}
+          slotProps={{ htmlInput: { maxLength: 5000 } }}
+        />
 
         <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' } }}>
-          <TextField label="Venue" placeholder="CVPR 2025, or “preprint”" value={form.venue} disabled={busy} onChange={(event) => set('venue', event.target.value)} slotProps={{ htmlInput: { maxLength: 200 } }} />
-          <TextField label="Year" value={form.year} disabled={busy} onChange={(event) => set('year', event.target.value)} slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 4 } }} />
+          <TextField
+            label="Venue"
+            placeholder="CVPR 2025, or “preprint”"
+            value={form.venue}
+            disabled={busy}
+            onChange={(event) => set('venue', event.target.value)}
+            slotProps={{ htmlInput: { maxLength: 200 } }}
+          />
+          <TextField
+            label="Year"
+            value={form.year}
+            disabled={busy}
+            onChange={(event) => set('year', event.target.value)}
+            slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 4 } }}
+          />
         </Box>
 
         <Box sx={{ display: 'grid', gap: 2 }}>
           <Typography variant="subtitle2">Where to read it</Typography>
           <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
-            <TextField label="arXiv" placeholder="2401.01234 or the arXiv address" value={form.arxivId} disabled={busy} onChange={(event) => set('arxivId', event.target.value)} />
-            <TextField label="DOI" placeholder="10.1234/example" value={form.doi} disabled={busy} onChange={(event) => set('doi', event.target.value)} />
-            <TextField label="Paper page" placeholder="https://…" value={form.url} disabled={busy} onChange={(event) => set('url', event.target.value)} />
-            <TextField label="PDF" placeholder="https://…" value={form.pdfUrl} disabled={busy} onChange={(event) => set('pdfUrl', event.target.value)} />
+            <TextField
+              label="arXiv"
+              placeholder="2401.01234 or the arXiv address"
+              value={form.arxivId}
+              disabled={busy}
+              onChange={(event) => set('arxivId', event.target.value)}
+            />
+            <TextField
+              label="DOI"
+              placeholder="10.1234/example"
+              value={form.doi}
+              disabled={busy}
+              onChange={(event) => set('doi', event.target.value)}
+            />
+            <TextField
+              label="Paper page"
+              placeholder="https://…"
+              value={form.url}
+              disabled={busy}
+              onChange={(event) => set('url', event.target.value)}
+            />
+            <TextField
+              label="PDF"
+              placeholder="https://…"
+              value={form.pdfUrl}
+              disabled={busy}
+              onChange={(event) => set('pdfUrl', event.target.value)}
+              helperText="An https address of the PDF. Visin keeps a copy to show on the paper’s page and to let the analyst search it. For an arXiv paper this can stay empty."
+            />
           </Box>
         </Box>
 
-        <TagInput tags={form.tags} onTagsChange={(next) => set('tags', next)} label="Tags" placeholder="segmentation, night driving…" maxTags={10} />
+        <TagInput
+          tags={form.tags}
+          onTagsChange={(next) => set('tags', next)}
+          label="Tags"
+          placeholder="segmentation, night driving…"
+          maxTags={10}
+        />
         <Divider />
         <ResultsEditor value={form.results} onChange={(next) => set('results', next)} disabled={busy} />
         <Divider />
@@ -229,9 +331,15 @@ const PaperEditPage: React.FC = () => {
           />
         )}
         <Box>
-          <VisibilitySwitch value={form.visibility} onChange={(next) => set('visibility', next)} canMakePublic={canShare} disabled={busy || (editing && !canShare)} />
+          <VisibilitySwitch
+            value={form.visibility}
+            onChange={(next) => set('visibility', next)}
+            canMakePublic={canShare}
+            disabled={busy || (editing && !canShare)}
+          />
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-            A public paper needs an arXiv id, a DOI or a link to the paper, and at least one cited result that is public on Visin.
+            A public paper needs an arXiv id, a DOI or a link to the paper, and at least one cited result that is public
+            on Visin.
           </Typography>
         </Box>
 

@@ -341,3 +341,59 @@ describe('the analyst changing the page', () => {
     expect(screen.getByText('Results at /projects')).toBeInTheDocument();
   });
 });
+
+describe('the keyboard shortcut', () => {
+  const press = (init: KeyboardEventInit) => {
+    const event = new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true, ...init });
+    act(() => void window.dispatchEvent(event));
+    return event;
+  };
+
+  it('opens and closes chat from anywhere with Ctrl+J, or Command+J, and keeps the browser’s own use of the keys away', () => {
+    mount();
+    expect(screen.queryByText('Embedded conversations')).toBeNull();
+    expect(press({ ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(screen.getByText('Embedded conversations')).toBeInTheDocument();
+    press({ metaKey: true });
+    expect(screen.queryByText('Embedded conversations')).toBeNull();
+    press({ ctrlKey: true, key: 'J' });
+    expect(screen.getByText('Embedded conversations')).toBeInTheDocument();
+  });
+
+  it('is a different shortcut with another modifier, and with nothing but the letter', () => {
+    mount();
+    for (const init of [{ ctrlKey: true, shiftKey: true }, { ctrlKey: true, altKey: true }, {}, { ctrlKey: true, key: 'k' }]) {
+      expect(press(init).defaultPrevented).toBe(false);
+    }
+    expect(screen.queryByText('Embedded conversations')).toBeNull();
+  });
+
+  it('leaves a key press that something else has taken, and one that is part of composing text', () => {
+    mount();
+    const taken = new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.addEventListener('keydown', (event) => event.preventDefault(), { once: true });
+    act(() => void document.body.dispatchEvent(taken));
+    expect(screen.queryByText('Embedded conversations')).toBeNull();
+    press({ ctrlKey: true, isComposing: true });
+    expect(screen.queryByText('Embedded conversations')).toBeNull();
+  });
+
+  it('does nothing where chat is not offered', () => {
+    state.authenticated = false;
+    mount();
+    expect(press({ ctrlKey: true }).defaultPrevented).toBe(false);
+  });
+
+  it('goes to the chat page instead of a panel on a page that has no room for one', () => {
+    mount('/chat');
+    press({ ctrlKey: true });
+    expect(screen.queryByText('Embedded conversations')).toBeNull();
+  });
+
+  it('is named on the button, so it can be found', () => {
+    mount();
+    fireEvent.mouseOver(screen.getByRole('button', { name: 'Chat' }));
+    return screen.findByRole('tooltip').then((tip) => expect(tip).toHaveTextContent(/Chat \((Ctrl\+J|⌘J)\)/));
+  });
+});
+

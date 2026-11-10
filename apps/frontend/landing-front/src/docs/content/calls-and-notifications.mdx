@@ -1,0 +1,145 @@
+Chat can notify people of new messages and ring them for a call, even when Visin is closed. Both work with nothing
+configured, and chat itself never depends on either: leave them alone and you still have messages, rooms and the
+analyst.
+
+## What works with nothing set up
+
+| You have                                      | Notifications                                    | Calls                                                                           |
+| --------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| A fresh `docker compose up -d`                | Yes, over HTTPS or on `localhost`                | Between two people on the same machine or network, and across most home networks |
+| Your own STUN server (`STUN_URLS`)            | Yes                                              | Most home and mobile networks                                                   |
+| A relay: your own coturn, or Cloudflare's     | Yes                                              | Everywhere, including offices and mobile carriers that block direct connections |
+| `CALLS_ENABLED=false`                         | Yes                                              | The call buttons are hidden                                                     |
+
+A call is between two people, in a direct message they have both joined. Either can show their camera or their
+screen. The audio and video go straight between the two browsers; the server only rings the other person and passes
+the connection details.
+
+## Files and voice messages
+
+In any conversation, use the paperclip beside the input to choose photos, MP4/MOV videos, PDFs or
+archives. Each message can carry up to five files, with a 25 MB limit per file. Upload progress appears above the
+input. Send becomes available when the files are ready; text is optional. Click a photo to enlarge it, play video
+and voice messages in the thread, or open a document using its download link.
+
+Use the microphone beside the input to record a voice message. **Finish** adds the recording to the upload tray;
+**Send** delivers it. Discard it with the close button. Recordings stop after five minutes, and are dropped if you
+leave the conversation. The microphone requires HTTPS (or localhost) and browser permission. Recordings upload to
+your Visin file-service; they do not use a speech transcription service. The analyst's text microphone remains
+available separately in private assistant threads. Vivi analyzes PNG, JPEG, WebP and GIF image attachments. Send an image without text for a description, or add a
+question about it. The newest five images in the recent thread stay available for follow-up questions. Images are
+read directly from file-service and sent unchanged to the configured provider. Images for analysis must be up to
+4 MB each; other chat attachments still allow 25 MB. Providers handle decoding and image resolution; OpenAI uses
+low detail to bound image-token use. Choose a model with image input in Account. Other attachment types remain stored and previewable,
+but their contents are not supplied to the analyst.
+
+File sharing is enabled by default. The all-in-one compose file supplies the file-service address and shared
+credential automatically. Standalone chat-service looks for the `file-service` host on port 5002 unless overridden; local development
+uses port 5002. Set the same `FILE_SERVICE_API_KEY` as file-service. Chat-service checks the credential and address at
+startup rather than silently switching file sharing off. Uploads go directly to file-service; download addresses are signed only after chat membership and message
+visibility are checked. An unsuccessful message send keeps the uploaded files in the tray for retry.
+
+## Replies, reactions and unsend
+
+Hover over a message on desktop to reveal Copy, Reply, React and the message menu. Keyboard focus also reveals the
+toolbar. Touchscreens keep the buttons visible with larger tap targets. Copy works directly or from the menu; for a
+message containing only files, it copies the file names. If the browser blocks clipboard access, a dialog offers
+selectable text for your device’s Copy command.
+
+Reply quotes the selected message above the composer and keeps the quote with your reply. React offers six quick
+emoji choices. Each person can have one reaction per message; choosing the same reaction again removes it.
+
+To remove your own message, choose **Message actions → Unsend** and confirm. Everyone sees a **Message unsent**
+marker in its original place. Text, attachment references and reactions disappear, quoted copies are redacted, and
+pending assistant analysis of the removed question is cancelled. Already sent assistant replies and saved findings
+are separate records. Changes to reactions and unsent messages are synchronized to other open chat windows.
+
+## Chat appearance
+
+Open a conversation’s menu and choose **Appearance**, or use the palette button in the conversation list.
+Pick Visin, Ocean, Forest, Sunset, Graphite or Rose. The preview and your chats update immediately, and each set
+follows the app’s light or dark theme. The header and composer always use glass effects, with compact message
+spacing and solid surfaces behind message text. **Reset** restores the default color set.
+
+Appearance is personal to your account on this browser, shared across its tabs and chat panels. It does not change
+anyone else’s conversation or sync to other devices. If browser storage is unavailable, choices last for this visit.
+
+## Notifications
+
+Visin sends notifications through your browser's own push service (Google, Mozilla or Apple, whichever your browser
+uses), so there is no account to create and nothing to pay for. The server makes its signing keys the first time it
+starts and keeps them in its database, so every copy of it signs the same way and a restart never switches anyone off.
+
+Each person turns them on for each device with the bell in the conversation list. The browser asks once.
+
+- **HTTPS is required.** Browsers offer push only on `https://` addresses and on `localhost`. Over plain `http://` on a
+  local network address, the bell says so instead of failing.
+- **On an iPhone or iPad, add Visin to the Home Screen first.** Apple allows web notifications only for installed apps.
+- A message notification is sent to people who have joined the conversation and have not read it. It is dropped if
+  they read it somewhere else first. The analyst's private threads send none.
+- A ringing call stays on the screen until it is answered or declined, and disappears everywhere once any device answers.
+
+To use your own keys, generate a pair with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address the push services can reach you at).
+
+## Making calls connect everywhere
+
+Two browsers behind different networks usually cannot reach each other directly. A **STUN** server tells each one how
+it looks from the internet, which is enough for most home and mobile networks. A **relay** (TURN) carries the call
+when that is not enough, which is common in offices and on some mobile carriers. Set up one of these, in this order
+of preference; the first that is configured and answers is used.
+
+### Cloudflare's hosted relay
+
+Create a key under **Realtime → TURN** in the Cloudflare dashboard, which needs no server of yours, and set:
+
+```bash
+CLOUDFLARE_TURN_KEY_ID=...
+CLOUDFLARE_TURN_API_TOKEN=...
+```
+
+Visin asks Cloudflare for short-lived credentials for each call, so the token never reaches a browser.
+
+### Your own relay
+
+Visin ships an optional [coturn](https://github.com/coturn/coturn) service. Choose a long random secret, point
+`TURN_URLS` at the public name of the machine that will run it, and start the `calls` profile:
+
+```bash
+# .env
+TURN_SECRET=a-long-random-string
+TURN_URLS=turn:turn.example.com:3478
+
+docker compose --profile calls up -d
+```
+
+It needs a public address, with UDP and TCP port 3478 and UDP ports 49160 to 49200 open to it. The relay refuses to
+connect to private network ranges, so it cannot be used to reach the network it sits in. If it is behind NAT, give it
+its public address with `--external-ip` in `compose.yml`. Any other TURN server that supports a shared secret
+(`use-auth-secret` in coturn) works the same way: set `TURN_URLS` and `TURN_SECRET`.
+
+### STUN only
+
+```bash
+STUN_URLS=stun:stun.example.com:3478
+```
+
+<Callout kind="note" title="The default STUN server">
+  The all-in-one `compose.yml` points `STUN_URLS` at Cloudflare's free public STUN server so that calls work across
+  home networks out of the box. A STUN server sees the addresses of the people calling, so set `STUN_URLS=` (empty, on
+  the line itself) to turn it off, or name your own. Visin has no built-in server: outside that compose file, with
+  `STUN_URLS` unset, none is used.
+</Callout>
+
+## Checking what your server does
+
+Signed in, open `/api/chat/calls/config` on the chat service. It answers with whether calls are on, and a `mode`:
+
+| `mode`       | Meaning                                                  |
+| ------------ | -------------------------------------------------------- |
+| `cloudflare` | Cloudflare's relay is configured                         |
+| `turn`       | Your own relay is configured                             |
+| `stun`       | STUN only: most networks connect, some will not          |
+| `local`      | Nothing configured: one machine or one local network     |
+
+When a call cannot connect and there is no relay, the call screen says so, and why.

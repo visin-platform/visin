@@ -16,7 +16,11 @@ export const OPEN_EVENT = 'visin:chat-context';
 
 /** One project and the same runs, in any order. Empty without a project: a general question matches nothing. */
 export const contextKey = (context?: PageContext): string =>
-  context?.projectId ? `${context.projectId}:${[...(context.trainingIds ?? [])].sort().join(',')}` : '';
+  context?.paperId
+    ? `paper:${context.paperId}`
+    : context?.projectId
+      ? `${context.projectId}:${[...(context.trainingIds ?? [])].sort().join(',')}`
+      : '';
 
 /** The analysis thread already about exactly this. */
 export const matchesContext = (conversation: Conversation, context: PageContext): boolean =>
@@ -45,6 +49,13 @@ export function displayTitle(conversation: Conversation, userId: string | undefi
 
 /** Questions worth one click, for what is being analysed. */
 export function starters(context: PageContext | undefined): string[] {
+  if (context?.paperId)
+    return [
+      'Summarize this paper',
+      'What are its main results, and on which data?',
+      'Find the exact results table',
+      'Do its numbers match the recorded runs on Visin?'
+    ];
   const runs = context?.trainingIds?.length ?? 0;
   if (runs > 1)
     return [
@@ -71,6 +82,7 @@ export const analysisOf = (request: OpenRequest): PageContext | undefined =>
     ? {
         assistantId: request.assistantId,
         projectId: request.projectId,
+        paperId: request.paperId,
         trainingIds: request.trainingIds,
         title: request.title,
         projectName: request.projectName
@@ -80,6 +92,8 @@ export const analysisOf = (request: OpenRequest): PageContext | undefined =>
 export function requestFromUrl(): OpenRequest | undefined {
   const params = new URLSearchParams(window.location.search);
   const projectId = params.get('project');
+  const paperId = params.get('paper');
+  if (paperId && !projectId) return { kind: 'assistant', paperId, title: params.get('title') || undefined };
   if (!projectId) return undefined;
   return {
     kind: params.get('kind') === 'project' ? 'project' : 'assistant',

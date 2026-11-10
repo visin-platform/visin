@@ -151,26 +151,30 @@ npm run typecheck       # tsc --noEmit per workspace
 npm test                # Vitest across all workspaces
 npm run test:coverage   # every workspace enforces a coverage floor
 npm run format          # Prettier
+npm run test:e2e --workspace=chat-front   # a front's Playwright suite (account, auth, chat, label, landing, shell, vision)
 ```
 
-MongoDB integration tests share [one Vitest setup](scripts/vitest-mongo-setup.mjs). It prepares the test
-binary once before suites start and passes its executable path to every suite with further downloads disabled.
-The default version is `8.3.9`, matching Compose; `MONGOMS_VERSION` can override it for deliberate compatibility
-testing. `MONGOMS_SYSTEM_BINARY` can select an already installed executable for offline runs. Vitest does not
-require Node VM flags. The setup's offline failure-path checks run with
-`node --test scripts/vitest-mongo-setup.test.mjs`.
+The e2e suites need Playwright's browser once per machine, and again when `@playwright/test` is upgraded
+(a version that wants a different build fails with "Executable doesn't exist"):
 
-Linting uses Oxlint, retaining React hooks, refresh boundaries, and the frontend theme-token rule. Releases use
-`node scripts/release.mjs` with maintained Conventional Changelog libraries. `--dry-run` previews the next
-version and changelog without writing files, committing, tagging, publishing, or pushing. Library releases use
-`--library` to update their version without creating the monorepo's release commit or tag. Release-script tests
-run in disposable repositories with `node --test scripts/release.test.mjs`.
+```sh
+npx playwright install chromium
+```
 
-Shared libraries are consumed from npm, not from the workspace, because a service's Docker build never sees the
-monorepo. After changing one, publish it and let `npm run sync:libs` re-pin consumers; `npm run lockfiles` then
-refreshes the per-service lockfiles. CI fails on drift in either. Architecture notes are in [CLAUDE.md](CLAUDE.md).
-After adding a service or a call between services, update `scripts/architecture-diagrams.mjs` and run
-`npm run diagrams`.
+**Browser tooling for Claude (Playwright MCP).** `.mcp.json` gives Claude Code a real browser, to open a running
+app, click through a change and look at the result. Two servers share `playwright.mcp.json`: `playwright` (a desktop
+window, 1280×800) and `playwright-mobile` (a phone: touch, no hover, which is what the composer and the call screen
+use to tell one from the other). Start the apps (`npm run dev:front`) and ask for <http://localhost:3010>. The
+browser starts with an empty profile, may only reach `localhost` (and the font hosts), and has a fake camera and microphone, so calls and
+camera can be tried without a device (a real screen picker and a real phone cannot be). The pinned version is in both
+entries of `.mcp.json`; Claude Code asks once to approve project servers.
+
+It is set up to be cheap to read: images are left out of replies (a screenshot is saved to `.playwright-mcp/`, and
+only looked at when asked), generated code is off, and only console warnings and errors come back. An action's reply
+is a few lines; the page itself comes as YAML from `browser_snapshot`, so what costs tokens is the size of the page
+asked about. `playwright-mobile` pages are lighter. Only `localhost` and the font hosts the apps load from can be
+reached. For a change that should stay fixed, write an e2e spec instead: it is checked on every run and costs
+nothing to repeat.
 
 </details>
 

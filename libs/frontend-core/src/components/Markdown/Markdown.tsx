@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type ReactNode } from 'react';
 import { Box, Link, Typography } from '@mui/material';
+import { CodeBlock } from './CodeBlock';
 import { parseBlocks, type Align, type Block, type Inline } from './parse';
 
 /** More than a readme needs: the rest is not shown, so one cannot make every visitor's browser work on a book. */
@@ -76,16 +77,7 @@ function renderBlock(block: Block, index: number): ReactNode {
         </Typography>
       );
     case 'code':
-      return (
-        <Box
-          key={index}
-          component="pre"
-          tabIndex={0}
-          sx={{ my: 1.5, p: 1.5, overflowX: 'auto', borderRadius: 1, bgcolor: 'action.hover', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.875rem', lineHeight: 1.5 }}
-        >
-          <code>{block.text}</code>
-        </Box>
-      );
+      return <CodeBlock key={index} text={block.text} />;
     case 'quote':
       return (
         <Box key={index} component="blockquote" sx={{ my: 1.5, mx: 0, pl: 2, borderLeft: 3, borderColor: 'divider', color: 'text.secondary' }}>

@@ -39,3 +39,31 @@ it('replays a recovered membership audit event after a reconnect cursor', async 
     controller.abort();
   }
 });
+
+it('streams reactions and unsend mutations even when their message sequence is already read', async () => {
+  const id = await create();
+  const source = await request(`/conversations/${id}/messages`, 'alice', {
+    body: 'Secret original',
+    clientId: 'mutation-stream-1'
+  });
+  const messageId = String(source.body.data._id);
+  await request(`/conversations/${id}/messages/${messageId}/reaction`, 'alice', { emoji: '❤️' });
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`${base}/api/chat/conversations/${id}/events?after=${source.body.data.seq}`, {
+      headers: { 'x-test-user': 'alice' },
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(7000)])
+    });
+    const reader = response.body!.getReader();
+    let text = '';
+    while (!text.includes('❤️')) text += new TextDecoder().decode((await reader.read()).value);
+    expect(text).toContain('event: message-updates');
+    expect(text).not.toContain('Secret original');
+    await request(`/conversations/${id}/messages/${messageId}/unsend`, 'alice', {});
+    while (!text.includes('"unsentAt":"')) text += new TextDecoder().decode((await reader.read()).value);
+    expect(text).toContain('"revision":2');
+    expect(text).not.toContain('Secret original');
+  } finally {
+    controller.abort();
+  }
+});

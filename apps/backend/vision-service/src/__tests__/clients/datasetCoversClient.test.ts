@@ -35,23 +35,26 @@ afterAll(() => {
   }
 });
 
+/** A dataset id as dataset-service takes it: 24 hexadecimal characters. */
+const id = (n: number) => n.toString(16).padStart(24, '0');
+
 describe('fetchDatasetCovers', () => {
   it('asks dataset-service for the covers a reader may see, as that reader', async () => {
-    fetchMock.mockResolvedValue(reply({ data: { d1: 'https://files.example.test/d1.jpg' } }));
+    fetchMock.mockResolvedValue(reply({ data: { [id(1)]: 'https://files.example.test/d1.jpg' } }));
 
-    expect(await fetchDatasetCovers(['d1', 'd2'], 'u1')).toEqual({ d1: 'https://files.example.test/d1.jpg' });
+    expect(await fetchDatasetCovers([id(1), id(2)], 'u1')).toEqual({ [id(1)]: 'https://files.example.test/d1.jpg' });
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe('http://localhost:5010/internal/datasets/covers');
-    expect(JSON.parse(options!.body as string)).toEqual({ ids: ['d1', 'd2'], userId: 'u1' });
+    expect(JSON.parse(options!.body as string)).toEqual({ ids: [id(1), id(2)], userId: 'u1' });
     expect((options!.headers as Record<string, string>)['X-Internal-Token']).toBe('internal-test-token');
   });
 
   it('asks as anyone when there is no reader, and sends nothing for no datasets', async () => {
     fetchMock.mockResolvedValue(reply({ data: {} }));
 
-    await fetchDatasetCovers(['d1'], undefined);
-    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ ids: ['d1'] });
+    await fetchDatasetCovers([id(1)], undefined);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ ids: [id(1)] });
 
     fetchMock.mockClear();
     expect(await fetchDatasetCovers([], 'u1')).toEqual({});
@@ -59,7 +62,7 @@ describe('fetchDatasetCovers', () => {
   });
 
   it('loads every requested cover in batches of at most a hundred', async () => {
-    const ids = Array.from({ length: 250 }, (_, index) => `d${index}`);
+    const ids = Array.from({ length: 250 }, (_, index) => id(index));
     const covers = Object.fromEntries(ids.map((id) => [id, `https://files.example.test/${id}.jpg`]));
     fetchMock.mockImplementation(async function (_url, options) {
       const body = JSON.parse(options!.body as string) as { ids: string[]; userId: string };
@@ -74,34 +77,57 @@ describe('fetchDatasetCovers', () => {
   });
 
   it('keeps successful batches when another batch fails', async () => {
-    const ids = Array.from({ length: 201 }, (_, index) => `d${index}`);
+    const ids = Array.from({ length: 201 }, (_, index) => id(index));
     fetchMock
-      .mockResolvedValueOnce(reply({ data: { d0: 'https://files.example.test/first.jpg' } }))
+      .mockResolvedValueOnce(reply({ data: { [id(0)]: 'https://files.example.test/first.jpg' } }))
       .mockRejectedValueOnce(new Error('timed out'))
-      .mockResolvedValueOnce(reply({ data: { d200: 'https://files.example.test/last.jpg' } }));
+      .mockResolvedValueOnce(reply({ data: { [id(200)]: 'https://files.example.test/last.jpg' } }));
 
     expect(await fetchDatasetCovers(ids, 'u1')).toEqual({
-      d0: 'https://files.example.test/first.jpg',
-      d200: 'https://files.example.test/last.jpg'
+      [id(0)]: 'https://files.example.test/first.jpg',
+      [id(200)]: 'https://files.example.test/last.jpg'
     });
   });
 
   it('answers none rather than failing a project list when the service is unwell', async () => {
     fetchMock.mockResolvedValueOnce(reply({}, false, 502));
-    expect(await fetchDatasetCovers(['d1'], 'u1')).toEqual({});
+    expect(await fetchDatasetCovers([id(1)], 'u1')).toEqual({});
 
     fetchMock.mockRejectedValueOnce(new Error('timed out'));
-    expect(await fetchDatasetCovers(['d1'], 'u1')).toEqual({});
+    expect(await fetchDatasetCovers([id(1)], 'u1')).toEqual({});
 
     fetchMock.mockResolvedValueOnce(reply({}));
-    expect(await fetchDatasetCovers(['d1'], 'u1')).toEqual({});
+    expect(await fetchDatasetCovers([id(1)], 'u1')).toEqual({});
   });
 
   it('asks for the service address in production rather than assuming one', async () => {
     process.env.NODE_ENV = 'production';
 
     // A missing address is a misconfiguration, but still not worth failing a list for.
-    expect(await fetchDatasetCovers(['d1'], 'u1')).toEqual({});
+    expect(await fetchDatasetCovers([id(1)], 'u1')).toEqual({});
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('ids that are not dataset ids', () => {
+  const real = 'a'.repeat(24);
+  const other = 'b'.repeat(24);
+
+  it('are left out, so one legacy reference does not cost the valid datasets their covers', async () => {
+    fetchMock.mockResolvedValue(reply({ data: { [real]: 'https://files.example.test/a.jpg' } }));
+
+    const covers = await fetchDatasetCovers(
+      ['iseauto-sample', real, '', 'not-an-id', real, other.toUpperCase()],
+      undefined
+    );
+
+    const sent = JSON.parse(fetchMock.mock.calls[0][1]!.body as string) as { ids: string[] };
+    expect(sent.ids).toEqual([real, other.toUpperCase()]);
+    expect(covers).toEqual({ [real]: 'https://files.example.test/a.jpg' });
+  });
+
+  it('send no request at all when none is a dataset id', async () => {
+    await expect(fetchDatasetCovers(['sample', 'x'], undefined)).resolves.toEqual({});
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

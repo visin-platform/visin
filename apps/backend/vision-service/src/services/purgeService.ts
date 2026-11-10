@@ -12,6 +12,7 @@ import Benchmark from '../models/Benchmark';
 import EpochVisualization from '../models/EpochVisualization';
 import Comparison from '../models/Comparison';
 import Finding from '../models/Finding';
+import { forgetPaperDocument } from './paperDocumentService';
 import Paper from '../models/Paper';
 import Config from '../models/Config';
 import { deleteFiles } from '../clients/fileServiceClient';
@@ -117,7 +118,9 @@ export async function purgeExpiredTrash(now = new Date()): Promise<{ projects: n
   const evaluations = (await Evaluation.deleteMany({ deletedAt: { $lte: cutoff } })).deletedCount ?? 0;
   if (evaluations > 0) invalidatePublic();
 
-  // A paper is only an address card, so there is nothing under it to delete first.
+  // A paper is an address card, plus the PDF and text read from it: those go first, so none is left with no owner.
+  const expiredPapers = await Paper.find({ trashedAt: { $lte: cutoff } }).select('_id').lean();
+  for (const { _id } of expiredPapers) await forgetPaperDocument(String(_id));
   const papers = (await Paper.deleteMany({ trashedAt: { $lte: cutoff } })).deletedCount ?? 0;
 
   if (projects.length + trainings.length + evaluations + papers > 0) {

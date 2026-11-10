@@ -354,3 +354,54 @@ describe('parsing at the boundary', () => {
     await expect(vision.getProject('k', 'p1')).rejects.toBeInstanceOf(ShapeError);
   });
 });
+
+describe('papers', () => {
+  const paper = {
+    paper: {
+      id: 'p/1',
+      title: 'CLFTv2',
+      authors: [{ name: 'Ann' }],
+      tags: [],
+      results: [{ kind: 'training', available: true, ref: 't1', name: 'run' }]
+    },
+    document: { status: 'ready', pageCount: 12 }
+  };
+
+  it('reads a paper and its text state through the read-only assistant route, escaping the id', async () => {
+    called.mockResolvedValue(paper);
+    await expect(vision.getPaper('k', 'p/1')).resolves.toMatchObject({
+      paper: { title: 'CLFTv2' },
+      document: { status: 'ready', pageCount: 12 }
+    });
+    expect(lastCall()).toMatchObject({ method: 'GET', path: '/paper-documents/p%2F1' });
+  });
+
+  it('treats a state it does not know as a failed read, so a newer server cannot break the tool', async () => {
+    called.mockResolvedValue({ ...paper, document: { status: 'archived' } });
+    await expect(vision.getPaper('k', 'p1')).resolves.toMatchObject({ document: { status: 'failed' } });
+  });
+
+  it('searches the text and reads pages with the query it was given', async () => {
+    called.mockResolvedValue({
+      query: 'mIoU',
+      pageCount: 12,
+      hits: [{ page: 7, score: 3, snippets: ['Val mean IoU 0.7591'] }]
+    });
+    await expect(vision.searchPaper('k', 'p1', 'mIoU', 3)).resolves.toMatchObject({ hits: [{ page: 7 }] });
+    expect(lastCall()).toMatchObject({ path: '/paper-documents/p1/search', query: { q: 'mIoU', limit: 3 } });
+
+    called.mockClear();
+    called.mockResolvedValue({ pageCount: 12, next: 5, pages: [{ page: 3, text: 'Method' }] });
+    await expect(vision.readPaperPages('k', 'p1', 3, 8)).resolves.toMatchObject({ next: 5 });
+    expect(lastCall()).toMatchObject({ path: '/paper-documents/p1/pages', query: { from: 3, to: 8 } });
+  });
+
+  it('refuses an answer that is not a paper, rather than building words out of nothing', async () => {
+    called.mockResolvedValue({ paper: { title: 'no id' } });
+    await expect(vision.getPaper('k', 'p1')).rejects.toBeInstanceOf(ShapeError);
+    called.mockResolvedValue({ hits: 'many' });
+    await expect(vision.searchPaper('k', 'p1', 'x')).rejects.toBeInstanceOf(ShapeError);
+    called.mockResolvedValue({ pages: [{ page: 'three' }] });
+    await expect(vision.readPaperPages('k', 'p1', 1)).rejects.toBeInstanceOf(ShapeError);
+  });
+});

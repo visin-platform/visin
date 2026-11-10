@@ -16,3 +16,9 @@ it('runs a question with fewer rounds under a limit saved before the rounds grew
 it('has no plan for a limit below the fewest rounds', () => {
   expect(budgetPlans(TOKENS_PER_ROUND, 8, true)).toEqual([]);
 });
+
+it('reserves image tokens on every possible provider round and reduces rounds to fit the daily budget', () => {
+  expect(reservationFor(false, 2, 1)).toBe(2 * (TOKENS_PER_ROUND + 32768));
+  const plans = budgetPlans(300000, 8, false, 1);
+  expect(plans).toEqual([{ screen: false, toolRounds: 4, reserve: reservationFor(false, 4, 1) }]);
+});

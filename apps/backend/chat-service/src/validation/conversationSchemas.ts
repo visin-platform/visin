@@ -10,6 +10,8 @@ export const createSchema = z
     assistantId: id.optional(),
     groupId: id.optional(),
     projectId: id.optional(),
+    /** a research paper to analyse in a private chat */
+    paperId: id.optional(),
     trainingIds: z.array(id).max(20).default([])
   })
   .strict();

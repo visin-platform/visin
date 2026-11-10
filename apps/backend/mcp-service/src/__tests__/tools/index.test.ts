@@ -57,8 +57,8 @@ describe('registerTools', () => {
 
   it('reports how many modules applied', () => {
     const { server } = makeServer();
-    // visualization and evaluation tools declare vision:read too, so that scope brings three modules.
-    expect(registerTools(server, caller, ['vision:read', 'dataset:read'])).toBe(4);
+    // visualization, evaluation and paper tools declare vision:read too, so that scope brings four modules.
+    expect(registerTools(server, caller, ['vision:read', 'dataset:read'])).toBe(5);
   });
 
   it('grants analysis independently of vision, which is the point of the split', () => {
@@ -128,7 +128,7 @@ describe('measurement is not opt-in', () => {
       'analysis:write'
     ]);
 
-    expect(count).toBe(7);
+    expect(count).toBe(8);
     expect(seen.length).toBeGreaterThan(10);
   });
 });

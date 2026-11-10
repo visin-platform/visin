@@ -65,7 +65,8 @@ export async function getTrainingStats(userId: string | undefined, filters: Trai
               $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] },
               $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
             }
-          }
+          },
+          { $group: { _id: null, totalTime: { $sum: '$epoch_time' }, epochCount: { $sum: 1 } } }
         ],
         as: 'epochs'
       }
@@ -73,8 +74,9 @@ export async function getTrainingStats(userId: string | undefined, filters: Trai
     // Add computed fields
     {
       $addFields: {
-        trainingTime: { $ifNull: [{ $sum: '$epochs.epoch_time' }, 0] },
-        epochCount: { $size: '$epochs' }
+        trainingTime: { $ifNull: [{ $arrayElemAt: ['$epochs.totalTime', 0] }, 0] },
+        activityStart: { $ifNull: ['$startTime', '$createdAt'] },
+        epochCount: { $ifNull: [{ $arrayElemAt: ['$epochs.epochCount', 0] }, 0] }
       }
     },
     // Group to calculate totals
@@ -97,42 +99,50 @@ export async function getTrainingStats(userId: string | undefined, filters: Trai
     }
   ];
 
-  const result = await Training.aggregate(aggregationPipeline);
-  const stats = result[0] || {
-    totalTrainings: 0,
-    totalTime: 0,
-    totalEpochs: 0,
-    avgEpochTime: 0
-  };
-
-  // These totals may span projects with different rates, so the time is summed
-  // per project and each project's own rates applied to its share.
-  const perProject = await Training.aggregate([
-    { $match: matchQuery },
+  const weekStart = new Date();
+  weekStart.setUTCHours(0, 0, 0, 0);
+  weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7) - 7 * 7);
+  // Reuse the already authorized runs and epoch sums for the overview and the eight-week trend.
+  const result = await Training.aggregate([
+    ...aggregationPipeline.slice(0, 3),
     {
-      $lookup: {
-        from: 'training_epoches',
-        let: { trainingId: '$_id' },
-        pipeline: [
+      $facet: {
+        totals: aggregationPipeline.slice(3),
+        perProject: [
+          { $group: { _id: '$projectId', totalTrainings: { $sum: 1 }, totalTime: { $sum: '$trainingTime' } } }
+        ],
+        weekly: [
+          { $match: { activityStart: { $gte: weekStart, $lte: new Date() } } },
           {
-            $match: {
-              $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] },
-              $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+            $group: {
+              _id: { $dateTrunc: { date: '$activityStart', unit: 'week', startOfWeek: 'monday', timezone: 'UTC' } },
+              trainings: { $sum: 1 },
+              seconds: { $sum: '$trainingTime' }
             }
           },
-          { $group: { _id: null, time: { $sum: '$epoch_time' } } }
-        ],
-        as: 'epochStats'
-      }
-    },
-    {
-      $group: {
-        _id: '$projectId',
-        totalTrainings: { $sum: 1 },
-        totalTime: { $sum: { $ifNull: [{ $arrayElemAt: ['$epochStats.time', 0] }, 0] } }
+          { $sort: { _id: 1 } }
+        ]
       }
     }
   ]);
+  const stats = result[0]?.totals[0] || {
+    totalTrainings: 0,
+    totalTime: 0,
+    totalHours: 0,
+    totalEpochs: 0,
+    avgEpochTime: 0
+  };
+  const weekly: { week: Date; trainings: number; hours: number }[] = (result[0]?.weekly ?? []).map(
+    (row: { _id: Date; trainings: number; seconds: number }) => ({
+      week: row._id,
+      trainings: row.trainings,
+      hours: row.seconds / 3600
+    })
+  );
+
+  // These totals may span projects with different rates, so the time is summed
+  // per project and each project's own rates applied to its share.
+  const perProject: { _id: string; totalTrainings: number; totalTime: number }[] = result[0]?.perProject ?? [];
 
   const byProject = await costingByProject(perProject.map((row) => row._id));
   const totalsByCurrency = new Map<string, CurrencyCostTotal>();
@@ -166,6 +176,7 @@ export async function getTrainingStats(userId: string | undefined, filters: Trai
 
   return {
     ...stats,
+    weekly,
     ...totals,
     costTotalsByCurrency,
     costCoverage,

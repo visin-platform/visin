@@ -1,3 +1,4 @@
+import { PageSkeleton } from '../components/common/PageSkeleton';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, CircularProgress, Container, Paper, Stack, Typography } from '@mui/material';
 import { Delete as DeleteIcon } from '@mui/icons-material';
@@ -264,13 +265,7 @@ const DatasetDetailPage: React.FC = () => {
       navigate('/datasets');
     }, 'Failed to move the dataset to the trash');
 
-  if (isLoading) {
-    return (
-      <Container maxWidth="xl" sx={{ py: 6, textAlign: 'center' }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
+  if (isLoading) return <PageSkeleton layout="detail" label="Loading dataset" />;
   if (error || !dataset) {
     return (
       <Container maxWidth="xl" sx={{ pb: 4 }}>

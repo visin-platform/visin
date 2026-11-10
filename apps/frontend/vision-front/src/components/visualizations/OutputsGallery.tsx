@@ -1,18 +1,9 @@
+import { ContentSkeleton } from '../common/ContentSkeleton';
+import { ImageOutlined } from '@mui/icons-material';
 import React, { useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import {
-  Alert,
-  Box,
-  Button,
-  ButtonBase,
-  Card,
-  CardContent,
-  CircularProgress,
-  MenuItem,
-  TextField,
-  Typography
-} from '@mui/material';
-import { onImage } from '@visin/frontend-core';
+import { Alert, Box, Button, ButtonBase, Card, CardContent, MenuItem, TextField, Typography } from '@mui/material';
+import { EmptyState, onImage } from '@visin/frontend-core';
 import { epochOutputsQuery, GALLERY_LIMIT, useRunClasses } from '../../hooks/useOutputImages';
 import type { Visualization } from '../../types';
 import { frameOf, OUTPUT_KIND_LABELS, OUTPUT_KINDS, type OutputClass, type OutputKind } from '../../utils/outputPixels';
@@ -100,7 +91,9 @@ const OutputsGallery: React.FC<OutputsGalleryProps> = ({
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-        <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600, mr: 1 }}>Model outputs</Typography>
+        <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600, mr: 1 }}>
+          Model outputs
+        </Typography>
         {ordered.length > EPOCH_BUTTONS ? (
           <TextField
             select
@@ -111,7 +104,9 @@ const OutputsGallery: React.FC<OutputsGalleryProps> = ({
             sx={{ minWidth: 120 }}
           >
             {ordered.map((value) => (
-              <MenuItem key={value} value={value}>Epoch {value}</MenuItem>
+              <MenuItem key={value} value={value}>
+                Epoch {value}
+              </MenuItem>
             ))}
           </TextField>
         ) : (
@@ -140,9 +135,7 @@ const OutputsGallery: React.FC<OutputsGalleryProps> = ({
       </Box>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress size={28} aria-label="Loading outputs" />
-        </Box>
+        <ContentSkeleton label="Loading outputs" cards />
       ) : failed ? (
         <Alert severity="error">Failed to load the model outputs</Alert>
       ) : (
@@ -160,13 +153,42 @@ const OutputsGallery: React.FC<OutputsGalleryProps> = ({
           </Box>
           {shortened.map(({ kind, total }) => (
             <Typography key={kind} variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-              Showing the latest {GALLERY_LIMIT} of {total} {OUTPUT_KIND_LABELS[kind].toLowerCase()} images for this epoch.
+              Showing the latest {GALLERY_LIMIT} of {total} {OUTPUT_KIND_LABELS[kind].toLowerCase()} images for this
+              epoch.
             </Typography>
           ))}
           {frames.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>No outputs for this epoch</Typography>
+            <EmptyState
+              icon={<ImageOutlined />}
+              title="No outputs for this epoch"
+              description="The run has not published images for this epoch. Try another epoch or refresh after the pipeline reports its outputs."
+              action={
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    for (const result of results) void result.refetch();
+                  }}
+                >
+                  Refresh outputs
+                </Button>
+              }
+            />
           ) : matching.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>No frame matches “{search.trim()}”</Typography>
+            <EmptyState
+              icon={<ImageOutlined />}
+              title={`No frame matches “${search.trim()}”`}
+              action={
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setSearch('');
+                    setShown(FRAMES_PER_PAGE);
+                  }}
+                >
+                  Clear search
+                </Button>
+              }
+            />
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -178,7 +200,9 @@ const OutputsGallery: React.FC<OutputsGalleryProps> = ({
               {matching.slice(0, shown).map(([frame, byKind]) => (
                 <Card key={frame} variant="outlined" component="section" aria-label={`Frame ${frame}`}>
                   <CardContent>
-                    <Typography variant="subtitle2" component="h4" sx={{ mb: 1, overflowWrap: 'anywhere' }}>{frame}</Typography>
+                    <Typography variant="subtitle2" component="h4" sx={{ mb: 1, overflowWrap: 'anywhere' }}>
+                      {frame}
+                    </Typography>
                     <Box
                       sx={{
                         display: 'grid',
@@ -221,7 +245,9 @@ const OutputsGallery: React.FC<OutputsGalleryProps> = ({
                                   justifyContent: 'center'
                                 }}
                               >
-                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>Not uploaded</Typography>
+                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                  Not uploaded
+                                </Typography>
                               </Box>
                             )}
                           </Box>

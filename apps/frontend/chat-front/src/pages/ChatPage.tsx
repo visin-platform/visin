@@ -1,3 +1,5 @@
+import { AppearanceDialog } from '../appearance/AppearanceDialog';
+import { appearanceSx } from '../appearance/chatAppearance';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 import { NewChat } from '../components/newChat/NewChat';
 import { ChatWorkspaceProvider } from '../contexts/ChatWorkspaceProvider';
@@ -23,6 +25,9 @@ export default function ChatPage({ panel = false }: { panel?: boolean }) {
 
 function WorkspaceView({ panel }: { panel: boolean }) {
   const {
+    appearance,
+    appearanceOpen,
+    setAppearanceOpen,
     isLoading,
     isAuthenticated,
     login,
@@ -54,15 +59,17 @@ function WorkspaceView({ panel }: { panel: boolean }) {
     );
   return (
     <Box
-      sx={{
+      role="region"
+      aria-label="Chat workspace"
+      sx={(theme) => ({
+        ...appearanceSx(theme, appearance.settings),
         display: 'flex',
         position: 'relative',
         height: panel ? '100%' : 'calc(100dvh - 150px)',
         minHeight: panel ? 0 : 400,
         overflow: 'hidden',
-        bgcolor: 'background.paper',
-        ...(panel ? {} : { border: 1, borderColor: 'divider', borderRadius: 2 })
-      }}
+        ...(panel ? {} : { border: 1, borderColor: 'divider', borderRadius: 3 })
+      })}
     >
       <ConversationList panel={panel} />
       <Stack sx={{ flex: 1, minWidth: 0, display: !detail ? { xs: 'none', md: panel ? 'none' : 'flex' } : 'flex' }}>
@@ -99,6 +106,7 @@ function WorkspaceView({ panel }: { panel: boolean }) {
           {error}
         </Alert>
       )}
+      <AppearanceDialog open={appearanceOpen} onClose={() => setAppearanceOpen(false)} appearance={appearance} />
       <PeopleDialog />
       <FindingDialog />
     </Box>

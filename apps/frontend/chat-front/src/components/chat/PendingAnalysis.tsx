@@ -25,7 +25,7 @@ export function PendingAnalysis({ panel }: { panel: boolean }) {
       </Stack>
       {
         <ChatContextChips
-          context={pending}
+          context={{ ...pending, paperTitle: pending.title }}
           labels={
             pending.trainingIds?.length === 1 && pending.title
               ? [{ id: pending.trainingIds[0], name: pending.title }]
@@ -45,6 +45,7 @@ export function PendingAnalysis({ panel }: { panel: boolean }) {
         inputRef={composerInput}
         hint={panel ? undefined : 'Enter to send, Shift+Enter for a new line'}
         disabled={!enabled}
+        commands
       />
     </>
   );

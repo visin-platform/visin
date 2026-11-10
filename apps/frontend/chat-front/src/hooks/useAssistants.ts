@@ -44,6 +44,11 @@ export function useAssistants() {
   };
   const save = () => change(() => assistantService.save(form, editing));
   const remove = (id: string) => change(() => assistantService.remove(id));
+  /** Starts new analyses with this assistant, or goes back to the built-in analyst. Its other settings are kept. */
+  const makeDefault = (row: Assistant, on: boolean) =>
+    change(() =>
+      assistantService.save({ name: row.name, personality: row.personality, paused: row.paused, default: on }, row._id)
+    );
 
   return {
     catalog,
@@ -58,6 +63,7 @@ export function useAssistants() {
     setConfirmDelete,
     empty,
     save,
-    remove
+    remove,
+    makeDefault
   };
 }

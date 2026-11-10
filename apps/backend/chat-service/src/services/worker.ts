@@ -1,3 +1,4 @@
+import { redactQuotes } from './messageService';
 import { recoverMembershipEvents } from './membershipAudit';
 import { createApiKey, deleteApiKey, logger } from '@visin/backend-core';
 import { AssistantRun } from '../models/AssistantRun';
@@ -5,10 +6,12 @@ import { Budget } from '../models/Budget';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { analyze } from './analyst';
+import { MAX_ANALYSIS_IMAGES, type ImageRef } from './imageInput';
 import { budgetPlans } from './analysisLimits';
+import { createDraftWriter } from './draft';
 import { resolveProviderKey } from './keys';
 import { appendMessage } from './messages';
-import { PROVIDERS } from './providers';
+import { PAPER_REQUEST_BYTES, PROVIDERS, PROVIDER_REPLAY_VERSION, ProviderRequestError } from './providers';
 import { assistantSettings } from './settings';
 import { runAllowed } from './sharedAssistants';
 import { expireScreenCalls, screenContextSchema } from './screen';
@@ -78,6 +81,7 @@ export function startWorker() {
       });
       const available =
         (await assistantSettings()).enabled &&
+        !(await Message.exists({ _id: job.messageId, unsentAt: { $ne: null } })) &&
         (await runAllowed(job.conversationId, job.userId, job.membershipVersion, job.assistantId));
       if (target && available && job.result)
         await appendMessage({
@@ -91,7 +95,7 @@ export function startWorker() {
           replyTo: job.messageId,
           evidence: job.evidence.map((e) => ({ tool: e.tool || '', input: e.input, at: e.at || new Date() }))
         });
-      await AssistantRun.updateOne({ _id: job.id }, { $set: { published: true } });
+      await AssistantRun.updateOne({ _id: job.id }, { $set: { published: true }, $unset: { draft: 1 } });
     }
     const expired = await AssistantRun.find({ state: 'running', leaseUntil: { $lt: new Date() } });
     for (const run of expired) {
@@ -103,7 +107,8 @@ export function startWorker() {
             state: 'failed',
             error: 'Analysis was interrupted. Send your question again to retry.',
             finishedAt: new Date()
-          }
+          },
+          $unset: { draft: 1 }
         }
       );
       // The run is over, so its conversation need not wait out the rest of the lock.
@@ -151,6 +156,8 @@ export function startWorker() {
 
   const execute = async ({ run, conversation: c }: Claimed) => {
     let key: Awaited<ReturnType<typeof createApiKey>> | undefined;
+    // Only a private thread shows the answer as it is written: shared replies are not exposed before they are final.
+    const drafts = c.kind === 'assistant' ? createDraftWriter(run.id) : undefined;
     const controller = new AbortController();
     controllers.set(run.id, controller);
     const assistantAvailable = () => runAllowed(run.conversationId, run.userId, run.membershipVersion, run.assistantId);
@@ -202,11 +209,41 @@ export function startWorker() {
           : undefined
       );
       const screen = c.kind === 'assistant' && checkedScreen.success ? checkedScreen.data : undefined;
+      const historyAfter =
+        c.kind === 'room'
+          ? Math.max(0, ...c.participants.filter((p) => p.state === 'active').map((p) => p.joinedSeq))
+          : 0;
+      const questions = await Message.find({
+        conversationId: c.id,
+        kind: 'person',
+        unsentAt: null,
+        seq: { $gt: historyAfter, $lte: trigger.seq }
+      })
+        .sort({ seq: -1 })
+        .limit(10);
+      await redactQuotes(questions);
+      // The newest five images remain available for follow-ups. Shared conversations send only images in the
+      // explicit ask, never an earlier participant's attachment outside that ask.
+      const imageRefs = new Map<string, ImageRef[]>();
+      let imageCount = 0;
+      for (const question of c.kind === 'assistant' ? questions : [trigger]) {
+        const selected = (question.attachments ?? [])
+          .filter((file) => file.kind === 'image')
+          .slice(0, MAX_ANALYSIS_IMAGES - imageCount);
+        imageRefs.set(question.id, selected);
+        imageCount += selected.length;
+      }
       const day = new Date().toISOString().slice(0, 10);
       await Budget.updateOne({ userId: run.userId, day }, { $setOnInsert: { reserved: 0 } }, { upsert: true });
       // The best plan the day's budget still holds: page changes need more room, and are given up before the question.
       let plan: ReturnType<typeof budgetPlans>[number] | undefined;
-      for (const candidate of budgetPlans(limit, toolRounds, screen?.allowActions === true)) {
+      for (const candidate of budgetPlans(
+        limit,
+        toolRounds,
+        screen?.allowActions === true,
+        imageCount,
+        c.kind === 'assistant' && c.paperId ? PAPER_REQUEST_BYTES : undefined
+      )) {
         const budget = await Budget.findOneAndUpdate(
           { userId: run.userId, day, reserved: { $lte: limit - candidate.reserve } },
           { $inc: { reserved: candidate.reserve } }
@@ -221,7 +258,7 @@ export function startWorker() {
       const steering = plan.screen;
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
       // provider may have consumed tokens even if the connection did not return usage.
-      if (c.kind === 'assistant' && (c.projectId || steering))
+      if (c.kind === 'assistant' && (c.projectId || c.paperId || steering))
         key = await createApiKey({
           userId: run.userId,
           userEmail: run.email,
@@ -232,17 +269,6 @@ export function startWorker() {
           ...(c.projectId ? { project: { id: c.projectId, name: c.projectName || c.title } } : {})
         });
       if (key) await AssistantRun.updateOne({ _id: run.id }, { $set: { keyId: key.summary.id } });
-      const historyAfter =
-        c.kind === 'room'
-          ? Math.max(0, ...c.participants.filter((p) => p.state === 'active').map((p) => p.joinedSeq))
-          : 0;
-      const questions = await Message.find({
-        conversationId: c.id,
-        kind: 'person',
-        seq: { $gt: historyAfter, $lte: trigger.seq }
-      })
-        .sort({ seq: -1 })
-        .limit(10);
       const replies = await Message.find({
         conversationId: c.id,
         kind: 'assistant',
@@ -255,7 +281,25 @@ export function startWorker() {
         return [
           {
             role: 'user' as const,
-            content: question.quote ? JSON.stringify({ quote: question.quote, question: question.body }) : question.body
+            imageRefs: imageRefs.get(question.id),
+            content: question.attachments?.length
+              ? JSON.stringify({
+                  question:
+                    question.body ||
+                    ((imageRefs.get(question.id)?.length ?? 0) > 0
+                      ? 'Describe what you see in the attached images.'
+                      : 'What can you tell me about these attachments?'),
+                  ...(question.quote ? { quote: question.quote } : {}),
+                  attachments: question.attachments.map(({ fileId, name, mime, size }) => ({
+                    name,
+                    mime,
+                    size,
+                    contentAvailable: imageRefs.get(question.id)?.some((file) => file.fileId === fileId) ?? false
+                  }))
+                })
+              : question.quote
+                ? JSON.stringify({ quote: question.quote, question: question.body })
+                : question.body
           },
           ...(reply ? [{ role: 'assistant' as const, content: reply.body }] : [])
         ];
@@ -273,19 +317,37 @@ export function startWorker() {
         JSON.stringify({
           transcript,
           asker: run.name,
-          question: trigger.body,
+          question: trigger.body || (imageCount ? 'Describe what you see in the attached images.' : ''),
+          ...(trigger.attachments?.length
+            ? {
+                attachments: trigger.attachments.map(({ name, mime }) => ({
+                  name,
+                  mime,
+                  contentAvailable: mime.startsWith('image/')
+                }))
+              }
+            : {}),
           ...(trigger.quote ? { quote: trigger.quote } : {})
         });
       while (transcript.length && sharedText().length > 11000) transcript.shift();
-      const history = c.kind === 'assistant' ? privateHistory : [{ role: 'user' as const, content: sharedText() }];
-      await AssistantRun.updateOne({ _id: run.id }, { $set: { provider, model } });
+      const history =
+        c.kind === 'assistant'
+          ? privateHistory
+          : [{ role: 'user' as const, content: sharedText(), imageRefs: imageRefs.get(trigger.id) }];
+      await AssistantRun.updateOne(
+        { _id: run.id },
+        { $set: { provider, model, providerReplayVersion: PROVIDER_REPLAY_VERSION } }
+      );
       const result = await analyze({
         toolRounds: plan.toolRounds,
+        conversationId: c.id,
         provider,
         model,
         apiKey: resolved.key,
         token: key?.token || '',
         projectId: c.kind === 'assistant' ? (c.projectId ?? undefined) : undefined,
+        paperId: c.kind === 'assistant' ? (c.paperId ?? undefined) : undefined,
+        paperTitle: c.kind === 'assistant' ? (c.paperTitle ?? undefined) : undefined,
         trainingIds: c.kind === 'assistant' ? c.trainingIds : [],
         shared: c.kind !== 'assistant',
         guard,
@@ -306,8 +368,28 @@ export function startWorker() {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(260000)]),
         activity: async (activity) => {
           await AssistantRun.updateOne({ _id: run.id, state: 'running' }, { $set: { activity } });
-        }
+        },
+        onText: drafts?.write,
+        // Only a private thread shows its steps: in a shared one nobody but the asker's reply is seen.
+        step:
+          c.kind === 'assistant'
+            ? {
+                start: async (tool) => {
+                  await AssistantRun.updateOne(
+                    { _id: run.id, state: 'running' },
+                    { $push: { steps: { tool, startedAt: new Date() } } }
+                  );
+                },
+                end: async (tool) => {
+                  await AssistantRun.updateOne(
+                    { _id: run.id, state: 'running', steps: { $elemMatch: { tool, endedAt: { $exists: false } } } },
+                    { $set: { 'steps.$.endedAt': new Date() } }
+                  );
+                }
+              }
+            : undefined
       });
+      drafts?.stop();
       await guard();
       const current = await AssistantRun.findById(run.id);
       const currentConversation = await Conversation.findById(c.id);
@@ -328,6 +410,8 @@ export function startWorker() {
             ...(price ? { price } : {}),
             state: 'completed',
             result: result.text,
+            // The whole answer, so the preview is complete until the published message replaces it.
+            ...(drafts ? { draft: result.text } : {}),
             evidence: result.evidence,
             activity: 'Completed',
             inputTokens: result.inputTokens,
@@ -347,6 +431,7 @@ export function startWorker() {
         { $inc: { reserved: -(reserve - result.inputTokens - result.outputTokens) } }
       );
     } catch (error) {
+      drafts?.stop();
       await AssistantRun.updateOne(
         { _id: run.id, state: 'running' },
         {
@@ -354,11 +439,14 @@ export function startWorker() {
             state: 'failed',
             activity: 'Failed',
             error: error instanceof Error ? error.message : 'Analysis failed',
+            ...(error instanceof ProviderRequestError ? { providerFailure: error.diagnostic } : {}),
             finishedAt: new Date()
-          }
+          },
+          $unset: { draft: 1 }
         }
       );
     } finally {
+      drafts?.stop();
       clearInterval(watch);
       controllers.delete(run.id);
       if (key) await deleteApiKey(run.userId, key.summary.id);

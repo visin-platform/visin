@@ -1,8 +1,17 @@
 import { createContext, useContext } from 'react';
+import type { ScreenCue } from './useScreenCalls';
 
 /** A deliberate request to open chat on something. Chat-front reads it and re-checks every id in it. */
 export type ChatRequest =
-  | { kind?: 'assistant' | 'project'; assistantId?: string; projectId?: string; trainingIds?: string[]; title?: string }
+  | {
+      kind?: 'assistant' | 'project';
+      assistantId?: string;
+      projectId?: string;
+      /** a research paper to analyse on its own, in a private chat */
+      paperId?: string;
+      trainingIds?: string[];
+      title?: string;
+    }
   | { kind: 'direct'; handle?: string; userId?: string; name?: string }
   | { kind: 'group'; groupId: string; title?: string };
 
@@ -24,6 +33,11 @@ export interface ChatDock {
   openWith: (request: ChatRequest) => void;
   /** The conversation the panel shows, for "open full page". */
   conversationId?: string;
+  /** What the analyst last opened on the page, until it is dismissed or fades. */
+  screenCue?: ScreenCue | null;
+  dismissScreenCue?: () => void;
+  /** Takes the last change back: goes to where the page was. */
+  undoScreenCue?: () => void;
 }
 
 export const ChatDockContext = createContext<ChatDock>({

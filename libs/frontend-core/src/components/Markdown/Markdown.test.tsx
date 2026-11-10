@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Markdown, MAX_MARKDOWN_LENGTH } from './Markdown';
 
 const renderMarkdown = (source: string) => render(<Markdown>{source}</Markdown>);
@@ -135,5 +135,24 @@ describe('Markdown', () => {
 
     expect(container).toHaveTextContent('second');
     expect(container).not.toHaveTextContent('first');
+  });
+});
+
+describe('Markdown code blocks', () => {
+  it('copies the code as written, and says so', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderMarkdown('```latex\n\\begin{table}\n  x\n```');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith('\\begin{table}\n  x');
+  });
+
+  it('stays quiet where the browser refuses the clipboard', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    renderMarkdown('```\nx\n```');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
   });
 });

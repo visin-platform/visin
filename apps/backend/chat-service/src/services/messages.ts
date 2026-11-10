@@ -1,4 +1,5 @@
 import { ConflictError } from '@visin/backend-core';
+import type { Attachment } from './attachments';
 import { flushMembershipEvents } from './membershipAudit';
 import { Conversation } from '../models/Conversation';
 import type { ScreenContext } from './screen';
@@ -11,6 +12,7 @@ export async function appendMessage(input: {
   senderName: string;
   kind: 'person' | 'assistant' | 'system';
   body: string;
+  attachments?: Attachment[];
   clientId: string;
   replyTo?: string;
   quote?: { messageId: string; senderName: string; body: string; kind: 'person' | 'assistant' | 'system' };
@@ -73,6 +75,8 @@ export async function appendMessage(input: {
         );
         return duplicate;
       }
+      // Not a retry of this message: a file in it already belongs to another (the index allows one owner).
+      throw new ConflictError('A file in this message was already sent');
     }
     throw error;
   }

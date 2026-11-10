@@ -1,5 +1,6 @@
+import { PageSkeleton } from '../components/common/PageSkeleton';
 import React from 'react';
-import { Alert, Box, CircularProgress, Container, Link, Paper, Typography } from '@mui/material';
+import { Alert, Box, Container, Link, Paper, Typography } from '@mui/material';
 import { PageHeader, VerificationMark } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, Navigate, useParams } from 'react-router-dom';
@@ -18,7 +19,12 @@ const CheckpointFact: React.FC<{ checkpoint: PublicEvaluation['checkpoint'] }> =
   if (!checkpoint) return <>Not given</>;
   const source = checkpointSource(checkpoint);
   const href = source.href?.(checkpoint);
-  if (href) return <Link href={href} target="_blank" rel="noopener noreferrer">{source.label(checkpoint)}</Link>;
+  if (href)
+    return (
+      <Link href={href} target="_blank" rel="noopener noreferrer">
+        {source.label(checkpoint)}
+      </Link>
+    );
   return <>{[source.label(checkpoint), source.detail?.(checkpoint)].filter(Boolean).join(' · ')}</>;
 };
 
@@ -30,7 +36,7 @@ const PublicEvaluationPage: React.FC = () => {
     queryFn: () => publicLeaderboardService.evaluation(id)
   });
 
-  if (isLoading) return <Container maxWidth="lg"><CircularProgress /></Container>;
+  if (isLoading) return <PageSkeleton layout="detail" label="Loading evaluation" />;
   if (isError || !data) {
     return (
       <Container maxWidth="lg" sx={{ pb: 4 }}>
@@ -45,12 +51,38 @@ const PublicEvaluationPage: React.FC = () => {
     return <Navigate to={`/leaderboards/${suite.slug}/${suite.version}/${data.evaluationId}`} replace />;
   }
   const rows: [string, React.ReactNode][] = [
-    ['Suite', <Link key="s" component={RouterLink} to={`/leaderboards/${suite.slug}/${suite.version}`}>{suite.name} · {suite.slug}@{suite.version}</Link>],
+    [
+      'Suite',
+      <Link key="s" component={RouterLink} to={`/leaderboards/${suite.slug}/${suite.version}`}>
+        {suite.name} · {suite.slug}@{suite.version}
+      </Link>
+    ],
     ['Protocol', `${suite.digest.slice(0, 12)} · ${suite.task} · ${publicDataText(suite.data)}, split ${suite.split}`],
     ['Checkpoint', <CheckpointFact key="c" checkpoint={checkpoint} />],
-    ...(data.sampleCounts ? [['Samples', Object.entries(data.sampleCounts).map(([name, count]) => `${name} ${count}`).join(' · ')] as [string, React.ReactNode]] : []),
-    ...(data.evaluator ? [['Evaluator', [data.evaluator.package, data.evaluator.version, data.evaluator.commit && `(${data.evaluator.commit})`].filter(Boolean).join(' ')] as [string, React.ReactNode]] : []),
-    ['Evidence level', `${EVIDENCE_META[data.evidenceLevel ?? 'none'].label}. ${EVIDENCE_META[data.evidenceLevel ?? 'none'].meaning}`],
+    ...(data.sampleCounts
+      ? [
+          [
+            'Samples',
+            Object.entries(data.sampleCounts)
+              .map(([name, count]) => `${name} ${count}`)
+              .join(' · ')
+          ] as [string, React.ReactNode]
+        ]
+      : []),
+    ...(data.evaluator
+      ? [
+          [
+            'Evaluator',
+            [data.evaluator.package, data.evaluator.version, data.evaluator.commit && `(${data.evaluator.commit})`]
+              .filter(Boolean)
+              .join(' ')
+          ] as [string, React.ReactNode]
+        ]
+      : []),
+    [
+      'Evidence level',
+      `${EVIDENCE_META[data.evidenceLevel ?? 'none'].label}. ${EVIDENCE_META[data.evidenceLevel ?? 'none'].meaning}`
+    ],
     ...(data.project ? [['Submitted by', data.project.name] as [string, React.ReactNode]] : []),
     ...(data.executedAt ? [['Ran', formatDateTime(data.executedAt)] as [string, React.ReactNode]] : []),
     ['Published', formatDateTime(data.publishedAt)],
@@ -68,23 +100,35 @@ const PublicEvaluationPage: React.FC = () => {
       />
       <PageHeader title={checkpointLabel(checkpoint)} subtitle={`Published result on ${suite.slug}@${suite.version}`} />
       <Alert severity="info" sx={{ mb: 3 }}>
-        Reported by whoever submitted it. Visin checked that it fits the protocol; it has not verified the checkpoint or the data.
+        Reported by whoever submitted it. Visin checked that it fits the protocol; it has not verified the checkpoint or
+        the data.
       </Alert>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 3 }}>
         {data.scores && (
           <section aria-labelledby="scores-heading">
-            <Typography id="scores-heading" variant="h6" gutterBottom>Scores</Typography>
+            <Typography id="scores-heading" variant="h6" gutterBottom>
+              Scores
+            </Typography>
             <ScoresTable scores={data.scores} />
           </section>
         )}
         <section aria-labelledby="evidence-heading">
-          <Typography id="evidence-heading" variant="h6" gutterBottom>Evidence</Typography>
+          <Typography id="evidence-heading" variant="h6" gutterBottom>
+            Evidence
+          </Typography>
           <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider' }}>
-            <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '160px 1fr' }, gap: 1, m: 0 }}>
+            <Box
+              component="dl"
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '160px 1fr' }, gap: 1, m: 0 }}
+            >
               {rows.map(([label, value]) => (
                 <React.Fragment key={label}>
-                  <Typography component="dt" variant="body2" color="text.secondary">{label}</Typography>
-                  <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: 'anywhere' }}>{value}</Typography>
+                  <Typography component="dt" variant="body2" color="text.secondary">
+                    {label}
+                  </Typography>
+                  <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: 'anywhere' }}>
+                    {value}
+                  </Typography>
                 </React.Fragment>
               ))}
             </Box>

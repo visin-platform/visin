@@ -706,16 +706,20 @@ describe('getTrainingStats', () => {
     projects: Array<{ _id: string; costing: { cpuRatePerHour: number; gpuRatePerHour: number; currency: string } }>
   ) {
     mockedVisibleProjects.mockResolvedValue(rows.flatMap((row) => (row._id ? [row._id] : [])));
-    mockedTraining.aggregate
-      .mockResolvedValueOnce([
-        {
-          totalTrainings: rows.reduce((sum, row) => sum + row.totalTrainings, 0),
-          totalTime: rows.reduce((sum, row) => sum + row.totalTime, 0),
-          totalEpochs: 1,
-          avgEpochTime: 1
-        }
-      ])
-      .mockResolvedValueOnce(rows);
+    mockedTraining.aggregate.mockResolvedValueOnce([
+      {
+        totals: [
+          {
+            totalTrainings: rows.reduce((sum, row) => sum + row.totalTrainings, 0),
+            totalTime: rows.reduce((sum, row) => sum + row.totalTime, 0),
+            totalEpochs: 1,
+            avgEpochTime: 1
+          }
+        ],
+        weekly: [],
+        perProject: rows
+      }
+    ]);
     mockedProject.find.mockResolvedValue(projects);
     return trainingService.getTrainingStats('u1', {});
   }
@@ -789,7 +793,14 @@ describe('getTrainingStats', () => {
 
   it('scopes unfiltered stats to visible projects', async () => {
     mockedVisibleProjects.mockResolvedValue(['p1']);
-    mockedTraining.aggregate.mockResolvedValue([{ totalTrainings: 3, totalTime: 100 }]);
+    mockedTraining.aggregate
+      .mockResolvedValueOnce([
+        {
+          totals: [{ totalTrainings: 3, totalTime: 100 }],
+          weekly: [{ _id: new Date('2026-11-02T00:00:00Z'), trainings: 3, seconds: 7200 }]
+        }
+      ])
+      .mockResolvedValueOnce([]);
 
     const stats = await trainingService.getTrainingStats('u1', { status: 'completed', tags: ['a', 'b'] });
 
@@ -803,6 +814,7 @@ describe('getTrainingStats', () => {
       })
     );
     expect(stats.totalTrainings).toBe(3);
+    expect(stats.weekly).toEqual([{ week: new Date('2026-11-02T00:00:00Z'), trainings: 3, hours: 2 }]);
   });
 
   it('403s when a project filter is not accessible', async () => {

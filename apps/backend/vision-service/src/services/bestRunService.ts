@@ -44,6 +44,8 @@ interface Candidate {
   direction: 'higher' | 'lower';
   directionFrom: 'taxonomy' | 'default';
   best: { trainingId: string; value: number; epoch: number } | null;
+  /** What every run reached, for the ranking a project's own page shows. */
+  reached: Map<string, { value: number; epoch: number }>;
 }
 
 async function candidateFor(projectId: string, runIds: string[], primary: string | undefined, taxonomyMetrics: { key: string; direction?: 'higher' | 'lower' }[] | undefined): Promise<Candidate | null> {
@@ -64,6 +66,7 @@ async function candidateFor(projectId: string, runIds: string[], primary: string
     ...headline,
     direction,
     directionFrom,
+    reached,
     best: winner ? { trainingId: winner[0], value: winner[1].value, epoch: winner[1].epoch } : null
   };
 }
@@ -81,7 +84,7 @@ export async function getBestRun(userId: string | undefined, query: BestRunQuery
   const projectIds = await scopedProjectIds(userId, query.projectId);
   const filter: QueryFilter<ITraining> = { deletedAt: null, projectId: { $in: projectIds } };
   if (query.datasetId) filter.$or = [{ datasetId: query.datasetId }, { 'dataset.id': query.datasetId }];
-  const trainings = await Training.find(filter).sort({ createdAt: -1 }).limit(MAX_RUNS).select('_id projectId name uuid status').lean();
+  const trainings = await Training.find(filter).sort({ createdAt: -1 }).limit(MAX_RUNS).select('_id projectId name uuid status createdAt').lean();
   if (trainings.length === 0) return { runs: 0, best: null };
 
   const byProject = new Map<string, string[]>();
@@ -120,8 +123,19 @@ export async function getBestRun(userId: string | undefined, query: BestRunQuery
 
   const training = trainings.find(run => run._id.toString() === winner.best!.trainingId)!;
   const project = projects.find(item => item._id.toString() === winner.projectId)!;
+  // A project's own page also wants every run in order, not only the first. Not for a dataset: runs there come from
+  // several projects, and a list across them would rank results that were never measured the same way.
+  const ranking = query.projectId
+    ? [...winner.reached]
+        .flatMap(([id, reading]) => {
+          const run = trainings.find(item => item._id.toString() === id);
+          return run ? [{ training: { _id: id, name: run.name, status: run.status, createdAt: run.createdAt }, value: reading.value, epoch: reading.epoch }] : [];
+        })
+        .sort((a, b) => (winner.direction === 'higher' ? b.value - a.value : a.value - b.value) || a.epoch - b.epoch)
+    : undefined;
   return {
     runs: trainings.length,
+    ...(ranking ? { ranking } : {}),
     best: {
       training: { _id: training._id.toString(), uuid: training.uuid, name: training.name, status: training.status, projectId: training.projectId },
       project: { _id: project._id.toString(), name: project.name, slug: project.slug },

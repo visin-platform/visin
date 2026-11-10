@@ -58,6 +58,10 @@
       "description": "Written conclusions about runs, by people or assistants"
     },
     {
+      "name": "Papers",
+      "description": "Research papers that cite results recorded on Visin, with their authors linked to Visin accounts"
+    },
+    {
       "name": "Suites",
       "description": "Immutable evaluation protocols that results are ranked on"
     },
@@ -80,6 +84,39 @@
   ],
   "components": {
     "schemas": {
+      "PaperDocumentState": {
+        "type": "object",
+        "required": [
+          "status",
+          "viewable"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "ready",
+              "failed"
+            ]
+          },
+          "viewable": {
+            "type": "boolean",
+            "description": "The PDF can be shown from storage"
+          },
+          "pageCount": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "The text was cut at the limits, so later pages are missing"
+          },
+          "error": {
+            "type": "string",
+            "description": "A short reason a read failed"
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "required": [
@@ -2026,6 +2063,41 @@
           }
         }
       },
+      "PaperResult": {
+        "type": "object",
+        "required": [
+          "kind",
+          "available"
+        ],
+        "description": "A result the paper cites. When it is no longer public, `available` is false and nothing about it is shown, except\nto the paper's managers, who also get its `ref`.\n",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project",
+              "training",
+              "leaderboard"
+            ]
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "ref": {
+            "type": "string",
+            "description": "A project id, a run id, or `slug@version` for a leaderboard."
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "Where in the paper it is used: \"Table 2\"."
+          },
+          "project": {
+            "$ref": "#/components/schemas/ActivityProject"
+          }
+        }
+      },
       "PaperPermissions": {
         "type": "object",
         "required": [
@@ -2139,6 +2211,96 @@
                 "minimum": 0,
                 "description": "How many of them are public now."
               }
+            }
+          }
+        }
+      },
+      "Paper": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "tags",
+          "owner",
+          "visibility",
+          "createdAt",
+          "updatedAt",
+          "results"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "abstract": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperAuthor"
+            }
+          },
+          "venue": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "arxivId": {
+            "type": "string",
+            "description": "Without a version, e.g. `2401.01234`."
+          },
+          "doi": {
+            "type": "string",
+            "description": "Lowercase, without `https://doi.org/`."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "pdfUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ResourceOwner"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "trashedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/PaperPermissions"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperResult"
             }
           }
         }
@@ -6168,6 +6330,39 @@
                               "type": "integer"
                             }
                           }
+                        },
+                        "ranking": {
+                          "type": "array",
+                          "description": "Only for a `projectId` query: every run that reported the result `best` was judged on, best first\n(lowest first where the direction is `lower`), each at the epoch it peaked. Runs that never\nreported it are not listed. Absent for a `datasetId` query, where runs from different projects\nwere not measured the same way.\n",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "training": {
+                                "type": "object",
+                                "properties": {
+                                  "_id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                }
+                              },
+                              "value": {
+                                "type": "number"
+                              },
+                              "epoch": {
+                                "type": "integer"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -6195,7 +6390,7 @@
         ],
         "summary": "Get training statistics",
         "operationId": "getTrainingStats",
-        "description": "Cost estimates use each project's current CPU/GPU rates. Amounts are\ngrouped by currency without exchange-rate conversion. Legacy scalar cost\nfields and currency are present only when exactly one currency is priced.\nCoverage includes unpriced trainings and measured durations in seconds;\nzero rates count as priced. These are current estimates, not historical bills.\n",
+        "description": "Cost estimates use each project's current CPU/GPU rates. Amounts are\ngrouped by currency without exchange-rate conversion. Legacy scalar cost\nfields and currency are present only when exactly one currency is priced.\nCoverage includes unpriced trainings and measured durations in seconds;\nzero rates count as priced. These are current estimates, not historical bills.\nWeekly activity covers the current UTC Monday-start week and the previous seven.\nRuns are grouped by startTime (createdAt when absent); hours sum recorded epoch\ndurations for those runs, not measured GPU utilization. Missing weeks have no runs.\n",
         "security": [
           {
             "BearerCredential": []
@@ -6222,6 +6417,32 @@
                       "properties": {
                         "totalTrainings": {
                           "type": "integer"
+                        },
+                        "totalHours": {
+                          "type": "number"
+                        },
+                        "weekly": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "week",
+                              "trainings",
+                              "hours"
+                            ],
+                            "properties": {
+                              "week": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "trainings": {
+                                "type": "integer"
+                              },
+                              "hours": {
+                                "type": "number"
+                              }
+                            }
+                          }
                         },
                         "totalTime": {
                           "type": "number"
@@ -11259,6 +11480,10 @@
                                   },
                                   "slug": {
                                     "type": "string"
+                                  },
+                                  "coverUrl": {
+                                    "type": "string",
+                                    "description": "A short-lived signed address of the project's picture, for a card: the cover its managers\nchose, else its dataset's cover as the caller may see it. Absent when there is neither.\n"
                                   }
                                 }
                               },
@@ -12468,6 +12693,316 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/paper-documents/{id}": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "A paper, for an assistant",
+        "operationId": "getPaperForAssistant",
+        "description": "Read-only, for an assistant acting for a person: the paper as that person may see it (authors, abstract, and the\nresults it cites on Visin, each only while it is still public) and whether its text can be searched. A key limited\nto one project reads no paper, since a paper belongs to none. Nothing here changes a paper.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The paper and the state of its text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "paper",
+                        "document"
+                      ],
+                      "properties": {
+                        "paper": {
+                          "$ref": "#/components/schemas/Paper"
+                        },
+                        "document": {
+                          "$ref": "#/components/schemas/PaperDocumentState"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/paper-documents/{id}/search": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Search inside a paper",
+        "operationId": "searchPaperText",
+        "description": "The pages of the paper that mention a word, a number or a phrase, best first, each with a few quoted passages.\nRead the page before relying on a snippet. Only for a paper whose PDF is `ready`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "default": 5,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 8
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The matching pages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "query",
+                        "hits",
+                        "pageCount"
+                      ],
+                      "properties": {
+                        "query": {
+                          "type": "string"
+                        },
+                        "pageCount": {
+                          "type": "integer"
+                        },
+                        "hits": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "page",
+                              "score",
+                              "snippets"
+                            ],
+                            "properties": {
+                              "page": {
+                                "type": "integer",
+                                "description": "Counted from 1, as a reader counts"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "snippets": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/paper-documents/{id}/pages": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Read pages of a paper",
+        "operationId": "readPaperPages",
+        "description": "Whole pages from `from` up to `to` (at most 20 asked for), as many as fit one read, about 18,000 characters: four\nor five dense pages. `next` is the page to continue from when the range was longer than one read can carry, and is\nabsent once the range or the paper ends. A page is cut (`cut: true`) only if it alone exceeds the budget.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 2000
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 2000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The pages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "pages",
+                        "pageCount"
+                      ],
+                      "properties": {
+                        "pageCount": {
+                          "type": "integer"
+                        },
+                        "next": {
+                          "type": "integer",
+                          "description": "The page to continue from"
+                        },
+                        "pages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "page",
+                              "text"
+                            ],
+                            "properties": {
+                              "page": {
+                                "type": "integer"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "cut": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"

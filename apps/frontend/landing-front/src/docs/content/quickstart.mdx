@@ -144,6 +144,18 @@ it arrives. [Sending results](/docs/sending-results) lists every name the charts
   `404` with `Training not found with uuid: …`.
 </Callout>
 
+## Watch a run as it goes
+
+A run that is still training updates itself: its epoch count moves, and its curves grow, without a reload. If you
+cloned Visin, a script in it sends a made-up run slowly enough to watch:
+
+```bash
+node scripts/demo-run.mjs --epochs 40 --delay 2
+```
+
+It needs only Node 18 or newer and the same `VISIN_URL` and `VISIN_TOKEN`. Add `--overfit` to see a run that trains
+past its best epoch, and `--seed 7` for the same numbers every time.
+
 ## Use it in your training loop
 
 Replace `train_one_epoch` with your own training step and post what it returns. Two things are worth keeping:

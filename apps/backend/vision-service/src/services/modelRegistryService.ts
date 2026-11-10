@@ -10,6 +10,7 @@ import { evaluationScope } from './evaluationScope';
 import { modelLinkKey, modelLinkLabel, modelLinkStored } from './sourceRegistry';
 import { checkProjectAccess, getVisibleProjectIds, resolveProject } from './projectAccessService';
 import { metricLeaves } from './resultMetrics';
+import { coverUrlsFor } from './projectCoverService';
 
 /** Runs read per request. A registry past this is narrowed by project, not paged deeper. */
 const MAX_RUNS = 2000;
@@ -191,12 +192,20 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
     isValidObjectId(id)
   );
   const projects = await Project.find({ _id: { $in: shown.map((id) => new Types.ObjectId(id)) } })
-    .select('name slug')
+    .select('name slug cover')
     .lean();
+  // A model has no picture of its own: its card shows the project's, chosen or its dataset's, by the same rules as the
+  // project's own card (never a raw frame a run rendered, and a private dataset gives a public viewer nothing).
+  const covers = await coverUrlsFor(projects, userId);
   const named = new Map(
     projects.map((project) => [
       project._id.toString(),
-      { _id: project._id.toString(), name: project.name, slug: project.slug }
+      {
+        _id: project._id.toString(),
+        name: project.name,
+        slug: project.slug,
+        ...(covers.has(project._id.toString()) ? { coverUrl: covers.get(project._id.toString()) } : {})
+      }
     ])
   );
 

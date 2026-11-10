@@ -96,6 +96,16 @@ export async function checkAccess<C extends ChatConversation>(
     }
   }
   if (conversation.kind === 'assistant' && conversation.projectId) await project(conversation.projectId);
+  // A conversation about a paper reads it as the asker may: a paper made private or trashed since stops being readable here.
+  if (conversation.kind === 'assistant' && conversation.paperId) {
+    const key = `paper:${conversation.paperId}`;
+    let pending = cache.projects.get(key);
+    if (!pending) {
+      pending = peer<Project>('VISION', `/api/papers/${conversation.paperId}`, req);
+      cache.projects.set(key, pending);
+    }
+    await pending;
+  }
   return conversation;
 }
 export function historyFilter(conversation: ChatConversation, userId: string) {
@@ -106,22 +116,31 @@ export function historyFilter(conversation: ChatConversation, userId: string) {
       : { seq: -1 };
   return {};
 }
-export async function publicPerson(handle: string): Promise<{ id: string; name: string; handle: string; kind?: string; assistantId?: string }> {
+export async function publicPerson(
+  handle: string
+): Promise<{ id: string; name: string; handle: string; kind?: string; assistantId?: string }> {
   const response = await fetchWithTimeout(`${endpoint('AUTH')}/auth/users/${encodeURIComponent(handle)}`, {
     timeoutMs: 5000,
     serviceName: 'auth-service'
   });
   if (response.status === 404) throw new NotFoundError('Public profile not found');
   if (!response.ok) throw new BadGatewayError('Could not look up this profile');
-  return ((await response.json()) as { data: { id: string; name: string; handle: string; kind?: string; assistantId?: string } }).data;
+  return (
+    (await response.json()) as {
+      data: { id: string; name: string; handle: string; kind?: string; assistantId?: string };
+    }
+  ).data;
 }
 
 /** Only contacts whose roster the current user may already read. Never an account directory. */
-export async function sharedContacts(req: Request): Promise<{ id: string; name: string }[]> {
+export async function sharedContacts(req: Request, groupId?: string): Promise<{ id: string; name: string }[]> {
   const memberships = await groups.getMyGroups(req.user!.id);
+  if (groupId && !memberships.some((membership) => membership.groupId === groupId))
+    throw new NotFoundError('Only members of this group can view its contacts');
   const contacts = new Map<string, { id: string; name: string }>();
   const rosters = await Promise.all(
     memberships
+      .filter((membership) => !groupId || membership.groupId === groupId)
       .slice(0, 20)
       .map((membership) =>
         peer<{ members: { userId: string; email?: string }[] }>('GROUP', `/api/groups/${membership.groupId}`, req)

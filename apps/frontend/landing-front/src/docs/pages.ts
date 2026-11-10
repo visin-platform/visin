@@ -12,6 +12,7 @@ import PredictionFrames from './content/prediction-frames.mdx';
 import ErrorsAndLimits from './content/errors-and-limits.mdx';
 import Assistants from './content/assistants.mdx';
 import Architecture from './content/architecture.mdx';
+import CallsAndNotifications from './content/calls-and-notifications.mdx';
 
 export interface DocPage {
   /** The path under /docs; empty for the docs home. */
@@ -120,6 +121,12 @@ export const DOC_SECTIONS: DocSection[] = [
         description:
           'How Visin is put together: the web apps, the services behind them, and how they talk to each other.',
         Content: Architecture
+      },
+      {
+        slug: 'calls-and-notifications',
+        title: 'Calls and notifications',
+        description: 'Chat notifications and one-to-one calls: what works with no setup, and how to make calls connect everywhere.',
+        Content: CallsAndNotifications
       }
     ]
   }

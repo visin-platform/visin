@@ -1,9 +1,10 @@
-import { trainingStatusLabel } from '../../utils/trainingStatus';
 import React from 'react';
 import { Box, Chip, Stack, Typography } from '@mui/material';
 import { ResponsiveActions } from '@visin/frontend-core';
 import { Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon, Code as CodeIcon } from '@mui/icons-material';
 import { Training } from '../../types';
+import { StatusChip } from '../trainings/TrainingStatusChip';
+import { secondsPerEpoch } from '../../utils/liveRuns';
 
 interface TrainingDetailHeaderProps {
   training: Training;
@@ -52,6 +53,12 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
             }}>
             {training.name}
           </Typography>
+          <StatusChip training={training} />
+          {training.status === 'running' && secondsPerEpoch(training) !== null && (
+            <Typography variant="caption" color="text.secondary">
+              about {Math.round(secondsPerEpoch(training)!)} s per epoch
+            </Typography>
+          )}
         </Box>
         <Typography
           variant="body2"
@@ -64,7 +71,6 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
           {training.description || 'No description provided'}
         </Typography>
 
-        {training.status === 'stalled' && <Typography color="warning.main" sx={{ mb: 1 }}>{trainingStatusLabel(training)}</Typography>}
         {training.tags && training.tags.length > 0 && (
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
             {training.tags.map((tag) => (

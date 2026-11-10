@@ -4,6 +4,7 @@ import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
 import { runEvaluationService } from '../services/runEvaluationService';
 import { RunEvaluation } from '../types';
+import { LIVE_POLL_MS, pollWhileRunning } from '../utils/liveRuns';
 
 export const useTrainingDetail = (id: string | undefined) => {
   const [selectedTestEpoch, setSelectedTestEpoch] = useState<number | null>(null);
@@ -11,7 +12,11 @@ export const useTrainingDetail = (id: string | undefined) => {
   const { data, isLoading, error, refetch: refetchTraining } = useQuery({
     queryKey: ['training', id],
     queryFn: () => trainingService.getTrainingWithEpochs(id!),
-    enabled: !!id
+    enabled: !!id,
+    // A run that is training is read again as it goes, so its curves grow on screen; one that is not is left alone.
+    refetchInterval: pollWhileRunning((response: Awaited<ReturnType<typeof trainingService.getTrainingWithEpochs>> | undefined) =>
+      response?.data?.training ? [response.data.training] : undefined
+    )
   });
 
   const training = data?.data?.training;
@@ -35,7 +40,9 @@ export const useTrainingDetail = (id: string | undefined) => {
         training_uuid: training!.uuid,
         limit: 1000
       }),
-    enabled: !!training?.uuid
+    enabled: !!training?.uuid,
+    // Test results come after training, but a run being watched should not need a reload to show the first ones.
+    refetchInterval: training?.status === 'running' ? LIVE_POLL_MS * 2 : false
   });
 
   const allEvaluations = useMemo(

@@ -194,6 +194,25 @@ describe('ShellLayout', () => {
     expect(screen.getByTestId('path')).toHaveTextContent('/account/profile');
   });
 
+  it('lets chat let go of this device before the session ends, and then signs out', async () => {
+    const order: string[] = [];
+    const letGo = (event: Event) => {
+      (event as CustomEvent<{ tasks: Promise<unknown>[] }>).detail.tasks.push(
+        Promise.resolve().then(() => void order.push('device released'))
+      );
+    };
+    window.addEventListener('visin:logout', letGo);
+    authState.logout.mockImplementation(() => void order.push('signed out'));
+    renderAt('/projects');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+
+    await vi.waitFor(() => expect(authState.logout).toHaveBeenCalledTimes(1));
+    window.removeEventListener('visin:logout', letGo);
+    expect(order).toEqual(['device released', 'signed out']);
+  });
+
   describe('top bar', () => {
     it('offers a visitor Sign in and Sign up, and the docs when the landing site is known', () => {
       authState.isAuthenticated = false;

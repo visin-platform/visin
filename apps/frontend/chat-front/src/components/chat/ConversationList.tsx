@@ -1,4 +1,13 @@
-import { Add, AutoAwesome, FolderOutlined, Forum, GroupsOutlined, PersonOutlined, Settings } from '@mui/icons-material';
+import {
+  Add,
+  AutoAwesome,
+  FolderOutlined,
+  Forum,
+  GroupsOutlined,
+  PersonOutlined,
+  PaletteOutlined,
+  Settings
+} from '@mui/icons-material';
 import {
   Avatar,
   Badge,
@@ -17,6 +26,7 @@ import { analystSettingsHref } from '../../utils/analystSettingsLink';
 import { KIND_LABEL, displayTitle } from '../../utils/chatContext';
 import { lastActiveLabel } from '../../utils/activity';
 import { unreadCount } from '../../utils/unread';
+import { NotificationToggle } from './NotificationToggle';
 const KIND_ICON: Record<Conversation['kind'], typeof AutoAwesome> = {
   assistant: AutoAwesome,
   direct: PersonOutlined,
@@ -40,7 +50,8 @@ function conversationDate(value: string) {
 }
 
 export function ConversationList({ panel }: { panel: boolean }) {
-  const { detail, canConfigure, show, setComposing, conversations, user, selected, loaded } = useChatWorkspaceContext();
+  const { setAppearanceOpen, detail, canConfigure, show, setComposing, conversations, user, selected, loaded } =
+    useChatWorkspaceContext();
 
   return (
     <Box
@@ -59,6 +70,10 @@ export function ConversationList({ panel }: { panel: boolean }) {
           Conversations
         </Typography>
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+          <IconButton size="small" aria-label="Chat appearance" onClick={() => setAppearanceOpen(true)}>
+            <PaletteOutlined fontSize="small" />
+          </IconButton>
+          <NotificationToggle />
           {canConfigure && (
             // Account's Analyst section: the settings are a page of their own, not part of a conversation.
             <IconButton size="small" aria-label="Analyst settings" component="a" href={analystSettingsHref()}>

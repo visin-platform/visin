@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { chatService } from '../services/chatService';
 
-import type { Conversation, OpenRequest, PageContext } from '../types/chat';
+import type { AttachmentRef, Conversation, OpenRequest, PageContext } from '../types/chat';
 import { analysisOf } from '../utils/chatContext';
 import { mergeMessages } from '../utils/messages';
 import { screenContext } from '../utils/screen';
@@ -36,6 +36,7 @@ export function useChatActions({
   const retry = useRef<
     | {
         body: string;
+        attachmentsKey?: string;
         clientId: string;
         conversation: string;
         replyTo?: string;
@@ -64,7 +65,7 @@ export function useChatActions({
   const handle = useCallback(
     (open: OpenRequest) => {
       const analysis = analysisOf(open);
-      if (analysis) return analyze(analysis);
+      if (analysis) return void analyze(analysis);
       if (open.kind === 'project' && open.projectId)
         return openConversation(() =>
           chatService.create({
@@ -83,18 +84,27 @@ export function useChatActions({
           })
         );
       if (open.kind === 'group') return openConversation(() => chatService.openGroup(open.groupId));
+      return undefined;
     },
     [analyze, openConversation]
   );
 
-  const post = (body: string, fromDraft: boolean, requestedReply?: string) =>
-    perform(async () => {
+  const post = async (body: string, fromDraft: boolean, requestedReply?: string, attachments: AttachmentRef[] = []) => {
+    let delivered = false;
+    await perform(async () => {
       const text = body.trim();
-      if (!c || !text) return;
+      if (!c || (!text && !attachments.length)) return;
+      const attachmentsKey = JSON.stringify(attachments);
       const replyTo = fromDraft ? replyTarget?._id : requestedReply;
-      if (retry.current?.body !== text || retry.current.conversation !== c._id || retry.current.replyTo !== replyTo)
+      if (
+        retry.current?.body !== text ||
+        retry.current.conversation !== c._id ||
+        retry.current.replyTo !== replyTo ||
+        retry.current.attachmentsKey !== attachmentsKey
+      )
         retry.current = {
           body: text,
+          attachmentsKey,
           clientId: crypto.randomUUID(),
           conversation: c._id,
           screen: c.kind === 'assistant' ? screenContext(panel) : undefined,
@@ -105,9 +115,11 @@ export function useChatActions({
         await chatService.send(c._id, {
           body: text,
           clientId: retry.current.clientId,
+          ...(attachments.length ? { attachments } : {}),
           ...(replyTo ? { replyTo } : {}),
           ...(retry.current.screen ? { screen: retry.current.screen } : {})
         });
+        delivered = true;
         const current = latestNavigation.current;
         const sameThread = current.accountId === navigation.accountId && current.c?._id === c._id;
         if (fromDraft && sameThread && current.draft === draft) {
@@ -124,6 +136,8 @@ export function useChatActions({
         setSending(false);
       }
     });
+    return delivered;
+  };
 
   const start = (context: PageContext, body: string) =>
     perform(async () => {
@@ -135,7 +149,11 @@ export function useChatActions({
           kind: 'assistant',
           ...(context.assistantId ? { assistantId: context.assistantId } : {}),
           title: (context.title || 'Analysis').slice(0, 120),
-          ...(context.projectId ? { projectId: context.projectId, trainingIds: context.trainingIds ?? [] } : {})
+          ...(context.paperId
+            ? { paperId: context.paperId }
+            : context.projectId
+              ? { projectId: context.projectId, trainingIds: context.trainingIds ?? [] }
+              : {})
         });
         await chatService.send(created._id, { body: text, clientId: crypto.randomUUID(), ...screenFor() });
         await refreshList();
@@ -145,7 +163,8 @@ export function useChatActions({
       }
     });
 
-  const send = () => (c ? post(draft, true) : pending ? start(pending, draft) : undefined);
+  const send = (attachments: AttachmentRef[] = []) =>
+    c ? post(draft, true, undefined, attachments) : pending ? start(pending, draft) : undefined;
 
   const ask = (text: string) => {
     setDraft(text);

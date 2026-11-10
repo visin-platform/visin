@@ -162,6 +162,30 @@ describe('best run with in-memory MongoDB', () => {
     });
   });
 
+  it('lists every run that reported the result, best first, for a project and not for a dataset', async () => {
+    const projectId = await project();
+    const first = await run(projectId, 'baseline', scores(0.4, 0.5));
+    const second = await run(projectId, 'clft', scores(0.5, 0.8, 0.7));
+    await run(projectId, 'silent', [{ lr: 0.1 }]);
+
+    const { body } = await get(`/trainings/best?projectId=${projectId}`);
+
+    expect(body.data.runs).toBe(3);
+    expect(body.data.ranking.map((row: { training: { _id: string } }) => row.training._id)).toEqual([second, first]);
+    expect(body.data.ranking[0]).toMatchObject({ training: { name: 'clft', status: 'completed' }, value: 0.8, epoch: 2 });
+    expect(body.data.ranking[0].training.createdAt).toEqual(expect.any(String));
+  });
+
+  it('ranks a lower-is-better result lowest first', async () => {
+    const projectId = await project({ taxonomy: { primaryMetric: 'val.error', metrics: [{ key: 'error', direction: 'lower' }] } });
+    await run(projectId, 'worse', [{ val: { error: 0.4 } }]);
+    await run(projectId, 'better', [{ val: { error: 0.1 } }]);
+
+    const { body } = await get(`/trainings/best?projectId=${projectId}`);
+
+    expect(body.data.ranking.map((row: { training: { name: string } }) => row.training.name)).toEqual(['better', 'worse']);
+  });
+
   it('judges by the project’s headline result and reads lower as better when the taxonomy says so', async () => {
     const projectId = await project({
       taxonomy: { primaryMetric: 'val.error', metrics: [{ key: 'error', direction: 'lower' }] }

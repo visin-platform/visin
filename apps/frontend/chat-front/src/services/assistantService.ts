@@ -8,6 +8,8 @@ import type {
 } from '../types/assistant';
 import { api } from './apiClient';
 export const assistantService = {
+  default: (signal?: AbortSignal) =>
+    api<{ _id: string; name: string } | null>('/assistants/default', undefined, signal),
   profile: (id: string, signal?: AbortSignal) =>
     api<AssistantProfile | null>(`/assistants/${id}/profile`, undefined, signal),
   saveProfile: (id: string, input: { handle: string; bio: string; public: boolean }) =>

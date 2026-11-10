@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  Skeleton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -31,6 +33,8 @@ const Viewer: React.FC<{ image: Visualization; classes?: OutputClass[]; onClose:
   classes,
   onClose
 }) => {
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [attempt, setAttempt] = useState(0);
   const [reading, setReading] = useState<string | null>(null);
   const [present, setPresent] = useState<number[]>([]);
   const decoded = isDecodedKind(image.type) ? image.type : undefined;
@@ -38,13 +42,52 @@ const Viewer: React.FC<{ image: Visualization; classes?: OutputClass[]; onClose:
 
   return (
     <>
-      <DialogContent sx={{ p: 0, display: 'flex', justifyContent: 'center', bgcolor: onImage.backdrop }}>
+      <DialogContent
+        sx={{
+          p: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          bgcolor: onImage.backdrop,
+          position: 'relative',
+          minHeight: 240
+        }}
+      >
+        {status === 'loading' && (
+          <Skeleton
+            role="status"
+            aria-label="Loading frame"
+            variant="rectangular"
+            sx={{ position: 'absolute', inset: 0, height: '100%', width: '100%', bgcolor: onImage.chip }}
+          />
+        )}
+        {status === 'error' && (
+          <Alert
+            severity="error"
+            sx={{ position: 'absolute', top: 24, zIndex: 1 }}
+            action={
+              <Button
+                color="inherit"
+                onClick={() => {
+                  setStatus('loading');
+                  setAttempt((value) => value + 1);
+                }}
+              >
+                Try again
+              </Button>
+            }
+          >
+            Could not load this frame.
+          </Alert>
+        )}
         <OutputImage
+          key={attempt}
           visualization={image}
+          onStatus={setStatus}
           classes={classes}
           onPixel={setReading}
           onDecoded={setPresent}
           sx={{
+            opacity: status === 'ready' ? 1 : 0,
             width: '100%',
             height: '85vh',
             objectFit: 'contain'
@@ -54,12 +97,13 @@ const Viewer: React.FC<{ image: Visualization; classes?: OutputClass[]; onClose:
       <DialogActions sx={{ bgcolor: onImage.backdrop, p: 2, flexWrap: 'wrap', gap: 2 }}>
         <Box
           sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
             gap: 2,
-            mr: "auto"
-          }}>
+            mr: 'auto'
+          }}
+        >
           <Chip label={kindLabel} size="small" sx={{ bgcolor: onImage.chip, color: onImage.ink }} />
           {image.epoch !== undefined && (
             <Chip label={`Epoch ${image.epoch}`} size="small" sx={{ bgcolor: onImage.chip, color: onImage.ink }} />
@@ -71,18 +115,15 @@ const Viewer: React.FC<{ image: Visualization; classes?: OutputClass[]; onClose:
             </Typography>
           )}
         </Box>
-        <Button onClick={onClose} sx={{ color: onImage.ink }}>Close</Button>
+        <Button onClick={onClose} sx={{ color: onImage.ink }}>
+          Close
+        </Button>
       </DialogActions>
     </>
   );
 };
 
-const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
-  open,
-  onClose,
-  selectedImage,
-  classes
-}) => (
+const ImageViewDialog: React.FC<ImageViewDialogProps> = ({ open, onClose, selectedImage, classes }) => (
   <Dialog
     open={open}
     onClose={onClose}
@@ -91,7 +132,9 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
     slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: onImage.backdrop } } }}
   >
     <DialogTitle sx={{ color: onImage.ink, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <Typography variant="subtitle1" component="span" sx={{ overflowWrap: 'anywhere' }}>{selectedImage?.filename}</Typography>
+      <Typography variant="subtitle1" component="span" sx={{ overflowWrap: 'anywhere' }}>
+        {selectedImage?.filename}
+      </Typography>
       <IconButton onClick={onClose} aria-label="Close dialog" sx={{ color: onImage.ink }}>
         <CloseIcon />
       </IconButton>
@@ -99,8 +142,11 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
     {selectedImage ? (
       <Viewer key={selectedImage.visualization_uuid} image={selectedImage} classes={classes} onClose={onClose} />
     ) : (
-      <DialogActions sx={{ bgcolor: onImage.backdrop, p: 2 }}>
-        <Button onClick={onClose} sx={{ color: onImage.ink }}>Close</Button>
+      <DialogActions sx={{ bgcolor: onImage.backdrop, p: 2, flexDirection: 'column', color: onImage.ink }}>
+        <Typography>No frame selected. Close this viewer and choose a frame from the gallery.</Typography>
+        <Button onClick={onClose} sx={{ color: onImage.ink }}>
+          Close
+        </Button>
       </DialogActions>
     )}
   </Dialog>

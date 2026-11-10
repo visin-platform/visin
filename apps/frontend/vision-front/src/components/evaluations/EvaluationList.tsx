@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   Box,
-  CircularProgress,
+  Button,
   Link,
   MenuItem,
   Paper,
@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { Scoreboard as EvaluationIcon } from '@mui/icons-material';
 import { Chip } from '@mui/material';
-import { EmptyState, useCompactLayout } from '@visin/frontend-core';
+import { EmptyState, ListSkeleton, useCompactLayout } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
 import { MobileListRow } from '../common/MobileList';
@@ -37,7 +37,8 @@ interface EvaluationListProps {
 }
 
 const PAGE_SIZES = [10, 30, 100];
-const suiteLabel = (evaluation: Evaluation) => (evaluation.suite ? `${evaluation.suite.slug}@${evaluation.suite.version}` : undefined);
+const suiteLabel = (evaluation: Evaluation) =>
+  evaluation.suite ? `${evaluation.suite.slug}@${evaluation.suite.version}` : undefined;
 
 /** The verdict, and a mark when a manager put the result on the public leaderboard. */
 const VerdictLabels: React.FC<{ row: Evaluation }> = ({ row }) => (
@@ -67,18 +68,35 @@ const EvaluationList: React.FC<EvaluationListProps> = ({ projectId, suite, title
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['evaluations', query],
     queryFn: () => evaluationService.list(query),
-    placeholderData: previous => previous
+    placeholderData: (previous) => previous
   });
   const rows = data?.evaluations ?? [];
 
   let content: React.ReactNode;
   if (isLoading) {
-    content = <CircularProgress />;
+    content = <ListSkeleton rows={6} label="Loading evaluations" />;
   } else if (isError) {
     content = <Alert severity="error">{error instanceof Error ? error.message : 'Failed to load evaluations'}</Alert>;
   } else if (rows.length === 0) {
     content = (
       <EmptyState
+        action={
+          state ? (
+            <Button
+              variant="contained"
+              onClick={() => {
+                setState('');
+                setPage(0);
+              }}
+            >
+              Clear filter
+            </Button>
+          ) : (
+            <Button variant="contained" component={RouterLink} to="/trainings">
+              View trainings
+            </Button>
+          )
+        }
         icon={<EvaluationIcon />}
         title={state ? 'No evaluations in this state' : 'No evaluations yet'}
         description={
@@ -91,7 +109,7 @@ const EvaluationList: React.FC<EvaluationListProps> = ({ projectId, suite, title
   } else if (compact) {
     content = (
       <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-        {rows.map(row => (
+        {rows.map((row) => (
           <MobileListRow
             key={row._id}
             to={`/evaluations/${row._id}`}
@@ -118,22 +136,30 @@ const EvaluationList: React.FC<EvaluationListProps> = ({ projectId, suite, title
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map(row => (
+            {rows.map((row) => (
               <TableRow key={row._id} hover>
                 <TableCell>
-                  <Link component={RouterLink} to={`/evaluations/${row._id}`}>{checkpointLabel(row.checkpoint)}</Link>
+                  <Link component={RouterLink} to={`/evaluations/${row._id}`}>
+                    {checkpointLabel(row.checkpoint)}
+                  </Link>
                   {row.status === 'failed' && (
-                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>Run failed</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                      Run failed
+                    </Typography>
                   )}
                 </TableCell>
                 <TableCell>
                   {row.suite ? (
-                    <Link component={RouterLink} to={`/suites/${row.suite.slug}/${row.suite.version}`}>{suiteLabel(row)}</Link>
+                    <Link component={RouterLink} to={`/suites/${row.suite.slug}/${row.suite.version}`}>
+                      {suiteLabel(row)}
+                    </Link>
                   ) : (
                     '-'
                   )}
                 </TableCell>
-                <TableCell><VerdictLabels row={row} /></TableCell>
+                <TableCell>
+                  <VerdictLabels row={row} />
+                </TableCell>
                 <TableCell>{formatDate(row.receivedAt)}</TableCell>
               </TableRow>
             ))}
@@ -145,19 +171,28 @@ const EvaluationList: React.FC<EvaluationListProps> = ({ projectId, suite, title
 
   return (
     <Box>
-      {title && <Typography variant="h6" gutterBottom>{title}</Typography>}
+      {title && (
+        <Typography variant="h6" gutterBottom>
+          {title}
+        </Typography>
+      )}
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
         <TextField
           select
           size="small"
           label="Verdict"
           value={state}
-          onChange={event => { setState(event.target.value as ValidationState | ''); setPage(0); }}
+          onChange={(event) => {
+            setState(event.target.value as ValidationState | '');
+            setPage(0);
+          }}
           sx={{ flex: '0 1 220px' }}
         >
           <MenuItem value="">All</MenuItem>
-          {(Object.keys(STATE_META) as ValidationState[]).map(key => (
-            <MenuItem key={key} value={key}>{STATE_META[key].label}</MenuItem>
+          {(Object.keys(STATE_META) as ValidationState[]).map((key) => (
+            <MenuItem key={key} value={key}>
+              {STATE_META[key].label}
+            </MenuItem>
           ))}
         </TextField>
       </Box>
@@ -170,7 +205,10 @@ const EvaluationList: React.FC<EvaluationListProps> = ({ projectId, suite, title
           rowsPerPage={limit}
           rowsPerPageOptions={PAGE_SIZES}
           onPageChange={(_event, next) => setPage(next)}
-          onRowsPerPageChange={event => { setLimit(Number(event.target.value)); setPage(0); }}
+          onRowsPerPageChange={(event) => {
+            setLimit(Number(event.target.value));
+            setPage(0);
+          }}
         />
       )}
     </Box>

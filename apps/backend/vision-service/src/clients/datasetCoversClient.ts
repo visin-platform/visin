@@ -1,12 +1,17 @@
 import { fetchWithTimeout, logger, requireEnv } from '@visin/backend-core';
 
 const BATCH_SIZE = 100;
+/** What dataset-service accepts as a dataset id; it refuses a whole request for one id that is not. */
+const DATASET_ID = /^[a-f\d]{24}$/i;
 
 /**
  * The cover pictures of Visin datasets, by dataset id, as `userId` may see them (anyone, when absent). A cover is
  * decoration: when dataset-service cannot be reached the answer is none, and the card shows its plain tile.
  */
-export async function fetchDatasetCovers(ids: string[], userId: string | undefined): Promise<Record<string, string>> {
+export async function fetchDatasetCovers(allIds: string[], userId: string | undefined): Promise<Record<string, string>> {
+  // A run can carry an older or foreign dataset reference that is not a Visin id: it has no cover, and must not cost the
+  // valid ones in the same request theirs.
+  const ids = [...new Set(allIds)].filter((id) => DATASET_ID.test(id));
   if (ids.length === 0) return {};
   try {
     const base =

@@ -271,3 +271,116 @@ it('delivers a screen call through polling when streaming is unavailable, and re
   window.removeEventListener('visin:screen', asked);
   expect(vi.getTimerCount()).toBe(0);
 });
+/** Stable, like the real ones: the hook restarts its stream when they change. */
+const noError = vi.fn();
+const noConversations = vi.fn();
+it('collects the analyst’s answer as it is written, and lets go of it when it is over', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  const { result, unmount } = renderHook(() =>
+    useChatThread({
+      selected: 'c1',
+      userId: 'alice',
+      isAuthenticated: true,
+      setError: noError,
+      setConversations: noConversations
+    })
+  );
+  await act(async () => {});
+  const draft = (data: unknown) =>
+    act(() => void Stream.instances[0].dispatchEvent(new MessageEvent('draft', { data: JSON.stringify(data) })));
+
+  draft({ runId: 'r1', messageId: 'q1', text: 'Validation' });
+  expect(result.current.drafts).toEqual([{ runId: 'r1', messageId: 'q1', text: 'Validation' }]);
+  draft({ runId: 'r1', messageId: 'q1', text: 'Validation peaked at epoch 42.' });
+  expect(result.current.drafts).toHaveLength(1);
+  expect(result.current.drafts[0].text).toBe('Validation peaked at epoch 42.');
+  draft({ runId: 'r2', messageId: 'q2', text: 'Another' });
+  expect(result.current.drafts.map((d) => d.runId)).toEqual(['r1', 'r2']);
+
+  draft({ runId: 'r1', messageId: 'q1', text: '' });
+  expect(result.current.drafts.map((d) => d.runId)).toEqual(['r2']);
+  unmount();
+});
+
+it('skips a draft frame that is not one, and does not move the replay cursor', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  const { result } = renderHook(() =>
+    useChatThread({
+      selected: 'c1',
+      userId: 'alice',
+      isAuthenticated: true,
+      setError: noError,
+      setConversations: noConversations
+    })
+  );
+  await act(async () => {});
+  const stream = Stream.instances[0];
+  act(() => {
+    stream.dispatchEvent(new MessageEvent('draft', { data: 'not json' }));
+    stream.dispatchEvent(new MessageEvent('draft', { data: JSON.stringify({ runId: 1, messageId: 'q', text: 'x' }) }));
+    stream.dispatchEvent(new MessageEvent('draft', { data: JSON.stringify({ runId: 'r', messageId: 'q' }) }));
+  });
+  expect(result.current.drafts).toEqual([]);
+  act(
+    () =>
+      void stream.dispatchEvent(
+        new MessageEvent('draft', { data: JSON.stringify({ runId: 'r', messageId: 'q', text: 'Hi' }) })
+      )
+  );
+  // Nothing about a draft is replayed: a reconnect asks for messages after the last one, not after a draft.
+  act(() => stream.dispatchEvent(new Event('error')));
+  expect(result.current.drafts).toHaveLength(1);
+});
+
+it('forgets drafts when the conversation changes', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  const { result, rerender } = renderHook(
+    ({ selected }) =>
+      useChatThread({
+        selected,
+        userId: 'alice',
+        isAuthenticated: true,
+        setError: noError,
+        setConversations: noConversations
+      }),
+    { initialProps: { selected: 'c1' } }
+  );
+  await act(async () => {});
+  act(
+    () =>
+      void Stream.instances[0].dispatchEvent(
+        new MessageEvent('draft', { data: JSON.stringify({ runId: 'r', messageId: 'q', text: 'Hi' }) })
+      )
+  );
+  expect(result.current.drafts).toHaveLength(1);
+  rerender({ selected: 'c2' });
+  await act(async () => {});
+  expect(result.current.drafts).toEqual([]);
+});
+
+it('retains mutation patches that arrive before the HTTP snapshot so unsent text never reappears', async () => {
+  vi.stubGlobal('EventSource', Stream);
+  let finish!: (rows: never) => void;
+  vi.mocked(chatService.messages).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  const setError = vi.fn(),
+    setConversations = vi.fn();
+  const { result } = renderHook(() =>
+    useChatThread({ selected: 'c1', userId: 'alice', isAuthenticated: true, setError, setConversations })
+  );
+  act(() =>
+    Stream.instances[0].dispatchEvent(
+      new MessageEvent('message-updates', {
+        data: JSON.stringify([{ _id: 'm1', revision: 1, unsentAt: '2026-11-10T12:00:00Z', reactions: [] }])
+      })
+    )
+  );
+  await act(async () =>
+    finish([{ _id: 'm1', seq: 1, kind: 'person', senderName: 'Alice', body: 'Secret original', evidence: [] }] as never)
+  );
+  expect(result.current.messages[0]).toMatchObject({ body: '', revision: 1, unsentAt: expect.any(String) });
+});

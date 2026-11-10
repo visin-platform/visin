@@ -2891,6 +2891,43 @@
       }
     }
   },
+  "PaperPagesQuery": {
+    "type": "object",
+    "properties": {
+      "from": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 2000
+      },
+      "to": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 2000
+      }
+    },
+    "required": [
+      "from"
+    ]
+  },
+  "PaperSearchQuery": {
+    "type": "object",
+    "properties": {
+      "q": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 200
+      },
+      "limit": {
+        "default": 5,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 8
+      }
+    },
+    "required": [
+      "q"
+    ]
+  },
   "PromoteEvaluationBody": {
     "type": "object",
     "properties": {

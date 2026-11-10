@@ -1,11 +1,13 @@
 import { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, ButtonBase, Skeleton, Typography } from '@mui/material';
-import { glassInteractive } from '@visin/frontend-core';
-import { formatCount } from './formatting';
+import { ActivityTrend, CountValue } from './ActivityTrend';
+import type { ActivityWeek } from './activity';
 import { panelSx } from './panel';
 
 export interface StatTile {
+  decimals?: number;
+  trend?: { weeks: ActivityWeek[]; metric: 'trainings' | 'hours' };
   label: string;
   to: string;
   icon: ReactNode;
@@ -36,11 +38,13 @@ export function StatTiles({ tiles }: { tiles: StatTile[] }) {
           to={tile.to}
           sx={{
             ...panelSx,
-            ...glassInteractive(),
+            transition: 'transform .15s ease',
+            '&:hover': { bgcolor: 'action.hover' },
+            '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-start',
             gap: { xs: 1, md: 1.5 },
             p: { xs: 1.75, md: 2.5 },
             textAlign: 'left',
@@ -75,9 +79,10 @@ export function StatTiles({ tiles }: { tiles: StatTile[] }) {
             ) : tile.failed || tile.value === undefined ? (
               '–'
             ) : (
-              formatCount(tile.value)
+              <CountValue value={tile.value} decimals={tile.decimals} />
             )}
           </Typography>
+          {!tile.loading && !tile.failed && tile.trend && <ActivityTrend {...tile.trend} />}
         </ButtonBase>
       ))}
     </Box>

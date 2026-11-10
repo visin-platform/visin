@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import ProjectTabs from './ProjectTabs';
 
 vi.mock('./ProjectOverviewTab', () => ({ default: () => <div>overview-tab</div> }));
+vi.mock('./RunsOverview', () => ({ default: ({ projectId, onSeeAll }: { projectId: string; onSeeAll: () => void }) => <button onClick={onSeeAll}>runs-overview:{projectId}</button> }));
 vi.mock('./ProjectReadme', () => ({ default: ({ project }: { project: { _id: string } }) => <div>readme:{project._id}</div> }));
 vi.mock('./ProjectTrainingsTab', () => ({ default: () => <div>trainings-tab</div> }));
 vi.mock('./ProjectEvaluationsTab', () => ({ default: () => <div>evaluations-tab</div> }));
@@ -25,7 +26,6 @@ const baseProps = {
   stats: { totalTrainings: 0, totalTime: 0, totalCost: 0, avgEpochTime: 0 },
   dashboardStats: { testResultsCount: 0, visualizationsCount: 0, benchmarksCount: 0 },
   isAuthenticated: true,
-  user: { id: 'u1', email: 'u1@test.dev', name: 'User One' },
   trainings: [],
   isFullTrainingsLoading: false,
   page: 0,

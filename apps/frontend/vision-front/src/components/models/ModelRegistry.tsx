@@ -151,26 +151,34 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
         renderInput={(params) => <TextField {...params} label="Rank by result" placeholder="Newest first" />}
         noOptionsText="No reported results yet"
       />
-      {metric.trim() && <TextField
-        select
-        size="small"
-        label="Better is"
-        value={direction}
-        onChange={(event) => {
-          setDirection(event.target.value as 'max' | 'min');
-          setPage(0);
-        }}
-        sx={{ flex: '0 1 160px' }}
-      >
-        <MenuItem value="max">Higher</MenuItem>
-        <MenuItem value="min">Lower</MenuItem>
-      </TextField>}
-      {(search || metric) && <Button onClick={() => {
-        setSearch('');
-        setMetric('');
-        setDirection('max');
-        setPage(0);
-      }}>Clear filters</Button>}
+      {metric.trim() && (
+        <TextField
+          select
+          size="small"
+          label="Better is"
+          value={direction}
+          onChange={(event) => {
+            setDirection(event.target.value as 'max' | 'min');
+            setPage(0);
+          }}
+          sx={{ flex: '0 1 160px' }}
+        >
+          <MenuItem value="max">Higher</MenuItem>
+          <MenuItem value="min">Lower</MenuItem>
+        </TextField>
+      )}
+      {(search || metric) && (
+        <Button
+          onClick={() => {
+            setSearch('');
+            setMetric('');
+            setDirection('max');
+            setPage(0);
+          }}
+        >
+          Clear filters
+        </Button>
+      )}
     </Box>
   );
 
@@ -239,6 +247,24 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
   } else if (rows.length === 0) {
     content = (
       <EmptyState
+        action={
+          search || metric ? (
+            <Button
+              variant="contained"
+              onClick={() => {
+                setSearch('');
+                setMetric('');
+                setPage(0);
+              }}
+            >
+              Clear filters
+            </Button>
+          ) : (
+            <Button variant="contained" component={RouterLink} to="/trainings">
+              View trainings
+            </Button>
+          )
+        }
         icon={<ModelIcon />}
         title={search || metric ? 'No models match' : 'No models yet'}
         description={
@@ -361,7 +387,9 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
                     <TableRow>
                       <TableCell colSpan={columns} sx={{ py: 0 }}>
                         <Box sx={{ pb: 1.5, pl: 5, display: 'grid', gap: 0.5 }}>
-                          {stored.length > 0 && <StoredModelDownloads trainingId={row.training._id} models={stored} detailsOnly />}
+                          {stored.length > 0 && (
+                            <StoredModelDownloads trainingId={row.training._id} models={stored} detailsOnly />
+                          )}
                           <Typography variant="body2">
                             <Box component="span" sx={{ color: 'text.secondary' }}>
                               Dataset:{' '}

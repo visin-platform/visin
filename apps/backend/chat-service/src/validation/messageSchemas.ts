@@ -1,17 +1,24 @@
 import { z } from 'zod';
 import { screenContextSchema } from '../services/screen';
+import { attachmentRefSchema, MAX_ATTACHMENTS } from './attachmentSchemas';
 import { id } from './commonSchemas';
 
 export const sendSchema = z
   .object({
-    body: z.string().trim().min(1).max(8000),
+    // Text may be left out when there are files.
+    body: z.string().trim().max(8000).default(''),
+    attachments: z.array(attachmentRefSchema).max(MAX_ATTACHMENTS).optional(),
     clientId: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/),
     replyTo: id.optional(),
     assistantId: id.optional(),
     // Where the asker's chat panel is, so the analyst can change the page beside it. Never stored on the message.
     screen: screenContextSchema.optional()
   })
-  .strict();
+  .strict()
+  .refine((input) => input.body.length > 0 || (input.attachments?.length ?? 0) > 0, {
+    message: 'A message needs text or a file',
+    path: ['body']
+  });
 
 export const saveFindingSchema = z
   .object({
@@ -25,3 +32,6 @@ export const saveFindingSchema = z
 export const messageCursorSchema = z.coerce.number().int().positive();
 export const streamCursorSchema = z.coerce.number().int().min(0);
 export const readSequenceSchema = (maxSeq: number) => z.number().int().min(0).max(maxSeq);
+
+export const REACTION_EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🔥'] as const;
+export const reactionSchema = z.object({ emoji: z.enum(REACTION_EMOJIS).nullable() }).strict();

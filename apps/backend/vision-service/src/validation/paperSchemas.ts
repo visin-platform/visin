@@ -127,3 +127,17 @@ export type MyPapersQuery = z.infer<typeof myPapersQuerySchema>;
 
 /** Whether a person stands behind the link between an author name on a paper and their account. */
 export const authorshipBodySchema = z.object({ linked: z.boolean() });
+
+/** Searching inside a paper's text: a word, a number or a phrase, and how many pages to return. */
+export const paperSearchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(200),
+  limit: z.coerce.number().int().positive().max(8).default(5)
+});
+export type PaperSearchQuery = z.infer<typeof paperSearchQuerySchema>;
+
+/** A few whole pages, counted from 1. */
+export const paperPagesQuerySchema = z.object({
+  from: z.coerce.number().int().positive().max(2000),
+  to: z.coerce.number().int().positive().max(2000).optional()
+});
+export type PaperPagesQuery = z.infer<typeof paperPagesQuerySchema>;

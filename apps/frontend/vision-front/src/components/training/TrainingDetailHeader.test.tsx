@@ -67,4 +67,35 @@ describe('TrainingDetailHeader', () => {
 
     expect(screen.getByRole('button', { name: /refresh/i })).toBeDisabled();
   });
+
+  describe('the status of the run', () => {
+    const metrics = (epochCount: number, totalTime: number) => ({ totalTime, epochCount, maxEpoch: epochCount, lastEpochTimestamp: null, cpuCost: 0, gpuCost: 0, totalCost: 0 });
+    const withStatus = (patch: object) => ({ ...training, ...patch }) as unknown as Training;
+
+    it('shows a run that is training as live, with how far it has got and how long an epoch takes', () => {
+      render(<TrainingDetailHeader {...baseProps} training={withStatus({ status: 'running', metrics: metrics(10, 340) })} />);
+      expect(screen.getByText('running · epoch 10')).toBeInTheDocument();
+      expect(screen.getByTestId('live-dot')).toBeInTheDocument();
+      expect(screen.getByText('about 34 s per epoch')).toBeInTheDocument();
+    });
+
+    it('gives no time per epoch before one has finished', () => {
+      render(<TrainingDetailHeader {...baseProps} training={withStatus({ status: 'running', metrics: metrics(0, 0) })} />);
+      expect(screen.getByText('running')).toBeInTheDocument();
+      expect(screen.queryByText(/per epoch/)).not.toBeInTheDocument();
+    });
+
+    it('says a finished run is finished, without a live dot or a pace', () => {
+      render(<TrainingDetailHeader {...baseProps} training={withStatus({ status: 'completed', metrics: metrics(10, 340) })} />);
+      expect(screen.getByText('completed')).toBeInTheDocument();
+      expect(screen.queryByTestId('live-dot')).not.toBeInTheDocument();
+      expect(screen.queryByText(/per epoch/)).not.toBeInTheDocument();
+    });
+
+    it('says once, and with how long, that a run has stopped reporting', () => {
+      render(<TrainingDetailHeader {...baseProps} training={withStatus({ status: 'stalled', lastSeenAt: new Date(Date.now() - 12 * 60_000).toISOString() })} />);
+      expect(screen.getAllByText(/stalled — last heard 12 min ago/)).toHaveLength(1);
+    });
+  });
 });
+

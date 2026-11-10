@@ -14,7 +14,7 @@ export async function visibleRuns(c: ChatConversation, userId: string) {
   if (c.kind === 'assistant') {
     const runs = await AssistantRun.find({ conversationId: c._id.toString(), userId })
       // The screen context holds the page's frame list: the worker's business, and too large for every poll.
-      .select('-email -keyId -result -evidence -personality -screen')
+      .select('-email -keyId -result -evidence -personality -screen -draft')
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
@@ -80,7 +80,7 @@ export async function cancelRuns(req: Request, conversationId: string) {
   );
   await AssistantRun.updateMany(
     { conversationId: c.id, userId: req.user!.id, state: { $in: ['queued', 'screen_queued', 'running'] } },
-    { $set: { state: 'cancelled', finishedAt: new Date(), activity: 'Cancelled' } }
+    { $set: { state: 'cancelled', finishedAt: new Date(), activity: 'Cancelled' }, $unset: { draft: 1 } }
   );
   return;
 }

@@ -4,6 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import ShellLayout from './components/ShellLayout';
 import ShellRoutes from './routes';
 import { ChatProvider } from './components/chat/ChatDock';
+import { ChatBackground } from './components/chat/ChatBackground';
+import { ScreenCue } from './components/chat/ScreenCue';
 import VisionUploads from './components/VisionUploads';
 
 // The shell's own queries: the home page's. Each remote brings its own client,
@@ -26,6 +28,8 @@ function App() {
             <ShellLayout>
               <ShellRoutes />
             </ShellLayout>
+            <ChatBackground />
+            <ScreenCue />
           </ChatProvider>
           <VisionUploads />
         </AuthProvider>

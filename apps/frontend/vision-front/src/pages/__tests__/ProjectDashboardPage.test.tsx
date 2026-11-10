@@ -20,7 +20,9 @@ vi.mock('../../services/projectService', () => ({
   }
 }));
 
-vi.mock('../../components/project/CitedInPapers', () => ({ default: ({ projectId }: { projectId: string }) => <div>Cited in for {projectId}</div> }));
+vi.mock('../../components/project/CitedInPapers', () => ({
+  default: ({ projectId }: { projectId: string }) => <div>Cited in for {projectId}</div>
+}));
 vi.mock('../../components/project/ProjectHeader', () => ({
   default: (props: any) => (
     <div data-testid="project-header">
@@ -182,6 +184,35 @@ describe('ProjectDashboardPage', () => {
     expect(screen.getByTestId('project-tabs')).toBeInTheDocument();
   });
 
+  it('offers the analyst on the project itself, and a team discussion only where there is a team', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'u1' }, isAuthenticated: true });
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Ask about this project' })).toBeInTheDocument();
+    // A project that is one person's has no one else to discuss it with.
+    expect(screen.queryByRole('button', { name: 'Discuss project' })).not.toBeInTheDocument();
+    cleanup();
+
+    useProjectDashboardMock.mockReturnValue(
+      baseHookReturn({ project: { ...baseHookReturn().project, owner: { kind: 'group' as const, id: 'g1' } } })
+    );
+    renderPage();
+    expect(screen.getByRole('button', { name: 'Ask about this project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discuss project' })).toBeInTheDocument();
+  });
+
+  it('opens the analyst, not a discussion, from "Ask about this project"', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'u1' }, isAuthenticated: true });
+    document.body.append(Object.assign(document.createElement('div'), { id: 'shell-root' }));
+    const seen: unknown[] = [];
+    window.addEventListener('visin:open-chat', (event) => seen.push((event as CustomEvent).detail), { once: true });
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask about this project' }));
+
+    expect(seen).toEqual([{ projectId: 'p1', trainingIds: [], title: 'My Project', kind: 'assistant' }]);
+    document.getElementById('shell-root')?.remove();
+  });
+
   it('notes the project as visited once it has loaded, by its slug where it has one, and not while it is loading', () => {
     clearVisits();
     useProjectDashboardMock.mockReturnValue(baseHookReturn({ project: undefined, isProjectLoading: true }));
@@ -193,7 +224,9 @@ describe('ProjectDashboardPage', () => {
       baseHookReturn({ project: { ...baseHookReturn().project, slug: 'my-project' } })
     );
     renderPage();
-    expect(readVisits()).toMatchObject([{ kind: 'project', id: 'p1', name: 'My Project', path: '/projects/my-project' }]);
+    expect(readVisits()).toMatchObject([
+      { kind: 'project', id: 'p1', name: 'My Project', path: '/projects/my-project' }
+    ]);
 
     clearVisits();
     useProjectDashboardMock.mockReturnValue(baseHookReturn());

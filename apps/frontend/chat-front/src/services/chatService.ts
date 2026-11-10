@@ -23,13 +23,17 @@ export const chatService = {
   capabilities: (signal?: AbortSignal) => read<Capabilities>('/capabilities', signal),
   groups: (signal?: AbortSignal) => read<ChatGroup[]>('/groups', signal),
   projects: (signal?: AbortSignal) => read<ChatProject[]>('/projects', signal),
-  contacts: (signal?: AbortSignal) => read<ChatContact[]>('/contacts', signal),
+  contacts: (signal?: AbortSignal, groupId?: string) =>
+    read<ChatContact[]>(`/contacts${groupId ? `?groupId=${encodeURIComponent(groupId)}` : ''}`, signal),
   create: (input: CreateConversationInput) => api<Conversation>('/conversations', input),
   openGroup: (groupId: string) => api<Conversation>(`/groups/${groupId}/channel`, {}),
   messages: (id: string, signal?: AbortSignal, before?: number) =>
     read<Message[]>(`/conversations/${id}/messages${before === undefined ? '' : `?before=${before}`}`, signal),
   runs: (id: string, signal?: AbortSignal) => read<Run[]>(`/conversations/${id}/runs`, signal),
   send: (id: string, input: SendMessageInput) => api<Message>(`/conversations/${id}/messages`, input),
+  react: (id: string, messageId: string, emoji: string | null) =>
+    api<Message>(`/conversations/${id}/messages/${messageId}/reaction`, { emoji }),
+  unsend: (id: string, messageId: string) => api<Message>(`/conversations/${id}/messages/${messageId}/unsend`, {}),
   markRead: (id: string, seq: number) => api<void>(`/conversations/${id}/read`, { seq }),
   membership: (id: string, action: string) => api<void>(`/conversations/${id}/membership`, { action }),
   invite: (id: string, handle: string) => api<void>(`/conversations/${id}/participants`, { handle }),
@@ -39,5 +43,9 @@ export const chatService = {
     read<ScreenCall[]>(`/conversations/${id}/screen-calls?tab=${encodeURIComponent(tab)}`, signal),
   screenResult: (id: string, result: { ok: boolean; summary: string }) =>
     api<void>(`/screen-calls/${id}/result`, result),
+  attachmentTicket: (id: string, input: { name: string; mime: string; size: number }, signal?: AbortSignal) =>
+    api<{ fileId: string; uploadUrl: string }>(`/conversations/${id}/attachments`, input, signal),
+  attachmentUrls: (id: string, fileIds: string[]) =>
+    api<{ urls: Record<string, string>; expiresMs: number }>(`/conversations/${id}/attachment-urls`, { fileIds }),
   saveFinding: (id: string, input: FindingInput) => api<void>(`/conversations/${id}/findings`, input)
 };

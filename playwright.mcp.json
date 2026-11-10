@@ -1,0 +1,30 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "isolated": true,
+    "launchOptions": {
+      "args": ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"]
+    },
+    "contextOptions": {
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "permissions": ["camera", "microphone"]
+    }
+  },
+  "console": {
+    "level": "warning"
+  },
+  "imageResponses": "omit",
+  "codegen": "none",
+  "outputDir": ".playwright-mcp",
+  "network": {
+    "allowedOrigins": [
+      "http://localhost:*",
+      "http://127.0.0.1:*",
+      "https://fonts.googleapis.com",
+      "https://fonts.gstatic.com"
+    ]
+  }
+}

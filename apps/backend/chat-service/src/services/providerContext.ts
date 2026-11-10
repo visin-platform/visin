@@ -10,6 +10,20 @@ interface Message {
   tool_call_id?: string;
   tool_calls?: unknown[];
 }
+/** The first `end` characters, without ending in half of a character that takes two (an emoji, a rare symbol). */
+export function headText(text: string, end: number): string {
+  const last = text.charCodeAt(end - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end);
+}
+
+/** The last `count` characters, without starting in the second half of one that takes two. */
+export function tailText(text: string, count: number): string {
+  if (count <= 0) return '';
+  const start = text.length - count;
+  const first = text.charCodeAt(start);
+  return text.slice(first >= 0xdc00 && first <= 0xdfff ? start + 1 : start);
+}
+
 const MARKER = '\n[TRUNCATED FOR CONTEXT: omitted data is unknown; fetch a narrower result before making claims.]\n';
 
 /** Fit the serialized provider envelope, including schemas, without breaking tool exchanges. */
@@ -21,7 +35,12 @@ export function fitProviderContext(payload: string, maxBytes: number): string {
   const serialize = () => {
     payload = JSON.stringify(envelope);
   };
-  const isQuestion = (m: Message) => m.role === 'user' && typeof m.content === 'string';
+  const isQuestion = (m: Message) =>
+    m.role === 'user' &&
+    (typeof m.content === 'string' ||
+      (Array.isArray(m.content) &&
+        m.content.length > 0 &&
+        m.content.every((block) => ['text', 'image', 'image_url'].includes(block.type ?? ''))));
   const latestQuestion = messages.findLast(isQuestion);
   // Discard complete older conversational turns; keep seeded application context and the current ask.
   for (let i = 1; i < messages.indexOf(latestQuestion!);) {
@@ -41,7 +60,7 @@ export function fitProviderContext(payload: string, maxBytes: number): string {
     const target = Math.max(256, text.length - (size() - maxBytes) - MARKER.length - 32);
     if (target >= text.length) return text;
     const tail = Math.min(256, Math.floor(target / 4));
-    return text.slice(0, target - tail) + MARKER + text.slice(-tail);
+    return headText(text, target - tail) + MARKER + tailText(text, tail);
   };
   // Oldest results go first. Keep IDs and error flags intact, and never rewrite the verified context.
   for (const message of messages) {

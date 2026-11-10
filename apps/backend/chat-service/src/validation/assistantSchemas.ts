@@ -5,7 +5,9 @@ export const assistantInput = z
   .object({
     name: z.string().trim().min(1).max(60),
     personality: z.string().trim().max(1500).default(''),
-    paused: z.boolean().default(false)
+    paused: z.boolean().default(false),
+    /** Make this the analyst new private analyses start with (true), or stop being so (false). Absent leaves it as it is. */
+    default: z.boolean().optional()
   })
   .strict();
 

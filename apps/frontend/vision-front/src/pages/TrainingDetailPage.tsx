@@ -3,7 +3,7 @@ import { usePageChatContext } from '../hooks/usePageChatContext';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Box, Container, CircularProgress, Alert } from '@mui/material';
+import { Container, Alert } from '@mui/material';
 
 import TrainingOverviewTab from '../components/TrainingOverviewTab';
 import TrainingEpochsTab from '../components/TrainingEpochsTab';
@@ -32,6 +32,7 @@ import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
 import { useTrainingActions } from '../hooks/useTrainingActions';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { PageSkeleton } from '../components/common/PageSkeleton';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 import { CostingProvider } from '../costing/CostingProvider';
 import { projectService } from '../services/projectService';
@@ -140,15 +141,7 @@ const TrainingDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "80vh"
-        }}>
-        <CircularProgress />
-      </Box>
+      <PageSkeleton label="Loading run" />
     );
   }
 

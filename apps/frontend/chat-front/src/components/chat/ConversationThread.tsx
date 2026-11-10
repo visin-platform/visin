@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { chatChrome } from '../../appearance/chatAppearance';
+import { useEffect, useState } from 'react';
+import type { Conversation } from '../../types/chat';
+import { ExportConversationDialog } from './ExportConversationDialog';
 import { ReplyPreview } from './ReplyPreview';
 import { AutoAwesome, MoreVert } from '@mui/icons-material';
 import {
@@ -17,15 +20,20 @@ import {
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { KIND_LABEL, displayTitle } from '../../utils/chatContext';
 import { AnalystSetupNotice } from './AnalystSetupNotice';
+import { CallButtons } from './CallButtons';
 import { BackToConversations } from './BackToConversations';
 import { ChatContextChips } from './ChatContextChips';
-import { Composer } from './Composer';
+import { MediaComposer } from './MediaComposer';
 import { analystSettingsHref } from '../../utils/analystSettingsLink';
 import { lastActiveLabel } from '../../utils/activity';
 import { MessageList } from './MessageList';
+import { stoppable } from '../../utils/runs';
+import { chatService } from '../../services/chatService';
 
 export function ConversationThread({ panel }: { panel: boolean }) {
   const {
+    setAppearanceOpen,
+    openConversation,
     forgetSelection,
     c,
     user,
@@ -35,6 +43,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     me,
     membership,
     sending,
+    attachmentsAvailable,
     connection,
     canConfigure,
     draft,
@@ -42,13 +51,34 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     send,
     composerInput,
     replyTarget,
-    setReplyTarget
+    setReplyTarget,
+    runs,
+    perform,
+    selected
   } = useChatWorkspaceContext();
+  const [exporting, setExporting] = useState<{ conversation: Conversation; title: string } | null>(null);
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [voiceTarget, setVoiceTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => setExporting(null), [c?._id]);
   if (!c) return null;
   return (
     <>
-      <Stack direction="row" sx={{ p: 1.5, alignItems: 'center', gap: 1 }}>
+      <Stack
+        component="header"
+        role="group"
+        aria-label="Conversation header"
+        direction="row"
+        sx={(theme) => ({
+          ...chatChrome(theme),
+          p: 1.5,
+          alignItems: 'center',
+          gap: { xs: 0, sm: 1 },
+          position: 'relative',
+          zIndex: 1,
+          borderBottom: 1,
+          borderColor: 'divider'
+        })}
+      >
         <BackToConversations panel={panel} onBack={forgetSelection} />
         {c.profile ? (
           <Link
@@ -72,9 +102,9 @@ export function ConversationThread({ panel }: { panel: boolean }) {
           <Typography noWrap sx={{ fontWeight: 700 }}>
             {displayTitle(c, user?.id)}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          <Typography noWrap variant="caption" sx={{ color: 'text.secondary' }}>
             {c.kind === 'assistant'
-              ? 'Private chat · you and this assistant'
+              ? `Private chat · you and ${c.profile?.name || 'this assistant'}`
               : c.kind === 'direct'
                 ? 'Private conversation'
                 : KIND_LABEL[c.kind]}
@@ -92,6 +122,13 @@ export function ConversationThread({ panel }: { panel: boolean }) {
             Ask privately
           </Button>
         )}
+        <Box ref={setVoiceTarget} sx={{ display: 'flex', flexShrink: 0 }} />
+        <CallButtons
+          key={c._id}
+          conversation={c}
+          userId={user?.id}
+          onOpenConversation={(conversation) => void openConversation(async () => conversation)}
+        />
         <IconButton
           aria-label="Conversation settings"
           aria-haspopup="menu"
@@ -101,6 +138,14 @@ export function ConversationThread({ panel }: { panel: boolean }) {
           <MoreVert />
         </IconButton>
         <Menu anchorEl={settingsAnchor} open={!!settingsAnchor} onClose={() => setSettingsAnchor(null)}>
+          <MenuItem
+            onClick={() => {
+              setSettingsAnchor(null);
+              setAppearanceOpen(true);
+            }}
+          >
+            Appearance
+          </MenuItem>
           {c.profile && (
             <MenuItem
               component="a"
@@ -117,6 +162,14 @@ export function ConversationThread({ panel }: { panel: boolean }) {
             }}
           >
             People
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setSettingsAnchor(null);
+              setExporting({ conversation: { ...c }, title: displayTitle(c, user?.id) });
+            }}
+          >
+            Export as Markdown
           </MenuItem>
           {canConfigure && (
             <MenuItem component="a" href={analystSettingsHref()} onClick={() => setSettingsAnchor(null)}>
@@ -149,18 +202,39 @@ export function ConversationThread({ panel }: { panel: boolean }) {
               : 'Reconnecting · checking for messages'}
         </Typography>
       )}
+      {exporting && exporting.conversation._id === c._id && (
+        <ExportConversationDialog
+          conversation={exporting.conversation}
+          title={exporting.title}
+          onClose={() => setExporting(null)}
+        />
+      )}
       <MessageList />
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
       {replyTarget && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}
-      <Composer
+      <MediaComposer
+        key={c._id}
+        voiceTarget={voiceTarget}
+        conversationId={c._id}
+        filesEnabled={Boolean(attachmentsAvailable)}
+        assistant={c.kind === 'assistant'}
         label={c.kind === 'assistant' ? 'Ask a follow-up' : 'Message'}
         value={draft}
         onChange={setDraft}
-        onSend={() => void send()}
+        onSendFiles={async (files) => await send(files)}
         sending={sending}
         inputRef={composerInput}
         hint={panel ? undefined : 'Enter to send, Shift+Enter for a new line'}
         disabled={me?.state === 'invited' || (c.kind === 'assistant' && !enabled)}
+        commands={c.kind === 'assistant'}
+        onStop={
+          stoppable(runs, c, user?.id)
+            ? () =>
+                void perform(async () => {
+                  await chatService.cancel(selected!);
+                })
+            : undefined
+        }
       />
     </>
   );

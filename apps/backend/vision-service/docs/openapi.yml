@@ -67,6 +67,15 @@ tags:
 
 components:
   schemas:
+    PaperDocumentState:
+      type: object
+      required: [status, viewable]
+      properties:
+        status: { type: string, enum: [none, pending, ready, failed] }
+        viewable: { type: boolean, description: 'The PDF can be shown from storage' }
+        pageCount: { type: integer }
+        truncated: { type: boolean, description: 'The text was cut at the limits, so later pages are missing' }
+        error: { type: string, description: A short reason a read failed }
     Error:
       type: object
       required:
@@ -1902,6 +1911,25 @@ paths:
                               source: { type: string, enum: [project, guessed] }
                           value: { type: number }
                           epoch: { type: integer }
+                      ranking:
+                        type: array
+                        description: |
+                          Only for a `projectId` query: every run that reported the result `best` was judged on, best first
+                          (lowest first where the direction is `lower`), each at the epoch it peaked. Runs that never
+                          reported it are not listed. Absent for a `datasetId` query, where runs from different projects
+                          were not measured the same way.
+                        items:
+                          type: object
+                          properties:
+                            training:
+                              type: object
+                              properties:
+                                _id: { type: string }
+                                name: { type: string }
+                                status: { type: string }
+                                createdAt: { type: string, format: date-time }
+                            value: { type: number }
+                            epoch: { type: integer }
         '400':
           $ref: '#/components/responses/Error'
         '403':
@@ -1920,6 +1948,9 @@ paths:
         fields and currency are present only when exactly one currency is priced.
         Coverage includes unpriced trainings and measured durations in seconds;
         zero rates count as priced. These are current estimates, not historical bills.
+        Weekly activity covers the current UTC Monday-start week and the previous seven.
+        Runs are grouped by startTime (createdAt when absent); hours sum recorded epoch
+        durations for those runs, not measured GPU utilization. Missing weeks have no runs.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -1940,6 +1971,17 @@ paths:
                     properties:
                       totalTrainings:
                         type: integer
+                      totalHours:
+                        type: number
+                      weekly:
+                        type: array
+                        items:
+                          type: object
+                          required: [week, trainings, hours]
+                          properties:
+                            week: { type: string, format: date-time }
+                            trainings: { type: integer }
+                            hours: { type: number }
                       totalTime:
                         type: number
                       totalEpochs:
@@ -4888,6 +4930,11 @@ paths:
                                 _id: { type: string }
                                 name: { type: string }
                                 slug: { type: string }
+                                coverUrl:
+                                  type: string
+                                  description: |
+                                    A short-lived signed address of the project's picture, for a card: the cover its managers
+                                    chose, else its dataset's cover as the caller may see it. Absent when there is neither.
                             best:
                               type: object
                               description: Present when `metric` was given and the run reported it.
@@ -5639,6 +5686,238 @@ paths:
                   message: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/{id}/document:
+    get:
+      tags: [Papers]
+      summary: Where a paper's PDF stands
+      operationId: getPaperDocument
+      x-internal: true
+      description: |
+        Whether the PDF behind the paper's address has been read into storage and text: `none` (the paper has no PDF
+        address), `pending` (being read; asking starts the read for a paper made before this existed), `ready`, or `failed`
+        with a short `error`. A paper that is not visible to the caller reads as not found.
+      security:
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The state of the PDF
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data: { $ref: '#/components/schemas/PaperDocumentState' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/{id}/document/refresh:
+    post:
+      tags: [Papers]
+      summary: Read a paper's PDF again
+      operationId: refreshPaperDocument
+      x-internal: true
+      description: |
+        For the paper's managers, after correcting its PDF address or when the file at the address was replaced.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: The PDF is being read again
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data: { $ref: '#/components/schemas/PaperDocumentState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/{id}/pdf:
+    get:
+      tags: [Papers]
+      summary: The paper's PDF
+      operationId: getPaperPdf
+      x-internal: true
+      description: |
+        The copy kept in storage, to show beside the paper's page, so a reader does not depend on the publisher's server.
+        Found only while the PDF is `ready`, and only for someone who may read the paper.
+      security:
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /paper-documents/{id}:
+    get:
+      tags: [Papers]
+      summary: A paper, for an assistant
+      operationId: getPaperForAssistant
+      description: |
+        Read-only, for an assistant acting for a person: the paper as that person may see it (authors, abstract, and the
+        results it cites on Visin, each only while it is still public) and whether its text can be searched. A key limited
+        to one project reads no paper, since a paper belongs to none. Nothing here changes a paper.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The paper and the state of its text
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [paper, document]
+                    properties:
+                      paper: { $ref: '#/components/schemas/Paper' }
+                      document: { $ref: '#/components/schemas/PaperDocumentState' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /paper-documents/{id}/search:
+    get:
+      tags: [Papers]
+      summary: Search inside a paper
+      operationId: searchPaperText
+      description: |
+        The pages of the paper that mention a word, a number or a phrase, best first, each with a few quoted passages.
+        Read the page before relying on a snippet. Only for a paper whose PDF is `ready`.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: q
+          in: query
+          required: true
+          schema: { $ref: ./generated/request-schemas.json#/PaperSearchQuery/properties/q }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/PaperSearchQuery/properties/limit }
+      responses:
+        '200':
+          description: The matching pages
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [query, hits, pageCount]
+                    properties:
+                      query: { type: string }
+                      pageCount: { type: integer }
+                      hits:
+                        type: array
+                        items:
+                          type: object
+                          required: [page, score, snippets]
+                          properties:
+                            page: { type: integer, description: 'Counted from 1, as a reader counts' }
+                            score: { type: number }
+                            snippets: { type: array, items: { type: string } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /paper-documents/{id}/pages:
+    get:
+      tags: [Papers]
+      summary: Read pages of a paper
+      operationId: readPaperPages
+      description: |
+        Whole pages from `from` up to `to` (at most 20 asked for), as many as fit one read, about 18,000 characters: four
+        or five dense pages. `next` is the page to continue from when the range was longer than one read can carry, and is
+        absent once the range or the paper ends. A page is cut (`cut: true`) only if it alone exceeds the budget.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          schema: { $ref: ./generated/request-schemas.json#/PaperPagesQuery/properties/from }
+        - name: to
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/PaperPagesQuery/properties/to }
+      responses:
+        '200':
+          description: The pages
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [pages, pageCount]
+                    properties:
+                      pageCount: { type: integer }
+                      next: { type: integer, description: The page to continue from }
+                      pages:
+                        type: array
+                        items:
+                          type: object
+                          required: [page, text]
+                          properties:
+                            page: { type: integer }
+                            text: { type: string }
+                            cut: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Error' }
 

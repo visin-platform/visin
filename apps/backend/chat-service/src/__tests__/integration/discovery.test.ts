@@ -23,6 +23,8 @@ it('discovers only shared-group roster contacts and revalidates them when starti
   });
   const contacts = await request('/contacts');
   expect(contacts.body.data).toEqual([{ id: target, name: 'colleague@private.invalid' }]);
+  expect((await request('/contacts?groupId=group1')).body.data).toEqual(contacts.body.data);
+  expect((await request('/contacts?groupId=not-a-member')).status).toBe(404);
   const created = await request('/conversations', 'alice', { kind: 'direct', title: 'Colleague', userIds: [target] });
   expect(created.status).toBe(201);
   expect(JSON.stringify(created.body.data)).not.toContain('colleague@private.invalid');

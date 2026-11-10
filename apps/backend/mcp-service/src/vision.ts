@@ -38,7 +38,13 @@ import {
   findingsResponseSchema,
   visualizationSchema,
   visualizationTypesResponseSchema,
-  visualizationsResponseSchema
+  visualizationsResponseSchema,
+  paperForAssistantSchema,
+  paperSearchSchema,
+  paperPagesSchema,
+  type PaperForAssistant,
+  type PaperSearch,
+  type PaperPages
 } from './schemas';
 
 /**
@@ -67,6 +73,15 @@ const post = async <T>(
 ): Promise<T> => parseResponse(schema, path, await callService(base(), apiKey, 'POST', path, body));
 
 export const vision = {
+  getPaper: (apiKey: string, id: string): Promise<PaperForAssistant> =>
+    get(paperForAssistantSchema, apiKey, `/paper-documents/${encodeURIComponent(id)}`),
+
+  searchPaper: (apiKey: string, id: string, q: string, limit?: number): Promise<PaperSearch> =>
+    get(paperSearchSchema, apiKey, `/paper-documents/${encodeURIComponent(id)}/search`, { q, limit }),
+
+  readPaperPages: (apiKey: string, id: string, from: number, to?: number): Promise<PaperPages> =>
+    get(paperPagesSchema, apiKey, `/paper-documents/${encodeURIComponent(id)}/pages`, { from, to }),
+
   listProjects: (apiKey: string, search?: string): Promise<Project[]> =>
     get(projectsResponseSchema, apiKey, '/projects', { search }),
 

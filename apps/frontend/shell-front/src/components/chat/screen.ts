@@ -118,3 +118,49 @@ export function resolvePlace(request: unknown): ScreenOutcome {
     }
   }
 }
+
+const tabName = (tab: unknown): string =>
+  typeof tab === 'string' ? tab.replaceAll('-', ' ').replace(/^./, (letter) => letter.toUpperCase()) : '';
+
+/**
+ * What a place is, in words for the person watching it open ("the run’s Epochs tab"), never an address or an id. Only
+ * for a place `resolvePlace` accepts; anything else is just "a page".
+ */
+export function describePlace(place: unknown, params: unknown): string {
+  const rest = typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {};
+  switch (place) {
+    case 'projects':
+      return 'the projects';
+    case 'project':
+      return 'a project';
+    case 'trainings':
+      return rest.project === undefined ? 'the runs' : 'the project’s runs';
+    case 'training':
+      if (rest.model !== undefined) return 'a run’s model';
+      return rest.tab === undefined ? 'a run' : `the run’s ${tabName(rest.tab)} tab`;
+    case 'compare': {
+      const count = Array.isArray(rest.ids) ? rest.ids.length : 0;
+      return `a comparison of ${count || 'some'} runs${rest.tab === undefined ? '' : `, ${tabName(rest.tab)}`}`;
+    }
+    case 'visualizations':
+      return `the frames of ${Array.isArray(rest.ids) ? rest.ids.length : 'some'} runs`;
+    case 'datasets':
+      return 'the datasets';
+    case 'dataset':
+      return 'a dataset';
+    case 'models':
+      return 'the models';
+    case 'benchmarks':
+      return 'the benchmarks';
+    case 'evaluation':
+      return 'an evaluation';
+    case 'suite':
+      return typeof rest.slug === 'string' ? `the ${rest.slug} suite` : 'a suite';
+    case 'paper':
+      return 'a paper';
+    case 'action':
+      return 'a frame';
+    default:
+      return 'a page';
+  }
+}

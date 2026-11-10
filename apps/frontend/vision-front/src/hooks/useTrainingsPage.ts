@@ -8,6 +8,7 @@ import { useTrainingTags } from './useTrainingTags';
 import { Training } from '../types';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { useAuth } from '../contexts/AuthContext';
+import { pollWhileRunning } from '../utils/liveRuns';
 
 export const useTrainingsPage = () => {
   const navigate = useNavigate();
@@ -128,7 +129,9 @@ export const useTrainingsPage = () => {
         order: sortOrder,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         excludeTags: excludedTags.length > 0 ? excludedTags : undefined
-      })
+      }),
+    // A page of runs with one training is read again as it goes: its epoch count moves, and its status turns over.
+    refetchInterval: pollWhileRunning((response: Awaited<ReturnType<typeof trainingService.getTrainings>> | undefined) => response?.data?.trainings)
   });
 
   const { availableTags, refetchTags } = useTrainingTags();

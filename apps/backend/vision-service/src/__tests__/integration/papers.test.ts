@@ -21,6 +21,8 @@ vi.mock('../../clients/projectGroupsClient', async () => {
   const module = await (() => ({ getUserGroups: vi.fn() }))();
   return Object.assign({ default: module }, module);
 });
+// Making a paper starts reading its PDF in the background; these tests are about who may see a paper, not about that.
+vi.mock('../../services/paperPdfFetch', () => ({ fetchPdf: vi.fn(async () => Promise.reject(new Error('no network in tests'))) }));
 vi.mock('../../clients/ownerIdentityClient', async () => {
   const module = await (() => ({ lookupOwnerIdentities: vi.fn() }))();
   return Object.assign({ default: module }, module);

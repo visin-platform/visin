@@ -5,6 +5,7 @@ import { trainingService } from '../services/trainingService';
 import { runEvaluationService } from '../services/runEvaluationService';
 import { benchmarkService } from '../services/benchmarkService';
 import type { ProjectTabKey } from '../components/project/projectTabs';
+import { pollWhileRunning } from '../utils/liveRuns';
 
 type TrainingSortColumn =
   'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
@@ -59,7 +60,8 @@ export const useProjectDashboard = (projectId: string | undefined, tab: ProjectT
         sortBy,
         order: sortOrder
       }),
-    enabled: !!projectResponse?.data && tab === 'trainings'
+    enabled: !!projectResponse?.data && tab === 'trainings',
+    refetchInterval: pollWhileRunning((response: Awaited<ReturnType<typeof trainingService.getTrainings>> | undefined) => response?.data?.trainings)
   });
 
   // Evaluations query: every evaluation of the project, up to a cap, because the tab ranks runs by their

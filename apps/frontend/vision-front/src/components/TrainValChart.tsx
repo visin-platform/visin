@@ -5,6 +5,9 @@ import { Epoch } from '../types';
 import { useChartColors } from '@visin/frontend-core';
 import { useMobileChartTooltip } from '../hooks/useMobileChartTooltip';
 import { isReported } from '../taxonomy/discover';
+import type { MetricDirection } from '../types/taxonomy';
+import { bestEpoch, formatReading } from './charts/bestEpoch';
+import { BestEpochMarker } from './charts/BestEpochMarker';
 
 interface TrainValChartProps {
   epochs: Epoch[];
@@ -12,9 +15,11 @@ interface TrainValChartProps {
   metric: string;
   /** Display name, used in the title and the series labels ("Loss", "Mean IoU"). */
   label: string;
+  /** Which way is better, from the project's taxonomy: for a loss, the best epoch is the lowest. */
+  direction?: MetricDirection;
 }
 
-const TrainValChart: React.FC<TrainValChartProps> = ({ epochs, metric, label }) => {
+const TrainValChart: React.FC<TrainValChartProps> = ({ epochs, metric, label, direction = 'higher' }) => {
   const { isMobile } = useMobileChartTooltip();
   const colors = useChartColors();
 
@@ -31,11 +36,31 @@ const TrainValChart: React.FC<TrainValChartProps> = ({ epochs, metric, label }) 
     return { epochs: sortedEpochs.map(e => e.epoch), train: read('train'), val: read('val') };
   }, [epochs, metric]);
 
+  // The checkpoint anyone would keep is the best validation epoch; a run that reports no validation is judged on
+  // its training readings instead.
+  const best = React.useMemo(() => {
+    const val = bestEpoch(chartData.epochs, chartData.val, direction);
+    if (val) return { ...val, split: 'validation' as const, slot: 1 };
+    const train = bestEpoch(chartData.epochs, chartData.train, direction);
+    return train ? { ...train, split: 'training' as const, slot: 0 } : null;
+  }, [chartData, direction]);
+
   return (
     <Box>
-      <Typography variant="subtitle1" gutterBottom>
+      <Typography variant="subtitle1" gutterBottom={!best}>
         Training and Validation {label}
       </Typography>
+      {best && (
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mb: 1 }}>
+          Best {best.split} {label} {formatReading(best.value)} at epoch {best.epoch}
+          {best.lastEpoch !== best.epoch && ` · ended at ${formatReading(best.last)} (epoch ${best.lastEpoch})`}
+          {best.drifted && (
+            <Box component="span" sx={{ color: 'warning.main' }}>
+              {' '}· shaded: past the best
+            </Box>
+          )}
+        </Typography>
+      )}
       {chartData.train.some(isReported) || chartData.val.some(isReported) ? (
         <Box sx={{
           ...(isMobile && {
@@ -67,7 +92,9 @@ const TrainValChart: React.FC<TrainValChartProps> = ({ epochs, metric, label }) 
             ]}
             height={400}
             margin={{ left: 80, right: 20, top: 20, bottom: 60 }}
-          />
+          >
+            {best && <BestEpochMarker best={best} color={colors.slot(best.slot)} />}
+          </LineChart>
         </Box>
       ) : (
         <Typography

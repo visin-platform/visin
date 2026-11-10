@@ -35,11 +35,11 @@ const makeEpoch = (epoch: number, overrides: Partial<Epoch> = {}): Epoch => ({
 });
 
 describe('TrainingOverviewCard', () => {
-  it('renders training name, status and description', () => {
+  it('leaves the name, status and description to the page header above it', () => {
     render(<TrainingOverviewCard training={baseTraining} epochs={[]} />);
-    expect(screen.getByText('My Training')).toBeInTheDocument();
-    expect(screen.getByText('completed')).toBeInTheDocument();
-    expect(screen.getByText('A test training run')).toBeInTheDocument();
+    expect(screen.queryByText('My Training')).not.toBeInTheDocument();
+    expect(screen.queryByText('completed')).not.toBeInTheDocument();
+    expect(screen.getByText('Training UUID')).toBeInTheDocument();
   });
 
   it('renders "-" for metrics when there are no epochs', () => {
@@ -58,7 +58,7 @@ describe('TrainingOverviewCard', () => {
 
   it('headlines a loss and a score for a segmentation run', () => {
     render(<TrainingOverviewCard training={baseTraining} epochs={[makeEpoch(1)]} />);
-    ['Train Loss', 'Val Loss', 'Train Mean IoU', 'Val Mean IoU'].forEach(title =>
+    ['Train Loss', 'Val Loss', 'Train Mean IoU', 'Val Mean IoU'].forEach((title) =>
       expect(screen.getByText(title)).toBeInTheDocument()
     );
     expect(screen.getByText('0.700')).toBeInTheDocument(); // train mean_iou
@@ -79,22 +79,29 @@ describe('TrainingOverviewCard', () => {
     expect(screen.getByText('Not available')).toBeInTheDocument();
     expect(screen.getByText('Not specified')).toBeInTheDocument();
   });
-
-  it.each(['running', 'failed', 'pending', 'stalled'] as const)('renders %s status chip', (status) => {
-    render(<TrainingOverviewCard training={{ ...baseTraining, status }} epochs={[]} />);
-    expect(screen.getByText(status)).toBeInTheDocument();
-  });
 });
 
- it('links the downloaded Visin dataset and shows its pinned revision', () => {
-    render(<TrainingOverviewCard training={{ ...baseTraining, dataset: { source: 'visin', id: 'd1', name: 'ZOD', revision: 'archive-version' } }} epochs={[]} />);
-    expect(screen.getByRole('link', { name: 'ZOD' })).toHaveAttribute('href', '/datasets/d1');
-    expect(screen.getByText('Revision: archive-version')).toBeInTheDocument();
-  });
+it('links the downloaded Visin dataset and shows its pinned revision', () => {
+  render(
+    <TrainingOverviewCard
+      training={{ ...baseTraining, dataset: { source: 'visin', id: 'd1', name: 'ZOD', revision: 'archive-version' } }}
+      epochs={[]}
+    />
+  );
+  expect(screen.getByRole('link', { name: 'ZOD' })).toHaveAttribute('href', '/datasets/d1');
+  expect(screen.getByText('Revision: archive-version')).toBeInTheDocument();
+});
 
 describe('TrainingOverviewCard Hub models', () => {
   const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
-  const model = { _id: 'm1', provider: 'hf' as const, kind: 'model' as const, repo: 'acme/clftv2-zod', revision: COMMIT, addedAt: '2026-01-02T00:00:00.000Z' };
+  const model = {
+    _id: 'm1',
+    provider: 'hf' as const,
+    kind: 'model' as const,
+    repo: 'acme/clftv2-zod',
+    revision: COMMIT,
+    addedAt: '2026-01-02T00:00:00.000Z'
+  };
 
   it('shows no model line for a run without one', () => {
     render(<TrainingOverviewCard training={baseTraining} epochs={[]} />);
@@ -120,7 +127,15 @@ describe('TrainingOverviewCard Hub models', () => {
 });
 
 describe('TrainingOverviewCard model card', () => {
-  const model = { _id: 'm1', provider: 'hf' as const, kind: 'model' as const, repo: 'acme/clft', revision: '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433', epoch: 7, addedAt: '2026-01-02T00:00:00.000Z' };
+  const model = {
+    _id: 'm1',
+    provider: 'hf' as const,
+    kind: 'model' as const,
+    repo: 'acme/clft',
+    revision: '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433',
+    epoch: 7,
+    addedAt: '2026-01-02T00:00:00.000Z'
+  };
 
   it('opens the card Visin wrote for that model, for copying into the repo', async () => {
     const card = vi.spyOn(modelService, 'card').mockResolvedValue('---\ntags:\n  - visin\n---\n# clft');
@@ -143,33 +158,70 @@ describe('TrainingOverviewCard model card', () => {
   });
 
   it('links straight to the demo Space once one is linked', () => {
-    renderWithClient(<TrainingOverviewCard training={{ ...baseTraining, models: [{ ...model, space: 'acme/clft-demo' }] }} epochs={[]} />);
-    expect(screen.getByRole('link', { name: 'Open demo' })).toHaveAttribute('href', 'https://huggingface.co/spaces/acme/clft-demo');
+    renderWithClient(
+      <TrainingOverviewCard
+        training={{ ...baseTraining, models: [{ ...model, space: 'acme/clft-demo' }] }}
+        epochs={[]}
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Open demo' })).toHaveAttribute(
+      'href',
+      'https://huggingface.co/spaces/acme/clft-demo'
+    );
   });
 });
 
 describe('TrainingOverviewCard models Visin keeps', () => {
   const pth = {
-    _id: 'm1', provider: 'visin' as const, kind: 'model' as const, fileId: 'models/t1/a.pth', filename: 'my-run-epoch99.pth',
-    format: 'pth' as const, epoch: 99, size: 1_073_741_824, sha256: 'a'.repeat(64), status: 'ready' as const,
-    license: { id: 'cc-by-4.0', name: 'CC BY 4.0' }, addedAt: '2026-03-01T00:00:00.000Z'
+    _id: 'm1',
+    provider: 'visin' as const,
+    kind: 'model' as const,
+    fileId: 'models/t1/a.pth',
+    filename: 'my-run-epoch99.pth',
+    format: 'pth' as const,
+    epoch: 99,
+    size: 1_073_741_824,
+    sha256: 'a'.repeat(64),
+    status: 'ready' as const,
+    license: { id: 'cc-by-4.0', name: 'CC BY 4.0' },
+    addedAt: '2026-03-01T00:00:00.000Z'
   };
-  const onnx = { ...pth, _id: 'm2', fileId: 'models/t1/a.onnx', filename: 'my-run-epoch99.onnx', format: 'onnx' as const, size: 536_870_912, sha256: 'b'.repeat(64), sourceSha256: 'a'.repeat(64) };
+  const onnx = {
+    ...pth,
+    _id: 'm2',
+    fileId: 'models/t1/a.onnx',
+    filename: 'my-run-epoch99.onnx',
+    format: 'onnx' as const,
+    size: 536_870_912,
+    sha256: 'b'.repeat(64),
+    sourceSha256: 'a'.repeat(64)
+  };
 
   it('offers both formats of one checkpoint together, with its licence and epoch', () => {
     renderWithClient(<TrainingOverviewCard training={{ ...baseTraining, models: [pth, onnx] }} epochs={[]} />);
     expect(screen.getByText('Model')).toBeInTheDocument();
     expect(screen.getByText('my-run-epoch99.pth · epoch 99')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Download my-run-epoch99.pth (pth)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m1/file');
-    expect(screen.getByRole('link', { name: 'Download my-run-epoch99.onnx (onnx)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m2/file');
-    expect(screen.getByRole('link', { name: 'View the outputs of my-run-epoch99.pth' })).toHaveAttribute('href', '/trainings/t1?tab=models&model=m1');
+    expect(screen.getByRole('link', { name: 'Download my-run-epoch99.pth (pth)' })).toHaveAttribute(
+      'href',
+      'http://localhost:4010/api/trainings/t1/models/m1/file'
+    );
+    expect(screen.getByRole('link', { name: 'Download my-run-epoch99.onnx (onnx)' })).toHaveAttribute(
+      'href',
+      'http://localhost:4010/api/trainings/t1/models/m2/file'
+    );
+    expect(screen.getByRole('link', { name: 'View the outputs of my-run-epoch99.pth' })).toHaveAttribute(
+      'href',
+      '/trainings/t1?tab=models&model=m1'
+    );
     expect(screen.getByText('Licence CC BY 4.0')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try it' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Model card' })).not.toBeInTheDocument();
   });
 
   it('says why a model cannot be downloaded, rather than link to a refusal', () => {
-    renderWithClient(<TrainingOverviewCard training={{ ...baseTraining, models: [{ ...pth, license: undefined }] }} epochs={[]} />);
+    renderWithClient(
+      <TrainingOverviewCard training={{ ...baseTraining, models: [{ ...pth, license: undefined }] }} epochs={[]} />
+    );
     expect(screen.getByText('.pth · 1.0 GB · Licence not stated')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Download/ })).not.toBeInTheDocument();
   });

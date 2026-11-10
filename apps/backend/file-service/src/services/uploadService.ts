@@ -95,6 +95,9 @@ export function validateContent(stage: string, policy: UploadPolicy): void {
     gif: text(0, 6) === 'GIF87a' || text(0, 6) === 'GIF89a',
     webp: text(0, 4) === 'RIFF' && text(8, 12) === 'WEBP',
     mp4: text(4, 8) === 'ftyp',
+    m4a: text(4, 8) === 'ftyp',
+    weba: starts('1a45dfa3'),
+    ogg: text(0, 4) === 'OggS',
     mov: ['ftyp', 'moov', 'mdat', 'wide'].includes(text(4, 8)),
     pdf: text(0, 5) === '%PDF-',
     // torch.save writes a zip (PK\x03\x04) since 1.6 and a pickle (protocol 2-5) before that.

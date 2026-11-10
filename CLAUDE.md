@@ -45,7 +45,8 @@ changes:
 2. `npm run typecheck --workspace=<ws>`
 3. `npm run test:coverage --workspace=<ws>` (includes the MongoMemoryServer integration suites and coverage floors)
 4. `npm run build --workspace=<ws>` (what the Dockerfile runs; also catches bundling/federation errors)
-5. `npm run test:e2e --workspace=<ws>` for a front with an `e2e/` suite (account, auth, label, landing, vision)
+5. `npm run test:e2e --workspace=<ws>` for a front with an `e2e/` suite (account, auth, chat, label, landing, shell,
+   vision). It needs the browser: `npx playwright install chromium` once, and again after a Playwright upgrade
 6. `npm run check:repo` once, at the end, for **every** change, even one that touches no spec or diagram. It runs the
    repo-wide checks CI runs outside any workspace (lib pins, lockfiles, doc links, architecture diagrams, `openapi:lint`,
    published API specs), in under a second. They are separate CI jobs, so a green workspace run says nothing about them,

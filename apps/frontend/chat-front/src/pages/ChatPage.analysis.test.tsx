@@ -54,8 +54,10 @@ it('shows measured evidence and submits a reviewed finding through the separate 
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   expect(await screen.findByText('Validation peaked at epoch 42.')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Base model' })).toHaveAttribute('href', `/trainings/${training}`);
-  expect(screen.getByRole('link', { name: 'Evidence · 111111' })).toHaveAttribute('href', `/trainings/${training}`);
+  // The thread's header and the answer both name the run; each links to it.
+  expect(screen.getAllByRole('link', { name: 'Base model' })).toHaveLength(2);
+  // The answer names the run it read (the thread's header names it too, so the answer's is the last).
+  expect(screen.getAllByRole('link', { name: 'Base model' }).at(-1)).toHaveAttribute('href', `/trainings/${training}`);
   expect(screen.queryByRole('link', { name: /not-an-id/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Save as finding' }));
   fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Validation peak' } });
@@ -80,7 +82,7 @@ it('lets users stop a durable analysis job', async () => {
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   expect(await screen.findByText('Reading epochs')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Stop analysis' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Stop the analyst' }));
   await waitFor(() => expect(api).toHaveBeenCalledWith('/conversations/c1/cancel', {}));
 });
 
@@ -205,7 +207,7 @@ it('shows another participant’s shared progress without offering cancellation'
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   expect(await screen.findByText('Reviewer · Preparing shared answer')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Stop analysis' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Stop the analyst' })).toBeNull();
 });
 
 it('does not offer retry for another participant’s failed shared question', async () => {

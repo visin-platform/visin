@@ -36,10 +36,23 @@ const runSchema = new Schema(
       )
     },
     result: String,
+    // The answer so far while it streams, kept until the answer is published. A preview only: `result` is the answer.
+    draft: String,
     evidence: { type: [{ tool: String, input: Schema.Types.Mixed, at: Date }], default: [] },
+    // What the analyst did, in order, as it did it: the tool, and when it started and ended. Shown while it works.
+    steps: {
+      type: [new Schema({ tool: String, startedAt: Date, endedAt: Date }, { _id: false })],
+      default: []
+    },
     published: { type: Boolean, default: false },
     activity: { type: String, default: 'Waiting' },
     error: String,
+    providerReplayVersion: { type: String, select: false },
+    // Machine-only diagnostics; never save the provider body, prompt, headers or credentials.
+    providerFailure: {
+      type: new Schema({ status: Number, type: String, requestId: String, reason: String }, { _id: false }),
+      select: false
+    },
     leaseUntil: Date,
     keyId: String,
     provider: String,

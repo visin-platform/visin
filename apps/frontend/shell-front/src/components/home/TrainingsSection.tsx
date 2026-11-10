@@ -4,6 +4,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { HomeTraining } from '../../services/homeApi';
 import { formatRelative } from './formatting';
 import { HomeSection, ListRow, RowIcon, SectionBody } from './HomeSection';
+import { LiveDot } from './LiveDot';
 import { statusLook } from './trainingStatus';
 
 interface TrainingsSectionProps {
@@ -34,7 +35,7 @@ export function TrainingsSection({ query, projectNames, now }: TrainingsSectionP
               // The status is named in the text; the icon only repeats it.
               leading={
                 <RowIcon color={livePalette(theme)[tone].main}>
-                  <Icon fontSize="small" />
+                  {training.status === 'running' ? <LiveDot color={livePalette(theme)[tone].main} /> : <Icon fontSize="small" />}
                 </RowIcon>
               }
               title={training.name}

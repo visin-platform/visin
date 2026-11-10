@@ -9,6 +9,7 @@ import type { CreatePaperBody, MyPapersQuery, PublicPapersQuery, UpdatePaperBody
 import { callerGroups, checkProjectAccess, projectPermission, resolveProject } from './projectAccessService';
 import { parseArxivId, parseDoi } from './paperIdentifiers';
 import { PaperCard, PaperView, resolveCited, splitBoard, publicName, toCards, toView } from './paperView';
+import { requestIndex } from './paperDocumentService';
 
 // The service's public surface stays here, whichever file a piece now lives in.
 export type { PaperAuthorView, PaperResultView, PaperPermissions, PaperCard, PaperView } from './paperView';
@@ -80,6 +81,9 @@ async function requirePaper(id: string, userId: string | undefined, min: Permiss
 }
 
 export const getPaper = async (id: string, userId: string | undefined): Promise<PaperView> => toView(await requirePaper(id, userId), userId);
+
+/** The paper itself, for what reads or reads into it (its PDF, its text): found only when the caller may read it. */
+export const readablePaper = (id: string, userId: string | undefined, min: Permission = 'read'): Promise<IPaper> => requirePaper(id, userId, min);
 
 /** The public papers that name this person and wait for them to say yes: what they are asked to confirm. */
 export async function listAuthorshipRequests(userId: string): Promise<PaperCard[]> {
@@ -200,6 +204,7 @@ export async function createPaper(userId: string, body: CreatePaperBody): Promis
   });
   if (paper.visibility === 'public') await assertPublishable(paper, true);
   await paper.save();
+  requestIndex(paper);
   return toView(paper, userId);
 }
 
@@ -232,6 +237,7 @@ export async function updatePaper(id: string, userId: string, body: UpdatePaperB
   // What must hold of a public paper is checked on whatever it will be, whichever field this edit touched.
   if (paper.visibility === 'public') await assertPublishable(paper, makesPublic || body.results !== undefined);
   await paper.save();
+  requestIndex(paper);
   return toView(paper, userId);
 }
 

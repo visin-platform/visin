@@ -1,7 +1,9 @@
+import { redactQuotes } from '../services/messageService';
 import { flushMembershipEvents } from '../services/membershipAudit';
 import { authenticateToken, BadRequestError } from '@visin/backend-core';
 import { type RequestHandler } from 'express';
 import { z } from 'zod';
+import { AssistantRun } from '../models/AssistantRun';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { authorize, historyFilter } from '../services/access';
@@ -20,6 +22,8 @@ const tabSchema = z
 const STREAM_POLL_MS = 2000;
 /** How often a stream polls while its tab has a run that can move the page, so the page follows within about half a second. */
 const STREAM_FAST_POLL_MS = 500;
+/** How often it polls while the asker's analyst is working, so the answer reads as it is written. */
+const STREAM_DRAFT_POLL_MS = 300;
 /** How often an open event stream re-checks the session and conversation access. */
 const STREAM_REAUTHORIZE_MS = 10000;
 /** A named heartbeat lets clients detect a silently stalled connection. */
@@ -51,9 +55,16 @@ export function createStreamController(): RequestHandler {
       lastRuns: string | undefined,
       lastSelection: string | undefined,
       timer: NodeJS.Timeout | undefined;
+    let lastMessageVersion = -1;
+    let refreshedMutationsAt = 0;
+    const sentRevisions = new Map<string, number>();
     const sentCalls = new Set<string>();
-    const later = (fast: boolean) => {
-      if (!stopped) timer = setTimeout(() => void tick(), fast ? STREAM_FAST_POLL_MS : STREAM_POLL_MS);
+    // What each run's draft was when it was last sent, so only a change is sent again.
+    const sentDrafts = new Map<string, { messageId: string; text: string }>();
+    // Whether the asker has an answer on its way (queued or being written), known from the last poll.
+    let answering = false;
+    const later = (delay: number) => {
+      if (!stopped) timer = setTimeout(() => void tick(), delay);
     };
     res.on('close', () => {
       stopped = true;
@@ -65,7 +76,7 @@ export function createStreamController(): RequestHandler {
     const tick = async () => {
       if (stopped || loading) return;
       loading = true;
-      let fast = false;
+      let delay = STREAM_POLL_MS;
       try {
         // Access is re-checked every few polls, not every one: each check asks the session
         // store, group-service and vision-service, per open stream.
@@ -80,6 +91,36 @@ export function createStreamController(): RequestHandler {
           authorizedAt = Date.now();
         }
         await flushMembershipEvents(conversationId);
+        // The analyst's answer as written so far, for the asker only. Read before the messages: a draft is kept until
+        // the answer is published as a message, so reading in this order never finds neither.
+        const draftFrames: string[] = [];
+        if (conversation.kind === 'assistant' && (answering || sentDrafts.size > 0)) {
+          const live = await AssistantRun.find({
+            conversationId,
+            userId,
+            $or: [{ state: 'running' }, { state: 'completed', published: false }]
+          })
+            .select('_id messageId draft')
+            .lean();
+          const present = new Set<string>();
+          for (const run of live) {
+            const runId = String(run._id);
+            const text = run.draft ?? '';
+            present.add(runId);
+            const before = sentDrafts.get(runId);
+            if (text === (before?.text ?? '')) continue;
+            sentDrafts.set(runId, { messageId: run.messageId, text });
+            draftFrames.push(`event: draft\ndata: ${JSON.stringify({ runId, messageId: run.messageId, text })}\n\n`);
+          }
+          // A run that is no longer working or waiting to be published: its draft is over.
+          for (const [runId, sent] of sentDrafts) {
+            if (present.has(runId)) continue;
+            sentDrafts.delete(runId);
+            draftFrames.push(
+              `event: draft\ndata: ${JSON.stringify({ runId, messageId: sent.messageId, text: '' })}\n\n`
+            );
+          }
+        }
         let messages = await Message.find({
           conversationId,
           $and: [historyFilter(conversation, userId), { seq: { $gt: after } }]
@@ -89,8 +130,29 @@ export function createStreamController(): RequestHandler {
         // A membership change can commit after the flush but before this query. Never advance
         // a replay cursor past a reserved audit sequence that is not materialized yet.
         const pending = await Conversation.findById(conversationId).select(
-          '+membershipEvents trainingIds trainingLabels'
+          '+membershipEvents trainingIds trainingLabels messageVersion'
         );
+        // A version check keeps idle polling cheap. Periodic reconciliation also repairs a process crash
+        // between updating a message and bumping its conversation version.
+        const messageVersion = pending?.messageVersion ?? 0;
+        if (messageVersion !== lastMessageVersion || Date.now() - refreshedMutationsAt > STREAM_HEARTBEAT_MS) {
+          const mutations = await Message.find({
+            conversationId,
+            revision: { $gt: 0 },
+            ...historyFilter(conversation, userId)
+          })
+            .select('_id revision unsentAt reactions')
+            .lean();
+          const changed = mutations.filter((row) => sentRevisions.get(String(row._id)) !== row.revision);
+          if (changed.length && !stopped) {
+            if (!res.write(`event: message-updates\ndata: ${JSON.stringify(changed)}\n\n`)) res.end();
+            wroteAt = Date.now();
+            for (const row of changed) sentRevisions.set(String(row._id), row.revision);
+          }
+          lastMessageVersion = messageVersion;
+          refreshedMutationsAt = Date.now();
+        }
+        await redactQuotes(messages);
         const boundary = Math.min(...(pending?.membershipEvents || []).map((event) => event.seq));
         messages = messages.filter((message) => message.seq < boundary);
         const jobs = await visibleRuns(conversation, userId);
@@ -114,10 +176,15 @@ export function createStreamController(): RequestHandler {
           wroteAt = Date.now();
           if (!res.write(frame)) res.end();
         }
+        // After the state frame, which carries the message an answer turns into.
+        for (const draftFrame of draftFrames) if (!stopped && !res.write(draftFrame)) res.end();
+        if (draftFrames.length) wroteAt = Date.now();
+        answering = conversation.kind === 'assistant' && jobs.some((job) => ['queued', 'running'].includes(job.state));
+        if (answering || sentDrafts.size > 0) delay = STREAM_DRAFT_POLL_MS;
         // A call exists only while one of this person's runs is working, which the runs above already say:
         // an idle stream costs no extra query, and a working one polls quickly so the page follows within ~0.5 s.
         if (tabId && conversation.kind === 'assistant' && jobs.some((job) => job.state === 'running')) {
-          fast = true;
+          delay = Math.min(delay, STREAM_FAST_POLL_MS);
           // Calls are sent once each.
           const calls = (await pendingScreenCalls(userId, tabId, conversationId)).filter((c) => !sentCalls.has(c.id));
           for (const call of calls) sentCalls.add(call.id);
@@ -127,7 +194,7 @@ export function createStreamController(): RequestHandler {
         res.end();
       } finally {
         loading = false;
-        later(fast);
+        later(delay);
       }
     };
     void tick();
