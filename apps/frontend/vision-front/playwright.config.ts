@@ -17,6 +17,12 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
+    // Match the mocked API origins without depending on a developer's .env.
+    env: {
+      VITE_VISION_API_URL: 'http://localhost:4010',
+      VITE_DATASET_API_URL: 'http://localhost:5010',
+      VITE_AUTH_SERVICE_URL: 'http://localhost:5001'
+    },
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000
