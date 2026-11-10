@@ -124,7 +124,7 @@ describe('AppLayout', () => {
     expect(signup).toHaveBeenCalled();
   });
 
-  it('shows who is signed in, with Account sections on account-front', () => {
+  it('shows who is signed in, with Account settings on account-front', () => {
     signedIn();
     renderLayout();
 
@@ -132,19 +132,19 @@ describe('AppLayout', () => {
 
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText('jane@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Account settings' })).toHaveAttribute(
       'href',
       'http://account.example.com/account/profile'
     );
   });
 
-  it('calls logout when the Logout menu item is clicked', () => {
+  it('calls logout when the Sign out menu item is clicked', () => {
     const logout = vi.fn();
     signedIn(logout);
     renderLayout();
 
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
 
     expect(logout).toHaveBeenCalled();
   });

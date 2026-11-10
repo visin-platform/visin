@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 730" width="800" height="730" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Visin: platform administration</title>
+  <desc id="desc">Admin-front is a separate app for platform administrators, reached from the account menu in the shell. Every request goes to admin-service, which checks the administrator role on the primary database, audits writes without request bodies and forwards only allow-listed operations, with the caller's own credential, to auth-service, group-service and chat-service. Each of those checks the administrator again. System monitoring stays in Grafana, which Admin only links to.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-brand" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="800" height="730" fill="#ffffff"/>
+  <g><!-- web app: Admin front -->
+    <rect x="20" y="20" width="360" height="90" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M20,36 h360" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="30" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="38" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="46" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="32" y="56" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Admin front</text>
+    <text x="32" y="74" font-size="12" fill="#475569" text-anchor="start">Users, Vivi setup, limits, usage, runs</text>
+    <text x="32" y="89" font-size="12" fill="#475569" text-anchor="start">Change history; names instead of ids</text>
+    
+  </g>
+  <g><!-- web app: Shell front -->
+    <rect x="460" y="20" width="320" height="90" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M460,36 h320" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="470" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="478" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="486" cy="28" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="472" y="56" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Shell front</text>
+    <text x="472" y="74" font-size="12" fill="#475569" text-anchor="start">Account menu: Administration</text>
+    <text x="472" y="89" font-size="12" fill="#475569" text-anchor="start">Shown after admin-service says yes</text>
+    
+  </g>
+  <g><path d="M460,65 L380,65" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="391.0" y="40" width="58.0" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="420.0" y="55" font-size="11.5" fill="#0f172a" text-anchor="middle">link out</text></g>
+  <g><!-- service: Admin service -->
+    <rect x="20" y="190" width="360" height="110" rx="10" fill="#2563eb"/>
+    <text x="32" y="214" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Admin service</text>
+    <text x="32" y="232" font-size="12" fill="#dbeafe" text-anchor="start">Administrator role checked on every request</text>
+    <text x="32" y="247" font-size="12" fill="#dbeafe" text-anchor="start">Allow-listed operations only; audited writes</text>
+    <text x="32" y="262" font-size="12" fill="#dbeafe" text-anchor="start">Forwards the caller's own credential</text>
+  </g>
+  <g><!-- data store: MongoDB -->
+    <path d="M420,198 v94 a180,8 0 0 0 360,0 v-94" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="600" cy="198" rx="180" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="432" y="226" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">MongoDB</text>
+    <text x="432" y="244" font-size="12" fill="#475569" text-anchor="start">Audit log: who, what, outcome</text>
+    <text x="432" y="259" font-size="12" fill="#475569" text-anchor="start">Accounts read for the role check</text>
+  </g>
+  <g><path d="M200,110 L200,190" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="106.4" y="145" width="147.1" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="180.0" y="160" font-size="11.5" fill="#0f172a" text-anchor="middle">HTTPS + session cookie</text></g>
+  <g><path d="M380,245 L420,245" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><!-- service: Auth service -->
+    <rect x="20" y="400" width="230" height="95" rx="10" fill="#2563eb"/>
+    <text x="32" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Auth service</text>
+    <text x="32" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Accounts, sessions, API keys</text>
+    <text x="32" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Recovery links, edit lease</text>
+  </g>
+  <g><!-- service: Group service -->
+    <rect x="285" y="400" width="230" height="95" rx="10" fill="#2563eb"/>
+    <text x="297" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Group service</text>
+    <text x="297" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Memberships and revisions</text>
+    <text x="297" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Last-owner protection</text>
+  </g>
+  <g><!-- service: Chat service -->
+    <rect x="550" y="400" width="230" height="95" rx="10" fill="#2563eb"/>
+    <text x="562" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Chat service</text>
+    <text x="562" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Vivi setup, policies, runs</text>
+    <text x="562" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Usage and guest budget</text>
+  </g>
+  <g><path d="M120,300 L120,400" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><path d="M260,300 L400,400" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><path d="M350,300 L665,400" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+  <g><!-- external: Grafana (separate, optional) -->
+    <rect x="20" y="525" width="760" height="95" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text x="32" y="551" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Grafana (separate, optional)</text>
+    <text x="32" y="569" font-size="12" fill="#475569" text-anchor="start">Health, logs, traces and alerts stay here, with their own sign-in</text>
+    <text x="32" y="584" font-size="12" fill="#475569" text-anchor="start">Admin only shows a link to it when GRAFANA_URL is set</text>
+  </g>
+<text x="20" y="660" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">The gateway is not the authority</text>
+    <text x="20" y="678" font-size="12" fill="#475569" text-anchor="start">Auth, group and chat each check the administrator again, so no service trusts admin-service.</text>
+    <text x="20" y="693" font-size="12" fill="#475569" text-anchor="start">An uncertain write (the call failed in transit) is recorded as such and is checked before it is repeated.</text>
+</svg>

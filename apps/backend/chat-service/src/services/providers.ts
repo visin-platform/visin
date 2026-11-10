@@ -140,6 +140,7 @@ export interface ProviderAdapter {
     signal: AbortSignal;
     /** The most this request may carry; the usual ceiling when absent. */
     maxRequestBytes?: number;
+    maxOutputTokens?: number;
     /**
      * Asks the provider to stream, and is told this turn's text so far as it arrives. The turn returned is the same
      * either way: streaming only lets the text be seen before the turn is over.
@@ -434,11 +435,11 @@ const anthropic: ProviderAdapter = {
       ...this.toolResults([{ id: 'visin_context', content, isError: false }])
     ];
   },
-  async send({ apiKey, model, system, messages, tools, signal, onText, maxRequestBytes }) {
+  async send({ apiKey, model, system, messages, tools, signal, onText, maxRequestBytes, maxOutputTokens }) {
     const payload = withinLimit(
       JSON.stringify({
         model,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: maxOutputTokens ?? MAX_OUTPUT_TOKENS,
         ...(onText ? { stream: true } : {}),
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: '5m' } }],
         messages: messages.flatMap((message) => {
@@ -644,11 +645,11 @@ const openai: ProviderAdapter = {
       ...this.toolResults([{ id: 'visin_context', content, isError: false }])
     ];
   },
-  async send({ apiKey, model, system, messages, tools, signal, onText, maxRequestBytes }) {
+  async send({ apiKey, model, system, messages, tools, signal, onText, maxRequestBytes, maxOutputTokens }) {
     const payload = withinLimit(
       JSON.stringify({
         model,
-        max_completion_tokens: MAX_OUTPUT_TOKENS,
+        max_completion_tokens: maxOutputTokens ?? MAX_OUTPUT_TOKENS,
         // Usage comes in the last chunk only when asked for: without it a streamed answer would have no cost.
         ...(onText ? { stream: true, stream_options: { include_usage: true } } : {}),
         messages: [{ role: 'system', content: system }, ...messages],

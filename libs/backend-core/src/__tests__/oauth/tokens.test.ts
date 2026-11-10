@@ -71,7 +71,8 @@ describe('verifyAccessToken', () => {
       name: 'A B',
       scopes: ['vision:read'],
       clientId: 'vsn-client-abc',
-      clientName: 'Claude'
+      clientName: 'Claude',
+      issuedAt: expect.any(Number)
     });
   });
 
@@ -100,11 +101,7 @@ describe('verifyAccessToken', () => {
   it('reports an expired token as expired, not as a bad signature', () => {
     // The client's response differs: expired means refresh, bad signature means
     // something is wrong that refreshing will not fix.
-    const expired = jwt.sign(
-      { sub: 'u1', typ: ACCESS_TOKEN_TYPE, aud: RESOURCE },
-      SECRET,
-      { expiresIn: -10 }
-    );
+    const expired = jwt.sign({ sub: 'u1', typ: ACCESS_TOKEN_TYPE, aud: RESOURCE }, SECRET, { expiresIn: -10 });
 
     expect(verifyAccessToken(expired, RESOURCE)).toEqual({ ok: false, rejection: 'expired' });
   });
@@ -131,10 +128,7 @@ describe('verifyAccessToken', () => {
 
   it('drops a scope this build does not define', () => {
     // A token minted before a scope was retired must not smuggle it back in.
-    const token = jwt.sign(
-      { sub: 'u1', typ: ACCESS_TOKEN_TYPE, aud: RESOURCE, scope: 'vision:read made:up' },
-      SECRET
-    );
+    const token = jwt.sign({ sub: 'u1', typ: ACCESS_TOKEN_TYPE, aud: RESOURCE, scope: 'vision:read made:up' }, SECRET);
 
     expect(verifyAccessToken(token, RESOURCE).scopes).toEqual(['vision:read']);
   });
@@ -174,7 +168,6 @@ describe('parseScopes', () => {
     expect(parseScopes(value)).toEqual([]);
   });
 });
-
 
 describe('looksLikeAccessToken', () => {
   it('recognises one of ours without needing the secret', () => {

@@ -178,6 +178,12 @@ nothing to repeat.
 
 </details>
 
+## Administration
+
+The separate Admin UI manages users, Vivi configuration, usage and budgets; see the
+[admin-service](apps/backend/admin-service/README.md) and [admin-front](apps/frontend/admin-front/README.md)
+READMEs. System monitoring remains in Grafana.
+
 ## Production deployment
 
 <details>

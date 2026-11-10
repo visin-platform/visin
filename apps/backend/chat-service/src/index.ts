@@ -1,3 +1,7 @@
+import { pruneGuestIdentifiers } from './services/guestAdmission';
+import mongoose from 'mongoose';
+import { GuestRun } from './models/GuestRun';
+import { ProviderUsage } from './models/ProviderUsage';
 import { initializeAssistantProfileIndexes } from './services/assistantProfiles';
 import { assertRequiredEnv, connectDb, fileServiceUrl, logger, serve } from '@visin/backend-core';
 import { createApp } from './app';
@@ -33,6 +37,9 @@ void connectDb({ serviceName: 'chat-service' })
   .then(async () => {
     await Promise.all([
       initializeAssistantProfileIndexes(),
+      GuestRun.createIndexes(),
+      ProviderUsage.init(),
+      mongoose.connection.collection('chat_guest_budgets').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
       ConversationAssistant.init(),
       Assistant.init(),
       Conversation.init(),
@@ -46,6 +53,12 @@ void connectDb({ serviceName: 'chat-service' })
       CallSignal.init(),
       DeploymentSecret.init()
     ]);
+    await pruneGuestIdentifiers();
+    const guestCleanup = setInterval(() => {
+      void pruneGuestIdentifiers().catch(() => logger.warn('Guest identifier cleanup failed'));
+    }, 30 * 60000);
+    guestCleanup.unref();
+    process.once('SIGTERM', () => clearInterval(guestCleanup));
     const stop = startWorker();
     const stopSweep = startCallSweep();
     process.once('SIGTERM', stop);

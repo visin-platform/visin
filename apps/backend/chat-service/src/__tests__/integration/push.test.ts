@@ -26,13 +26,18 @@ const api = (path: string, user: string, method: string, body?: unknown) =>
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
 
+const corsOrigin = process.env.CORS_ORIGIN;
+// Assigning undefined to process.env stores the string "undefined", so an unset origin is deleted instead.
+const restoreCorsOrigin = () => {
+  if (corsOrigin === undefined) delete process.env.CORS_ORIGIN;
+  else process.env.CORS_ORIGIN = corsOrigin;
+};
 beforeEach(() => {
   send.mockReset();
   send.mockResolvedValue({ statusCode: 201 });
-  delete process.env.VAPID_PUBLIC_KEY;
-  delete process.env.VAPID_PRIVATE_KEY;
-  delete process.env.VAPID_SUBJECT;
+  restoreCorsOrigin();
 });
+afterAll(restoreCorsOrigin);
 
 /** A room both people are active in, so a message from alice is unread for bob. */
 async function activeRoom() {
@@ -88,18 +93,16 @@ describe('signing keys', () => {
     }
   });
 
-  it('lets an operator bring their own pair', async () => {
-    const own = webpush.generateVAPIDKeys();
-    process.env.VAPID_PUBLIC_KEY = own.publicKey;
-    process.env.VAPID_PRIVATE_KEY = own.privateKey;
-    process.env.VAPID_SUBJECT = 'mailto:ops@example.test';
-    const result = await request<{ publicKey: string }>('/push/config');
-    expect(result.body.data.publicKey).toBe(own.publicKey);
-    expect(await DeploymentSecret.countDocuments()).toBe(0);
+  it('signs as the deployment\'s https origin, not a local development one listed first', async () => {
+    const setDetails = vi.spyOn(webpush, 'setVapidDetails');
+    process.env.CORS_ORIGIN = 'http://localhost:3004, https://app.example.test';
+    expect((await request<{ enabled: boolean }>('/push/config')).body.data.enabled).toBe(true);
+    expect(setDetails.mock.calls.at(-1)?.[0]).toBe('https://app.example.test');
+    setDetails.mockRestore();
   });
 
-  it('is unavailable when the operator subject is not a mailto: or a URL', async () => {
-    process.env.VAPID_SUBJECT = 'not a subject';
+  it('is unavailable when the contact address is not a mailto: or a URL', async () => {
+    process.env.CORS_ORIGIN = 'not a subject';
     const result = await request<{ enabled: boolean }>('/push/config');
     expect(result.body.data.enabled).toBe(false);
   });
@@ -142,7 +145,7 @@ describe('subscriptions', () => {
   });
 
   it('reports not configured, and stores nothing, when signing keys are unavailable', async () => {
-    process.env.VAPID_SUBJECT = 'not a subject';
+    process.env.CORS_ORIGIN = 'not a subject';
     const response = await api('/push/subscriptions', 'alice', 'POST', { endpoint: ENDPOINT, keys });
     expect(((await response.json()) as { data: { configured: boolean } }).data.configured).toBe(false);
     expect(await PushSubscription.countDocuments()).toBe(0);

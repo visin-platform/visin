@@ -50,6 +50,12 @@ jobs:
               - *backend-shared
             "@visin/frontend-core":
               - *frontend-shared
+            admin-service:
+              - *backend-shared
+              - 'apps/backend/admin-service/**'
+            admin-front:
+              - *frontend-shared
+              - 'apps/frontend/admin-front/**'
             auth-service:
               - *backend-shared
               - 'apps/backend/auth-service/**'

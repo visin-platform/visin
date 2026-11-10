@@ -14,6 +14,7 @@ vi.mock('../../remotes', () => {
 
 const dock = (available: boolean): ChatDock => ({
   available,
+  guest: false,
   open: false,
   toggle: () => undefined,
   close: () => undefined,

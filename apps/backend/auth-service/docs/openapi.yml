@@ -273,6 +273,30 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
 paths:
+  /auth/recover:
+    post:
+      tags: [Sign-in]
+      summary: Complete one-use account recovery
+      operationId: recoverAccount
+      x-internal: true
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, pattern: '^[a-f0-9]{64}$' }
+                password: { type: string, minLength: 10, maxLength: 200 }
+      responses:
+        '200':
+          description: Password replaced and existing credentials revoked; sign in again
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/Error'
   /.well-known/oauth-authorization-server:
     get:
       tags: [OAuth]

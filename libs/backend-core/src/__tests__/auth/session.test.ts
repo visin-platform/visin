@@ -37,7 +37,7 @@ afterEach(() => vi.restoreAllMocks());
 it('checks the account identity/version and the unexpired session on the primary, reading ids only', async () => {
   expect(await isCurrentSession(claims)).toBe(true);
   expect(users.findOne).toHaveBeenCalledWith(
-    { _id: new mongoose.Types.ObjectId(claims.id), email: 'user@example.test', kind: { $ne: 'assistant' }, tokenVersion: 3 },
+    { _id: new mongoose.Types.ObjectId(claims.id), email: 'user@example.test', kind: { $ne: 'assistant' }, status: { $nin: ['suspended', 'deleted'] }, tokenVersion: 3 },
     options
   );
   expect(mongoose.connection.collection).toHaveBeenCalledWith(USER_SESSIONS_COLLECTION);

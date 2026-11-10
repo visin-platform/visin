@@ -37,6 +37,8 @@ describe('shell ConfigProvider', () => {
       'VITE_ACCOUNT_FRONT_URL',
       'VITE_CHAT_FRONT_URL',
       'VITE_CHAT_SERVICE_URL',
+      'VITE_ADMIN_FRONT_URL',
+      'VITE_ADMIN_SERVICE_URL',
     ]) {
       vi.stubEnv(name, '');
     }
@@ -54,6 +56,8 @@ describe('shell ConfigProvider', () => {
       GROUP_SERVICE_URL: 'http://localhost:5006',
       DATASET_API_URL: 'http://localhost:5010',
       LANDING_FRONT_URL: 'http://localhost:3000',
+      ADMIN_FRONT_URL: 'http://localhost:3016',
+      ADMIN_SERVICE_URL: 'http://localhost:5016',
     });
   });
 

@@ -148,6 +148,7 @@ export const startSession = async (
   identity: SessionIdentity = {}
 ): Promise<{ payload: UserPayload; token: string }> => {
   if (dbUser.kind === 'assistant') throw new UnauthorizedError('Bots cannot sign in');
+  if (dbUser.status === 'suspended' || dbUser.status === 'deleted') throw new UnauthorizedError('Account is not active');
   const session = await createSession(req, dbUser._id.toString(), method);
   return mintSessionToken(
     res,

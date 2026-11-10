@@ -1,4 +1,5 @@
 import AnalyzeButton from '../components/analysis/AnalyzeButton';
+import AskViviButton from '../components/analysis/AskViviButton';
 import { usePageChatContext } from '../hooks/usePageChatContext';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -135,6 +136,7 @@ const ProjectDashboardPage: React.FC = () => {
             {/* The analyst reads the project's runs and answers. A discussion is a room for the people who share the
                 project: for a project that is one person's, there is no one else in it. */}
             <AnalyzeButton projectId={project._id} trainingIds={[]} title={project.name} />
+            <AskViviButton projectId={project._id} title={project.name} visibility={project.visibility} />
             {project.owner.kind === 'group' && (
               <AnalyzeButton projectId={project._id} trainingIds={[]} title={`${project.name} discussion`} discussion />
             )}

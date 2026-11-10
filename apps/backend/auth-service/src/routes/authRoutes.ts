@@ -1,3 +1,5 @@
+import { recoverAccount } from '../controllers/recoveryController';
+import { createAdminRoutes } from './adminRoutes';
 import { uploadBotPicture, removeBotPicture, getBotPicture } from '../controllers/botPictureController';
 import express, { Router } from 'express';
 import {
@@ -49,6 +51,7 @@ import {
 } from '../validation/authSchemas';
 
 const router = Router();
+router.use('/admin/control', createAdminRoutes());
 
 /**
  * A budget of its own for minting and revealing credentials.
@@ -72,6 +75,7 @@ router.get('/setup-status', getSetupStatus);
 router.post('/setup', validateRequest({ body: setupBodySchema }), setupFirstUser);
 router.post('/register', validateRequest({ body: registerBodySchema }), register);
 router.post('/login', validateRequest({ body: loginBodySchema }), login);
+router.post('/recover', createRateLimiter({ windowMs: 60 * 60000, max: 10 }), recoverAccount);
 
 // Refresh token route (protected)
 router.post('/refresh', authenticateToken, refreshToken);
@@ -93,7 +97,13 @@ router.put(
   uploadPicture
 );
 router.delete('/profile/picture', pictureLimiter, authenticateToken, removePicture);
-router.put('/bots/:userId/picture', pictureLimiter, authenticateToken, express.raw({ type: () => true, limit: MAX_AVATAR_BYTES }), uploadBotPicture);
+router.put(
+  '/bots/:userId/picture',
+  pictureLimiter,
+  authenticateToken,
+  express.raw({ type: () => true, limit: MAX_AVATAR_BYTES }),
+  uploadBotPicture
+);
 router.get('/bots/:userId/picture', createRateLimiter({ max: 600 }), authenticateToken, getBotPicture);
 router.delete('/bots/:userId/picture', pictureLimiter, authenticateToken, removeBotPicture);
 // What a public page's `<img>` loads: anyone, so a budget of its own like the other public reads.
@@ -134,13 +144,7 @@ router.delete('/sessions/:id', authenticateToken, validateRequest({ params: sess
  * another: escalating one credential into a fresh one with wider scopes would
  * make every scope on every key advisory.
  */
-router.post(
-  '/api-keys',
-  keyLimiter,
-  authenticateToken,
-  validateRequest({ body: createApiKeyBodySchema }),
-  createKey
-);
+router.post('/api-keys', keyLimiter, authenticateToken, validateRequest({ body: createApiKeyBodySchema }), createKey);
 router.get('/api-keys', authenticateToken, listKeys);
 // POST, not GET: it mutates (reveals are counted), and a URL that returns a
 // live credential ends up in browser history, referrer headers and access logs.
@@ -172,7 +176,12 @@ router.post(
 );
 
 // Internal: group-service's "Add member" search.
-router.get('/internal/users/search', requireInternalServiceToken, validateRequest({ query: searchUsersQuerySchema }), searchUsers);
+router.get(
+  '/internal/users/search',
+  requireInternalServiceToken,
+  validateRequest({ query: searchUsersQuerySchema }),
+  searchUsers
+);
 
 // Internal service endpoints for token management
 router.post(

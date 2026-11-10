@@ -3,17 +3,25 @@ import { avatarUrl, checkAvatar, NotFoundError, ServiceUnavailableError } from '
 import { Avatar } from '../models/Avatar';
 import { User } from '../models/User';
 
-/** Bot identity links are public; management authority comes from the live chat definition. */
+/**
+ * Bot identity links are public; management authority comes from the live chat definition: its creator and managers,
+ * and, for the platform's own assistant (Vivi), any active platform administrator.
+ */
 async function managedBot(actorId: string, userId: string) {
   if (!mongoose.isValidObjectId(userId)) throw new NotFoundError('Bot not found');
-  const user = await User.findOne({ _id: userId, kind: 'assistant' }).select('_id assistantId');
+  const [user, admin] = await Promise.all([
+    User.findOne({ _id: userId, kind: 'assistant' }).select('_id assistantId'),
+    mongoose.isValidObjectId(actorId)
+      ? User.exists({ _id: actorId, roles: 'admin', status: { $nin: ['suspended', 'deleted'] } })
+      : null
+  ]);
   if (!user?.assistantId || !mongoose.isValidObjectId(user.assistantId)) throw new NotFoundError('Bot not found');
   const allowed = await mongoose.connection.collection('chatassistants').findOne(
     {
       _id: new mongoose.Types.ObjectId(user.assistantId),
       profileUserId: user.id,
       deletedAt: null,
-      $or: [{ createdBy: actorId }, { managerIds: actorId }]
+      $or: [{ createdBy: actorId }, { managerIds: actorId }, ...(admin ? [{ platformDefault: true }] : [])]
     },
     { projection: { _id: 1 } }
   );

@@ -13,7 +13,9 @@ cat <<EOF > /usr/share/nginx/html/config.json
   "LABEL_SERVICE_URL": "${LABEL_SERVICE_URL}",
   "GROUP_SERVICE_URL": "${GROUP_SERVICE_URL}",
   "CHAT_SERVICE_URL": "${CHAT_SERVICE_URL}",
-  "LANDING_FRONT_URL": "${LANDING_FRONT_URL}"
+  "LANDING_FRONT_URL": "${LANDING_FRONT_URL}",
+  "ADMIN_FRONT_URL": "${ADMIN_FRONT_URL}",
+  "ADMIN_SERVICE_URL": "${ADMIN_SERVICE_URL}"
 }
 EOF
 # The APIs own the live sitemaps; omit links for services that are not configured.

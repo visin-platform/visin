@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_VISION_API_URL: string;
   readonly VITE_DATASET_API_URL: string;
   readonly VITE_LANDING_FRONT_URL: string;
+  readonly VITE_ADMIN_FRONT_URL: string;
+  readonly VITE_ADMIN_SERVICE_URL: string;
   readonly VITE_LABEL_SERVICE_URL: string;
 }
 

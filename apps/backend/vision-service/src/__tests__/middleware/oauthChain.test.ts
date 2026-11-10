@@ -1,3 +1,5 @@
+import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
@@ -11,7 +13,7 @@ import express from 'express';
  * optionalAuth instead, verified fine, and left `req.user.id` undefined so
  * every private project vanished from the caller's own listing.
  */
-import { apiKeyAuth, mintAccessToken, optionalAuth } from '@visin/backend-core';
+import { apiKeyAuth, mintAccessToken, optionalAuth, errorHandler } from '@visin/backend-core';
 
 const SECRET = 'test-secret';
 const RESOURCE = 'https://mcp.example.test';
@@ -20,23 +22,37 @@ const app = express();
 app.use('/api/projects', apiKeyAuth('vision'), optionalAuth, (req, res) => {
   res.json({ userId: req.user?.id ?? null, scopes: req.apiKey?.scopes ?? null });
 });
+app.use(errorHandler);
 
+let mongo: MongoMemoryServer;
 let server: Server;
 let baseUrl: string;
 
 beforeAll(async () => {
+  mongo = await MongoMemoryServer.create();
+  await mongoose.connect(mongo.getUri());
+  await mongoose.connection
+    .collection('users')
+    .insertOne({ _id: new mongoose.Types.ObjectId('68987cf71078a6d4d52ba430'), email: 'a@b.com', status: 'active' });
   server = createServer(app);
-  await new Promise<void>(resolve => server.listen(0, resolve));
+  await new Promise<void>((resolve) => server.listen(0, resolve));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
-afterAll(() => new Promise<void>(resolve => server.close(() => resolve())));
+afterAll(async () => {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await mongoose.disconnect();
+  await mongo.stop();
+});
 
 const get = async (auth?: string) => {
   const response = await fetch(`${baseUrl}/api/projects`, {
-    headers: auth ? { Authorization: auth } : {},
+    headers: auth ? { Authorization: auth } : {}
   });
-  return { status: response.status, body: await response.json() as { userId: string | null; scopes: string[] | null } };
+  return {
+    status: response.status,
+    body: (await response.json()) as { userId: string | null; scopes: string[] | null }
+  };
 };
 
 const token = (scopes: Parameters<typeof mintAccessToken>[0]['scopes']) =>
@@ -48,12 +64,15 @@ const token = (scopes: Parameters<typeof mintAccessToken>[0]['scopes']) =>
     issuer: 'https://auth-api.example.test',
     scopes,
     clientId: 'vsn-client-abc',
-    clientName: 'Claude',
+    clientName: 'Claude'
   }).accessToken;
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env.JWT_SECRET = SECRET;
   process.env.MCP_PUBLIC_URL = RESOURCE;
+  await mongoose.connection
+    .collection('users')
+    .updateOne({ _id: new mongoose.Types.ObjectId('68987cf71078a6d4d52ba430') }, { $set: { status: 'active' } });
 });
 
 describe('an OAuth access token through the whole chain', () => {
@@ -71,5 +90,11 @@ describe('an OAuth access token through the whole chain', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.userId).toBeNull();
+  });
+  it('rejects an otherwise valid OAuth credential after account suspension', async () => {
+    await mongoose.connection
+      .collection('users')
+      .updateOne({ _id: new mongoose.Types.ObjectId('68987cf71078a6d4d52ba430') }, { $set: { status: 'suspended' } });
+    expect((await get(`Bearer ${token(['vision:read'])}`)).status).toBe(401);
   });
 });

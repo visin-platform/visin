@@ -1,0 +1,15 @@
+services:
+  admin-front:
+    image: ${REGISTRY:-ghcr.io/visin-platform}/admin-front:${TAG:-latest}
+    restart: unless-stopped
+    ports: ['3016:80']
+    environment:
+      ADMIN_SERVICE_URL: ${ADMIN_SERVICE_URL}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      AUTH_FRONT_URL: ${AUTH_FRONT_URL}
+      SHELL_FRONT_URL: ${SHELL_FRONT_URL:-}
+      GRAFANA_URL: ${GRAFANA_URL:-}
+    networks: [visinnet]
+networks:
+  visinnet:
+    external: true

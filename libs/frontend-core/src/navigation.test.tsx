@@ -180,4 +180,42 @@ describe('account items', () => {
       expect(createVisinNavigation('vision', {}, { analystSettings: true }).accountItems).toEqual([]);
     });
   });
+
+  describe('the account menu', () => {
+    const adminUrls = { ...urls, admin: 'https://admin.test/' };
+    const menu = (...args: Parameters<typeof createVisinNavigation>) =>
+      createVisinNavigation(...args).menuItems.map(item => item.text);
+
+    it('is short: Account settings once, never the Account sections repeated', () => {
+      expect(menu('shell', adminUrls)).toEqual(['Account settings']);
+    });
+
+    it('adds Administration, last, only for a platform administrator and where Admin is configured', () => {
+      expect(menu('shell', adminUrls, { platformAdmin: false })).not.toContain('Administration');
+      expect(menu('account', urls, { platformAdmin: true })).not.toContain('Administration');
+      const nav = createVisinNavigation(['shell', 'account'], adminUrls, { platformAdmin: true });
+      expect(nav.menuItems.map(item => item.text)).toEqual(['Account settings', 'Administration']);
+      // Admin is its own app: always a link out.
+      expect(nav.menuItems.at(-1)).toMatchObject({ href: 'https://admin.test/' });
+      expect(nav.accountItems.map(item => item.text)).not.toContain('Administration');
+    });
+
+    it('leads with the public page when there is one, a local route in the shell', () => {
+      const nav = createVisinNavigation(['shell', 'account'], urls, { publicHandle: 'ada lovelace' });
+      expect(nav.menuItems.map(item => item.text)).toEqual(['Your public page', 'Account settings']);
+      expect(nav.menuItems[0]).toMatchObject({ path: '/u/ada%20lovelace' });
+      expect(menu('shell', urls)).not.toContain('Your public page');
+    });
+
+    it('links to the shell from another app, and leaves the page out without one', () => {
+      expect(createVisinNavigation('account', urls, { publicHandle: 'ada' }).menuItems[0]).toMatchObject({
+        href: 'https://app.test/u/ada'
+      });
+      expect(menu('account', { account: urls.account })).toEqual(['Account settings']);
+    });
+
+    it('is empty where Account is unreachable', () => {
+      expect(menu('vision', {})).toEqual([]);
+    });
+  });
 });

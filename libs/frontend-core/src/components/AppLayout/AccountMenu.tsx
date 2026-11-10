@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Avatar, Box, Divider, Drawer, ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Typography } from '@mui/material';
 import { Logout, Person } from '@mui/icons-material';
 import { glass } from '../../theme';
+import { linkProps } from './navLinks';
 import type { AppLayoutNavItem, AppLayoutUser } from './types';
 
 /** The letter on a user's avatar when they have no picture, or a person icon when they have no name. */
@@ -14,20 +15,27 @@ interface AccountMenuProps {
   anchor: HTMLElement | null;
   onClose: () => void;
   user?: AppLayoutUser | null;
-  accountItems: AppLayoutNavItem[];
+  /** The few places the menu lists under the person's name. */
+  menuItems: AppLayoutNavItem[];
+  /** Where the person's own name leads (Account's first page); the name is not a link where Account is unreachable. */
+  accountHome?: AppLayoutNavItem;
   /** One menu entry for a nav item, closing the menu when it is chosen. */
   renderItem: (item: AppLayoutNavItem, onClose: () => void) => ReactNode;
   onLogout: () => void;
 }
 
-/** The account menu: who is signed in, the account pages, and logging out. */
-export function AccountMenu({ mobile, anchor, onClose, user, accountItems, renderItem, onLogout }: AccountMenuProps) {
+/** The account menu: who is signed in (a link to their account), a few places, and signing out. */
+export function AccountMenu({ mobile, anchor, onClose, user, menuItems, accountHome, renderItem, onLogout }: AccountMenuProps) {
   const initial = userInitial(user);
 
   // An array rather than a fragment: Menu and MenuList walk their direct
   // children to manage focus.
   const accountMenuItems = [
-    <MenuItem key="who" disabled sx={{ gap: 1.5, py: 1.25, '&.Mui-disabled': { opacity: 1 } }}>
+    <MenuItem
+      key="who"
+      {...(accountHome ? { ...linkProps(accountHome), onClick: onClose, title: 'Account settings' } : { disabled: true })}
+      sx={{ gap: 1.5, py: 1.25, '&.Mui-disabled': { opacity: 1 } }}
+    >
       <Avatar src={user?.picture} alt="" sx={{ width: 36, height: 36, bgcolor: 'secondary.main' }}>
         {initial}
       </Avatar>
@@ -43,8 +51,8 @@ export function AccountMenu({ mobile, anchor, onClose, user, accountItems, rende
       </Box>
     </MenuItem>,
     <Divider key="who-divider" />,
-    ...accountItems.map((item) => renderItem(item, onClose)),
-    ...(accountItems.length > 0 ? [<Divider key="logout-divider" />] : []),
+    ...menuItems.map((item) => renderItem(item, onClose)),
+    ...(menuItems.length > 0 ? [<Divider key="logout-divider" />] : []),
     <MenuItem
       key="logout"
       onClick={() => {
@@ -55,7 +63,7 @@ export function AccountMenu({ mobile, anchor, onClose, user, accountItems, rende
       <ListItemIcon>
         <Logout fontSize="small" />
       </ListItemIcon>
-      <ListItemText>Logout</ListItemText>
+      <ListItemText>Sign out</ListItemText>
     </MenuItem>
   ];
 

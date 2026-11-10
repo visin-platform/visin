@@ -6,6 +6,7 @@ import { MAX_DAILY_TOKEN_LIMIT } from '../services/settings';
 export const settingsSchema = z
   .object({
     enabled: z.boolean(),
+    revision: z.number().int().min(0).optional(),
     toolRounds: z.number().int().min(MIN_TOOL_ROUNDS).max(MAX_TOOL_ROUNDS).optional(),
     provider: z.enum(PROVIDER_IDS),
     // Chosen from the provider's own list, which is checked below; empty only while turning it off.

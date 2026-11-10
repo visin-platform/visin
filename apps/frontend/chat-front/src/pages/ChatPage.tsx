@@ -1,3 +1,5 @@
+import GuestVivi from '../components/GuestVivi';
+import { useGuestCapabilities } from '../components/guest/useGuestCapabilities';
 import { AppearanceDialog } from '../appearance/AppearanceDialog';
 import { appearanceSx } from '../appearance/chatAppearance';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
@@ -20,6 +22,33 @@ export default function ChatPage({ panel = false }: { panel?: boolean }) {
     <ChatWorkspaceProvider value={workspace}>
       <WorkspaceView key={workspace.user?.id} panel={panel} />
     </ChatWorkspaceProvider>
+  );
+}
+
+/**
+ * What someone without a session sees: where guest Vivi is on, simply Vivi's chat (the same frame as the signed-in
+ * one, with a quiet "Sign in for more" beneath); otherwise the plain invitation to sign in.
+ */
+function VisitorView({ login, panel }: { login: () => void; panel: boolean }) {
+  const guest = useGuestCapabilities();
+  if (guest.isPending) return <CircularProgress aria-label="Loading chat" />;
+  if (guest.data?.enabled)
+    return (
+      <Box
+        sx={{
+          height: panel ? '100%' : 'calc(100dvh - 150px)',
+          minHeight: panel ? 0 : 400,
+          ...(panel ? {} : { border: 1, borderColor: 'divider', borderRadius: 3, overflow: 'hidden' })
+        }}
+      >
+        <GuestVivi onSignIn={login} />
+      </Box>
+    );
+  return (
+    <Stack sx={{ p: 3 }} spacing={2}>
+      <Typography>Sign in to message people and analyze training results.</Typography>
+      <Button onClick={login}>Sign in</Button>
+    </Stack>
   );
 }
 
@@ -50,13 +79,7 @@ function WorkspaceView({ panel }: { panel: boolean }) {
   } = useChatWorkspaceContext();
 
   if (isLoading) return <CircularProgress aria-label="Loading chat" />;
-  if (!isAuthenticated)
-    return (
-      <Stack sx={{ p: 3 }} spacing={2}>
-        <Typography>Sign in to message people and analyze training results.</Typography>
-        <Button onClick={login}>Sign in</Button>
-      </Stack>
-    );
+  if (!isAuthenticated) return <VisitorView login={login} panel={panel} />;
   return (
     <Box
       role="region"

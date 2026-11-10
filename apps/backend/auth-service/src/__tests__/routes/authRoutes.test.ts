@@ -48,7 +48,8 @@ describe('authRoutes', () => {
     expect(find('put', '/bots/:userId/picture')!.handlerCount).toBe(4);
     expect(find('delete', '/bots/:userId/picture')!.handlerCount).toBe(3);
     expect(find('get', '/bots/:userId/picture')!.handlerCount).toBe(3);
-    expect(routes).toHaveLength(37);
+    expect(find('post', '/recover')!.handlerCount).toBe(2);
+    expect(routes).toHaveLength(38);
   });
 
   it('lets nobody reach an API key without a session', () => {

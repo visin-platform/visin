@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../hooks/useGuestVivi', () => ({ useGuestVivi: () => false }));
 vi.mock('../../config/ConfigProvider', () => ({ useConfig: () => ({ CHAT_FRONT_URL: 'http://chat.test' }) }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ isAuthenticated: true }) }));
 vi.mock('../../remotes', () => ({ remoteChatPanel: () => () => <div>Embedded conversations</div>, forgetChatPanel: vi.fn() }));

@@ -41,7 +41,7 @@ x-app-env: &app-env
   MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/visin}
   JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-before-exposing}
   INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-only-internal-token-change-before-exposing}
-  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3010,http://localhost:3012,http://localhost:3014}
+  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3010,http://localhost:3012,http://localhost:3014,http://localhost:3016}
 
 x-file-creds: &file-creds
   FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:-dev-only-file-api-key-change-before-exposing}
@@ -52,6 +52,32 @@ x-needs-mongo: &needs-mongo
     condition: service_healthy
 
 services:
+  admin-service:
+    build: ./apps/backend/admin-service
+    image: ${REGISTRY:-visin}/admin-service:${TAG:-local}
+    <<: *common
+    ports: ['${COMPOSE_BIND:-0.0.0.0}:5016:5016']
+    depends_on: *needs-mongo
+    environment:
+      <<: *app-env
+      PORT: 5016
+      SERVICE_NAME: admin-service
+      GROUP_SERVICE_URL: http://group-service:5006
+      AUTH_SERVICE_URL: http://auth-service:5001
+      CHAT_SERVICE_URL: http://chat-service:5012
+
+  admin-front:
+    build: ./apps/frontend/admin-front
+    image: ${REGISTRY:-visin}/admin-front:${TAG:-local}
+    <<: *common
+    ports: ['${COMPOSE_BIND:-0.0.0.0}:3016:80']
+    environment:
+      ADMIN_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5016
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
+      GRAFANA_URL: ${GRAFANA_URL:-}
+
   # ---------------------------------------------------------------- data stores
   mongodb:
     image: mongo:8.3.9
@@ -248,6 +274,10 @@ services:
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       PORT: 5012
       SERVICE_NAME: chat-service
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      GUEST_NETWORK_SECRET: ${GUEST_NETWORK_SECRET:-}
+      GUEST_TRUSTED_PROXY: ${GUEST_TRUSTED_PROXY:-}
       AUTH_SERVICE_URL: http://auth-service:5001
       GROUP_SERVICE_URL: http://group-service:5006
       VISION_SERVICE_URL: http://vision-service:4010
@@ -263,9 +293,6 @@ services:
       TURN_SECRET: ${TURN_SECRET:-}
       CLOUDFLARE_TURN_KEY_ID: ${CLOUDFLARE_TURN_KEY_ID:-}
       CLOUDFLARE_TURN_API_TOKEN: ${CLOUDFLARE_TURN_API_TOKEN:-}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
 
   # Optional relay for calls between networks that cannot reach each other directly (the same job as
   # Cloudflare's hosted relay, which needs no server of yours). Not started by default:
@@ -305,8 +332,9 @@ services:
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
-      # Where an administrator's "Set up" link goes when chat is not inside the shell.
+      # Where an administrator's "Set up" link goes: Admin's Vivi setup, or Account when Admin is not set.
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      ADMIN_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3016
 
   # ------------------------------------------------------------------ frontends
   # Every value here lands in a config.json the browser fetches at runtime, so
@@ -404,6 +432,9 @@ services:
       GROUP_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5006
       # Docs and About, linked from a visitor's top bar.
       LANDING_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3000
+      # Administration in the account menu: admin-service says whether the viewer is a platform administrator.
+      ADMIN_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3016
+      ADMIN_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5016
 
 volumes:
   mongodb_data:

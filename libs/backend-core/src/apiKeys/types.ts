@@ -97,6 +97,7 @@ export interface ApiKeySummary {
 export type ApiKeyRejection = 'malformed' | 'unknown' | 'revoked' | 'expired' | 'bad-secret';
 
 export interface ApiKeyVerification {
+  createdAt?: Date;
   ok: boolean;
   rejection?: ApiKeyRejection;
   userId?: string;

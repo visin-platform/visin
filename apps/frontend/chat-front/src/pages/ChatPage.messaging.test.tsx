@@ -4,11 +4,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { api } from '../services/apiClient';
 import '../utils/chatContext';
 import Chat from './ChatPage';
-it('asks visitors to sign in without fetching private messages', async () => {
+it('asks visitors to sign in without fetching private messages, where guest Vivi is off', async () => {
   state.authenticated = false;
   render(<Chat />);
-  expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-  expect(api).not.toHaveBeenCalled();
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  expect(screen.getByText('Sign in to message people and analyze training results.')).toBeInTheDocument();
+  expect(api).toHaveBeenCalledWith('/guest/capabilities');
+  expect(vi.mocked(api).mock.calls.every(([path]) => path === '/guest/capabilities')).toBe(true);
+});
+
+it('gives visitors just Vivi\'s chat where guest Vivi is on, with no sign-in wall above it', async () => {
+  state.authenticated = false;
+  const before = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path: string, body?: unknown) =>
+    path === '/guest/capabilities' ? { enabled: true, siteKey: 'k', sessionDailyLimit: 3 } : before(path, body)
+  );
+  try {
+    render(<Chat />);
+    expect(await screen.findByRole('textbox', { name: 'Message Vivi' })).toBeInTheDocument();
+    expect(screen.getByText(/Hi, I'm Vivi/)).toBeInTheDocument();
+    expect(screen.queryByText('Sign in to message people and analyze training results.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in for more' })).toBeInTheDocument();
+    expect(vi.mocked(api).mock.calls.every(([path]) => String(path).startsWith('/guest/'))).toBe(true);
+  } finally {
+    vi.mocked(api).mockImplementation(before);
+  }
 });
 
 it('shows accept and decline on an invitation and disables sending', async () => {

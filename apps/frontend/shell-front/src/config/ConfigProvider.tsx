@@ -25,6 +25,12 @@ export interface AppConfig {
    * those links out rather than pointing somewhere else.
    */
   LANDING_FRONT_URL?: string;
+  /**
+   * Platform administration: admin-front is linked from the account menu, and admin-service is asked only whether to
+   * offer that link. Either unset, the entry is never offered.
+   */
+  ADMIN_FRONT_URL?: string;
+  ADMIN_SERVICE_URL?: string;
 }
 
 // `npm run dev` starts every app on its fixed port, so the shell needs no .env to
@@ -42,7 +48,9 @@ function createDevConfig(): AppConfig {
     LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL || 'http://localhost:5008',
     GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL || 'http://localhost:5006',
     CHAT_SERVICE_URL: import.meta.env.VITE_CHAT_SERVICE_URL || 'http://localhost:5012',
-    LANDING_FRONT_URL: import.meta.env.VITE_LANDING_FRONT_URL || 'http://localhost:3000'
+    LANDING_FRONT_URL: import.meta.env.VITE_LANDING_FRONT_URL || 'http://localhost:3000',
+    ADMIN_FRONT_URL: import.meta.env.VITE_ADMIN_FRONT_URL || 'http://localhost:3016',
+    ADMIN_SERVICE_URL: import.meta.env.VITE_ADMIN_SERVICE_URL || 'http://localhost:5016'
   };
 }
 

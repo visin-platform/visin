@@ -9,11 +9,12 @@ import {
   type ReactNode
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Box, IconButton, Tooltip, Typography } from '@mui/material';
-import { ChatBubbleOutlined, Close, OpenInFull } from '@mui/icons-material';
+import { Box, Button, IconButton, Tooltip, Typography } from '@mui/material';
+import { AutoAwesome, ChatBubbleOutlined, Close, OpenInFull } from '@mui/icons-material';
 import { Loader, chrome, tint, useCompactLayout } from '@visin/frontend-core';
 import { useConfig } from '../../config/ConfigProvider';
 import { useAuth } from '../../contexts/AuthContext';
+import { useGuestVivi } from '../../hooks/useGuestVivi';
 import { forgetChatPanel, remoteChatPanel } from '../../remotes';
 import { RemoteBoundary } from '../RemoteBoundary';
 import { useScreenCalls, type ScreenCue } from './useScreenCalls';
@@ -46,6 +47,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const config = useConfig();
   const { isAuthenticated } = useAuth();
   const available = Boolean(config.CHAT_FRONT_URL && isAuthenticated);
+  const guest = useGuestVivi();
+  // The dock opens for someone with chat, or for a visitor who may ask Vivi: the same panel, the same shortcut.
+  const reachable = available || guest;
   const compact = useCompactLayout();
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -74,7 +78,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Remotes ask with an event: they cannot reach this context from their own bundle.
   useEffect(() => {
-    if (!available) return;
+    if (!reachable) return;
     const receive = (event: Event) => {
       const request = (event as CustomEvent<ChatRequest | undefined>).detail;
       if (request) openWith(request);
@@ -83,13 +87,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('visin:open-chat', receive);
     return () => window.removeEventListener('visin:open-chat', receive);
-  }, [available, openWith, compact, navigate]);
+  }, [reachable, openWith, compact, navigate]);
+
+  // Pages beside the dock (a project's "Ask Vivi") learn whether a visitor may ask, as they learn everything else
+  // from the shell: a flag and an event, since a remote cannot reach this context from its own bundle.
+  useEffect(() => {
+    window.__visinGuestVivi = guest;
+    window.dispatchEvent(new CustomEvent('visin:guest-vivi', { detail: guest }));
+    return () => {
+      window.__visinGuestVivi = false;
+    };
+  }, [guest]);
 
   // Not on the chat page itself, which would be the same conversation twice; not on a phone, which has no room.
-  const panelOpen = available && open && !onChatPage && !compact;
+  const panelOpen = reachable && open && !onChatPage && !compact;
   const [screenCue, setScreenCue] = useState<ScreenCue | null>(null);
   const dismissScreenCue = useCallback(() => setScreenCue(null), []);
-  useScreenCalls(panelOpen, setScreenCue);
+  useScreenCalls(panelOpen && available, setScreenCue);
   useNotificationNavigation();
   const toggle = useCallback(() => {
     if (compact || onChatPage) navigate('/chat');
@@ -99,7 +113,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Ctrl+J, or Command+J on a Mac, opens and closes chat from anywhere. Another modifier makes it a different shortcut
   // (Ctrl+Shift+J is the browser's console), and a key press that something has already taken is left to it.
   useEffect(() => {
-    if (!available) return;
+    if (!reachable) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
@@ -109,11 +123,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [available, toggle]);
+  }, [reachable, toggle]);
 
   const value = useMemo(
     () => ({
       available,
+      guest,
       open: panelOpen,
       toggle,
       close: () => setOpen(false),
@@ -126,7 +141,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setScreenCue(null);
       }
     }),
-    [available, panelOpen, toggle, navigate, openWith, conversationId, screenCue, dismissScreenCue]
+    [available, guest, panelOpen, toggle, navigate, openWith, conversationId, screenCue, dismissScreenCue]
   );
   return <ChatDockContext.Provider value={value}>{children}</ChatDockContext.Provider>;
 }
@@ -137,7 +152,28 @@ const SHORTCUT = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(nav
 /** Chat's place in the top bar, beside the other icons. */
 export function ChatButton() {
   const dock = useChatDock();
-  if (!dock.available) return null;
+  const compact = useCompactLayout();
+  if (!dock.available && !dock.guest) return null;
+  // A visitor is told what this is: a word beside the icon on a desktop, where a bare bubble would not say "Vivi".
+  if (!dock.available)
+    return compact ? (
+      <IconButton onClick={dock.toggle} aria-label="Ask Vivi" aria-pressed={dock.open} sx={{ color: chrome.inkMuted }}>
+        <AutoAwesome />
+      </IconButton>
+    ) : (
+      <Tooltip title={`${dock.open ? 'Close Vivi' : 'Ask Vivi, no account needed'} (${SHORTCUT})`}>
+        <Button
+          size="small"
+          startIcon={<AutoAwesome />}
+          onClick={dock.toggle}
+          aria-label="Ask Vivi"
+          aria-pressed={dock.open}
+          sx={{ color: dock.open ? 'primary.main' : chrome.ink, whiteSpace: 'nowrap' }}
+        >
+          Ask Vivi
+        </Button>
+      </Tooltip>
+    );
   return (
     <Tooltip title={`${dock.open ? 'Close chat' : 'Chat'} (${SHORTCUT})`}>
       <IconButton
@@ -211,7 +247,7 @@ export function ChatSidePanel() {
   return (
     <Box
       component="aside"
-      aria-label="Chat"
+      aria-label={dock.available ? 'Chat' : 'Ask Vivi'}
       onClickCapture={(event) => {
         if (
           event.defaultPrevented ||
@@ -284,7 +320,7 @@ export function ChatSidePanel() {
       >
         <ChatBubbleOutlined fontSize="small" sx={{ color: 'primary.main' }} />
         <Typography component="h2" sx={{ flex: 1, fontWeight: 700, fontSize: '1rem', ml: 0.5 }}>
-          Chat
+          {dock.available ? 'Chat' : 'Ask Vivi'}
         </Typography>
         <Tooltip title="Open full page">
           <IconButton

@@ -18,7 +18,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   // Account's own sections are local here and fill the section bar. It used to
   // offer a lone "Back to Vision" link instead, so Labeling was unreachable from
   // here and the menu changed shape on the way in and out.
-  const { groups, accountItems } = createVisinNavigation(
+  const { groups, accountItems, menuItems } = createVisinNavigation(
     'account',
     { vision: config.VISION_FRONT_URL, label: config.LABEL_FRONT_URL },
     { analystSettings }
@@ -29,6 +29,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       appName="Account"
       navGroups={groups}
       accountItems={accountItems}
+      menuItems={menuItems}
       user={user}
       onLogout={logout}
     >

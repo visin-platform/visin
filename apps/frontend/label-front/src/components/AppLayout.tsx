@@ -30,7 +30,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Same menu as vision-front, only with the ownership flipped: Jobs are local
   // routes here and the Vision sections link across.
-  const { groups, accountItems } = createVisinNavigation('label', {
+  const { groups, accountItems, menuItems } = createVisinNavigation('label', {
     vision: config.VISION_FRONT_URL,
     account: config.ACCOUNT_FRONT_URL
   });
@@ -40,6 +40,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       appName="Labeling"
       navGroups={groups}
       accountItems={accountItems}
+      menuItems={menuItems}
       user={user}
       // Jobs and the workbench serve anonymous visitors now, so the menu has
       // to offer a way in rather than assuming there is already a session.

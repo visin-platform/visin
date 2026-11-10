@@ -10,6 +10,13 @@ const settingsSchema = new Schema(
     // Absent on settings saved before there was one: the default applies.
     dailyTokenLimit: Number,
     toolRounds: Number,
+    revision: { type: Number, default: 0 },
+    history: {
+      type: [
+        new Schema({ actorId: String, at: Date, before: Schema.Types.Mixed, after: Schema.Types.Mixed }, { _id: false })
+      ],
+      default: []
+    },
     updatedBy: String
   },
   { timestamps: true }

@@ -11,8 +11,7 @@ import { PushSubscription } from '../models/PushSubscription';
  * is logged rather than retried.
  *
  * It needs no account anywhere. The signing keys (VAPID) are made by this service on first start and kept in the
- * database, so a fresh clone has notifications with nothing configured; `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`
- * override them for an operator who wants to hold their own.
+ * database, so a fresh clone has notifications with nothing configured, and every replica signs the same way.
  */
 
 export interface PushPayload {
@@ -49,20 +48,19 @@ export function resetPushConfig(): void {
 }
 
 /**
- * Who the push services can contact about this sender. An operator's own `mailto:` when set; otherwise the
- * deployment's own address from its CORS origins, never an address of ours.
+ * Who the push services can contact about this sender: the deployment's own public address, from its CORS origins,
+ * never an address of ours. An https origin is preferred, since push services may refuse a localhost or plain-http
+ * contact and a deployment often lists its local development origins first.
  */
 function subject(): string {
-  const configured = process.env.VAPID_SUBJECT?.trim();
-  if (configured) return configured;
-  return (process.env.CORS_ORIGIN || '').split(',')[0]?.trim() || 'https://localhost';
+  const origins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return origins.find((origin) => origin.startsWith('https://')) || origins[0] || 'https://localhost';
 }
 
 async function loadKeys(): Promise<{ publicKey: string; privateKey: string }> {
-  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
-  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
-  if (publicKey && privateKey) return { publicKey, privateKey };
-
   const read = async () => {
     const found = await DeploymentSecret.findById(SECRET_ID).lean();
     if (!found) return null;

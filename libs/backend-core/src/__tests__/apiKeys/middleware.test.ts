@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { vi, type Mock } from 'vitest';
 vi.mock('../../apiKeys/service', async () => {
   const module = await (() => ({ verifyApiKey: vi.fn() }))();
@@ -412,5 +413,79 @@ describe('project-limited dataset reads', () => {
     verify.mockResolvedValue({ ...VALID, projectId: 'p1' });
     await apiKeyAuth('label', { projectLimitedDatasetReads: true })(makeReq(), makeRes(), next);
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+  });
+});
+
+describe('account suspension', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('rejects an otherwise valid credential owned by a suspended account', async () => {
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011' });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(1);
+    const findOne = vi.fn().mockResolvedValue({ _id: '507f1f77bcf86cd799439011', status: 'suspended' });
+    vi.spyOn(mongoose.connection, 'collection').mockReturnValue({ findOne } as never);
+    const req = makeReq();
+    await apiKeyAuth('vision')(req, makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(req.user).toBeUndefined();
+    expect(findOne.mock.calls[0][1].projection).toEqual({ status: 1, credentialsRevokedAt: 1 });
+  });
+  it('fails closed when account state cannot be read', async () => {
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011' });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(0);
+    await apiKeyAuth('vision')(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 503 }));
+  });
+  it('rejects an OAuth access token issued before an administrator revoked credentials', async () => {
+    process.env.JWT_SECRET = 'revocation-test-secret';
+    const { accessToken } = mintAccessToken({
+      userId: '507f1f77bcf86cd799439011',
+      email: 'user@example.test',
+      name: 'User',
+      resource: 'https://mcp.example.test',
+      issuer: 'https://auth.example.test',
+      scopes: ['vision:read'],
+      clientId: 'test-client',
+      clientName: 'Test client'
+    });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(1);
+    vi.spyOn(mongoose.connection, 'collection').mockReturnValue({
+      findOne: vi.fn().mockResolvedValue({ status: 'active', credentialsRevokedAt: new Date() })
+    } as never);
+    const req = makeReq({ headers: { authorization: `Bearer ${accessToken}` } });
+    await apiKeyAuth('vision', { audience: 'https://mcp.example.test' })(req, makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(req.user).toBeUndefined();
+  });
+  it('accepts a newly issued key but rejects keys issued before recovery', async () => {
+    const now = Date.now();
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date(now) });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(1);
+    vi.spyOn(mongoose.connection, 'collection').mockReturnValue({
+      findOne: vi.fn().mockResolvedValue({ status: 'active', credentialsRevokedAt: new Date(now - 1000) })
+    } as never);
+    await apiKeyAuth('vision')(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith();
+    (next as Mock).mockClear();
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date(now - 2000) });
+    await apiKeyAuth('vision')(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+  });
+  it('fails closed with a 503 when the account lookup errors', async () => {
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date() });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(1);
+    vi.spyOn(mongoose.connection, 'collection').mockReturnValue({
+      findOne: vi.fn().mockRejectedValue(new Error('not primary'))
+    } as never);
+    const req = makeReq();
+    await apiKeyAuth('vision')(req, makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 503 }));
+    expect(req.user).toBeUndefined();
+  });
+  it('rejects credentials for an account that no longer exists', async () => {
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date() });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(1);
+    vi.spyOn(mongoose.connection, 'collection').mockReturnValue({ findOne: vi.fn().mockResolvedValue(null) } as never);
+    await apiKeyAuth('vision')(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
   });
 });

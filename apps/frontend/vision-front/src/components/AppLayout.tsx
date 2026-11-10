@@ -19,7 +19,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const config = getGlobalConfig();
 
   // A visitor's menu leaves out Labels, which needs an account.
-  const { groups, accountItems } = createVisinNavigation(
+  const { groups, accountItems, menuItems } = createVisinNavigation(
     'vision',
     {
       shell: config.SHELL_FRONT_URL,
@@ -34,6 +34,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       appName="Vision"
       navGroups={groups}
       accountItems={accountItems}
+      menuItems={menuItems}
       user={user}
       isAuthenticated={isAuthenticated}
       authPending={isLoading}

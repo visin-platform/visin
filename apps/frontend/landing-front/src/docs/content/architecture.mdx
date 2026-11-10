@@ -89,3 +89,13 @@ Chat runs as a full page or a resizable panel inside the shell. Private assistan
   alt="Chat front in the shell or full page, conversation membership checks, durable analyst jobs in MongoDB, read-only MCP tools and reviewed finding saves."
   caption="Research chat and private training analysis"
 />
+
+## Administration
+
+Platform administrators manage users, Vivi and anonymous access in a separate app, reached from the account menu. Admin-service checks the administrator role on every request, records every write without its request body and forwards only listed operations to the service that owns the data, each of which checks the administrator again. System monitoring stays in Grafana.
+
+<Diagram
+  name="admin.svg"
+  alt="Admin front, linked from the shell's account menu, calls admin-service, which checks the administrator role, audits writes in MongoDB and forwards allow-listed operations to auth, group and chat services; Grafana is separate."
+  caption="Platform administration"
+/>

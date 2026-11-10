@@ -291,6 +291,7 @@ describe('verifyApiKey', () => {
 
     await expect(verifyApiKey(token)).resolves.toEqual({
       ok: true,
+      createdAt: CREATED_AT,
       userId: 'u1',
       userEmail: 'u1@example.com',
       userName: 'Tester',

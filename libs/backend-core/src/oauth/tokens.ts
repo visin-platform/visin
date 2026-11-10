@@ -96,6 +96,7 @@ export interface AccessTokenVerification {
   scopes?: ApiKeyScope[];
   clientId?: string;
   clientName?: string;
+  issuedAt?: number;
 }
 
 /**
@@ -138,7 +139,8 @@ export const verifyAccessToken = (
     name: claims.name ?? '',
     scopes: (claims.scope ?? '').split(' ').filter(isApiKeyScope),
     clientId: claims.clientId,
-    clientName: claims.clientName
+    clientName: claims.clientName,
+    issuedAt: claims.iat
   };
 };
 

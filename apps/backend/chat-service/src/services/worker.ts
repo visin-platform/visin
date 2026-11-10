@@ -1,3 +1,4 @@
+import { assertViviUser } from './adminPolicy';
 import { redactQuotes } from './messageService';
 import { recoverMembershipEvents } from './membershipAudit';
 import { createApiKey, deleteApiKey, logger } from '@visin/backend-core';
@@ -17,6 +18,9 @@ import { runAllowed } from './sharedAssistants';
 import { expireScreenCalls, screenContextSchema } from './screen';
 import { steerScreen } from './screenSteering';
 import { priceSnapshot } from './usage';
+
+/** How often a running question re-reads its account's state and Vivi policy. */
+const VIVI_CHECK_MS = 5000;
 
 /**
  * Analyses one process runs at once. A turn can take minutes, so one at a time would
@@ -160,7 +164,22 @@ export function startWorker() {
     const drafts = c.kind === 'assistant' ? createDraftWriter(run.id) : undefined;
     const controller = new AbortController();
     controllers.set(run.id, controller);
-    const assistantAvailable = () => runAllowed(run.conversationId, run.userId, run.membershipVersion, run.assistantId);
+    // The account's state and Vivi policy, read at most every few seconds: the watch below runs every second, and a
+    // suspension or a policy turned off needs to stop the run soon, not within the second. A refusal is remembered
+    // for the same few seconds, so it keeps stopping the run.
+    let viviChecked: { at: number; check: Promise<unknown> } | undefined;
+    const viviAllowed = () => {
+      if (!viviChecked || Date.now() - viviChecked.at >= VIVI_CHECK_MS) {
+        const check = assertViviUser(run.userId);
+        check.catch(() => undefined);
+        viviChecked = { at: Date.now(), check };
+      }
+      return viviChecked.check;
+    };
+    const assistantAvailable = async () => {
+      await viviAllowed();
+      return runAllowed(run.conversationId, run.userId, run.membershipVersion, run.assistantId);
+    };
     const guard = async () => {
       controller.signal.throwIfAborted();
       if (
@@ -190,7 +209,9 @@ export function startWorker() {
       }
       // The provider, model and limit are read as the run starts, so a change in the settings applies to the next
       // question. A run that cannot happen is refused before it is charged anything.
-      const { provider, model, dailyTokenLimit: limit, toolRounds } = await assistantSettings();
+      const { provider, model, dailyTokenLimit, toolRounds } = await assistantSettings();
+      const policy = await assertViviUser(run.userId);
+      const limit = Math.min(dailyTokenLimit, policy.dailyTokenLimit);
       if (!model) throw new Error('No assistant model is configured');
       const resolved = await resolveProviderKey(provider);
       if (!resolved) throw new Error(`No ${PROVIDERS[provider].name} key is configured`);
@@ -235,6 +256,12 @@ export function startWorker() {
       }
       const day = new Date().toISOString().slice(0, 10);
       await Budget.updateOne({ userId: run.userId, day }, { $setOnInsert: { reserved: 0 } }, { upsert: true });
+      // One question per admission against the account's daily allowance, before any tokens are reserved.
+      const admitted = await Budget.findOneAndUpdate(
+        { userId: run.userId, day, $expr: { $lt: [{ $ifNull: ['$requests', 0] }, policy.dailyRequestLimit] } },
+        { $inc: { requests: 1 } }
+      );
+      if (!admitted) throw new Error('Your daily Vivi question allowance is used. Try again tomorrow.');
       // The best plan the day's budget still holds: page changes need more room, and are given up before the question.
       let plan: ReturnType<typeof budgetPlans>[number] | undefined;
       for (const candidate of budgetPlans(
@@ -253,7 +280,11 @@ export function startWorker() {
           break;
         }
       }
-      if (!plan) throw new Error('Your daily assistant token budget is used. Try again tomorrow.');
+      if (!plan) {
+        // Nothing was sent, so the question does not count against the day's allowance.
+        await Budget.updateOne({ userId: run.userId, day }, { $inc: { requests: -1 } });
+        throw new Error('Your daily assistant token budget is used. Try again tomorrow.');
+      }
       const reserve = plan.reserve;
       const steering = plan.screen;
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
@@ -339,6 +370,8 @@ export function startWorker() {
         { $set: { provider, model, providerReplayVersion: PROVIDER_REPLAY_VERSION } }
       );
       const result = await analyze({
+        runId: run.id,
+        usageUserId: run.userId,
         toolRounds: plan.toolRounds,
         conversationId: c.id,
         provider,

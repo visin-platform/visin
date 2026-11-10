@@ -60,3 +60,14 @@ vi.mock('../../services/access', async () => {
   }))();
   return Object.assign({ default: module }, module);
 });
+
+// These HTTP/worker suites use synthetic names (alice/bob) as authenticated IDs.
+// Keep policy enforcement real while replacing only the account identity lookup.
+vi.mock('../../services/adminPolicy', async () => {
+  const actual = await vi.importActual<typeof import('../../services/adminPolicy')>('../../services/adminPolicy');
+  return { ...actual, assertViviUser: async (id: string) => {
+    const policy = await actual.effectivePolicy(id);
+    if (!policy.enabled) throw new Error('Vivi access is disabled');
+    return policy;
+  } };
+});

@@ -1,3 +1,4 @@
+import { meteredCall } from './providerUsage';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { requireEnv } from '@visin/backend-core';
@@ -101,6 +102,8 @@ export async function analyze(input: {
   /** The provider's key, never logged or stored with the run. */
   apiKey: string;
   token: string;
+  runId?: string;
+  usageUserId?: string;
   projectId?: string;
   /** The paper this conversation is about, when it is one. */
   paperId?: string;
@@ -287,7 +290,7 @@ export async function analyze(input: {
         imageCount ? 'Looking at your images and preparing an answer' : 'Reading results and preparing an answer'
       );
       await input.guard?.();
-      const turn = await adapter.send({
+      const send = () => adapter.send({
         apiKey,
         model,
         system,
@@ -297,6 +300,9 @@ export async function analyze(input: {
         onText: input.onText,
         maxRequestBytes: requestBytes
       });
+      const turn = input.runId && input.usageUserId
+        ? await meteredCall({ runId: input.runId, userId: input.usageUserId, provider: input.provider, model }, send)
+        : await send();
       providerRequests++;
       cacheReadTokens += turn.cacheReadTokens ?? 0;
       cacheWriteTokens += turn.cacheWriteTokens ?? 0;

@@ -1,3 +1,4 @@
+import { createAdminControlRoutes } from './adminControlRoutes';
 import { authenticateToken } from '@visin/backend-core';
 import { Router } from 'express';
 import { createAssistantAdminRoutes } from './assistantAdminRoutes';
@@ -20,6 +21,7 @@ export function createChatRoutes() {
   const router = Router();
   const limits = createChatRateLimits();
   router.use(authenticateToken);
+  router.use(createAdminControlRoutes());
   router.use(createAssistantRoutes(limits));
   router.use(createDiscoveryRoutes(limits));
   router.use(createAssistantAdminRoutes(limits));

@@ -1,0 +1,3 @@
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+export default defineConfig({ plugins: [react()], test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test/setup.ts'], coverage: { provider: 'v8', reporter: ['text', 'lcov'], include: ['src/services/admin.ts', 'src/App.tsx', 'src/Gate.tsx', 'src/nav.tsx', 'src/Users.tsx', 'src/Policies.tsx', 'src/Runs.tsx', 'src/Audit.tsx', 'src/hooks/useUserNames.ts', 'src/utils/money.ts', 'src/components/StatusChip.tsx', 'src/components/Stat.tsx', 'src/utils/dateTime.ts', 'src/components/PersonLink.tsx'] } } });

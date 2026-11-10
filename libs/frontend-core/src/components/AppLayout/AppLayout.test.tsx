@@ -235,22 +235,22 @@ describe('AppLayout', () => {
       );
     });
 
-    it('logs out from the menu', () => {
+    it('signs out from the menu', () => {
       renderAt('/projects');
 
       openAccount();
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
 
       expect(onLogout).toHaveBeenCalledTimes(1);
     });
 
-    it('offers only Logout where Account is unreachable', () => {
+    it('offers only Sign out where Account is unreachable', () => {
       renderAt('/projects', undefined, { accountItems: [] });
 
       openAccount();
 
       expect(screen.queryByRole('menuitem', { name: 'Profile' })).not.toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: 'Logout' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
     });
 
     it('falls back to "User" when the user has no name, or there is no user', () => {
@@ -262,6 +262,33 @@ describe('AppLayout', () => {
       renderAt('/projects', null);
       openAccount();
       expect(screen.getByText('User')).toBeInTheDocument();
+    });
+
+    it('lists what the app says under the name, not every Account section', () => {
+      renderAt('/projects', undefined, {
+        menuItems: [{ text: 'Account settings', icon: null, path: '/account/profile' }]
+      });
+
+      openAccount();
+      const items = within(screen.getByRole('menu', { name: 'Account' })).getAllByRole('menuitem');
+
+      expect(items.map((item) => item.textContent)).toEqual(['TTest Usertest@example.com', 'Account settings', 'Sign out']);
+    });
+
+    it('opens Account from the name, where Account is reachable', () => {
+      renderAt('/projects');
+
+      openAccount();
+
+      expect(screen.getByRole('menuitem', { name: /Test User/ })).toHaveAttribute('href', '/account/profile');
+    });
+
+    it('does not make the name a link where Account is unreachable', () => {
+      renderAt('/projects', undefined, { accountItems: [] });
+
+      openAccount();
+
+      expect(screen.getByRole('menuitem', { name: /Test User/ })).not.toHaveAttribute('href');
     });
 
     it('is a group of its own while one of its sections is shown', () => {
@@ -279,13 +306,13 @@ describe('AppLayout', () => {
       expect(screen.queryByRole('menuitem', { name: /Appearance/ })).not.toBeInTheDocument();
     });
 
-    it('ends in Logout without a stray divider where Account has no sections', () => {
+    it('ends in Sign out without a stray divider where Account has no sections', () => {
       renderAt('/projects', undefined, { accountItems: [] });
 
       openAccount();
 
       expect(screen.getAllByRole('separator')).toHaveLength(1);
-      expect(screen.getByRole('menuitem', { name: 'Logout' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
     });
 
     it('is in the top bar, leaving the rail to places', () => {
@@ -307,7 +334,7 @@ describe('AppLayout', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
       expect(onLogin).toHaveBeenCalledTimes(1);
-      expect(screen.queryByText('Logout')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sign out')).not.toBeInTheDocument();
     });
 
     it('offers Sign up where the app can send one', () => {
@@ -363,13 +390,13 @@ describe('AppLayout', () => {
       expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
     });
 
-    it('keeps the links out of the account menu, which has the sections and Logout only', () => {
+    it('keeps the links out of the account menu, which has the sections and Sign out only', () => {
       renderAt('/projects', undefined, { siteLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }] });
 
       openAccount();
       const items = within(screen.getByRole('menu', { name: 'Account' })).getAllByRole('menuitem');
 
-      expect(items.map((item) => item.textContent)).toEqual(['TTest Usertest@example.com', 'Profile', 'Groups', 'Logout']);
+      expect(items.map((item) => item.textContent)).toEqual(['TTest Usertest@example.com', 'Profile', 'Groups', 'Sign out']);
     });
 
     it('shows the same links to a visitor', () => {
@@ -759,7 +786,7 @@ describe('AppLayout', () => {
       openAccount();
       const sheet = within(screen.getByRole('menu', { name: 'Account' }));
       expect(sheet.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
-      fireEvent.click(sheet.getByRole('menuitem', { name: 'Logout' }));
+      fireEvent.click(sheet.getByRole('menuitem', { name: 'Sign out' }));
 
       expect(onLogout).toHaveBeenCalledTimes(1);
     });

@@ -11,12 +11,17 @@ const authState = {
   signup: vi.fn(),
   logout: vi.fn(),
 };
+vi.mock('../hooks/useGuestVivi', () => ({ useGuestVivi: () => false }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 
 const config: Record<string, string | undefined> = {};
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config }));
 let analystAdmin = false;
 vi.mock('../hooks/useCanConfigureAnalyst', () => ({ useCanConfigureAnalyst: () => analystAdmin }));
+let platformAdmin = false;
+vi.mock('../hooks/useIsPlatformAdmin', () => ({ useIsPlatformAdmin: () => platformAdmin }));
+let publicHandle: string | undefined;
+vi.mock('../hooks/usePublicHandle', () => ({ usePublicHandle: () => publicHandle }));
 vi.mock('../remotes', () => ({ remoteChatPanel: () => () => <div>Embedded conversations</div>, forgetChatPanel: vi.fn() }));
 
 import ShellLayout from './ShellLayout';
@@ -159,6 +164,41 @@ describe('ShellLayout', () => {
     expect(screen.queryByRole('link', { name: 'Analyst' })).not.toBeInTheDocument();
   });
 
+  it('keeps the account menu short: Account settings, plus Administration for platform administrators only', () => {
+    config.ADMIN_FRONT_URL = 'https://admin.example.test';
+    const menuNames = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+      return within(screen.getByRole('menu', { name: 'Account' }))
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent);
+    };
+    try {
+      renderAt('/projects');
+      expect(menuNames()).toEqual(['JJane Doejane@example.com', 'Account settings', 'Sign out']);
+      cleanup();
+
+      platformAdmin = true;
+      publicHandle = 'test-user';
+      renderAt('/projects');
+      expect(menuNames()).toEqual([
+        'JJane Doejane@example.com',
+        'Your public page',
+        'Account settings',
+        'Administration',
+        'Sign out'
+      ]);
+      expect(screen.getByRole('menuitem', { name: 'Administration' })).toHaveAttribute(
+        'href',
+        'https://admin.example.test/'
+      );
+      expect(screen.getByRole('menuitem', { name: 'Your public page' })).toHaveAttribute('href', '/u/test-user');
+    } finally {
+      platformAdmin = false;
+      publicHandle = undefined;
+      delete config.ADMIN_FRONT_URL;
+    }
+  });
+
   it('keeps Account sections out of the section bar elsewhere', () => {
     renderAt('/projects');
 
@@ -189,7 +229,7 @@ describe('ShellLayout', () => {
     renderAt('/projects');
 
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Profile' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Account settings' }));
 
     expect(screen.getByTestId('path')).toHaveTextContent('/account/profile');
   });
@@ -206,7 +246,7 @@ describe('ShellLayout', () => {
     renderAt('/projects');
 
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
 
     await vi.waitFor(() => expect(authState.logout).toHaveBeenCalledTimes(1));
     window.removeEventListener('visin:logout', letGo);

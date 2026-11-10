@@ -1,5 +1,5 @@
 import { DEFAULT_TOOL_ROUNDS } from './analysisLimits';
-import { logger } from '@visin/backend-core';
+import { ConflictError, logger } from '@visin/backend-core';
 import mongoose from 'mongoose';
 import { Settings } from '../models/Settings';
 import { keyStatus, resetProviderKeyCache, resolveProviderKey } from './keys';
@@ -139,9 +139,58 @@ export async function providerCatalog() {
   );
 }
 
-export async function saveAssistantSettings(input: Saved, userId: string): Promise<void> {
-  await Settings.updateOne({ _id: KEY }, { $set: { ...input, updatedBy: userId } }, { upsert: true });
-  stored = { at: Date.now(), doc: { ...input } };
+export async function saveAssistantSettings(input: Saved, userId: string, expectedRevision?: number): Promise<void> {
+  const before = await Settings.findById(KEY).lean();
+  if (expectedRevision !== undefined && (before?.revision ?? 0) !== expectedRevision)
+    throw new ConflictError('Vivi settings changed; reload before saving');
+  const filter = {
+    _id: KEY,
+    ...(expectedRevision === undefined
+      ? {}
+      : {
+          $or: [{ revision: expectedRevision }, ...(expectedRevision === 0 ? [{ revision: { $exists: false } }] : [])]
+        })
+  };
+  const { enabled, provider, model, dailyTokenLimit, toolRounds } = input;
+  const safe = { enabled, provider, model, dailyTokenLimit, toolRounds };
+  try {
+    const result = await Settings.updateOne(
+      filter,
+      {
+        $set: { ...safe, updatedBy: userId },
+        $inc: { revision: 1 },
+        $push: {
+          history: {
+            $each: [
+              {
+                actorId: userId,
+                at: new Date(),
+                before: before
+                  ? {
+                      enabled: before.enabled,
+                      provider: before.provider,
+                      model: before.model,
+                      dailyTokenLimit: before.dailyTokenLimit,
+                      toolRounds: before.toolRounds
+                    }
+                  : null,
+                after: safe
+              }
+            ],
+            $slice: -100
+          }
+        }
+      },
+      { upsert: !before }
+    );
+    if (!result.matchedCount && !result.upsertedCount)
+      throw new ConflictError('Vivi settings changed; reload before saving');
+  } catch (error) {
+    if ((error as { code?: number }).code === 11000)
+      throw new ConflictError('Vivi settings changed; reload before saving');
+    throw error;
+  }
+  stored = { at: Date.now(), doc: safe };
 }
 
 /** The platform administrator role, read from the account itself on the primary, as the session check does. */
@@ -150,7 +199,7 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
   const account = await mongoose.connection
     .collection('users')
     .findOne(
-      { _id: new mongoose.Types.ObjectId(userId), roles: 'admin' },
+      { _id: new mongoose.Types.ObjectId(userId), roles: 'admin', status: { $nin: ['suspended', 'deleted'] } },
       { projection: { _id: 1 }, readPreference: 'primary', maxTimeMS: 3000 }
     );
   return account !== null;

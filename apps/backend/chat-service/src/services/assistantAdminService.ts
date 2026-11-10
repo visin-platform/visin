@@ -1,3 +1,4 @@
+import { Settings } from '../models/Settings';
 import { BadGatewayError, BadRequestError, isEncryptionConfigured, logger } from '@visin/backend-core';
 import { reservationFor, TOKENS_PER_ROUND, MIN_TOOL_ROUNDS, MAX_TOOL_ROUNDS } from './analysisLimits';
 import { removeProviderKey, saveProviderKey } from './keys';
@@ -26,7 +27,10 @@ import {
 
 const settingsView = async () => {
   const { settings, missing, ready } = await assistantStatus();
+  const saved = await Settings.findById('assistant').select('revision history').lean();
   return {
+    revision: saved?.revision ?? 0,
+    history: saved?.history ?? [],
     enabled: settings.enabled,
     provider: settings.provider,
     model: settings.model,
@@ -79,7 +83,7 @@ export async function updateSettings(userId: string, body: unknown) {
     throw new BadRequestError(
       `The daily limit must be at least ${reservation.toLocaleString('en-US')} tokens: one question reserves that much`
     );
-  await saveAssistantSettings({ ...input, dailyTokenLimit, toolRounds }, userId);
+  await saveAssistantSettings({ ...input, dailyTokenLimit, toolRounds }, userId, input.revision);
   logger.info('Assistant settings changed', { by: userId, ...input, dailyTokenLimit });
   return await settingsView();
 }

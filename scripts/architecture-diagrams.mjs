@@ -898,6 +898,129 @@ files['chat.svg'] = doc(
   ]
 );
 
+// ---------------------------------------------------------------- administration
+files['admin.svg'] = doc(
+  800,
+  730,
+  'Visin: platform administration',
+  'Admin-front is a separate app for platform administrators, reached from the account menu in the shell. Every request goes to admin-service, which checks the administrator role on the primary database, audits writes without request bodies and forwards only allow-listed operations, with the caller\'s own credential, to auth-service, group-service and chat-service. Each of those checks the administrator again. System monitoring stays in Grafana, which Admin only links to.',
+  [
+    node.web({
+      x: 20,
+      y: 20,
+      w: 360,
+      h: 90,
+      title: 'Admin front',
+      lines: ['Users, Vivi setup, limits, usage, runs', 'Change history; names instead of ids']
+    }),
+    node.web({
+      x: 460,
+      y: 20,
+      w: 320,
+      h: 90,
+      title: 'Shell front',
+      lines: ['Account menu: Administration', 'Shown after admin-service says yes']
+    }),
+    edge(
+      [
+        [460, 65],
+        [380, 65]
+      ],
+      { label: 'link out', at: [420, 50] }
+    ),
+    node.service({
+      x: 20,
+      y: 190,
+      w: 360,
+      h: 110,
+      title: 'Admin service',
+      lines: [
+        'Administrator role checked on every request',
+        'Allow-listed operations only; audited writes',
+        'Forwards the caller\'s own credential'
+      ]
+    }),
+    node.data({
+      x: 420,
+      y: 190,
+      w: 360,
+      h: 110,
+      title: 'MongoDB',
+      lines: ['Audit log: who, what, outcome', 'Accounts read for the role check']
+    }),
+    edge(
+      [
+        [200, 110],
+        [200, 190]
+      ],
+      { label: 'HTTPS + session cookie', at: [180, 155] }
+    ),
+    edge([
+      [380, 245],
+      [420, 245]
+    ]),
+    node.service({
+      x: 20,
+      y: 400,
+      w: 230,
+      h: 95,
+      title: 'Auth service',
+      lines: ['Accounts, sessions, API keys', 'Recovery links, edit lease']
+    }),
+    node.service({
+      x: 285,
+      y: 400,
+      w: 230,
+      h: 95,
+      title: 'Group service',
+      lines: ['Memberships and revisions', 'Last-owner protection']
+    }),
+    node.service({
+      x: 550,
+      y: 400,
+      w: 230,
+      h: 95,
+      title: 'Chat service',
+      lines: ['Vivi setup, policies, runs', 'Usage and guest budget']
+    }),
+    edge([
+      [120, 300],
+      [120, 400]
+    ]),
+    edge([
+      [260, 300],
+      [400, 400]
+    ]),
+    edge([
+      [350, 300],
+      [665, 400]
+    ]),
+    node.external({
+      x: 20,
+      y: 525,
+      w: 760,
+      h: 95,
+      title: 'Grafana (separate, optional)',
+      lines: [
+        'Health, logs, traces and alerts stay here, with their own sign-in',
+        'Admin only shows a link to it when GRAFANA_URL is set'
+      ]
+    }),
+    texts({
+      x: 20,
+      y: 660,
+      w: 760,
+      title: 'The gateway is not the authority',
+      lines: [
+        'Auth, group and chat each check the administrator again, so no service trusts admin-service.',
+        'An uncertain write (the call failed in transit) is recorded as such and is checked before it is repeated.'
+      ],
+      color: C.ink,
+      sub: C.body
+    })
+  ]
+);
+
 const stale = [];
 for (const [name, svg] of Object.entries(files)) {
   const file = join(out, name);

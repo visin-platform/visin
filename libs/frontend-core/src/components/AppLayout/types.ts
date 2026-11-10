@@ -67,11 +67,16 @@ export interface AppLayoutProps {
   appName: string;
   navGroups: AppLayoutNavGroup[];
   /**
-   * Account's sections: listed in the account menu, and in the section bar
-   * while one of them is shown. Empty where Account is unreachable, leaving the
-   * menu only Logout.
+   * Account's sections: in the section bar while one of them is shown, and the account menu's list unless
+   * `menuItems` says otherwise. Empty where Account is unreachable, leaving the menu only Sign out.
    */
   accountItems?: AppLayoutNavItem[];
+  /**
+   * What the account menu lists under the person's name, before Sign out. Left out, the menu lists `accountItems`.
+   * The menu is meant to stay short: the Account sections have their own bar, so the menu names where Account is
+   * (one entry) rather than repeating them.
+   */
+  menuItems?: AppLayoutNavItem[];
   user: AppLayoutUser | null;
   onLogout: () => void;
   /** Max width of the centered content column. Defaults to 800. */

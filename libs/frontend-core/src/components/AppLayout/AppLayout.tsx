@@ -42,6 +42,7 @@ export function AppLayout({
   appName,
   navGroups,
   accountItems = [],
+  menuItems = accountItems,
   user,
   onLogout,
   maxContentWidth = 800,
@@ -145,7 +146,8 @@ export function AppLayout({
       anchor={accountAnchor}
       onClose={closeAccount}
       user={user}
-      accountItems={accountItems}
+      menuItems={menuItems}
+      accountHome={accountItems[0]}
       renderItem={menuItem}
       onLogout={onLogout}
     />

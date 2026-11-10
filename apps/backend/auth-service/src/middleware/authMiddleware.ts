@@ -80,7 +80,7 @@ export const authenticateToken = async (req: Request, _res: Response, next: Next
     return;
   }
 
-  if (!dbUser) {
+  if (!dbUser || dbUser.status === 'suspended' || dbUser.status === 'deleted') {
     next(new UnauthorizedError('User not found'));
     return;
   }
@@ -120,7 +120,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
           { $set: { lastLoginAt: new Date() } },
           { returnDocument: 'after', upsert: false }
         );
-        if (dbUser) {
+        if (dbUser && dbUser.status !== 'suspended' && dbUser.status !== 'deleted') {
           req.user = decoded;
           req.authSession = session;
           req.dbUser = dbUser;

@@ -15,6 +15,8 @@ import { visitIcon, visitLabel } from './home/visitKinds';
 import { ChatButton, ChatSidePanel } from './chat/ChatDock';
 import { useChatDock } from './chat/chatDock';
 import { useCanConfigureAnalyst } from '../hooks/useCanConfigureAnalyst';
+import { useIsPlatformAdmin } from '../hooks/useIsPlatformAdmin';
+import { usePublicHandle } from '../hooks/usePublicHandle';
 import { beforeLogout } from './chat/notifications';
 
 /** Outside any app's routes (Home, Explore, the not-found page): the widest frame, no header. */
@@ -56,7 +58,14 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const layout = definition ? definition.layout(pathname) : NO_APP_LAYOUT;
   // Account's Analyst section is for platform administrators, which chat-service says.
   const analystSettings = useCanConfigureAnalyst();
-  const memberNavigation = useMemo(() => createVisinNavigation(APP_LIST, {}, { analystSettings }), [analystSettings]);
+  // Administration is admin-front, a separate app: its entry is a link out, for platform administrators only.
+  const platformAdmin = useIsPlatformAdmin();
+  const adminUrl = config.ADMIN_FRONT_URL;
+  const publicHandle = usePublicHandle();
+  const memberNavigation = useMemo(
+    () => createVisinNavigation(APP_LIST, { admin: adminUrl }, { analystSettings, platformAdmin, publicHandle }),
+    [adminUrl, analystSettings, platformAdmin, publicHandle]
+  );
   const navigation = isAuthenticated ? memberNavigation : VISITOR_NAVIGATION;
   // Where this browser was lately, offered by the search box before anything is typed.
   const recent = useRecentVisits()
@@ -89,6 +98,7 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       navGroups={navigation.groups}
       homePath="/"
       accountItems={navigation.accountItems}
+      menuItems={navigation.menuItems}
       user={user}
       isAuthenticated={isAuthenticated}
       authPending={isLoading}
@@ -104,7 +114,7 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       showPageHeader={layout.showPageHeader}
       // Chat is a companion to whatever page is open, not a place in the menu: a button in the bar, and a panel
       // docked beside the page.
-      headerActions={chat.available ? <ChatButton /> : undefined}
+      headerActions={chat.available || chat.guest ? <ChatButton /> : undefined}
       sidePanel={chat.open ? <ChatSidePanel /> : undefined}
     >
       {children}

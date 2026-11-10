@@ -17,6 +17,8 @@ export type ChatRequest =
 
 declare global {
   interface Window {
+    /** Whether a visitor may ask Vivi: the shell's answer, for pages that offer "Ask Vivi" beside the dock. */
+    __visinGuestVivi?: boolean;
     /** The newest request, for a chat panel that has not loaded yet. */
     __visinChatContext?: ChatRequest;
   }
@@ -25,6 +27,11 @@ declare global {
 export interface ChatDock {
   /** Chat is configured and someone is signed in. */
   available: boolean;
+  /**
+   * A visitor may ask Vivi: guest Vivi is on. Not `available`, which pages read as "there is a conversation to message
+   * or open": a visitor has none, only the guest panel.
+   */
+  guest: boolean;
   /** The side panel is open (on a desktop, outside the chat page). */
   open: boolean;
   toggle: () => void;
@@ -42,6 +49,7 @@ export interface ChatDock {
 
 export const ChatDockContext = createContext<ChatDock>({
   available: false,
+  guest: false,
   open: false,
   toggle: () => undefined,
   close: () => undefined,

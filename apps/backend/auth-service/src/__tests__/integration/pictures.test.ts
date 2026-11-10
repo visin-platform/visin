@@ -5,6 +5,7 @@ import type { Server } from 'node:http';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler } from '@visin/backend-core';
+import { removeBotPicture, uploadBotPicture } from '../../services/botPictureService';
 import { Avatar } from '../../models/Avatar';
 import { User } from '../../models/User';
 import authRoutes from '../../routes/authRoutes';
@@ -307,6 +308,19 @@ describe('profile pictures with in-memory MongoDB', () => {
       expect(response.status).toBe(503);
       expect(await Avatar.countDocuments({ userId: bot.id })).toBe(0);
       expect((await User.findById(bot.id))!.picture).toBeUndefined();
+    });
+    // Through the service, not HTTP: the upload route's hourly limit is shared by this whole file.
+    it("lets any platform administrator change the platform assistant's picture, and no other bot's", async () => {
+      const { bot, assistantId } = await botFixture();
+      const admin = await account({ roles: ['admin'] });
+      // Someone else's private bot stays theirs.
+      await expect(uploadBotPicture(admin.id, bot.id, PNG)).rejects.toThrow('Bot not found');
+      await mongoose.connection.collection('chatassistants').updateOne({ _id: assistantId }, { $set: { platformDefault: true } });
+      await expect(uploadBotPicture(admin.id, bot.id, PNG)).resolves.toMatchObject({ picture: expect.any(String) });
+      // A suspended administrator has no such authority.
+      await User.updateOne({ _id: admin.id }, { $set: { status: 'suspended' } });
+      await expect(removeBotPicture(admin.id, bot.id)).rejects.toThrow('Bot not found');
+      expect(await Avatar.countDocuments({ userId: bot.id })).toBe(1);
     });
     it('rejects outsiders, humans, stale manager metadata, unsafe formats and oversized uploads', async () => {
       const { manager, bot, assistantId } = await botFixture();

@@ -1,12 +1,14 @@
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-const state = vi.hoisted(() => ({ enabled: true, authenticated: true, failed: false }));
+const state = vi.hoisted(() => ({ enabled: true, authenticated: true, failed: false, guest: false }));
 vi.mock('../../config/ConfigProvider', () => ({
   useConfig: () => ({ CHAT_FRONT_URL: state.enabled ? 'http://chat.test' : undefined })
 }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ isAuthenticated: state.authenticated }) }));
+vi.mock('../../hooks/useGuestVivi', () => ({ useGuestVivi: () => state.guest }));
 vi.mock('../../remotes', () => {
   function Panel() {
     if (state.failed) throw new Error('Deployment offline');
@@ -31,6 +33,9 @@ import { forgetChatPanel } from '../../remotes';
 /** What AppLayout does with the dock: the button in the bar, the panel beside the page. */
 function Layout() {
   const dock = useChatDock();
+  useEffect(() => {
+    latest = dock;
+  });
   const location = useLocation();
   return (
     <>
@@ -53,6 +58,8 @@ const mount = (path = '/projects') =>
       </ChatProvider>
     </MemoryRouter>
   );
+let latest: ReturnType<typeof useChatDock> | undefined;
+const useChatDockValue = () => latest!;
 const openChat = () => fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
 beforeEach(() => {
   vi.clearAllMocks();
@@ -60,7 +67,9 @@ beforeEach(() => {
   state.enabled = true;
   state.authenticated = true;
   state.failed = false;
+  state.guest = false;
   delete window.__visinChatContext;
+  delete window.__visinGuestVivi;
 });
 
 it('offers chat only when it is configured and someone is signed in', () => {
@@ -397,3 +406,44 @@ describe('the keyboard shortcut', () => {
   });
 });
 
+
+describe('for a visitor who may ask Vivi', () => {
+  beforeEach(() => {
+    state.authenticated = false;
+    state.guest = true;
+  });
+
+  it('offers a labelled Ask Vivi button, not the chat button, and opens the same panel', () => {
+    mount();
+    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Vivi' }));
+    expect(screen.getByRole('complementary', { name: 'Ask Vivi' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Ask Vivi' })).toBeInTheDocument();
+    expect(screen.getByText('Embedded conversations')).toBeInTheDocument();
+  });
+
+  it('is offered nothing while guest Vivi is off', () => {
+    state.guest = false;
+    mount();
+    expect(screen.queryByRole('button', { name: 'Ask Vivi' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
+  });
+
+  it('tells pages beside the dock, and opens the panel for a request they make', () => {
+    const heard = vi.fn();
+    window.addEventListener('visin:guest-vivi', heard);
+    mount();
+    expect(window.__visinGuestVivi).toBe(true);
+    expect(heard).toHaveBeenCalled();
+    act(() => {
+      window.dispatchEvent(new CustomEvent('visin:open-chat', { detail: { kind: 'project', projectId: 'p1', title: 'P' } }));
+    });
+    expect(screen.getByText('Embedded conversations')).toBeInTheDocument();
+    window.removeEventListener('visin:guest-vivi', heard);
+  });
+
+  it('never offers the signed-in conversation shortcuts: a visitor has no conversation to open', () => {
+    mount();
+    expect(useChatDockValue().available).toBe(false);
+  });
+});

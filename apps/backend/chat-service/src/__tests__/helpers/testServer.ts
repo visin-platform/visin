@@ -27,9 +27,9 @@ import { resetAssistantSettingsCache } from '../../services/settings';
 export let base: string;
 let mongo: MongoMemoryServer, server: Server, currentApp: ReturnType<typeof createApp>;
 
-export async function request<T = Record<string, unknown>>(path: string, user = 'alice', body?: unknown) {
+export async function request<T = Record<string, unknown>>(path: string, user = 'alice', body?: unknown, method?: string) {
   const response = await fetch(`${base}/api/chat${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: { 'x-test-user': user, 'content-type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });

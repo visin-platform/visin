@@ -49,7 +49,7 @@ export async function isCurrentSession(claims: unknown): Promise<boolean> {
   const userId = new mongoose.Types.ObjectId(user.id);
   const [account, session] = await Promise.all([
     mongoose.connection.collection('users').findOne(
-      { _id: userId, kind: { $ne: 'assistant' }, email: user.email.toLowerCase(), tokenVersion: user.tokenVersion },
+      { _id: userId, kind: { $ne: 'assistant' }, status: { $nin: ['suspended', 'deleted'] }, email: user.email.toLowerCase(), tokenVersion: user.tokenVersion },
       options
     ),
     mongoose.connection.collection(USER_SESSIONS_COLLECTION).findOne(

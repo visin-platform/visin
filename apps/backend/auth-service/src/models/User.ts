@@ -18,6 +18,9 @@ export interface IUser extends Document {
    * returns a user document.
    */
   passwordHash?: string;
+  recoveryHash?: string;
+  recoveryExpiresAt?: Date;
+  credentialsRevokedAt?: Date;
   roles: string[];
   /**
    * What people see of the account in place of an email: the address of its public page
@@ -50,6 +53,9 @@ export interface IUser extends Document {
   /** Internal singleton marker; only first-run setup may assign it. */
   bootstrapSlot?: 'initial-admin';
   lastLoginAt?: Date;
+  status?: 'active' | 'suspended' | 'deleted';
+  adminRevision?: number;
+  adminHistory?: { actorId: string; at: Date; reason: string; changes: unknown }[];
   tokenVersion: number; // for token invalidation
   createdAt: Date;
   updatedAt: Date;
@@ -67,6 +73,9 @@ const UserSchema = new Schema<IUser>(
     signupMethod: { type: String, required: true },
     googleSubject: { type: String, select: false },
     passwordHash: { type: String, select: false },
+    recoveryHash: { type: String, select: false },
+    recoveryExpiresAt: { type: Date, select: false },
+    credentialsRevokedAt: Date,
     roles: { type: [String], default: [] },
     handle: { type: String, lowercase: true, trim: true },
     bio: { type: String, trim: true, maxlength: 280 },
@@ -77,6 +86,13 @@ const UserSchema = new Schema<IUser>(
     showActivity: { type: Boolean, default: true },
     bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },
     lastLoginAt: { type: Date },
+    status: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active' },
+    adminRevision: { type: Number, default: 0 },
+    adminHistory: {
+      type: [new Schema({ actorId: String, at: Date, reason: String, changes: Schema.Types.Mixed }, { _id: false })],
+      select: false,
+      default: []
+    },
     tokenVersion: { type: Number, default: 1 }
   },
   { timestamps: true }
@@ -84,22 +100,33 @@ const UserSchema = new Schema<IUser>(
 
 // The claim and administrator are one document, so a failed response cannot
 // leave a pending lock or authorize another administrator. Other users omit it.
-UserSchema.index({ bootstrapSlot: 1 }, {
-  name: 'unique_initial_admin',
-  unique: true,
-  partialFilterExpression: { bootstrapSlot: 'initial-admin' },
-});
+UserSchema.index(
+  { bootstrapSlot: 1 },
+  {
+    name: 'unique_initial_admin',
+    unique: true,
+    partialFilterExpression: { bootstrapSlot: 'initial-admin' }
+  }
+);
 
-UserSchema.index({ handle: 1 }, {
-  unique: true,
-  partialFilterExpression: { handle: { $type: 'string' } }
-});
+UserSchema.index(
+  { handle: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { handle: { $type: 'string' } }
+  }
+);
 
 UserSchema.index({ assistantId: 1 }, { unique: true, partialFilterExpression: { assistantId: { $type: 'string' } } });
 
-UserSchema.index({ googleSubject: 1 }, {
-  unique: true,
-  partialFilterExpression: { googleSubject: { $type: 'string' } }
-});
+UserSchema.index({ recoveryHash: 1 }, { unique: true, partialFilterExpression: { recoveryHash: { $type: 'string' } } });
+
+UserSchema.index(
+  { googleSubject: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { googleSubject: { $type: 'string' } }
+  }
+);
 
 export const User = model<IUser>('User', UserSchema);

@@ -1,6 +1,7 @@
+import mongoose from 'mongoose';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { logger } from '../logging/logger';
-import { ForbiddenError, UnauthorizedError } from '../errors/HttpError';
+import { ForbiddenError, ServiceUnavailableError, UnauthorizedError } from '../errors/HttpError';
 import { looksLikeApiKey } from './crypto';
 import { verifyApiKey } from './service';
 import { looksLikeAccessToken, verifyAccessToken } from '../oauth/tokens';
@@ -69,6 +70,8 @@ interface Verified {
   label?: string;
   scopes?: ApiKeyScope[];
   projectId?: string;
+  issuedAt?: number;
+  createdAt?: Date;
 }
 
 /** The domains that sit inside a project, and so the only ones a project-limited key may reach. */
@@ -94,6 +97,7 @@ const verifiedAccessToken = (token: string, audience?: string): Verified => {
     // one connection look like a new actor on every refresh.
     keyId: result.clientId,
     label: result.clientName,
+    issuedAt: result.issuedAt,
     scopes: result.scopes
   };
 };
@@ -123,11 +127,7 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}): RequestHandler {
   const readPaths = options.readPaths ?? [];
 
-  return async function apiKeyAuthHandler(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> {
+  return async function apiKeyAuthHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
     if (req.user) {
       next();
       return;
@@ -161,7 +161,7 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
      * none, `req.user.id` lands undefined, and a read-only grant would slip
      * past the gate below entirely.
      */
-    const verification = isKey
+    const verification: Verified = isKey
       ? await verifyApiKey(token)
       : verifiedAccessToken(token as string, options.audience);
 
@@ -176,10 +176,50 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
       return;
     }
 
+    // Account suspension also stops already-issued API/OAuth credentials. The
+    // owner lookup is primary and uncached; a datastore outage fails closed.
+    if (typeof verification.userId === 'string' && /^[a-f\d]{24}$/i.test(verification.userId)) {
+      if (mongoose.connection.readyState !== 1) {
+        next(new ServiceUnavailableError('Account state is unavailable'));
+        return;
+      }
+      let account;
+      try {
+        account = await mongoose.connection
+          .collection('users')
+          .findOne(
+            { _id: new mongoose.Types.ObjectId(verification.userId) },
+            { projection: { status: 1, credentialsRevokedAt: 1 }, readPreference: 'primary', maxTimeMS: 3000 }
+          );
+      } catch (error) {
+        logger.error('Account state lookup failed', { error: (error as Error).message });
+        next(new ServiceUnavailableError('Account state is unavailable'));
+        return;
+      }
+      const issuedAt = isKey
+        ? verification.createdAt?.getTime()
+        : verification.issuedAt
+          ? verification.issuedAt * 1000
+          : undefined;
+      if (
+        !account ||
+        ['suspended', 'deleted'].includes(account.status) ||
+        (account.credentialsRevokedAt &&
+          (issuedAt === undefined || issuedAt <= new Date(account.credentialsRevokedAt).getTime()))
+      ) {
+        next(new UnauthorizedError('Account credentials are not active'));
+        return;
+      }
+    }
+
     // Its scopes already keep a limited key out of other domains; saying so
     // plainly tells its owner that the limit, not a missing scope, is the reason.
-    const datasetRead = Boolean(verification.projectId && domain === 'dataset' &&
-      options.projectLimitedDatasetReads && (req.method === 'GET' || req.method === 'HEAD'));
+    const datasetRead = Boolean(
+      verification.projectId &&
+      domain === 'dataset' &&
+      options.projectLimitedDatasetReads &&
+      (req.method === 'GET' || req.method === 'HEAD')
+    );
     if (verification.projectId && !PROJECT_DOMAINS.has(domain) && !datasetRead) {
       if (options.anonymousReadsWhenProjectLimited && READ_METHODS.has(req.method)) {
         next();
@@ -189,11 +229,14 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
       return;
     }
 
-    const isRead =
-      READ_METHODS.has(req.method) || readPaths.some((pattern) => pattern.test(req.path));
+    const isRead = READ_METHODS.has(req.method) || readPaths.some((pattern) => pattern.test(req.path));
     const required = datasetRead
-      ? (verification.scopes?.includes('vision:read') ? 'vision:read' : 'vision:write')
-      : (isRead ? readScope(domain) : writeScope(domain));
+      ? verification.scopes?.includes('vision:read')
+        ? 'vision:read'
+        : 'vision:write'
+      : isRead
+        ? readScope(domain)
+        : writeScope(domain);
 
     const scopes = verification.scopes ?? [];
     if (!scopes.includes(required)) {

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  AdminPanelSettings,
   Article,
   Assignment,
   AutoAwesome,
@@ -16,13 +17,18 @@ import {
   ModelTraining,
   Person,
   PhotoLibrary,
+  Public,
   Scoreboard,
+  Settings,
   Storage
 } from '@mui/icons-material';
 import type { AppLayoutNavGroup, AppLayoutNavItem } from './components/AppLayout';
 
-/** The fronts whose sections make up the shared menu. */
-export type VisinApp = 'shell' | 'vision' | 'label' | 'account';
+/**
+ * The fronts whose sections make up the shared menu. `admin` is a standalone app that is never a remote, so its
+ * entry is always a link out.
+ */
+export type VisinApp = 'shell' | 'vision' | 'label' | 'account' | 'admin';
 
 export interface VisinAppUrls {
   /** Base URL of shell-front, which owns Home and Explore, e.g. https://app.example.com */
@@ -33,11 +39,19 @@ export interface VisinAppUrls {
   label?: string;
   /** Base URL of account-front, e.g. https://account.example.com */
   account?: string;
+  /** Base URL of admin-front, e.g. https://admin.example.com */
+  admin?: string;
 }
 
 export interface VisinNavigation {
   groups: AppLayoutNavGroup[];
+  /** Account's sections: the section bar shown on every Account page. */
   accountItems: AppLayoutNavItem[];
+  /**
+   * The short list under the person's name in the account menu: where their public page, their account settings and
+   * (for a platform administrator) Administration are. The Account sections are not repeated here.
+   */
+  menuItems: AppLayoutNavItem[];
 }
 
 interface NavSection {
@@ -50,7 +64,7 @@ interface NavSection {
   /** Where the section lives for a visitor, where that differs from `path`. */
   signedOutPath?: string;
   /** Left out unless the app says so through the option of this name: it is not for everyone. */
-  requires?: 'analystSettings';
+  requires?: 'analystSettings' | 'platformAdmin' | 'publicPage';
 }
 
 interface NavGroup {
@@ -137,6 +151,18 @@ const ACCOUNT_SECTIONS: NavSection[] = [
   { app: 'account', text: 'Analyst', icon: <AutoAwesome />, path: '/account/analyst', requires: 'analystSettings' }
 ];
 
+/**
+ * What the account menu lists. Short on purpose: the Account sections are one tab bar away on every Account page, so
+ * the menu names Account once instead of repeating them.
+ */
+const MENU_SECTIONS: NavSection[] = [
+  // A public page is a profile the person turned on: without one there is no address to link to.
+  { app: 'shell', text: 'Your public page', icon: <Public />, path: '/u', requires: 'publicPage' },
+  { app: 'account', text: 'Account settings', icon: <Settings />, path: '/account/profile' },
+  // Platform administration: users, Vivi controls, usage. For platform administrators only, so the app decides.
+  { app: 'admin', text: 'Administration', icon: <AdminPanelSettings />, path: '/', requires: 'platformAdmin' }
+];
+
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
 
 export interface VisinNavigationOptions {
@@ -151,6 +177,13 @@ export interface VisinNavigationOptions {
    * Adds the Analyst section to Account. Only a hint for the menu: the service checks the role on every request.
    */
   analystSettings?: boolean;
+  /**
+   * Whether the viewer is a platform administrator (the account's own role, not a group role). Adds Administration,
+   * a link to admin-front, to the account menu. Only a hint: admin-service checks the role on every request.
+   */
+  platformAdmin?: boolean;
+  /** The handle of the viewer's public page (`/u/{handle}`), when they have turned it on. Adds "Your public page". */
+  publicHandle?: string;
 }
 
 /**
@@ -167,7 +200,7 @@ export interface VisinNavigationOptions {
 export function createVisinNavigation(
   localApps: VisinApp | readonly VisinApp[] | null,
   urls: VisinAppUrls,
-  { isAuthenticated = true, analystSettings = false }: VisinNavigationOptions = {}
+  { isAuthenticated = true, analystSettings = false, platformAdmin = false, publicHandle }: VisinNavigationOptions = {}
 ): VisinNavigation {
   const local = new Set<VisinApp>(localApps === null ? [] : typeof localApps === 'string' ? [localApps] : localApps);
 
@@ -175,10 +208,19 @@ export function createVisinNavigation(
     if (signedInOnly && !isAuthenticated) {
       return [];
     }
-    if (requires === 'analystSettings' && !analystSettings) {
+    if (
+      (requires === 'analystSettings' && !analystSettings) ||
+      (requires === 'platformAdmin' && !platformAdmin) ||
+      (requires === 'publicPage' && !publicHandle)
+    ) {
       return [];
     }
-    const target = !isAuthenticated && signedOutPath ? signedOutPath : path;
+    const target =
+      requires === 'publicPage'
+        ? `${path}/${encodeURIComponent(publicHandle ?? '')}`
+        : !isAuthenticated && signedOutPath
+          ? signedOutPath
+          : path;
     if (local.has(app)) {
       return [{ text, icon, path: target }];
     }
@@ -205,5 +247,5 @@ export function createVisinNavigation(
     ];
   });
 
-  return { groups, accountItems: ACCOUNT_SECTIONS.flatMap(toItems) };
+  return { groups, accountItems: ACCOUNT_SECTIONS.flatMap(toItems), menuItems: MENU_SECTIONS.flatMap(toItems) };
 }

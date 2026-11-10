@@ -1,3 +1,4 @@
+import { createAdminGroupRoutes } from './adminGroupRoutes';
 import express, { Router } from 'express';
 import { validateInternalServiceToken, allowUserOrInternalService, type InternalServiceRequest } from '../middleware/internalServiceAuth';
 import * as ctrl from '../controllers/groupController';
@@ -12,6 +13,7 @@ import {
 } from '../validation/groupSchemas';
 
 const router = Router();
+router.use('/admin', createAdminGroupRoutes());
 
 /**
  * "Add member" search, per signed-in account: enough to type a name and correct

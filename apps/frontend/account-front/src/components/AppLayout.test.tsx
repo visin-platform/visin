@@ -120,7 +120,7 @@ describe('AppLayout', () => {
     renderAt('/account/profile');
 
     openAccount();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
 
     expect(mockLogout).toHaveBeenCalledTimes(1);
   });

@@ -1,0 +1,20 @@
+services:
+  admin-service:
+    image: ${REGISTRY:-ghcr.io/visin-platform}/admin-service:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    ports: ['5016:5016']
+    environment:
+      NODE_ENV: production
+      PORT: 5016
+      SERVICE_NAME: admin-service
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      GROUP_SERVICE_URL: http://group-service:5006
+      AUTH_SERVICE_URL: http://auth-service:5001
+      CHAT_SERVICE_URL: http://chat-service:5012
+    networks: [visinnet]
+networks:
+  visinnet:
+    external: true

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Conversation, OpenRequest, PageContext } from '../types/chat';
 import { OPEN_EVENT, PAGE_CONTEXT_EVENT, contextKey, requestFromUrl } from '../utils/chatContext';
+import { forgetRequestedProject, rememberRequestedProject } from '../components/guest/requested';
 
 export function usePageChatContext({
   panel,
@@ -31,7 +32,10 @@ export function usePageChatContext({
     const onPage = (event: Event) => {
       if (steeredPath.current !== `${window.location.pathname}${window.location.search}`)
         steeredPath.current = undefined;
-      setPageContext((event as CustomEvent<PageContext | null>).detail ?? undefined);
+      const context = (event as CustomEvent<PageContext | null>).detail;
+      if (context?.projectId) rememberRequestedProject(context);
+      else forgetRequestedProject();
+      setPageContext(context ?? undefined);
     };
     const onSteer = (event: Event) => {
       const path = (event as CustomEvent<unknown>).detail;
@@ -41,6 +45,8 @@ export function usePageChatContext({
       const value = (event as CustomEvent<OpenRequest>).detail;
       if (!value) return;
       steeredPath.current = undefined;
+      // A visitor has no conversation to open it in: the guest panel uses the project, if there is one.
+      rememberRequestedProject(value);
       delete window.__visinChatContext;
       setRequest(value);
     };
@@ -50,7 +56,10 @@ export function usePageChatContext({
     // A newly loaded chat takes the most recent request, or the full page's address.
     const waiting = window.__visinChatContext ?? (panel ? undefined : requestFromUrl());
     delete window.__visinChatContext;
-    if (waiting) setRequest(waiting);
+    if (waiting) {
+      rememberRequestedProject(waiting);
+      setRequest(waiting);
+    }
     return () => {
       window.removeEventListener('visin:screen-navigation', onSteer);
       window.removeEventListener(PAGE_CONTEXT_EVENT, onPage);
