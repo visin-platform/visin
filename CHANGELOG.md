@@ -1,5 +1,16 @@
 # Visin Changelog
 
+## [2.8.0](https://github.com/visin-platform/visin/compare/v2.7.0...v2.8.0) (2026-11-10)
+
+### Features
+
+* expand chat, calling, paper reading, and training dashboards ([9b50941](https://github.com/visin-platform/visin/commit/9b50941720ed007884367f68e03f14511025f9fb))
+
+### Chores
+
+* **release:** @visin/backend-core 1.19.0 ([aebbfb1](https://github.com/visin-platform/visin/commit/aebbfb10fb17cf0a0d4859f6ae1187a6e99cb1c3))
+* **release:** @visin/frontend-core 1.23.0 ([14d6fdd](https://github.com/visin-platform/visin/commit/14d6fdd53a6427c6ceec3ff2736292b81cec63c7))
+
 ## [2.7.0](https://github.com/visin-platform/visin/compare/v2.6.0...v2.7.0) (2026-11-07)
 
 ### Features
