@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.11.0](https://github.com/visin-platform/visin/compare/v2.10.0...v2.11.0) (2026-11-11)
+
+### Features
+
+* setup turnstile for public routes ([309b1c1](https://github.com/visin-platform/visin/commit/309b1c100352342176fdb068f74004e78ce6bc5f))
+
 ## [2.10.0](https://github.com/visin-platform/visin/compare/v2.9.0...v2.10.0) (2026-11-10)
 
 ### Features
