@@ -5,8 +5,12 @@ export interface GuestCapabilities {
   assistant?: { name: string; picture?: string; handle?: string };
   enabled: boolean;
   siteKey: string;
+  botCheckRequired?: boolean;
   sessionDailyLimit: number;
 }
+
+export const guestChatAvailable = (data: GuestCapabilities | undefined) =>
+  data?.enabled === true && (data.botCheckRequired === false || Boolean(data.siteKey));
 
 /** Whether a visitor may ask Vivi, and the limit to tell them. One answer, shared by the page and the chat itself. */
 export function useGuestCapabilities() {

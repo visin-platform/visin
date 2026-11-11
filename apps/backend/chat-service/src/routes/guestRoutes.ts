@@ -10,6 +10,7 @@ import {
 } from '@visin/backend-core';
 import { effectivePolicy } from '../services/adminPolicy';
 import {
+  guestBotCheckRequired,
   guestConfigured,
   guestDenialReason,
   guestHash,
@@ -85,7 +86,8 @@ export function createGuestRoutes() {
       success: true,
       data: {
         enabled: policy.enabled && policy.guestEnabled && guestConfigured(),
-        siteKey: process.env.TURNSTILE_SITE_KEY || '',
+        botCheckRequired: guestBotCheckRequired(),
+        siteKey: guestBotCheckRequired() ? process.env.TURNSTILE_SITE_KEY || '' : '',
         sessionDailyLimit: policy.guestSessionRequests,
         // Who a visitor is talking to: the platform assistant's name and picture, and its page where that is public.
         ...(assistant ? { assistant } : {})
@@ -167,7 +169,7 @@ export function createGuestRoutes() {
             .regex(/^[a-z0-9][a-z0-9-]{0,119}$/i)
             .optional(),
           idempotencyKey: z.string().min(16).max(100),
-          challengeToken: z.string().min(1).max(2048)
+          challengeToken: z.string().max(2048).optional()
         })
         .strict(),
       req.body
@@ -180,7 +182,10 @@ export function createGuestRoutes() {
       res.status(202).json({ success: true, data: { runId, state: existing.state } });
       return;
     }
-    await challenge(input.challengeToken, new URL(req.get('origin')!).hostname);
+    if (guestBotCheckRequired()) {
+      if (!input.challengeToken) throw new ForbiddenError('Complete the guest verification again');
+      await challenge(input.challengeToken, new URL(req.get('origin')!).hostname);
+    }
     const price = await priceSnapshot(settings.provider, settings.model);
     if (!price || price.currency !== 'USD')
       throw new ServiceUnavailableError('Guest model requires configured USD pricing');

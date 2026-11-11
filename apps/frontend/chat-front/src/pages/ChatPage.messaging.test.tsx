@@ -24,8 +24,21 @@ it('gives visitors just Vivi\'s chat where guest Vivi is on, with no sign-in wal
     expect(await screen.findByRole('textbox', { name: 'Message Vivi' })).toBeInTheDocument();
     expect(screen.getByText(/Hi, I'm Vivi/)).toBeInTheDocument();
     expect(screen.queryByText('Sign in to message people and analyze training results.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign in for more' })).toBeInTheDocument();
     expect(vi.mocked(api).mock.calls.every(([path]) => String(path).startsWith('/guest/'))).toBe(true);
+  } finally {
+    vi.mocked(api).mockImplementation(before);
+  }
+});
+
+it('offers sign in when verification configuration is incomplete', async () => {
+  state.authenticated = false;
+  const before = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path: string, body?: unknown) =>
+    path === '/guest/capabilities' ? { enabled: true, siteKey: '' } : before(path, body)
+  );
+  try {
+    render(<Chat />);
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   } finally {
     vi.mocked(api).mockImplementation(before);
   }

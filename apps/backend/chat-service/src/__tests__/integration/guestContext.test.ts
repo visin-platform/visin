@@ -53,7 +53,10 @@ describe('guest context', () => {
       Assistant.deleteMany({}),
       mongoose.connection.collection('users').deleteMany({})
     ]);
-    await AdminPolicy.create({ _id: 'global', settings: { ...defaultPolicy, guestEnabled: true, guestDailyBudgetMicros: 1, guestMonthlyBudgetMicros: 1 } });
+    await AdminPolicy.create({
+      _id: 'global',
+      settings: { ...defaultPolicy, guestEnabled: true, guestDailyBudgetMicros: 1, guestMonthlyBudgetMicros: 1 }
+    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -88,7 +91,42 @@ describe('guest context', () => {
 
   it('is found by searching public projects for the question when there is none', async () => {
     const found = await guestContext({ question: 'public', signal: signal() });
-    expect(JSON.parse(found.text)).toMatchObject({ found: 'search', projects: [{ id: project, name: 'Public research' }] });
+    expect(JSON.parse(found.text)).toMatchObject({
+      found: 'search',
+      projects: [{ id: project, name: 'Public research' }]
+    });
+  });
+
+  it('browses multiple public projects for the suggested discovery question', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.startsWith('http://vision.invalid/api/public/projects')) {
+        expect(new URL(href).searchParams.has('search')).toBe(false);
+        return new Response(
+          JSON.stringify({
+            data: {
+              projects: [
+                { id: project, name: 'Road segmentation' },
+                { id: '222222222222222222222222', name: 'Sensor fusion' }
+              ]
+            }
+          })
+        );
+      }
+      const id = href.split('/').pop();
+      return new Response(
+        JSON.stringify({
+          data: {
+            _id: id,
+            visibility: 'public',
+            name: id === project ? 'Road segmentation' : 'Sensor fusion',
+            description: 'Computer vision research'
+          }
+        })
+      );
+    });
+    const found = await guestContext({ question: 'Find public computer vision projects', signal: signal() });
+    expect(found.projects.map((p) => p.name)).toEqual(['Road segmentation', 'Sensor fusion']);
   });
 
   it('is nothing, said plainly, when no public project matches; a private match is left out', async () => {
@@ -122,7 +160,12 @@ describe('guest context', () => {
   });
 
   it('tells visitors who they are talking to, and links her page only while it is public', async () => {
-    const assistant = await Assistant.create({ name: 'Vivi', createdBy: 'admin', published: true, platformDefault: true });
+    const assistant = await Assistant.create({
+      name: 'Vivi',
+      createdBy: 'admin',
+      published: true,
+      platformDefault: true
+    });
     const identity = await mongoose.connection.collection('users').insertOne({
       kind: 'assistant',
       assistantId: assistant.id,
@@ -131,9 +174,17 @@ describe('guest context', () => {
       profilePublic: true,
       picture: 'https://auth.example.test/auth/avatars/vivi'
     });
-    const shown = (await (await realFetch(`${base}/capabilities`)).json()) as { data: { enabled: boolean; assistant?: unknown } };
-    expect(shown.data.assistant).toEqual({ name: 'Vivi', picture: 'https://auth.example.test/auth/avatars/vivi', handle: 'vivi' });
-    await mongoose.connection.collection('users').updateOne({ _id: identity.insertedId }, { $set: { profilePublic: false } });
+    const shown = (await (await realFetch(`${base}/capabilities`)).json()) as {
+      data: { enabled: boolean; assistant?: unknown };
+    };
+    expect(shown.data.assistant).toEqual({
+      name: 'Vivi',
+      picture: 'https://auth.example.test/auth/avatars/vivi',
+      handle: 'vivi'
+    });
+    await mongoose.connection
+      .collection('users')
+      .updateOne({ _id: identity.insertedId }, { $set: { profilePublic: false } });
     forgetPlatformAssistant();
     const hidden = (await (await realFetch(`${base}/capabilities`)).json()) as { data: { assistant?: unknown } };
     expect(hidden.data.assistant).toEqual({ name: 'Vivi', picture: 'https://auth.example.test/auth/avatars/vivi' });

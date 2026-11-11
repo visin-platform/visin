@@ -9,9 +9,11 @@ const BUDGETS = 'chat_guest_budgets';
  * keep raw addresses out of storage, a trusted proxy chain (or every caller shares one address) and the vision
  * service that answers which projects are public.
  */
+export const guestBotCheckRequired = () => process.env.NODE_ENV !== 'development';
+
 export function guestSetup() {
   return {
-    botCheck: Boolean(process.env.TURNSTILE_SECRET_KEY && process.env.TURNSTILE_SITE_KEY),
+    botCheck: !guestBotCheckRequired() || Boolean(process.env.TURNSTILE_SECRET_KEY && process.env.TURNSTILE_SITE_KEY),
     networkSecret: (process.env.GUEST_NETWORK_SECRET?.length ?? 0) >= 32,
     trustedProxy: Boolean(process.env.GUEST_TRUSTED_PROXY),
     visionService: Boolean(process.env.VISION_SERVICE_URL)

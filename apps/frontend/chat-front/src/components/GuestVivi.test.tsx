@@ -20,10 +20,10 @@ async function response(path: string) {
   if (path === '/guest/questions') return { runId: 'guest-run', remaining: 2, resetAt: '2026-11-11T00:00:00Z' };
   return { state: 'completed', answer: 'A public project answer' };
 }
-const mount = (onSignIn?: () => void) =>
+const mount = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <GuestVivi onSignIn={onSignIn} />
+      <GuestVivi />
     </QueryClientProvider>
   );
 beforeEach(() => {
@@ -100,7 +100,11 @@ it('accepts questions without a project picker and lets the server find public c
 it('shows the configured assistant avatar, profile and appearance settings', async () => {
   mock.mockImplementation(async (path: string) =>
     path === '/guest/capabilities'
-      ? { enabled: true, assistant: { name: 'Research Vivi', picture: '/vivi.png', handle: 'research-vivi' } }
+      ? {
+          enabled: true,
+          siteKey: 'public-site-key',
+          assistant: { name: 'Research Vivi', picture: '/vivi.png', handle: 'research-vivi' }
+        }
       : response(path)
   );
   mount();
@@ -117,6 +121,30 @@ it('fills the box from an example, which starts the check', async () => {
   expect(box()).toHaveValue('What does this project study?');
   await waitFor(() => expect(window.turnstile?.render).toHaveBeenCalled());
   expect(screen.getByText('Complete the check above to send.')).toBeInTheDocument();
+});
+
+it('does not offer chat when verification is required but its site key is missing', async () => {
+  mock.mockResolvedValue({ enabled: true, siteKey: '', sessionDailyLimit: 3 });
+  mount();
+  await waitFor(() => expect(mock).toHaveBeenCalled());
+  expect(screen.queryByRole('textbox', { name: 'Message Vivi' })).not.toBeInTheDocument();
+});
+
+it('sends without a bot check when the service does not require one', async () => {
+  mock.mockImplementation(async (path: string) =>
+    path === '/guest/capabilities'
+      ? { enabled: true, botCheckRequired: false, siteKey: '', sessionDailyLimit: 3 }
+      : response(path)
+  );
+  mount();
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Message Vivi' }), {
+    target: { value: 'Describe this project' }
+  });
+  expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+  send();
+  expect(await screen.findByText('A public project answer')).toBeInTheDocument();
+  expect(window.turnstile?.render).not.toHaveBeenCalled();
+  expect(mock.mock.calls.find(([path]) => path === '/guest/questions')![1]).not.toHaveProperty('challengeToken');
 });
 
 it('requires verification and sends one bounded question with an idempotency key', async () => {
@@ -136,7 +164,8 @@ it('requires verification and sends one bounded question with an idempotency key
     })
   );
   expect(screen.getByText(/2 of 3 questions left today/)).toBeInTheDocument();
-  expect(window.turnstile?.reset).toHaveBeenCalledWith('guest-widget');
+  expect(window.turnstile?.reset).not.toHaveBeenCalled();
+  expect(window.turnstile?.remove).toHaveBeenCalledWith('guest-widget');
   // The question sits in the thread above the answer, and the box is clear for the next one.
   expect(screen.getByText('Describe this public project')).toBeInTheDocument();
   expect(box()).toHaveValue('');
@@ -159,13 +188,6 @@ it('shows the question and "Vivi is answering" while waiting', async () => {
   expect(await screen.findByText('Vivi is answering…')).toBeInTheDocument();
   expect(screen.getByText('What is this?')).toBeInTheDocument();
   expect(box()).toBeDisabled();
-});
-
-it('offers sign-in beneath the chat', async () => {
-  const signIn = vi.fn();
-  mount(signIn);
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in for more' }));
-  expect(signIn).toHaveBeenCalledTimes(1);
 });
 
 it('keeps the conversation in this browser, so it is there again on another day', async () => {
@@ -192,16 +214,6 @@ it('lets a month-old conversation go, and keeps a recent one', async () => {
   mount();
   expect(await screen.findByText('Remembered')).toBeInTheDocument();
   expect(screen.queryByText('Forgotten')).not.toBeInTheDocument();
-});
-
-it('starts a new chat on request, removing the conversation from the browser', async () => {
-  STORED([{ id: 'a', question: 'Earlier', answer: 'Earlier answer', project: 'P', at: Date.now() }]);
-  mount();
-  expect(await screen.findByText('Earlier answer')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
-  expect(screen.queryByText('Earlier answer')).not.toBeInTheDocument();
-  expect(localStorage.getItem('visin.guest.vivi')).toBeNull();
-  expect(screen.getByText(/Hi, I'm Vivi/)).toBeInTheDocument();
 });
 
 it('survives storage that cannot be read or written', async () => {
@@ -368,13 +380,4 @@ it('uses a new submission key if the page changes after an uncertain failure', a
   const bodies = mock.mock.calls.filter(([path]) => path === '/guest/questions').map(([, body]) => body);
   expect(bodies[0].idempotencyKey).not.toBe(bodies[1].idempotencyKey);
   expect(bodies[1].projectId).toBe('different-project');
-});
-
-it('keeps the daily allowance reminder when starting a new chat', async () => {
-  await ready();
-  send();
-  await screen.findByText('A public project answer');
-  fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
-  expect(screen.getByText(/2 of 3 questions left today/)).toBeInTheDocument();
-  expect(screen.queryByText('A public project answer')).not.toBeInTheDocument();
 });

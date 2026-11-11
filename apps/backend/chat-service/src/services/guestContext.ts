@@ -9,12 +9,46 @@ export interface PublicProjectContext {
 
 const MAX_PROJECT_BYTES = 128_000;
 /** Projects a search hands to Vivi: enough to choose from, few enough that each keeps a useful description. */
-const SEARCHED = 3;
+const SEARCHED = 8;
 /** What the question and its context may take of one guest request, so the cost bound holds. */
 export const GUEST_CONTEXT_BYTES = 4500;
 
+const DISCOVERY_WORDS = new Set([
+  'find',
+  'show',
+  'list',
+  'public',
+  'computer',
+  'vision',
+  'project',
+  'projects',
+  'what',
+  'which',
+  'are',
+  'the',
+  'a',
+  'an',
+  'me',
+  'about',
+  'does',
+  'do',
+  'study',
+  'studies',
+  'work',
+  'on',
+  'in',
+  'of',
+  'for',
+  'can',
+  'you',
+  'please',
+  'all',
+  'any'
+]);
+
 const bytes = (text: string) => Buffer.byteLength(text, 'utf8');
-const cut = (text: string, max: number) => Buffer.from(text).subarray(0, Math.max(0, max)).toString('utf8').replace(/�+$/, '');
+const cut = (text: string, max: number) =>
+  Buffer.from(text).subarray(0, Math.max(0, max)).toString('utf8').replace(/�+$/, '');
 
 /** A project as anyone may see it. No credential of any kind is sent: vision's public API is the boundary. */
 export async function publicProject(id: string, signal: AbortSignal): Promise<PublicProjectContext> {
@@ -46,11 +80,20 @@ export async function publicProject(id: string, signal: AbortSignal): Promise<Pu
   } catch {
     throw new ServiceUnavailableError('Public project data is unavailable right now');
   }
-  const project = (parsed.data ?? parsed) as { _id?: unknown; name?: unknown; description?: unknown; visibility?: unknown };
+  const project = (parsed.data ?? parsed) as {
+    _id?: unknown;
+    name?: unknown;
+    description?: unknown;
+    visibility?: unknown;
+  };
   if (project.visibility !== 'public') throw new ForbiddenError('Only public projects are available to guest Vivi');
   const projectId = String(project._id);
   if (!/^[a-f\d]{24}$/i.test(projectId)) throw new BadRequestError('Public project identity is unavailable');
-  return { id: projectId, name: cut(String(project.name || ''), 200), description: cut(String(project.description || ''), 2000) };
+  return {
+    id: projectId,
+    name: cut(String(project.name || ''), 200),
+    description: cut(String(project.description || ''), 2000)
+  };
 }
 
 /**
@@ -66,7 +109,16 @@ export async function guestContext(input: { question: string; projectId?: string
     projects = [await publicProject(input.projectId, input.signal)];
     found = 'page';
   } else {
-    const candidates = (await searchPublicProjects(input.question.slice(0, 100))).slice(0, SEARCHED);
+    // Catalogue search is full-text OR search, not a natural-language question interpreter.
+    // Generic discovery requests should browse the catalogue rather than match 'project'.
+    const query = input.question
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}-]+/gu, ' ')
+      .split(/\s+/)
+      .filter((word) => word && !DISCOVERY_WORDS.has(word))
+      .join(' ')
+      .slice(0, 100);
+    const candidates = (await searchPublicProjects(query)).slice(0, SEARCHED);
     const read = await Promise.allSettled(candidates.map((candidate) => publicProject(candidate.id, input.signal)));
     projects = read.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
     found = 'search';

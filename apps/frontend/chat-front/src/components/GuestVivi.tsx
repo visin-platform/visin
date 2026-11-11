@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, CircularProgress, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { Box, Chip, CircularProgress, IconButton, Stack, TextField, Typography } from '@mui/material';
 import { Send } from '@mui/icons-material';
 import { ApiError, Markdown } from '@visin/frontend-core';
 import { api } from '../services/apiClient';
@@ -12,7 +12,7 @@ import { useChatAppearance } from '../appearance/useChatAppearance';
 import { projectIdentifier } from './guest/projectIdentifier';
 import { refusalMessage, resetTime } from './guest/refusal';
 import { useRequestedProject } from './guest/requested';
-import { useGuestCapabilities } from './guest/useGuestCapabilities';
+import { guestChatAvailable, useGuestCapabilities } from './guest/useGuestCapabilities';
 import { useTurnstile } from './guest/useTurnstile';
 
 const DISCOVERY_EXAMPLES = ['Find public computer vision projects', 'Which projects study autonomous driving?'];
@@ -24,9 +24,11 @@ const EXAMPLES = ['What does this project study?', 'What are the best results so
  * The server holds the limits; a refusal arrives as
  * Vivi's own message saying which one applies. Not drawn while guest Vivi is off, so a visitor is never offered it.
  */
-export default function GuestVivi({ onSignIn }: { onSignIn?: () => void }) {
+export default function GuestVivi() {
   const capabilities = useGuestCapabilities();
-  const enabled = capabilities.data?.enabled === true;
+  // Older servers do not send this flag; assume verification is required unless explicitly disabled.
+  const checkRequired = capabilities.data?.botCheckRequired !== false;
+  const enabled = guestChatAvailable(capabilities.data);
   const project = useRequestedProject();
   const assistant = capabilities.data?.assistant;
   const name = assistant?.name || 'Vivi';
@@ -45,7 +47,10 @@ export default function GuestVivi({ onSignIn }: { onSignIn?: () => void }) {
   const asked = useRef({ question: '', project: '' });
   // The check appears once the visitor begins to type, so looking costs nothing.
   const [typing, setTyping] = useState(false);
-  const check = useTurnstile(enabled ? capabilities.data?.siteKey : undefined, typing);
+  const check = useTurnstile(
+    enabled ? capabilities.data?.siteKey : undefined,
+    typing && Boolean(question.trim()) && !busy
+  );
   const thread = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -99,7 +104,7 @@ export default function GuestVivi({ onSignIn }: { onSignIn?: () => void }) {
   if (!enabled) return null;
   const dailyLimit = capabilities.data?.sessionDailyLimit ?? 3;
   const identifier = project ? projectIdentifier(project.id) : null;
-  const canSend = !busy && Boolean(check.token) && Boolean(question.trim());
+  const canSend = !busy && (!checkRequired || Boolean(check.token)) && Boolean(question.trim());
 
   const send = async () => {
     if (!canSend || submitting.current) return;
@@ -119,7 +124,7 @@ export default function GuestVivi({ onSignIn }: { onSignIn?: () => void }) {
       const result = await api<{ runId: string; remaining?: number; resetAt?: string }>('/guest/questions', {
         question: text,
         ...(identifier ? { projectId: identifier } : {}),
-        challengeToken: check.token,
+        ...(checkRequired ? { challengeToken: check.token } : {}),
         idempotencyKey: key.current
       });
       setRun(result.runId);
@@ -136,14 +141,12 @@ export default function GuestVivi({ onSignIn }: { onSignIn?: () => void }) {
       // would hand back the same refusal. Only an attempt whose fate is unknown keeps its key, so a retry is never
       // charged twice.
       if (err instanceof ApiError && err.status < 500) key.current = '';
-    } finally {
-      check.reset();
     }
   };
 
   // What the line under the box says, most pressing first.
   const hint =
-    question.trim() && !check.token && !busy
+    question.trim() && checkRequired && !check.token && !busy
       ? 'Complete the check above to send.'
       : allowance || `No account needed · ${dailyLimit} questions a day`;
 
@@ -270,36 +273,9 @@ export default function GuestVivi({ onSignIn }: { onSignIn?: () => void }) {
               }
             }}
           />
-          <Stack
-            direction="row"
-            sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}
-          >
-            <Typography variant="caption" color="text.secondary">
-              {hint}
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              {history.items.length > 0 && !busy && (
-                <Button
-                  size="small"
-                  color="inherit"
-                  title="Remove this conversation from this browser"
-                  onClick={() => {
-                    history.clear();
-                    setRefused('');
-                    key.current = '';
-                  }}
-                  sx={{ whiteSpace: 'nowrap' }}
-                >
-                  New chat
-                </Button>
-              )}
-              {onSignIn && (
-                <Button size="small" onClick={onSignIn} sx={{ whiteSpace: 'nowrap' }}>
-                  Sign in for more
-                </Button>
-              )}
-            </Stack>
-          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            {hint}
+          </Typography>
         </Stack>
       </Box>
     </Box>

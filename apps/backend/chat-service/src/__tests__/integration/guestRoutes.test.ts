@@ -93,7 +93,10 @@ describe('anonymous public project questions', () => {
         if (String(url).startsWith('http://vision.invalid/api/public/projects')) {
           // Like vision's text search: whole words only.
           const search = new URL(String(url)).searchParams.get('search');
-          const cards = [{ id: project, name: 'Public research', slug: 'public-research', owner: { id: 'x' } }, { name: 'no id' }];
+          const cards = [
+            { id: project, name: 'Public research', slug: 'public-research', owner: { id: 'x' } },
+            { name: 'no id' }
+          ];
           return new Response(JSON.stringify({ data: { projects: search && search !== 'public' ? [] : cards } }));
         }
         if (String(url).startsWith('http://vision.invalid/')) {
@@ -126,12 +129,13 @@ describe('anonymous public project questions', () => {
     const response = await request('/session', 'POST', {});
     cookie = response.headers.get('set-cookie')!.split(';')[0];
   });
-  const request = (path: string, method = 'GET', body?: unknown, session = cookie) =>
+  const request = (path: string, method = 'GET', body?: unknown, session = cookie, ip?: string) =>
     realFetch(base + path, {
       method,
       headers: {
         Origin: 'https://app.example.test',
         'Content-Type': 'application/json',
+        ...(ip ? { 'X-Forwarded-For': ip } : {}),
         ...(session ? { Cookie: session } : {})
       },
       ...(method === 'GET' ? {} : { body: JSON.stringify(body ?? {}) })
@@ -160,6 +164,29 @@ describe('anonymous public project questions', () => {
     expect(await ProviderUsage.countDocuments({ state: 'completed', kind: 'guest' })).toBe(1);
     expect((await request(`/runs/${result.data.runId}`, 'GET', undefined, 'visin_guest=tampered')).status).toBe(403);
   });
+  it('allows development questions without a bot check even when keys are configured', async () => {
+    process.env.NODE_ENV = 'development';
+    try {
+      const capabilities = (await (await request('/capabilities')).json()) as {
+        data: { enabled: boolean; siteKey: string; botCheckRequired: boolean };
+      };
+      expect(capabilities.data).toMatchObject({ enabled: true, siteKey: '', botCheckRequired: false });
+      const { challengeToken: _token, ...body } = question();
+      const response = await request('/questions', 'POST', body, cookie, '192.0.2.1');
+      expect(response.status).toBe(202);
+      const result = (await response.json()) as { data: { runId: string } };
+      expect((await finished(result.data.runId))?.state).toBe('completed');
+      expect(
+        vi.mocked(globalThis.fetch).mock.calls.some(([url]) => String(url).includes('challenges.cloudflare.com'))
+      ).toBe(false);
+    } finally {
+      process.env.NODE_ENV = 'test';
+    }
+  });
+  it('requires a verification token outside development', async () => {
+    const { challengeToken: _token, ...body } = question();
+    expect((await request('/questions', 'POST', body, cookie, '192.0.2.2')).status).toBe(403);
+  });
   it('refuses private project context before provider execution', async () => {
     publicVisible = false;
     expect((await request('/questions', 'POST', question())).status).toBe(403);
@@ -181,13 +208,16 @@ describe('anonymous public project questions', () => {
     expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
   });
   it('finds a public project from part of its name, and asks vision once a minute for the same search', async () => {
-    const calls = () => vi.mocked(globalThis.fetch).mock.calls.filter(([url]) => String(url).includes('/api/public/projects')).length;
+    const calls = () =>
+      vi.mocked(globalThis.fetch).mock.calls.filter(([url]) => String(url).includes('/api/public/projects')).length;
     const found = (await (await request('/projects?q=Pub')).json()) as { data: { projects: { name: string }[] } };
     expect(found.data.projects.map((p) => p.name)).toEqual(['Public research']);
     const asked = calls();
     await request('/projects?q=pub');
     expect(calls()).toBe(asked);
-    expect(((await (await request('/projects?q=zzz')).json()) as { data: { projects: unknown[] } }).data.projects).toEqual([]);
+    expect(
+      ((await (await request('/projects?q=zzz')).json()) as { data: { projects: unknown[] } }).data.projects
+    ).toEqual([]);
   });
   it('reports vision being down as unavailable, never as the project being private', async () => {
     visionDown = true;

@@ -20,7 +20,7 @@ Messages use durable conversation sequences for pagination and SSE replay. SSE r
 
 Existing findings stay in Vision. A separate user-reviewed save receives an ephemeral `analysis:write` credential, preserves analyst attribution, and uses `sourceId=chat:<message-id>` for idempotency in vision-service. The model never receives write tools.
 
-Run `npm run dev --workspace=chat-service`, or use root Compose. `npm test --workspace=chat-service` uses a temporary MongoDB and local HTTP server with a mocked provider. No real provider calls are made by tests.
+Run `npm run dev --workspace=chat-service`, or use root Compose. The dev command sets `NODE_ENV=development` and skips guest Turnstile verification; restart it after changing the command. Deployments must use `NODE_ENV=production` to enforce verification. `npm test --workspace=chat-service` uses a temporary MongoDB and local HTTP server with a mocked provider. No real provider calls are made by tests.
 
 The remaining scope is tracked in root `todo.md`: shared research-tool access, per-assistant models, memory, full contact discovery, search, richer moderation, visual analysis and proactive summaries. Chat currently retains persisted history until operator-managed deletion; user-facing retention/deletion controls remain required before a public rollout.
 

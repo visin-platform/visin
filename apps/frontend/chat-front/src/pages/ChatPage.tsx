@@ -1,5 +1,5 @@
 import GuestVivi from '../components/GuestVivi';
-import { useGuestCapabilities } from '../components/guest/useGuestCapabilities';
+import { guestChatAvailable, useGuestCapabilities } from '../components/guest/useGuestCapabilities';
 import { AppearanceDialog } from '../appearance/AppearanceDialog';
 import { appearanceSx } from '../appearance/chatAppearance';
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
@@ -27,12 +27,12 @@ export default function ChatPage({ panel = false }: { panel?: boolean }) {
 
 /**
  * What someone without a session sees: where guest Vivi is on, simply Vivi's chat (the same frame as the signed-in
- * one, with a quiet "Sign in for more" beneath); otherwise the plain invitation to sign in.
+ * one); otherwise the plain invitation to sign in.
  */
 function VisitorView({ login, panel }: { login: () => void; panel: boolean }) {
   const guest = useGuestCapabilities();
   if (guest.isPending) return <CircularProgress aria-label="Loading chat" />;
-  if (guest.data?.enabled)
+  if (guestChatAvailable(guest.data))
     return (
       <Box
         sx={{
@@ -41,7 +41,7 @@ function VisitorView({ login, panel }: { login: () => void; panel: boolean }) {
           ...(panel ? {} : { border: 1, borderColor: 'divider', borderRadius: 3, overflow: 'hidden' })
         }}
       >
-        <GuestVivi onSignIn={login} />
+        <GuestVivi />
       </Box>
     );
   return (

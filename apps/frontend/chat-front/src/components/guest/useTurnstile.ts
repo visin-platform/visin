@@ -24,15 +24,22 @@ export function useTurnstile(siteKey: string | undefined, wanted: boolean) {
   const widget = useRef<string | null>(null);
   const [token, setToken] = useState('');
   useEffect(() => {
-    if (!siteKey || !wanted || !container.current) return;
+    if (!siteKey || !wanted || !container.current) {
+      setToken('');
+      return;
+    }
     let alive = true;
     const render = () => {
       if (alive && container.current && window.turnstile && widget.current === null)
         widget.current = window.turnstile.render(container.current, {
           sitekey: siteKey,
           action: 'vivi-guest',
-          callback: setToken,
-          'expired-callback': () => setToken('')
+          callback: (value) => {
+            if (alive) setToken(value);
+          },
+          'expired-callback': () => {
+            if (alive) setToken('');
+          }
         });
     };
     let script = document.querySelector<HTMLScriptElement>('script[data-visin-turnstile]');
