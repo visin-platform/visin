@@ -1,5 +1,16 @@
 # Visin Changelog
 
+## [2.12.0](https://github.com/visin-platform/visin/compare/v2.11.0...v2.12.0) (2026-11-13)
+
+### Features
+
+* add browser monitoring with Grafana Faro ([6375848](https://github.com/visin-platform/visin/commit/63758487a255c6eb043c23ba903e34758f42f9a7))
+
+### Chores
+
+* **release:** @visin/backend-core 1.21.0 ([d6f0fe3](https://github.com/visin-platform/visin/commit/d6f0fe381e038425de92dffb585e2a32b755af57))
+* **release:** @visin/frontend-core 1.25.0 ([9f74902](https://github.com/visin-platform/visin/commit/9f74902b333c4075cd1ba7960998ef3a6952f898))
+
 ## [2.11.0](https://github.com/visin-platform/visin/compare/v2.10.0...v2.11.0) (2026-11-11)
 
 ### Features
