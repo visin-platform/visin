@@ -40,6 +40,9 @@ export default defineConfig(() => ({
   },
   build: {
     modulePreload: false,
+    // Maps for browser error stacks, read by the collector (Alloy) from this app's container.
+    // 'hidden': no sourceMappingURL in the bundle, so browsers never fetch them.
+    sourcemap: 'hidden' as const,
     target: 'esnext',
     minify: true,
     cssCodeSplit: false

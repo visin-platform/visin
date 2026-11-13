@@ -360,6 +360,7 @@ services:
     <<: *common
     ports: ['${COMPOSE_BIND:-0.0.0.0}:3004:80']
     environment:
+      FARO_COLLECTOR_URL: ${FARO_COLLECTOR_URL:-}
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -417,6 +418,7 @@ services:
     <<: *common
     ports: ['${COMPOSE_BIND:-0.0.0.0}:3010:80']
     environment:
+      FARO_COLLECTOR_URL: ${FARO_COLLECTOR_URL:-}
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012

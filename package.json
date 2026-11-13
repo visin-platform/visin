@@ -35,6 +35,8 @@
     "openapi:bundle:check": "node scripts/openapi.mjs bundle --check",
     "docs:check": "node scripts/check-docs.mjs",
     "diagrams": "node scripts/architecture-diagrams.mjs",
+    "telemetry:routes": "node scripts/telemetry-routes.mjs",
+    "telemetry:routes:check": "node scripts/telemetry-routes.mjs --check",
     "diagrams:check": "node scripts/architecture-diagrams.mjs --check",
     "check:repo": "npm run sync:libs:check && npm run lockfiles:check && npm run docs:check && npm run diagrams:check && npm run openapi:lint && npm run openapi:bundle:check",
     "release": "node scripts/release.mjs"

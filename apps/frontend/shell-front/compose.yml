@@ -7,6 +7,7 @@ services:
     image: ${REGISTRY:-ghcr.io/visin-platform}/shell-front:${TAG:-latest}
     restart: unless-stopped
     environment:
+      FARO_COLLECTOR_URL: ${FARO_COLLECTOR_URL:-}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
       AUTH_FRONT_URL: ${AUTH_FRONT_URL}
       VISION_FRONT_URL: ${VISION_FRONT_URL}

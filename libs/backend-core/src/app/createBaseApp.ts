@@ -37,7 +37,7 @@ export interface CreateBaseAppOptions {
  * preflight answers from a fixed list (`corsAllowedHeaders`). `X-Request-Id`
  * lets a caller name the request it is tracing.
  */
-export const STANDARD_CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id'];
+export const STANDARD_CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id', 'traceparent', 'tracestate'];
 
 /**
  * Builds an Express app with the baseline middleware every Visin service

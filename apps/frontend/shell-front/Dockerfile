@@ -6,7 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# The release this image is (publish-images.yml); after the install so it never busts that cache.
+ARG APP_VERSION=dev
+RUN APP_VERSION=$APP_VERSION npm run build
 
 # ---- Production Stage ----
 FROM nginx:alpine

@@ -70,6 +70,22 @@ beforeEach(() => {
 });
 
 describe('tracingMiddleware', () => {
+  it("joins the caller's trace on the first request, before lazy tracer initialization", async () => {
+    const traceId = '0af7651916cd43dd8448eb211c80319c';
+    const parentId = 'b7ad6b7169203331';
+
+    await withApp(
+      (app) => app.get('/ping', (_req, res) => void res.json({})),
+      async (baseUrl) => {
+        await fetch(`${baseUrl}/ping`, { headers: { traceparent: `00-${traceId}-${parentId}-01` } });
+      }
+    );
+    await flush();
+
+    expect(exported[0].spanContext().traceId).toBe(traceId);
+    expect(exported[0].parentSpanContext?.spanId).toBe(parentId);
+  });
+
   it('names the span for the route and records the status, without the query string', async () => {
     await withApp(
       (app) => app.get('/api/items/:id', (_req, res) => void res.json({})),
@@ -90,22 +106,6 @@ describe('tracingMiddleware', () => {
     });
     expect(JSON.stringify(span.attributes)).not.toContain('secret');
     expect(span.resource.attributes['service.name']).toBe('trace-test-service');
-  });
-
-  it("joins the caller's trace when it sends a traceparent", async () => {
-    const traceId = '0af7651916cd43dd8448eb211c80319c';
-    const parentId = 'b7ad6b7169203331';
-
-    await withApp(
-      (app) => app.get('/ping', (_req, res) => void res.json({})),
-      async (baseUrl) => {
-        await fetch(`${baseUrl}/ping`, { headers: { traceparent: `00-${traceId}-${parentId}-01` } });
-      }
-    );
-    await flush();
-
-    expect(exported[0].spanContext().traceId).toBe(traceId);
-    expect(exported[0].parentSpanContext?.spanId).toBe(parentId);
   });
 
   it('marks a 5xx response as an error', async () => {

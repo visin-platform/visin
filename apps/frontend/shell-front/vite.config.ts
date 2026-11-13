@@ -10,6 +10,8 @@ export default defineConfig(() => ({
   // Unit tests read no .env: a test stubs what it needs from import.meta.env,
   // so a developer's local .env cannot make a suite pass here and fail in CI.
   envDir: process.env.VITEST ? (false as const) : undefined,
+  // The release, passed by publish-images.yml as a build argument; browser telemetry reports it.
+  define: { __APP_VERSION__: JSON.stringify(process.env.APP_VERSION || 'dev') },
   plugins: [
     react(),
     // The module-federation host. No remotes are listed: where vision, label
@@ -25,6 +27,9 @@ export default defineConfig(() => ({
   },
   build: {
     modulePreload: false,
+    // Maps for browser error stacks, read by the collector (Alloy) from this app's container.
+    // 'hidden': no sourceMappingURL in the bundle, so browsers never fetch them.
+    sourcemap: 'hidden' as const,
     target: 'esnext',
     minify: true,
     cssCodeSplit: false

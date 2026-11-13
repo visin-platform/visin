@@ -59,8 +59,10 @@ export const getTracer = (): Tracer => {
 
 /** Makes one SERVER span per request, a child of the caller's when it sent a `traceparent`. */
 export const tracingMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  // Register the propagator before extracting the very first incoming parent.
+  const requestTracer = getTracer();
   const parentContext = propagation.extract(context.active(), req.headers);
-  const span = getTracer().startSpan(
+  const span = requestTracer.startSpan(
     `${req.method} ${safeRequestPath(req.originalUrl)}`,
     { kind: SpanKind.SERVER },
     parentContext

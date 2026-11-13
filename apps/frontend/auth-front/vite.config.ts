@@ -23,10 +23,15 @@ export default defineConfig(({ mode }) => {
       }
     },
     define: {
-      'process.env': env // Expose .env variables to the app
+      'process.env': env, // Expose .env variables to the app
+      // The release, passed by publish-images.yml as a build argument; browser telemetry reports it.
+      __APP_VERSION__: JSON.stringify(process.env.APP_VERSION || 'dev')
     },
     build: {
       modulePreload: false,
+      // Maps for browser error stacks, read by the collector (Alloy) from this app's container.
+      // 'hidden': no sourceMappingURL in the bundle, so browsers never fetch them.
+      sourcemap: 'hidden' as const,
       target: 'esnext',
       minify: true,
       cssCodeSplit: false

@@ -7,6 +7,7 @@ import { ChatProvider } from './components/chat/ChatDock';
 import { ChatBackground } from './components/chat/ChatBackground';
 import { ScreenCue } from './components/chat/ScreenCue';
 import VisionUploads from './components/VisionUploads';
+import { ObservabilityNavigation } from './components/ObservabilityNavigation';
 
 // The shell's own queries: the home page's. Each remote brings its own client,
 // nearer its hooks than this one.
@@ -22,6 +23,7 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <Router>
+      <ObservabilityNavigation />
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ChatProvider>

@@ -1,6 +1,8 @@
 import { createConfigProvider, VisinThemeProvider } from '@visin/frontend-core';
 
 export interface AppConfig {
+  /** Optional self-hosted Faro collector. Empty disables browser telemetry. */
+  FARO_COLLECTOR_URL?: string;
   AUTH_SERVICE_URL?: string;
   AUTH_FRONT_URL?: string;
   /**
@@ -37,6 +39,7 @@ export interface AppConfig {
 // find them; a VITE_* variable still overrides any of these.
 function createDevConfig(): AppConfig {
   return {
+    ...(import.meta.env.VITE_FARO_COLLECTOR_URL ? { FARO_COLLECTOR_URL: import.meta.env.VITE_FARO_COLLECTOR_URL } : {}),
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL || 'http://localhost:5001',
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL || 'http://localhost:3004',
     VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL || 'http://localhost:3012',

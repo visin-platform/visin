@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 import type { AddressInfo } from 'net';
-import { createBaseApp } from '../../app/createBaseApp';
+import { createBaseApp, STANDARD_CORS_ALLOWED_HEADERS } from '../../app/createBaseApp';
 import { errorHandler } from '../../middleware/errorHandler';
 
 import type { CreateBaseAppOptions } from '../../app/createBaseApp';
@@ -43,6 +43,20 @@ async function withServer(
 }
 
 describe('createBaseApp CORS', () => {
+  it('permits browser trace propagation through fixed CORS header lists', async () => {
+    await withServer({ corsOrigins: ['https://allowed.example'], corsAllowedHeaders: STANDARD_CORS_ALLOWED_HEADERS }, async baseUrl => {
+      const response = await fetch(`${baseUrl}/echo`, {
+        method: 'OPTIONS', headers: {
+          Origin: 'https://allowed.example', 'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'content-type,traceparent,tracestate'
+        }
+      });
+      expect(response.status).toBe(204);
+      expect(response.headers.get('access-control-allow-headers')).toContain('traceparent');
+      expect(response.headers.get('access-control-allow-headers')).toContain('tracestate');
+    });
+  });
+
   it('returns a classified 403 (not an unhandled 500) for a disallowed origin', async () => {
     await withServer(['https://allowed.example'], async baseUrl => {
       const res = await fetch(`${baseUrl}/cookie-check`, {

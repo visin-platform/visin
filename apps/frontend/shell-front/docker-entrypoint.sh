@@ -2,6 +2,7 @@
 set -e
 cat <<EOF > /usr/share/nginx/html/config.json
 {
+  "FARO_COLLECTOR_URL": "${FARO_COLLECTOR_URL}",
   "AUTH_SERVICE_URL": "${AUTH_SERVICE_URL}",
   "AUTH_FRONT_URL": "${AUTH_FRONT_URL}",
   "VISION_FRONT_URL": "${VISION_FRONT_URL}",

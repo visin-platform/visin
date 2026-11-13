@@ -3,6 +3,7 @@
 # Generate config.json at runtime using environment variables
 cat > /usr/share/nginx/html/config.json << EOF
 {
+  "FARO_COLLECTOR_URL": "${FARO_COLLECTOR_URL}",
   "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
   "AUTH_SERVICE_URL": "${AUTH_SERVICE_URL}",
   "VISION_API_URL": "${VISION_API_URL}"

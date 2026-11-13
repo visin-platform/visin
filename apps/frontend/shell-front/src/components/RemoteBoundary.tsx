@@ -25,6 +25,15 @@ export class RemoteBoundary extends Component<RemoteBoundaryProps, RemoteBoundar
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`${this.props.appTitle} failed to render`, error, info.componentStack);
+    if (window.__visinObservabilityV1?.faro) {
+      void import('@visin/frontend-core/observability')
+        .then(({ reportFrontendError }) => {
+          reportFrontendError(error);
+        })
+        .catch(() => {
+          /* Error recovery is independent of telemetry. */
+        });
+    }
   }
 
   override render() {

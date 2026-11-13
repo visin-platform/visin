@@ -231,6 +231,8 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.arch }}
+          # Read by images that report their release (shell-front's browser telemetry).
+          build-args: APP_VERSION=${{ needs.setup.outputs.tag }}
 
       # The filename is the digest with its "sha256:" prefix removed: artifact
       # upload rejects a colon, because it cannot be written to an NTFS volume.
