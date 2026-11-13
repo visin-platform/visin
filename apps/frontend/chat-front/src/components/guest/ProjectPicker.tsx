@@ -7,6 +7,8 @@ import { projectIdentifier } from './projectIdentifier';
 export interface PublicProject {
   id: string;
   name: string;
+  /** The run the visitor's page shows, when it shows exactly one. */
+  trainingId?: string;
 }
 
 /**
@@ -65,7 +67,7 @@ export default function ProjectPicker({
           {...params}
           label="Public project"
           placeholder="Search by name, or paste a project link"
-          helperText={compact ? undefined : "Vivi answers from a project's public name and description."}
+          helperText={compact ? undefined : "Vivi answers from the project's public page."}
         />
       )}
     />

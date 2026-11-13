@@ -27,6 +27,7 @@ export async function appendMessage(input: {
     screen?: ScreenContext;
   };
   evidence?: { tool: string; input: unknown; at: Date }[];
+  suggestions?: string[];
 }) {
   await flushMembershipEvents(input.conversationId);
   const existing = await Message.findOne({ conversationId: input.conversationId, clientId: input.clientId });

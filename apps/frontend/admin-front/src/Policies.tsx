@@ -31,6 +31,9 @@ export type Settings = {
   guestGlobalRequests: number;
   guestDailyBudgetMicros: number;
   guestMonthlyBudgetMicros: number;
+  guestGreeting: string;
+  guestExamples: string[];
+  guestAnswerWords: number;
 };
 type UserSettings = Partial<Pick<Settings, 'enabled' | 'dailyRequestLimit' | 'dailyTokenLimit'>>;
 interface HistoryEntry {
@@ -192,10 +195,35 @@ function GlobalEditor({ policy, onSaved }: { policy: GlobalPolicy; onSaved: () =
           slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
         />
       ))}
+      <Typography variant="subtitle1">What visitors see</Typography>
+      <TextField
+        label="Guest greeting"
+        multiline
+        value={settings.guestGreeting}
+        onChange={(e) => set({ guestGreeting: e.target.value })}
+        helperText={`Shown after "Hi, I'm <assistant name>!". The assistant's name and personality are set on its own page.`}
+        slotProps={{ htmlInput: { maxLength: 300 } }}
+      />
+      <TextField
+        label="Suggested questions"
+        multiline
+        minRows={2}
+        value={settings.guestExamples.join('\n')}
+        onChange={(e) => set({ guestExamples: e.target.value.split('\n').slice(0, 3) })}
+        helperText="One per line, up to three of 80 characters. Visitors can send one with a click."
+      />
+      <TextField
+        type="number"
+        label="Guest answer length (words)"
+        value={settings.guestAnswerWords}
+        onChange={(e) => set({ guestAnswerWords: Math.trunc(Number(e.target.value) || 0) })}
+        helperText="About how long an answer is, 30 to 300. Longer answers reserve more of the spend ceiling."
+        slotProps={{ htmlInput: { min: 30, max: 300, step: 10 } }}
+      />
       <SaveBar
         reason={reason}
         setReason={setReason}
-        save={() => save.mutate({ settings, reason })}
+        save={() => save.mutate({ settings: withCleanExamples(settings), reason })}
         discard={() => {
           setSettings(policy.settings);
           setReason('');
@@ -371,6 +399,12 @@ const SETUP_ITEMS: { key: keyof GuestSetup; label: string; how: string }[] = [
   { key: 'trustedProxy', label: 'Trusted proxy', how: 'GUEST_TRUSTED_PROXY in the chat service' },
   { key: 'visionService', label: 'Vision service address', how: 'VISION_SERVICE_URL in the chat service' }
 ];
+
+/** Suggested questions as typed, one per line: blank lines and edge spaces are not questions. */
+const withCleanExamples = (settings: Settings): Settings => ({
+  ...settings,
+  guestExamples: settings.guestExamples.map((example) => example.trim()).filter(Boolean)
+});
 
 /** What still stands between this form and anonymous Vivi: the deployment's settings, and the two ceilings below. */
 function guestMissing(setup: GuestSetup | undefined, settings: Settings): string[] {

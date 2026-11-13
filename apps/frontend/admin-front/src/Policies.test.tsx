@@ -15,7 +15,10 @@ const GLOBAL_SETTINGS = {
   guestNetworkRequests: 10,
   guestGlobalRequests: 100,
   guestDailyBudgetMicros: 0,
-  guestMonthlyBudgetMicros: 0
+  guestMonthlyBudgetMicros: 0,
+  guestGreeting: "I know Visin's public research.",
+  guestExamples: ['Find public computer vision projects'],
+  guestAnswerWords: 80
 };
 
 const READY = { botCheck: true, networkSecret: true, trustedProxy: true, visionService: true };
@@ -138,6 +141,31 @@ it('edits guest spend ceilings in dollars and stores millionths', async () => {
       '/vivi/admin/policies',
       'PUT',
       expect.objectContaining({ settings: { ...settings, guestMonthlyBudgetMicros: 40000000 } })
+    )
+  );
+});
+
+it('edits what visitors see: greeting, one suggested question per line, and answer length', async () => {
+  answerWith({ id: 'global', revision: 3, settings: GLOBAL_SETTINGS, history: [] });
+  renderPage(<Policies />);
+  const examples = await screen.findByLabelText('Suggested questions');
+  expect(examples).toHaveValue('Find public computer vision projects');
+  fireEvent.change(examples, { target: { value: '  What uses LiDAR?\n\nWhich projects study driving? ' } });
+  fireEvent.change(screen.getByLabelText('Guest greeting'), { target: { value: 'Ask me about driving.' } });
+  fireEvent.change(screen.getByLabelText('Guest answer length (words)'), { target: { value: '60' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save policy' }));
+  await waitFor(() =>
+    expect(admin).toHaveBeenCalledWith(
+      '/vivi/admin/policies',
+      'PUT',
+      expect.objectContaining({
+        settings: {
+          ...GLOBAL_SETTINGS,
+          guestGreeting: 'Ask me about driving.',
+          guestExamples: ['What uses LiDAR?', 'Which projects study driving?'],
+          guestAnswerWords: 60
+        }
+      })
     )
   );
 });

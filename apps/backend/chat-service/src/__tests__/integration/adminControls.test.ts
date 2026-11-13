@@ -70,6 +70,19 @@ it('rejects invalid identifiers, over-long reasons and unsafe guest enablement',
     (await request('/admin/policies', ADMIN, edit(0, { ...defaultPolicy, guestEnabled: true }), 'PUT')).status
   ).toBe(400);
 });
+it("saves the guest greeting, suggested questions and answer length, within their bounds", async () => {
+  const guest = { guestGreeting: 'Ask me about driving research.', guestExamples: ['What uses LiDAR?'], guestAnswerWords: 60 };
+  const saved = await request('/admin/policies', ADMIN, edit(0, { ...defaultPolicy, ...guest }), 'PUT');
+  expect(saved.status).toBe(200);
+  expect(await effectivePolicy()).toMatchObject(guest);
+  for (const bad of [
+    { guestExamples: ['a', 'b', 'c', 'd'] },
+    { guestExamples: ['x'.repeat(81)] },
+    { guestGreeting: 'x'.repeat(301) },
+    { guestAnswerWords: 10 }
+  ])
+    expect((await request('/admin/policies', ADMIN, edit(1, { ...defaultPolicy, ...bad }), 'PUT')).status).toBe(400);
+});
 it('says exactly what is missing when anonymous access cannot be turned on', async () => {
   const saved = { ...process.env };
   try {

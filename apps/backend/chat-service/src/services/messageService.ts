@@ -246,7 +246,7 @@ export async function unsend(req: Request, conversationId: string, messageId: un
   await Message.updateOne(
     { _id: message._id, unsentAt: null },
     {
-      $set: { unsentAt: new Date(), body: '', reactions: [], evidence: [], assistantCancelled: true },
+      $set: { unsentAt: new Date(), body: '', reactions: [], evidence: [], suggestions: [], assistantCancelled: true },
       $unset: { attachments: 1, quote: 1, assistantRequest: 1, screenRequest: 1 },
       $inc: { revision: 1 }
     }

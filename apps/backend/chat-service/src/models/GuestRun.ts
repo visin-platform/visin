@@ -7,7 +7,11 @@ export const GuestRun = model(
       sessionId: { type: String, required: true },
       month: String,
       state: { type: String, enum: ['admitting', 'running', 'completed', 'failed'], default: 'admitting' },
+      /** Kept with the answer, and as briefly, so a follow-up ("tell me more about the first") has what it follows. */
+      question: String,
       answer: String,
+      /** The answer so far, while it is being written: a preview only, gone once the answer is. */
+      draft: String,
       error: String,
       /** Before an answer could draw on several projects; read only for runs saved then. */
       projectId: String,

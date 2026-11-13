@@ -8,12 +8,22 @@ export const MAX_TOOL_ROUNDS = 16;
 export const TOKENS_PER_ROUND = MAX_REQUEST_BYTES + MAX_OUTPUT_TOKENS;
 /** What one round may use: the request it sends and the answer it may write. */
 const perRound = (requestBytes: number) => requestBytes + MAX_OUTPUT_TOKENS;
+/** Rendered frames the analyst may look at in one answer: enough to compare two, few enough to stay affordable. */
+export const FRAME_IMAGES = 2;
+/**
+ * What one frame may cost per round. A frame is an image Visin rendered, so its size is known to be within what a
+ * provider bills at most a few thousand tokens for; an uploaded image keeps the far wider IMAGE_TOKENS_PER_ROUND.
+ */
+export const FRAME_TOKENS_PER_ROUND = 6000;
 export const reservationFor = (
   screen: boolean,
   toolRounds = DEFAULT_TOOL_ROUNDS,
   imageCount = 0,
-  requestBytes = MAX_REQUEST_BYTES
-) => (toolRounds + (screen ? MAX_SCREEN_CALLS : 0)) * (perRound(requestBytes) + imageCount * IMAGE_TOKENS_PER_ROUND);
+  requestBytes = MAX_REQUEST_BYTES,
+  frames = false
+) =>
+  (toolRounds + (screen ? MAX_SCREEN_CALLS : 0)) *
+  (perRound(requestBytes) + imageCount * IMAGE_TOKENS_PER_ROUND + (frames ? FRAME_IMAGES * FRAME_TOKENS_PER_ROUND : 0));
 export const RESERVATION = reservationFor(false);
 
 export interface BudgetPlan {
@@ -21,6 +31,8 @@ export interface BudgetPlan {
   screen: boolean;
   toolRounds: number;
   reserve: number;
+  /** Set when the turn may look at rendered frames, which reserves room for FRAME_IMAGES of them. */
+  frames?: true;
 }
 /**
  * The ways a question can run within a daily limit, best first. A page change is a convenience, so a question
@@ -32,10 +44,20 @@ export function budgetPlans(
   toolRounds = DEFAULT_TOOL_ROUNDS,
   screen = false,
   imageCount = 0,
-  requestBytes = MAX_REQUEST_BYTES
+  requestBytes = MAX_REQUEST_BYTES,
+  frames = false
 ): BudgetPlan[] {
   const capped = Math.min(toolRounds, Math.floor(limit / (perRound(requestBytes) + imageCount * IMAGE_TOKENS_PER_ROUND)));
+  const withFrames = (on: boolean): BudgetPlan => ({
+    screen: on,
+    toolRounds,
+    reserve: reservationFor(on, toolRounds, imageCount, requestBytes, true),
+    frames: true
+  });
+  // Looking at frames, like moving the page, is given up before the question is: those plans come first.
   const plans: BudgetPlan[] = [
+    ...(frames && screen ? [withFrames(true)] : []),
+    ...(frames ? [withFrames(false)] : []),
     ...(screen ? [{ screen: true, toolRounds, reserve: reservationFor(true, toolRounds, imageCount, requestBytes) }] : []),
     { screen: false, toolRounds, reserve: reservationFor(false, toolRounds, imageCount, requestBytes) },
     { screen: false, toolRounds: capped, reserve: reservationFor(false, capped, imageCount, requestBytes) }
@@ -44,6 +66,8 @@ export function budgetPlans(
     (plan, index) =>
       plan.reserve <= limit &&
       plan.toolRounds >= MIN_TOOL_ROUNDS &&
-      plans.findIndex((other) => other.reserve === plan.reserve && other.screen === plan.screen) === index
+      plans.findIndex(
+        (other) => other.reserve === plan.reserve && other.screen === plan.screen && other.frames === plan.frames
+      ) === index
   );
 }

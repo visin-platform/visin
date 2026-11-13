@@ -10,11 +10,18 @@ let requested: PublicProject | null = null;
 const listeners = new Set<() => void>();
 
 export function rememberRequestedProject(request: unknown): void {
-  const { projectId, title } = (request ?? {}) as { projectId?: unknown; title?: unknown };
+  const { projectId, title, trainingIds } = (request ?? {}) as {
+    projectId?: unknown;
+    title?: unknown;
+    trainingIds?: unknown;
+  };
   if (typeof projectId !== 'string' || !projectId) return;
   const name = typeof title === 'string' && title ? title : 'This project';
-  if (requested?.id === projectId && requested.name === name) return;
-  requested = { id: projectId, name };
+  // A page about one run (not a comparison of several) lets Vivi answer about that run and its frames.
+  const run = Array.isArray(trainingIds) && trainingIds.length === 1 ? trainingIds[0] : undefined;
+  const trainingId = typeof run === 'string' && /^[a-f\d]{24}$/i.test(run) ? run : undefined;
+  if (requested?.id === projectId && requested.name === name && requested.trainingId === trainingId) return;
+  requested = { id: projectId, name, ...(trainingId ? { trainingId } : {}) };
   listeners.forEach((listener) => listener());
 }
 

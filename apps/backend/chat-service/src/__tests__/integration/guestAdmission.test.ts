@@ -36,6 +36,14 @@ describe('distributed guest admission', () => {
     const results = await Promise.all(Array.from({ length: 20 }, (_, i) => admit(String(i), `s${i}`, `192.0.2.${i}`)));
     expect(results.filter(Boolean)).toHaveLength(2);
   });
+  it('reports what is left of the smaller allowance, so a private window is not promised a fresh one', async () => {
+    const overrides = { guestSessionRequests: 10, guestNetworkRequests: 4 };
+    const first = await admit('w1', 'window-one', '192.0.2.50', overrides);
+    expect(first!.remaining).toBe(3);
+    await releaseGuestSlot(first!.month, 'w1');
+    // A new session (a private window) on the same network: the network has 2 left, not the session's 9.
+    expect((await admit('w2', 'window-two', '192.0.2.50', overrides))!.remaining).toBe(2);
+  });
   it('caps a session despite changing networks', async () => {
     for (let i = 0; i < 3; i++) {
       const result = await admit(String(i), 'session', `192.0.2.${i}`);
@@ -62,7 +70,7 @@ describe('distributed guest admission', () => {
     const why = (sessionId = 'session', network = '192.0.2.1', overrides = {}) =>
       guestDenialReason({ sessionId, network, reserveMicros: 100, caps: { ...caps, ...overrides }, now });
 
-    it('the visitor\'s own allowance, then their network\'s', async () => {
+    it("the visitor's own allowance, then their network's", async () => {
       for (let i = 0; i < 3; i++)
         await releaseGuestSlot((await admit(String(i), 'session', `192.0.2.${i}`))!.month, String(i));
       expect(await why('session', '192.0.2.9')).toBe('session');
@@ -74,7 +82,7 @@ describe('distributed guest admission', () => {
       expect(await why('session')).toBe('burst');
     });
 
-    it('the shared pause: the day\'s questions, the daily spend and the monthly spend', async () => {
+    it("the shared pause: the day's questions, the daily spend and the monthly spend", async () => {
       const first = await admit('a', 's1', '192.0.2.1');
       await releaseGuestSlot(first!.month, 'a');
       expect(await why('s2', '192.0.2.2', { guestGlobalRequests: 1 })).toBe('shared');

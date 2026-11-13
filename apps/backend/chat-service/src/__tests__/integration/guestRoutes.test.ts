@@ -13,6 +13,7 @@ import { ADAPTERS } from '../../services/providers';
 import { resetAssistantSettingsCache } from '../../services/settings';
 import { defaultPolicy } from '../../services/adminPolicy';
 import { clearPublicCatalogue } from '../../services/guestCatalogue';
+import { GUEST_REQUEST_BYTES } from '../../services/guestContext';
 describe('anonymous public project questions', () => {
   let mongo: MongoMemoryServer;
   let server: Server;
@@ -126,9 +127,11 @@ describe('anonymous public project questions', () => {
       assistant: {}
     });
     cookie = '';
-    const response = await request('/session', 'POST', {});
+    // From its own address each time: the limit on starting sessions is per address and spans this whole file.
+    const response = await request('/session', 'POST', {}, '', `198.51.100.${++sessions}`);
     cookie = response.headers.get('set-cookie')!.split(';')[0];
   });
+  let sessions = 0;
   const request = (path: string, method = 'GET', body?: unknown, session = cookie, ip?: string) =>
     realFetch(base + path, {
       method,
@@ -291,11 +294,70 @@ describe('anonymous public project questions', () => {
     expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
   });
 
-  it('rejects oversized UTF-8 context before consuming a guest allowance', async () => {
-    expect((await request('/questions', 'POST', { ...question(), question: '汉'.repeat(1800) })).status).toBe(400);
-    expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
-    expect(await mongoose.connection.collection('chat_guest_budgets').countDocuments()).toBe(0);
+  it('fits the longest multi-byte question, and a follow-up to it, within the bytes it reserved', async () => {
+    // Its own address: the route's per-address limiter counts across this whole file.
+    const visitor = '203.0.113.77';
+    const within = () => {
+      const sent = vi.mocked(ADAPTERS.anthropic.send).mock.calls.at(-1)![0];
+      expect(sent.maxRequestBytes).toBe(GUEST_REQUEST_BYTES);
+      expect(
+        Buffer.byteLength(JSON.stringify({ model: sent.model, system: sent.system, messages: sent.messages }))
+      ).toBeLessThanOrEqual(GUEST_REQUEST_BYTES);
+      return (sent.messages[0] as { content: string }).content;
+    };
+    const first = (await (
+      await request('/questions', 'POST', { ...question(), question: '汉'.repeat(2000) }, cookie, visitor)
+    ).json()) as { data: { runId: string } };
+    await finished(first.data.runId);
+    expect(within()).not.toContain('"previous"');
+    // The stored question is for the next answer, never shown back.
+    expect(await (await request(`/runs/${first.data.runId}`)).text()).not.toContain('"question"');
+    const second = (await (
+      await request(
+        '/questions',
+        'POST',
+        { ...question('idempotency-key-0002'), question: 'Tell me more about the first one' },
+        cookie,
+        visitor
+      )
+    ).json()) as { data: { runId: string } };
+    await finished(second.data.runId);
+    const content = within();
+    expect(content).toContain('"previous":{"question":"汉');
+    expect(content).toContain('Question: Tell me more about the first one');
   });
+  it('shows the answer as it is written, and only the finished answer once it is', async () => {
+    let release!: () => void;
+    vi.mocked(ADAPTERS.anthropic.send).mockImplementationOnce(async (request) => {
+      request.onText?.('This is a public');
+      await new Promise<void>((resolve) => (release = resolve));
+      return {
+        text: 'This is a public research project.',
+        calls: [],
+        inputTokens: 100,
+        outputTokens: 20,
+        stop: 'done',
+        assistant: {}
+      };
+    });
+    const visitor = '203.0.113.78';
+    const asked = (await (await request('/questions', 'POST', question(), cookie, visitor)).json()) as {
+      data: { runId: string };
+    };
+    const read = async () =>
+      (
+        (await (await request(`/runs/${asked.data.runId}`)).json()) as {
+          data: { state: string; draft?: string; answer?: string };
+        }
+      ).data;
+    await vi.waitFor(async () => expect((await read()).draft).toBe('This is a public'), { timeout: 3000 });
+    expect((await read()).state).toBe('running');
+    release();
+    await finished(asked.data.runId);
+    expect(await read()).toMatchObject({ state: 'completed', answer: 'This is a public research project.' });
+    expect((await read()).draft).toBeUndefined();
+  });
+
   it('rechecks public visibility when a completed answer is read later', async () => {
     const result = (await (await request('/questions', 'POST', question())).json()) as { data: { runId: string } };
     await finished(result.data.runId);
@@ -314,7 +376,7 @@ describe('anonymous public project questions', () => {
       assistant: {}
     });
     const result = (await (await request('/questions', 'POST', question())).json()) as { data: { runId: string } };
-    expect((await finished(result.data.runId))?.answer).toContain('guest response limit');
+    expect((await finished(result.data.runId))?.answer).toContain('This answer was cut short');
   });
   it('fails visibly when a paid provider attempt returns no answer', async () => {
     vi.mocked(ADAPTERS.anthropic.send).mockResolvedValueOnce({

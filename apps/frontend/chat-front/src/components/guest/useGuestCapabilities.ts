@@ -7,6 +7,9 @@ export interface GuestCapabilities {
   siteKey: string;
   botCheckRequired?: boolean;
   sessionDailyLimit: number;
+  /** Set by an administrator: the first words a visitor reads after "Hi, I'm <name>!", and questions to try. */
+  greeting?: string;
+  examples?: string[];
 }
 
 export const guestChatAvailable = (data: GuestCapabilities | undefined) =>

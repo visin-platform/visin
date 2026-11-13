@@ -247,7 +247,8 @@ export function MessageList() {
         <FollowUps
           questions={followUps(
             c,
-            messages.filter((m) => m.kind === 'person').map((m) => m.body)
+            messages.filter((m) => m.kind === 'person').map((m) => m.body),
+            messages.at(-1)?.suggestions
           )}
           onAsk={ask}
         />

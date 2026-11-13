@@ -100,6 +100,10 @@ function counterPaths(input: GuestRequest) {
   };
 }
 
+/** A counter in the budget document, by its dotted path; an absent one is zero. */
+const counter = (doc: unknown, path: string): number =>
+  Number(path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], doc) ?? 0);
+
 /** The UTC midnight that resets the daily counters. */
 export const nextGuestReset = (now = new Date()): Date =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
@@ -114,7 +118,7 @@ export type GuestDenial = 'session' | 'network' | 'burst' | 'shared' | 'capacity
 export async function guestDenialReason(input: GuestRequest): Promise<GuestDenial> {
   const { now, month, session, paths } = counterPaths(input);
   const doc = await mongoose.connection.collection(BUDGETS).findOne({ _id: month as never });
-  const at = (path: string): number => Number(path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], doc) ?? 0);
+  const at = (path: string): number => counter(doc, path);
   const { caps, reserveMicros } = input;
   if (at(paths.session) >= caps.guestSessionRequests) return 'session';
   if (at(paths.network) >= caps.guestNetworkRequests) return 'network';
@@ -131,7 +135,7 @@ export async function guestDenialReason(input: GuestRequest): Promise<GuestDenia
 }
 
 export async function reserveGuest(input: GuestRequest & { runId: string }) {
-  const { now, month, day, session, paths } = counterPaths(input);
+  const { now, month, session, paths } = counterPaths(input);
   const collection = mongoose.connection.collection(BUDGETS);
   try {
     await collection.updateOne(
@@ -182,13 +186,20 @@ export async function reserveGuest(input: GuestRequest & { runId: string }) {
     ],
     { returnDocument: 'after' }
   );
-  return result
-    ? {
-        month,
-        remaining: Math.max(0, input.caps.guestSessionRequests - Number(result.days?.[day]?.sessions?.[session] ?? 0)),
-        resetAt: nextGuestReset(now).toISOString()
-      }
-    : null;
+  if (!result) return null;
+  // Whichever runs out first. A private window is a new session but the same network, so reporting the session's
+  // count alone promised a fresh allowance the network would not honour.
+  return {
+    month,
+    remaining: Math.max(
+      0,
+      Math.min(
+        input.caps.guestSessionRequests - counter(result, paths.session),
+        input.caps.guestNetworkRequests - counter(result, paths.network)
+      )
+    ),
+    resetAt: nextGuestReset(now).toISOString()
+  };
 }
 export async function releaseGuestSlot(month: string, runId: string) {
   await mongoose.connection

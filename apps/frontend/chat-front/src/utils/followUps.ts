@@ -5,10 +5,13 @@ import { starters } from './chatContext';
 const ANYTIME = ['Explain that in simpler terms', 'What should I check before trusting this?'];
 
 /**
- * Up to three next questions worth one click after an answer: what suits what is being analysed, minus what was
+ * Up to three next questions worth one click after an answer. The ones the analyst offered with that answer come
+ * first: they are about what it just found. What suits the page being analysed fills the rest, minus anything
  * already asked in this thread.
  */
-export function followUps(context: PageContext | undefined, asked: string[]): string[] {
+export function followUps(context: PageContext | undefined, asked: string[], suggested: string[] = []): string[] {
   const used = new Set(asked.map((question) => question.trim().toLowerCase()));
-  return [...new Set([...starters(context), ...ANYTIME])].filter((text) => !used.has(text.toLowerCase())).slice(0, 3);
+  return [...new Set([...suggested, ...starters(context), ...ANYTIME])]
+    .filter((text) => !used.has(text.trim().toLowerCase()))
+    .slice(0, 3);
 }

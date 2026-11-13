@@ -15,8 +15,13 @@ import { useRequestedProject } from './guest/requested';
 import { guestChatAvailable, useGuestCapabilities } from './guest/useGuestCapabilities';
 import { useTurnstile } from './guest/useTurnstile';
 
+/** Used until the server says otherwise (an administrator sets them in the guest policy). */
 const DISCOVERY_EXAMPLES = ['Find public computer vision projects', 'Which projects study autonomous driving?'];
+/** How often a question being answered is asked after: often enough to read the answer as it is written. */
+const POLL_MS = 1000;
+const GREETING = "I know Visin's public research: what each project studies, how it was run and what it found.";
 const EXAMPLES = ['What does this project study?', 'What are the best results so far?', 'Which data does it use?'];
+const RUN_EXAMPLES = ['How did this run do?', 'What do its images show?', 'Where does it peak?'];
 
 /**
  * Vivi for someone who has not signed in, as a plain chat: Vivi says hello in an empty thread, the visitor asks, and
@@ -36,6 +41,7 @@ export default function GuestVivi() {
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [run, setRun] = useState('');
+  const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState('');
   const [allowance, setAllowance] = useState('');
@@ -59,8 +65,11 @@ export default function GuestVivi() {
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const result = await api<{ state: string; answer?: string; error?: string }>(`/guest/runs/${run}`);
+        const result = await api<{ state: string; answer?: string; draft?: string; error?: string }>(
+          `/guest/runs/${run}`
+        );
         if (!alive) return;
+        setDraft(result.draft || '');
         if (result.state === 'completed' || result.state === 'failed') {
           history.add({
             id: run,
@@ -72,10 +81,11 @@ export default function GuestVivi() {
           // A failed question goes back in the box to try again; an answered one is done.
           if (result.state === 'failed') setQuestion(asked.current.question);
           setRun('');
+          setDraft('');
           setBusy(false);
           submitting.current = false;
           key.current = '';
-        } else timer = setTimeout(() => void poll(), 5000);
+        } else timer = setTimeout(() => void poll(), POLL_MS);
       } catch (err) {
         if (alive) {
           setRefused(err instanceof Error ? err.message : 'Could not read the answer');
@@ -99,7 +109,7 @@ export default function GuestVivi() {
   useEffect(() => {
     const el = thread.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [history.items.length, busy, refused]);
+  }, [history.items.length, busy, refused, draft]);
 
   if (!enabled) return null;
   const dailyLimit = capabilities.data?.sessionDailyLimit ?? 3;
@@ -124,6 +134,7 @@ export default function GuestVivi() {
       const result = await api<{ runId: string; remaining?: number; resetAt?: string }>('/guest/questions', {
         question: text,
         ...(identifier ? { projectId: identifier } : {}),
+        ...(identifier && project?.trainingId ? { trainingId: project.trainingId } : {}),
         ...(checkRequired ? { challengeToken: check.token } : {}),
         idempotencyKey: key.current
       });
@@ -174,14 +185,12 @@ export default function GuestVivi() {
       >
         <ViviBubble assistant={assistant}>
           <Typography>
-            Hi, I&apos;m {name}, Visin&apos;s research assistant. Ask me about any public project: what it studies, how
-            it was run, what it found.
+            Hi, I&apos;m {name}! {capabilities.data?.greeting || GREETING}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            I answer from a project&apos;s public name and description.{' '}
             {project
               ? `Ready when you are: ${project.name}.`
-              : 'Name a project in your question and I’ll find its public context.'}
+              : 'Ask about a topic, a dataset or a project by name.'}
           </Typography>
           {history.items.length === 0 && !busy && (
             <Stack
@@ -191,7 +200,12 @@ export default function GuestVivi() {
               sx={{ flexWrap: 'wrap', mt: 1.5 }}
               aria-label="Example questions"
             >
-              {(project ? EXAMPLES : DISCOVERY_EXAMPLES).map((example) => (
+              {(project?.trainingId
+                ? RUN_EXAMPLES
+                : project
+                  ? EXAMPLES
+                  : (capabilities.data?.examples ?? DISCOVERY_EXAMPLES)
+              ).map((example) => (
                 <Chip
                   key={example}
                   label={example}
@@ -225,12 +239,19 @@ export default function GuestVivi() {
           <Stack spacing={1.5}>
             <VisitorBubble>{asked.current.question}</VisitorBubble>
             <ViviBubble assistant={assistant}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <CircularProgress size={14} aria-label="Vivi is answering" />
-                <Typography variant="body2" color="text.secondary">
-                  Vivi is answering…
-                </Typography>
-              </Stack>
+              {draft ? (
+                // The answer as it is being written; the finished one replaces it.
+                <Box aria-live="polite" aria-busy="true">
+                  <Markdown>{draft}</Markdown>
+                </Box>
+              ) : (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <CircularProgress size={14} aria-label="Vivi is answering" />
+                  <Typography variant="body2" color="text.secondary">
+                    Vivi is answering…
+                  </Typography>
+                </Stack>
+              )}
             </ViviBubble>
           </Stack>
         )}

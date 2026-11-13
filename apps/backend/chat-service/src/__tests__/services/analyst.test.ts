@@ -1,7 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { fetchWithTimeout } from '@visin/backend-core';
 import { vi, type Mock } from 'vitest';
-import { analyze, reservationFor, RESERVATION } from '../../services/analyst';
+import {
+  analyze,
+  reservationFor,
+  RESERVATION,
+  splitSuggestions,
+  withoutSuggestions
+} from '../../services/analyst';
 vi.mock('@modelcontextprotocol/sdk/client/index.js', async () => {
   const module = await (() => ({ Client: vi.fn() }))();
   return Object.assign({ default: module }, module);
@@ -171,19 +177,49 @@ it('aborts without a provider request and rejects unbounded history', async () =
   );
   expect(provider).not.toHaveBeenCalled();
 });
+it('keeps the start of a long thread by shortening earlier answers before dropping any turn', async () => {
+  provider.mockResolvedValue(answer([{ type: 'text', text: 'Fine.' }]));
+  const history = [];
+  for (let turn = 0; turn < 4; turn++)
+    history.push(
+      { role: 'user' as const, content: `Question ${turn}` },
+      { role: 'assistant' as const, content: `Conclusion ${turn}. ${'detail '.repeat(700)}` }
+    );
+  history.push({ role: 'user' as const, content: 'Latest question' });
+  await analyze({ ...input(), history });
+  const sent = JSON.parse(provider.mock.calls[0][1].body).messages as { role: string; content: unknown }[];
+  const text = (index: number) => String(sent.find((m) => String(m.content).startsWith(`Conclusion ${index}.`))?.content);
+  // The first answer is still there, cut to its opening; the latest one is whole.
+  expect(sent.some((m) => m.content === 'Question 0')).toBe(true);
+  expect(text(0)).toContain('[earlier answer shortened]');
+  expect(text(0).length).toBeLessThan(700);
+  expect(text(3)).not.toContain('[earlier answer shortened]');
+});
+it('opens the conversation with the hour, so the next question can reuse the cache, and gives the exact time on request', async () => {
+  provider.mockResolvedValueOnce(answer([{ type: 'tool_use', id: 'c', name: 'get_screen_context', input: {} }], 'tool_use'));
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Fine.' }]));
+  await analyze(input());
+  const opening = JSON.stringify(JSON.parse(provider.mock.calls[0][1].body).messages.slice(0, 3));
+  expect(opening).toMatch(/retrievedAt\\":\\"\d{4}-\d\d-\d\dT\d\d:00Z/);
+  const asked = JSON.stringify(JSON.parse(provider.mock.calls[1][1].body).messages.at(-1));
+  expect(asked).toMatch(/retrievedAt\\":\\"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+Z/);
+});
 it('keeps a long thread working by dropping its oldest turns', async () => {
   provider.mockResolvedValue(answer([{ type: 'text', text: 'Fine.' }]));
   const history = [];
-  for (let turn = 0; turn < 8; turn++)
+  for (let turn = 0; turn < 40; turn++)
     history.push(
       { role: 'user' as const, content: `Question ${turn}` },
       { role: 'assistant' as const, content: `${turn}`.repeat(4000) }
     );
   history.push({ role: 'user' as const, content: 'Latest question' });
   await analyze({ ...input(), history });
-  const sent = JSON.parse(provider.mock.calls[0][1].body).messages as { role: string; content: string }[];
+  const sent = JSON.parse(provider.mock.calls[0][1].body).messages as { role: string; content: unknown }[];
   expect(sent[0].role).toBe('user');
-  expect(sent.at(-1)?.content).toBe('Latest question');
+  // The question closes the conversation, so it carries the cache mark the next round of reading reads back.
+  expect(sent.at(-1)?.content).toEqual([
+    { type: 'text', text: 'Latest question', cache_control: { type: 'ephemeral', ttl: '5m' } }
+  ]);
   expect(sent.some((m) => m.content === 'Question 0')).toBe(false);
 });
 it('sends tool text as text rather than re-encoded JSON', async () => {
@@ -893,5 +929,138 @@ describe('a conversation about a paper', () => {
     expect(sentTools()).toEqual(['get_training', 'get_screen_context']);
     await analyze({ ...paperInput(), shared: true });
     expect(sentTools(1)).toBeUndefined();
+  });
+});
+
+it('runs the reads of one turn together, and hands results back in the order they were asked for', async () => {
+  let running = 0,
+    most = 0;
+  call.mockImplementation(async (request) => {
+    if (request.name !== 'get_training') return { content: [{ type: 'text', text: 'ok' }] };
+    most = Math.max(most, ++running);
+    // The first read is the slow one: its result must still come first.
+    await new Promise((done) => setTimeout(done, request.arguments.training === 'run1' ? 30 : 5));
+    running--;
+    return { content: [{ type: 'text', text: `Result for ${request.arguments.training}` }] };
+  });
+  provider.mockResolvedValueOnce(
+    answer(
+      [
+        { type: 'tool_use', id: 'a', name: 'get_training', input: { training: 'run1' } },
+        { type: 'tool_use', id: 'b', name: 'get_training', input: { training: 'run2' } }
+      ],
+      'tool_use'
+    )
+  );
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Done.' }]));
+  await analyze(input());
+  expect(most).toBe(2);
+  const results = JSON.parse(provider.mock.calls[1][1].body).messages.at(-1).content as {
+    tool_use_id: string;
+    content: string;
+  }[];
+  expect(results.map((r) => [r.tool_use_id, r.content])).toEqual([
+    ['a', 'Result for run1'],
+    ['b', 'Result for run2']
+  ]);
+});
+
+it('offers the suite tools, so ranking and weakest-condition questions can be answered', async () => {
+  transport.listTools.mockResolvedValue({
+    tools: ['get_leaderboard', 'get_worst_conditions', 'list_suites', 'update_training'].map((name) => ({
+      name,
+      inputSchema: { type: 'object' }
+    }))
+  });
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Done.' }]));
+  await analyze(input());
+  expect(JSON.parse(provider.mock.calls[0][1].body).tools.map((t: { name: string }) => t.name)).toEqual([
+    'get_leaderboard',
+    'get_worst_conditions',
+    'list_suites',
+    'get_screen_context'
+  ]);
+});
+
+describe('looking at rendered frames', () => {
+  const png = Buffer.from('frame-bytes').toString('base64');
+  const frameTools = () =>
+    transport.listTools.mockResolvedValue({
+      tools: ['list_visualizations', 'view_visualizations'].map((name) => ({ name, inputSchema: { type: 'object' } }))
+    });
+
+  it('shows the analyst as many frames as the answer has room for, beside the captions, never as text', async () => {
+    frameTools();
+    call.mockImplementation(async (request) =>
+      request.name === 'view_visualizations'
+        ? {
+            content: [
+              { type: 'text', text: 'Three overlays, epoch 40.' },
+              ...[1, 2, 3].map(() => ({ type: 'image', data: png, mimeType: 'image/png' }))
+            ]
+          }
+        : { content: [{ type: 'text', text: 'ok' }] }
+    );
+    provider.mockResolvedValueOnce(
+      answer(
+        [{ type: 'tool_use', id: 'v', name: 'view_visualizations', input: { visualizations: ['a', 'b', 'c'] } }],
+        'tool_use'
+      )
+    );
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'It misses pedestrians at range.' }]));
+    await analyze({ ...input(), frames: true });
+    const first = JSON.parse(provider.mock.calls[0][1].body);
+    expect(first.tools.map((t: { name: string }) => t.name)).toContain('view_visualizations');
+    expect(first.system[0].text).toContain('view_visualizations shows you up to 2');
+    const blocks = JSON.parse(provider.mock.calls[1][1].body).messages.at(-1).content as {
+      type: string;
+      content?: string;
+      source?: { data: string };
+    }[];
+    expect(blocks[0].content).toContain('Three overlays, epoch 40.');
+    expect(blocks[0].content).toContain('Only the first 2 of these 3 frames');
+    expect(blocks[0].content).not.toContain(png);
+    expect(blocks.filter((block) => block.type === 'image').map((block) => block.source?.data)).toEqual([png, png]);
+  });
+
+  it('does not offer frames when the turn reserved no room for them, and refuses a call for one', async () => {
+    frameTools();
+    provider.mockResolvedValueOnce(
+      answer([{ type: 'tool_use', id: 'v', name: 'view_visualizations', input: { visualizations: ['a'] } }], 'tool_use')
+    );
+    await expect(analyze(input())).rejects.toThrow('Tool unavailable');
+    const first = JSON.parse(provider.mock.calls[0][1].body);
+    expect(first.tools.map((t: { name: string }) => t.name)).toEqual(['get_screen_context']);
+    expect(first.system[0].text).not.toContain('view_visualizations');
+  });
+});
+
+describe('next questions offered with an answer', () => {
+  it('takes them off the answer, and keeps a preview from ever showing the line', async () => {
+    provider.mockResolvedValueOnce(
+      answer([
+        {
+          type: 'text',
+          text: 'Run b leads by 2.1 mIoU.\n\nNext: Which condition is run b weakest in? | ok | How do they compare at their best epochs?'
+        }
+      ])
+    );
+    const result = await analyze(input());
+    expect(result.text).toBe('Run b leads by 2.1 mIoU.');
+    // Too short to be a question worth a click, so it is left out.
+    expect(result.suggestions).toEqual(['Which condition is run b weakest in?', 'How do they compare at their best epochs?']);
+    expect(JSON.parse(provider.mock.calls[0][1].body).system[0].text).toContain('Next: ');
+    expect(withoutSuggestions('The answer.\n\nNex')).toBe('The answer.');
+    expect(withoutSuggestions('The answer.\n\nNext: Which run')).toBe('The answer.');
+    expect(withoutSuggestions('Next steps are clear.')).toBe('Next steps are clear.');
+    expect(splitSuggestions('An answer with no line.')).toEqual({ text: 'An answer with no line.', suggestions: [] });
+  });
+
+  it('leaves a shared conversation alone: no instruction to offer them, and the text is kept as written', async () => {
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Agreed.\n\nNext: What about run c in the rain?' }]));
+    const result = await analyze({ ...input(), shared: true });
+    expect(result.suggestions).toEqual([]);
+    expect(result.text).toContain('Next: What about run c in the rain?');
+    expect(JSON.parse(provider.mock.calls[0][1].body).system[0].text).not.toContain('Next: ');
   });
 });

@@ -82,6 +82,8 @@ export interface Message {
   replyTo?: string;
   quote?: ReplyQuote;
   evidence: { tool: string; input: Record<string, unknown>; at: string }[];
+  /** Next questions the analyst offered after this answer. */
+  suggestions?: string[];
 }
 
 export interface Run {

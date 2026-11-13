@@ -337,7 +337,7 @@ it('follows page context and clears it when leaving the project', async () => {
   await screen.findByText('A public project answer');
   expect(mock).toHaveBeenCalledWith('/guest/questions', expect.objectContaining({ projectId: 'route-project' }));
   act(() => window.dispatchEvent(new CustomEvent('visin:page-context', { detail: null })));
-  expect(screen.getByText(/Name a project in your question/)).toBeInTheDocument();
+  expect(screen.getByText(/Ask about a topic, a dataset or a project/)).toBeInTheDocument();
 });
 
 it('cleans up the verification widget when the chat closes', async () => {
@@ -380,4 +380,58 @@ it('uses a new submission key if the page changes after an uncertain failure', a
   const bodies = mock.mock.calls.filter(([path]) => path === '/guest/questions').map(([, body]) => body);
   expect(bodies[0].idempotencyKey).not.toBe(bodies[1].idempotencyKey);
   expect(bodies[1].projectId).toBe('different-project');
+});
+
+it("greets and suggests questions as the administrator set them, falling back to Visin's own", async () => {
+  forgetRequestedProject();
+  mock.mockImplementation(async (path: string) =>
+    path === '/guest/capabilities'
+      ? {
+          enabled: true,
+          siteKey: 'public-site-key',
+          sessionDailyLimit: 3,
+          greeting: 'Ask me about driving research.',
+          examples: ['What uses LiDAR?']
+        }
+      : response(path)
+  );
+  mount();
+  expect(await screen.findByText(/Ask me about driving research\./)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'What uses LiDAR?' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Find public computer vision projects' })).not.toBeInTheDocument();
+});
+
+it('shows the answer as it is being written, then the finished one', async () => {
+  let reads = 0;
+  mock.mockImplementation(async (path: string) => {
+    if (path.startsWith('/guest/runs/'))
+      return ++reads === 1
+        ? { state: 'running', draft: 'A public project' }
+        : { state: 'completed', answer: 'A public project answer' };
+    return response(path);
+  });
+  await ready();
+  send();
+  expect(await screen.findByText('A public project')).toBeInTheDocument();
+  expect(screen.queryByText('Vivi is answering…')).not.toBeInTheDocument();
+  expect(await screen.findByText('A public project answer', undefined, { timeout: 3000 })).toBeInTheDocument();
+});
+
+it("asks about the run a page shows, and offers questions about it and its images", async () => {
+  const run = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+  await ready();
+  act(() =>
+    window.dispatchEvent(
+      new CustomEvent('visin:page-context', {
+        detail: { projectId: 'route-project', trainingIds: [run], title: 'Fusion run' }
+      })
+    )
+  );
+  expect(await screen.findByRole('button', { name: 'What do its images show?' })).toBeInTheDocument();
+  send();
+  await screen.findByText('A public project answer');
+  expect(mock).toHaveBeenCalledWith(
+    '/guest/questions',
+    expect.objectContaining({ projectId: 'route-project', trainingId: run })
+  );
 });

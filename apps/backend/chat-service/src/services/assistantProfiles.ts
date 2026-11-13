@@ -194,7 +194,7 @@ export async function savePlatformProfile(body: unknown) {
   );
   if (!assistant) throw new NotFoundError('No platform assistant is set up yet');
   await writeProfile(assistant, profile, { platformDefault: true, deletedAt: null });
-  publicCache = undefined;
+  forgetPlatformAssistant();
   return getPlatformProfile();
 }
 
@@ -225,7 +225,24 @@ export async function platformAssistantPublic(): Promise<PublicAssistant | null>
   return value;
 }
 
+/** Who guest Vivi is: the platform assistant's name and the personality its managers wrote, as it is set now. */
+export interface AssistantVoice {
+  name: string;
+  personality: string;
+}
+let voiceCache: { at: number; value: AssistantVoice | null } | undefined;
+export async function platformAssistantVoice(): Promise<AssistantVoice | null> {
+  if (voiceCache && Date.now() - voiceCache.at < PUBLIC_FRESH_MS) return voiceCache.value;
+  const assistant = await Assistant.findOne({ platformDefault: true, published: true, paused: false, deletedAt: null })
+    .select('name personality')
+    .lean();
+  const value = assistant ? { name: assistant.name, personality: (assistant.personality ?? '').trim() } : null;
+  voiceCache = { at: Date.now(), value };
+  return value;
+}
+
 /** Test seam. */
 export function forgetPlatformAssistant(): void {
   publicCache = undefined;
+  voiceCache = undefined;
 }

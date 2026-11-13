@@ -1,4 +1,4 @@
-import { withTiers } from '../../services/providers';
+import { cacheConversation, withTiers } from '../../services/providers';
 
 const models = (...ids: string[]) => ids.map((id) => ({ id, name: id }));
 const tiers = (result: ReturnType<typeof withTiers>) =>
@@ -38,5 +38,30 @@ describe('the plain choices of model', () => {
     expect(withTiers('anthropic', models('claude-haiku-5-5')).recommended).toBe('claude-haiku-5-5');
     expect(withTiers('openai', models('o4-mini', 'o3')).recommended).toBeNull();
     expect(withTiers('openai', []).models).toEqual([]);
+  });
+});
+
+describe('caching the conversation between rounds of reading', () => {
+  it('marks the last block of the last message, on a copy', () => {
+    const results = { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: 'one' }, { type: 'tool_result', tool_use_id: 'b', content: 'two' }] };
+    const messages = [{ role: 'user', content: 'Question' }, results];
+    const sent = cacheConversation(messages, true) as { content: { cache_control?: unknown }[] }[];
+    expect(sent[1].content[0].cache_control).toBeUndefined();
+    expect(sent[1].content[1].cache_control).toEqual({ type: 'ephemeral', ttl: '5m' });
+    // Nothing kept between rounds carries a mark, or marks would pile up past what a request allows.
+    expect(JSON.stringify(messages)).not.toContain('cache_control');
+  });
+
+  it('turns a plain question into a block so it can carry the mark', () => {
+    const sent = cacheConversation([{ role: 'user', content: 'Question' }], true);
+    expect(sent).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'Question', cache_control: { type: 'ephemeral', ttl: '5m' } }] }
+    ]);
+  });
+
+  it('leaves a turn with no tools alone: it is sent once, so a cache write would only cost', () => {
+    const messages = [{ role: 'user', content: 'Question' }];
+    expect(cacheConversation(messages, false)).toBe(messages);
+    expect(cacheConversation([], true)).toEqual([]);
   });
 });

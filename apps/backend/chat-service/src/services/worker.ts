@@ -8,7 +8,7 @@ import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { analyze } from './analyst';
 import { MAX_ANALYSIS_IMAGES, type ImageRef } from './imageInput';
-import { budgetPlans } from './analysisLimits';
+import { budgetPlans, FRAME_IMAGES } from './analysisLimits';
 import { createDraftWriter } from './draft';
 import { resolveProviderKey } from './keys';
 import { appendMessage } from './messages';
@@ -97,7 +97,8 @@ export function startWorker() {
           body: job.result,
           clientId: `assistant:${job.messageId}`,
           replyTo: job.messageId,
-          evidence: job.evidence.map((e) => ({ tool: e.tool || '', input: e.input, at: e.at || new Date() }))
+          evidence: job.evidence.map((e) => ({ tool: e.tool || '', input: e.input, at: e.at || new Date() })),
+          ...(job.suggestions?.length ? { suggestions: job.suggestions } : {})
         });
       await AssistantRun.updateOne({ _id: job.id }, { $set: { published: true }, $unset: { draft: 1 } });
     }
@@ -269,7 +270,9 @@ export function startWorker() {
         toolRounds,
         screen?.allowActions === true,
         imageCount,
-        c.kind === 'assistant' && c.paperId ? PAPER_REQUEST_BYTES : undefined
+        c.kind === 'assistant' && c.paperId ? PAPER_REQUEST_BYTES : undefined,
+        // Frames belong to a project's runs, and share the provider's per-request image limit with uploads.
+        c.kind === 'assistant' && Boolean(c.projectId) && imageCount + FRAME_IMAGES <= MAX_ANALYSIS_IMAGES
       )) {
         const budget = await Budget.findOneAndUpdate(
           { userId: run.userId, day, reserved: { $lte: limit - candidate.reserve } },
@@ -373,6 +376,7 @@ export function startWorker() {
         runId: run.id,
         usageUserId: run.userId,
         toolRounds: plan.toolRounds,
+        frames: plan.frames === true,
         conversationId: c.id,
         provider,
         model,
@@ -446,6 +450,7 @@ export function startWorker() {
             // The whole answer, so the preview is complete until the published message replaces it.
             ...(drafts ? { draft: result.text } : {}),
             evidence: result.evidence,
+            ...(result.suggestions?.length ? { suggestions: result.suggestions } : {}),
             activity: 'Completed',
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,

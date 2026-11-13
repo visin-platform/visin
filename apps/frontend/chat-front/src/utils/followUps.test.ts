@@ -28,3 +28,11 @@ it('suits a comparison, a project and a general question', () => {
   expect(followUps({ projectId: 'p1', trainingIds: [] }, [])[0]).toBe('Summarize the best runs in this project');
   expect(followUps(undefined, [])[0]).toBe('How do I read a validation curve?');
 });
+
+it("puts the analyst's own suggestions first, and still leaves out what was already asked", () => {
+  const suggested = ['Which condition is run b weakest in?', 'How do they compare at their best epochs?'];
+  const offered = followUps(undefined, ['which condition is run b weakest in?'], suggested);
+  expect(offered[0]).toBe('How do they compare at their best epochs?');
+  expect(offered).not.toContain('Which condition is run b weakest in?');
+  expect(offered).toHaveLength(3);
+});
