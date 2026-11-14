@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.13.0](https://github.com/visin-platform/visin/compare/v2.12.0...v2.13.0) (2026-11-14)
+
+### Features
+
+* improve assistant analysis to read images ([ba7fef2](https://github.com/visin-platform/visin/commit/ba7fef22cf517cb35d2a94adaa362f7a9d74a6cc))
+
 ## [2.12.0](https://github.com/visin-platform/visin/compare/v2.11.0...v2.12.0) (2026-11-13)
 
 ### Features
