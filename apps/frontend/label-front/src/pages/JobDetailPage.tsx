@@ -150,7 +150,10 @@ const JobDetailPage: React.FC = () => {
               <OwnerChip owner={job.dataset.owner} userId={user?.id} groups={ownerGroups} />
             </>
           )}
-          <Chip label={job.sensors.map((sensor) => sensor.key).join(' + ')} size="small" variant="outlined" />
+          {/* A job over a dataset with no named sensors has nothing to say here: no empty chip. */}
+          {job.sensors.length > 0 && (
+            <Chip label={job.sensors.map((sensor) => sensor.key).join(' + ')} size="small" variant="outlined" />
+          )}
           {job.redundancy > 1 && <Chip label={`K=${job.redundancy}`} size="small" variant="outlined" />}
         </Stack>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }} aria-label="classes">

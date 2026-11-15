@@ -33,13 +33,13 @@ export interface ShowcaseItem {
 export const SHOWCASE: ShowcaseItem[] = [
   {
     src: '/showcase/charts.webp',
-    alt: 'Training and validation loss and mean IoU curves of one run over 100 epochs',
+    alt: 'Training and validation loss and mean IoU curves of one run over 200 epochs, its best epoch marked and the epochs after it shaded',
     title: 'Every epoch, charted',
-    caption: 'See the loss and metric curves your training script sends.'
+    caption: 'See the curves your training script sends, with the best epoch marked.'
   },
   {
     src: '/showcase/compare.webp',
-    alt: 'Nine runs compared by training time, best epoch and best validation mIoU, with a LaTeX export button',
+    alt: 'Five runs compared by training time, best epoch and best validation mIoU, with a LaTeX export button',
     title: 'Runs compared at their best',
     caption: 'Each run at its strongest epoch, and the table ready for your paper as LaTeX.'
   },
@@ -50,8 +50,20 @@ export const SHOWCASE: ShowcaseItem[] = [
     caption: 'Break test scores down to match your data.'
   },
   {
+    src: '/showcase/project.webp',
+    alt: "A project's 118 runs ranked by validation mean IoU, beside a chart of the best result so far, run by run",
+    title: 'The best run, and how you got there',
+    caption: 'Runs ranked by the metric you care about, and each new best over time.'
+  },
+  {
+    src: '/showcase/analyst.webp',
+    alt: 'The chat analyst open beside a training run, with the run as context and suggested questions',
+    title: 'Ask about any run',
+    caption: 'An analyst beside every run that reads its recorded results. You bring the model provider.'
+  },
+  {
     src: '/showcase/label.webp',
-    alt: 'A labeling job at 1,002 of 4,110 frames, with start labeling and browse buttons',
+    alt: 'A labeling job at 1,003 of 4,110 frames, with start labeling and browse buttons',
     title: 'Labeling as a team',
     caption: 'Share labeling work across your group and track progress.'
   }

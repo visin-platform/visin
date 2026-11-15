@@ -2,7 +2,7 @@ import { Box, Container, Typography } from '@mui/material';
 import { SHOWCASE } from '../content';
 
 /**
- * What a run leaves behind, shown rather than told: four real screens, a title
+ * What a run leaves behind, shown rather than told: six real screens, a title
  * and one line each.
  */
 export default function Showcase() {

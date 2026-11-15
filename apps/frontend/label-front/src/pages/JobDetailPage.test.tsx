@@ -125,6 +125,16 @@ describe('JobDetailPage', () => {
     expect(screen.getByText(/31 boxes drawn/)).toBeInTheDocument();
   });
 
+  it('shows no sensors chip for a job whose dataset names none, rather than an empty one', async () => {
+    mockedGetJob.mockResolvedValue(job({ sensors: [] }));
+    renderPage();
+
+    expect(await screen.findByText('Mask check')).toBeInTheDocument();
+    expect(screen.queryByText('camera + lidar')).not.toBeInTheDocument();
+    const chips = [...document.querySelectorAll('.MuiChip-label')].map((label) => label.textContent?.trim());
+    expect(chips).not.toContain('');
+  });
+
   it('shows no annotator table to a visitor, who is not given the email addresses', async () => {
     mockedStats.mockResolvedValue({ ...stats, perUser: undefined });
     renderPage();

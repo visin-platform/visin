@@ -100,7 +100,7 @@ export default function Hero({ appUrl }: HeroProps) {
               muted
               playsInline
               preload="metadata"
-              aria-label="A tour of Visin: a project's training runs, one opened with its curves and per-class scores, then nine runs compared at their best epoch and exported as LaTeX"
+              aria-label="A tour of Visin: a project's training runs, one opened with its curves, then five runs compared at their best epoch and exported as LaTeX"
               // The app's dark page, so the frame is the right colour before the first frame arrives.
               sx={{ display: 'block', width: '100%', aspectRatio: '1440 / 900', bgcolor: '#0b0f17' }}
             />
