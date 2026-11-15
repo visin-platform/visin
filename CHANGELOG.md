@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.14.0](https://github.com/visin-platform/visin/compare/v2.13.0...v2.14.0) (2026-11-15)
+
+### Features
+
+* add run alerts, chat search, analyst project notes and per-purpose models ([97006eb](https://github.com/visin-platform/visin/commit/97006eb334fd7f87379e030c35355ac91f7e0670))
+
 ## [2.13.0](https://github.com/visin-platform/visin/compare/v2.12.0...v2.13.0) (2026-11-14)
 
 ### Features
