@@ -17,6 +17,7 @@ import { DeploymentSecret } from '../../models/DeploymentSecret';
 import { Message } from '../../models/Message';
 import { Pricing } from '../../models/Pricing';
 import { ProviderKey } from '../../models/ProviderKey';
+import { PushPreference } from '../../models/PushPreference';
 import { PushSubscription } from '../../models/PushSubscription';
 import { ScreenCall } from '../../models/ScreenCall';
 import { Settings } from '../../models/Settings';
@@ -104,6 +105,7 @@ export function setupChatTests() {
     await Pricing.deleteMany({});
     await ScreenCall.deleteMany({});
     await PushSubscription.deleteMany({});
+    await PushPreference.deleteMany({});
     await DeploymentSecret.deleteMany({});
     await Call.deleteMany({});
     await CallSignal.deleteMany({});

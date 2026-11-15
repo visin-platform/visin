@@ -7,6 +7,11 @@ export async function listMessages(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data });
 }
 
+export async function searchMessages(req: Request, res: Response): Promise<void> {
+  const data = await service.searchMessages(req, paramId(req), { q: req.query.q, before: req.query.before });
+  res.json({ success: true, data });
+}
+
 export async function sendMessage(req: Request, res: Response): Promise<void> {
   const result = await service.sendMessage(req, paramId(req), req.body);
   res.status(result.created ? 201 : 200).json({ success: true, data: result.message });

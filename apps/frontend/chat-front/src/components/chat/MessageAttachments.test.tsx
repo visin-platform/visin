@@ -73,3 +73,61 @@ it('shows a retry when the addresses cannot be signed', async () => {
   );
   expect(await screen.findByText('Could not load attachments.', {}, { timeout: 4000 })).toBeInTheDocument();
 });
+
+it('signs a failing image again only once, then offers a retry instead of reloading it without end', async () => {
+  let signed = 0;
+  vi.mocked(chatService.attachmentUrls).mockImplementation(async () => ({
+    urls: { a: `https://files.example.test/a?sig=${++signed}` },
+    expiresMs: Date.now() + 3600000
+  }));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MessageAttachments
+        conversationId="c"
+        files={[{ fileId: 'a', name: 'a.png', mime: 'image/png', size: 1, kind: 'image' }]}
+      />
+    </QueryClientProvider>
+  );
+  fireEvent.error(await screen.findByAltText('a.png'));
+  await vi.waitFor(() => expect(screen.getByAltText('a.png')).toHaveAttribute('src', 'https://files.example.test/a?sig=2'));
+  // The fresh address fails too: no third signing, and the thread stops changing height.
+  fireEvent.error(screen.getByAltText('a.png'));
+  const status = await screen.findByRole('status');
+  expect(status).toHaveTextContent('a.png · Could not load');
+  expect(chatService.attachmentUrls).toHaveBeenCalledTimes(2);
+
+  // Asked for by the person, it is signed and shown again; one that loads is allowed its one re-signing later.
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  const again = await screen.findByAltText('a.png');
+  await vi.waitFor(() => expect(again).toHaveAttribute('src', 'https://files.example.test/a?sig=3'));
+  fireEvent.load(again);
+  fireEvent.error(again);
+  await vi.waitFor(() => expect(chatService.attachmentUrls).toHaveBeenCalledTimes(4));
+});
+
+it('treats a failing video and voice message the same way', async () => {
+  vi.mocked(chatService.attachmentUrls).mockImplementation(async (_c, ids) => ({
+    urls: Object.fromEntries(ids.map((id) => [id, `https://files.example.test/${id}?t=${Math.random()}`])),
+    expiresMs: Date.now() + 3600000
+  }));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MessageAttachments
+        conversationId="c"
+        files={[
+          { fileId: 'v', name: 'v.mp4', mime: 'video/mp4', size: 1, kind: 'video' },
+          { fileId: 's', name: 's.webm', mime: 'audio/webm', size: 1, kind: 'audio' }
+        ]}
+      />
+    </QueryClientProvider>
+  );
+  const video = await screen.findByLabelText('v.mp4');
+  fireEvent.loadedMetadata(video);
+  fireEvent.loadedMetadata(screen.getByLabelText('Voice message: s.webm'));
+  fireEvent.error(video);
+  await vi.waitFor(() => expect(chatService.attachmentUrls).toHaveBeenCalledTimes(2));
+  fireEvent.error(screen.getByLabelText('v.mp4'));
+  expect(await screen.findByText(/v\.mp4 · Could not load/)).toBeInTheDocument();
+  fireEvent.error(screen.getByLabelText('Voice message: s.webm'));
+  await vi.waitFor(() => expect(chatService.attachmentUrls).toHaveBeenCalledTimes(3));
+});

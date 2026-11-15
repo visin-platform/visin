@@ -18,6 +18,8 @@ export interface Project {
   description?: string;
   /** Markdown; present when the project is opened, not in lists. */
   readme?: string;
+  /** What the chat analyst is told first, a note to a line; present when the project is opened, not in lists. */
+  analystNotes?: string;
   visibility: Visibility;
   owner: OwnerRef & { name?: string };
   createdBy: string;
@@ -61,6 +63,8 @@ export interface UpdateProjectData {
   description?: string;
   /** Markdown, at most 20,000 characters; an empty one clears it */
   readme?: string;
+  /** At most 1,500 characters; an empty one clears it */
+  analystNotes?: string;
   visibility?: Visibility;
   editorGroupIds?: string[];
   /** null clears the taxonomy, returning the project to pure discovery */

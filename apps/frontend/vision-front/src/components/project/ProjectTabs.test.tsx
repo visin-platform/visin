@@ -14,6 +14,7 @@ vi.mock('./ProjectComparisonsTab', () => ({ default: () => <div>comparisons-tab<
 vi.mock('../analysis/FindingsPanel', () => ({ default: () => <div>analysis-tab</div> }));
 vi.mock('../models/ModelRegistry', () => ({ default: ({ projectId }: { projectId: string }) => <div>models-tab:{projectId}</div> }));
 vi.mock('../ProjectSettings', () => ({ default: () => <div>settings-tab</div> }));
+vi.mock('./ProjectAnalystNotes', () => ({ default: () => <div>analyst-notes</div> }));
 vi.mock('../common/BestRunCard', () => ({ default: ({ projectId }: { projectId: string }) => <div>best-run:{projectId}</div> }));
 vi.mock('./FirstRunPanel', () => ({ default: () => <div>first-run-panel</div> }));
 
@@ -149,6 +150,7 @@ describe('ProjectTabs', () => {
 
     expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByText('settings-tab')).toBeInTheDocument();
+    expect(screen.getByText('analyst-notes')).toBeInTheDocument();
   });
 
   it('calls onTabChange when a tab is clicked', () => {

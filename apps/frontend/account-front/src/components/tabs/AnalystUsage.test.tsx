@@ -618,3 +618,43 @@ it('shows latency only for measured questions rather than averaging legacy zero 
   renderUsage();
   expect(await screen.findByText(/cached input tokens/)).toHaveTextContent('5s average measured answer time');
 });
+it('shows how much of the input came from the cache and how many requests an answer took', async () => {
+  const base = report();
+  service.usage.mockResolvedValue(
+    report({
+      totals: { ...base.totals, inputTokens: 2000 },
+      performance: {
+        measuredQuestions: 2,
+        cacheReadTokens: 600,
+        cacheWriteTokens: 100,
+        providerRequests: 5,
+        toolCalls: 3,
+        durationMs: 10000
+      }
+    })
+  );
+  renderUsage();
+  const line = await screen.findByText(/cached input tokens/);
+  expect(line).toHaveTextContent('(30% of input)');
+  expect(line).toHaveTextContent('5 provider requests (2.5 per answer)');
+});
+it('leaves the ratios out when there is nothing to divide by', async () => {
+  const base = report();
+  service.usage.mockResolvedValue(
+    report({
+      totals: { ...base.totals, inputTokens: 0 },
+      performance: {
+        measuredQuestions: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        providerRequests: 0,
+        toolCalls: 0,
+        durationMs: 0
+      }
+    })
+  );
+  renderUsage();
+  const line = await screen.findByText(/cached input tokens/);
+  expect(line).not.toHaveTextContent('% of input');
+  expect(line).not.toHaveTextContent('per answer');
+});

@@ -2,12 +2,14 @@ import { entityId, TRAINING_TABS, COMPARE_TABS, PROJECT_TABS } from './screen';
 
 /** What the address of the page beside the chat says it shows. Every id still has to be verified before use. */
 export type PageContext =
-  | { place: 'training'; trainingIds: [string]; tab: string }
+  | { place: 'training'; trainingIds: [string]; tab: string; frame?: string }
   | { place: 'compare'; trainingIds: string[]; tab: string }
   | { place: 'visualizations'; trainingIds: string[] }
   | { place: 'project'; projectId: string; tab: string };
 
 const isId = (value: string) => entityId.safeParse(value).success;
+/** A visualization's id as vision gives it. Only its shape is checked here; the frame tools check access to it. */
+const FRAME_ID = /^[A-Za-z0-9_-]{8,64}$/;
 const oneOf = (value: string | null, allowed: readonly string[], fallback: string) =>
   value === null ? fallback : allowed.includes(value) ? value : undefined;
 /** 2 to 8 distinct, well-formed run ids, as the comparison pages take them. */
@@ -35,7 +37,16 @@ export function pageContext(path?: string | null): PageContext | undefined {
   const training = /^\/trainings\/([^/]+)$/.exec(pathname);
   if (training && isId(training[1])) {
     const tab = oneOf(params.get('tab'), TRAINING_TABS, 'overview');
-    return tab ? { place: 'training', trainingIds: [training[1]], tab } : undefined;
+    // The image open on the Visualizations tab (vision-front keeps it in `frame=`).
+    const frame = params.get('frame');
+    return tab
+      ? {
+          place: 'training',
+          trainingIds: [training[1]],
+          tab,
+          ...(tab === 'visualizations' && frame && FRAME_ID.test(frame) ? { frame } : {})
+        }
+      : undefined;
   }
   const project = /^\/projects\/([^/]+)$/.exec(pathname);
   if (project && isId(project[1])) {

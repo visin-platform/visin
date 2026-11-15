@@ -29,6 +29,14 @@ export const saveFindingSchema = z
   })
   .strict();
 
+export const MAX_SEARCH_TERM = 100;
+export const searchQuerySchema = z
+  .object({
+    q: z.string().trim().min(2, 'Type at least two characters').max(MAX_SEARCH_TERM),
+    before: z.coerce.number().int().positive().optional()
+  })
+  .strict();
+
 export const messageCursorSchema = z.coerce.number().int().positive();
 export const streamCursorSchema = z.coerce.number().int().min(0);
 export const readSequenceSchema = (maxSeq: number) => z.number().int().min(0).max(maxSeq);

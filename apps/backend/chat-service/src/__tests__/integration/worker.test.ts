@@ -1,15 +1,17 @@
 import '../helpers/mocks';
-import { vi, type Mock } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import { createApiKey, fetchWithTimeout } from '@visin/backend-core';
 import { AssistantRun } from '../../models/AssistantRun';
 import { Budget } from '../../models/Budget';
 import { Conversation } from '../../models/Conversation';
 import { Message } from '../../models/Message';
 import { peer } from '../../services/access';
-import { analyze } from '../../services/analyst';
+import { analyze, type AnalysisSpend } from '../../services/analyst';
+import { reservationFor } from '../../services/analysisLimits';
 import { appendMessage } from '../../services/messages';
 import { ProviderRequestError, PROVIDER_REPLAY_VERSION } from '../../services/providers';
 import { startWorker } from '../../services/worker';
+import { listen, notify } from '../../services/wakeBus';
 import { enableAnalyst } from '../helpers/analystFixtures';
 import { base, create, request, setupChatTests } from '../helpers/testServer';
 
@@ -330,4 +332,73 @@ it('records safe provider diagnostics privately and identifies the running repla
   expect(JSON.stringify(visible)).not.toContain('providerReplayVersion');
   const health = await fetch(`${base}/health`);
   expect(health.headers.get('x-visin-chat-replay')).toBe(PROVIDER_REPLAY_VERSION);
+});
+
+describe('a failed question and the day\'s budget', () => {
+  const failWith = async (clientId: string, spend?: (input: { spent: AnalysisSpend }) => void) => {
+    await enableAnalyst('test');
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Compare the runs', clientId });
+    vi.mocked(analyze).mockImplementationOnce(async (input) => {
+      spend?.(input as unknown as { spent: AnalysisSpend });
+      throw new Error('Project is no longer accessible');
+    });
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('failed');
+    return (await Budget.findOne({ userId: 'alice' }))?.reserved;
+  };
+
+  it('gives back the whole reservation when nothing was sent to the provider', async () => {
+    expect(await failWith('refund-none')).toBe(0);
+  });
+
+  it('keeps what completed requests used, and one round for a request that never answered', async () => {
+    const reserved = await failWith('refund-partial', ({ spent }) => {
+      spent.inputTokens = 5000;
+      spent.outputTokens = 1000;
+      spent.requests = 1;
+      spent.inFlight = true;
+    });
+    expect(reserved).toBe(6000 + reservationFor(false, 1));
+  });
+
+  it('keeps only the used tokens when every request answered', async () => {
+    const reserved = await failWith('refund-used', ({ spent }) => {
+      spent.inputTokens = 7000;
+      spent.outputTokens = 500;
+      spent.requests = 1;
+    });
+    expect(reserved).toBe(7500);
+  });
+});
+
+it('looks for work as soon as it is told a question is waiting, not at its next scheduled look', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'Wake me', clientId: 'wake-question-1' });
+  const before = (analyze as Mock).mock.calls.length;
+  const worker = startWorker();
+  try {
+    // The first scheduled look is a second away; only the signal can bring a run in sooner.
+    notify('worker');
+    await vi.waitFor(() => expect((analyze as Mock).mock.calls.length).toBe(before + 1), { timeout: 700 });
+  } finally {
+    worker();
+  }
+});
+
+it('wakes the worker when a question is saved', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  const woken = vi.fn();
+  const off = listen('worker', woken);
+  const stream = vi.fn();
+  const offStream = listen(`conv:${id}`, stream);
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'Ping', clientId: 'wake-question-2' });
+  off();
+  offStream();
+  expect(woken).toHaveBeenCalled();
+  expect(stream).toHaveBeenCalled();
 });

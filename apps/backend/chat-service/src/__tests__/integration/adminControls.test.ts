@@ -150,6 +150,8 @@ it('keeps provider setting revisions and rejects stale edits', async () => {
     enabled: false,
     provider: 'anthropic' as const,
     model: '',
+    guestModel: '',
+    sharedModel: '',
     dailyTokenLimit: 800000,
     toolRounds: 8
   };

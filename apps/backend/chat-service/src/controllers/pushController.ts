@@ -4,6 +4,8 @@ import { unreadFor } from '../services/pushNotify';
 import { id } from '../validation/commonSchemas';
 import { parsed } from '../validation/parse';
 import { pushSubscriptionSchema, unsubscribeSchema } from '../validation/pushSchemas';
+import { setRunAlerts, wantsRunAlerts } from '../services/runAlerts';
+import { pushPreferencesSchema } from '../validation/runAlertSchemas';
 
 /** GET /push/config: whether this server can send notifications, and the public key a browser subscribes with. */
 export async function config(_req: Request, res: Response): Promise<void> {
@@ -36,4 +38,16 @@ export async function unread(req: Request, res: Response): Promise<void> {
   const conversation = req.query.conversation === undefined ? undefined : parsed(id, req.query.conversation);
   res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: await unreadFor(req.user!.id, conversation) });
+}
+
+/** GET /push/preferences: what this person wants pushed besides messages and calls. */
+export async function preferences(req: Request, res: Response): Promise<void> {
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, data: { runs: await wantsRunAlerts(req.user!.id) } });
+}
+
+export async function savePreferences(req: Request, res: Response): Promise<void> {
+  const { runs } = parsed(pushPreferencesSchema, req.body);
+  await setRunAlerts(req.user!.id, runs);
+  res.json({ success: true, data: { runs } });
 }

@@ -39,7 +39,7 @@ export const listProjects = async (userId: string | undefined, filters: GetProje
   // Without readmes: each can be 20,000 characters, and a list shows none of them.
   // `lastActivityAt` is sorted here: a project older than that field reads as its last edit.
   const byActivity = sortBy === 'lastActivityAt';
-  const found = await Project.find(query).select('-readme').sort(byActivity ? {} : { [sortBy]: sortOrder });
+  const found = await Project.find(query).select('-readme -analystNotes').sort(byActivity ? {} : { [sortBy]: sortOrder });
   const activity = (project: IProject) => (project.lastActivityAt ?? project.updatedAt).getTime();
   const projects = byActivity
     ? [...found].sort((a, b) => (sortOrder === 1 ? activity(a) - activity(b) : activity(b) - activity(a)))
@@ -154,6 +154,7 @@ interface UpdateProjectData {
   name?: string;
   description?: string;
   readme?: string;
+  analystNotes?: string;
   visibility?: Visibility;
   editorGroupIds?: string[];
   slug?: string;
@@ -189,6 +190,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   if (description !== undefined) project.description = description;
   // An empty readme is none: there is nothing to show, and the page then offers to write one.
   if (readme !== undefined) project.readme = readme.trim() ? readme : undefined;
+  if (data.analystNotes !== undefined) project.analystNotes = data.analystNotes.trim() || undefined;
   if (slug !== undefined) {
     if (slug.trim()) {
       // An id-shaped slug is ambiguous with the project that id names, and a

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { clearVisits, recordVisit } from '@visin/frontend-core';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -397,5 +397,46 @@ describe('chat', () => {
   it('is left out where chat is not configured', () => {
     renderWithChat('/projects');
     expect(screen.queryByRole('button', { name: 'Chat' })).toBeNull();
+  });
+});
+
+describe('chat on a phone', () => {
+  const asPhone = () =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    );
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('takes the whole screen: no app bar or tab bar, one arrow out, and the conversations below it', async () => {
+    asPhone();
+    renderAt('/chat');
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(await screen.findByText('Embedded conversations')).toBeInTheDocument();
+    expect(screen.queryByTestId('path')).not.toBeInTheDocument();
+  });
+
+  it('leaves to Home when chat was opened straight from a link', async () => {
+    asPhone();
+    renderAt('/chat');
+    fireEvent.click(screen.getByRole('button', { name: 'Leave chat' }));
+    expect(await screen.findByTestId('path')).toHaveTextContent('/');
+  });
+
+  it('keeps the menus on every other page of a phone', () => {
+    asPhone();
+    renderAt('/projects');
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Leave chat' })).not.toBeInTheDocument();
   });
 });

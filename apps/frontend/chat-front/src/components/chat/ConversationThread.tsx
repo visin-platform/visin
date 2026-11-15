@@ -2,6 +2,7 @@ import { chatChrome } from '../../appearance/chatAppearance';
 import { useEffect, useState } from 'react';
 import type { Conversation } from '../../types/chat';
 import { ExportConversationDialog } from './ExportConversationDialog';
+import { SearchConversationDialog } from './SearchConversationDialog';
 import { ReplyPreview } from './ReplyPreview';
 import { AutoAwesome, MoreVert } from '@mui/icons-material';
 import {
@@ -57,9 +58,13 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     selected
   } = useChatWorkspaceContext();
   const [exporting, setExporting] = useState<{ conversation: Conversation; title: string } | null>(null);
+  const [searching, setSearching] = useState(false);
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
   const [voiceTarget, setVoiceTarget] = useState<HTMLElement | null>(null);
-  useEffect(() => setExporting(null), [c?._id]);
+  useEffect(() => {
+    setExporting(null);
+    setSearching(false);
+  }, [c?._id]);
   if (!c) return null;
   return (
     <>
@@ -158,6 +163,14 @@ export function ConversationThread({ panel }: { panel: boolean }) {
           <MenuItem
             onClick={() => {
               setSettingsAnchor(null);
+              setSearching(true);
+            }}
+          >
+            Search messages
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setSettingsAnchor(null);
               setShowPeople(true);
             }}
           >
@@ -209,6 +222,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
           onClose={() => setExporting(null)}
         />
       )}
+      {searching && <SearchConversationDialog conversationId={c._id} onClose={() => setSearching(false)} />}
       <MessageList />
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
       {replyTarget && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}

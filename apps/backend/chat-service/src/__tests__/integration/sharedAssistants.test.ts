@@ -6,9 +6,11 @@ import { Assistant } from '../../models/Assistant';
 import { AssistantRun } from '../../models/AssistantRun';
 import { Conversation } from '../../models/Conversation';
 import { Message } from '../../models/Message';
+import { Settings } from '../../models/Settings';
 import { groups } from '../../services/access';
 import { analyze } from '../../services/analyst';
 import { appendMessage } from '../../services/messages';
+import { resetAssistantSettingsCache } from '../../services/settings';
 import { startWorker } from '../../services/worker';
 import { enableAnalyst } from '../helpers/analystFixtures';
 import { create, request, setupChatTests } from '../helpers/testServer';
@@ -92,6 +94,30 @@ describe('shared assistants', () => {
     await worker.tick();
     const context = JSON.parse((analyze as Mock).mock.calls.at(-1)![0].history[0].content);
     expect(context).toMatchObject({ question: 'Explain more', quote: { body: answer!.body, senderName: 'Reviewer' } });
+  });
+
+  it('answers on the shared-conversation model when one is set, and on the main model otherwise', async () => {
+    const { assistant, conversationId } = await setup();
+    await consent(conversationId, 'alice');
+    await consent(conversationId, 'bob');
+    await Settings.updateOne({ _id: 'assistant' }, { $set: { sharedModel: 'cheap-model' } });
+    resetAssistantSettingsCache();
+    expect((await ask(conversationId, assistant.id)).status).toBe(201);
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ shared: true, model: 'cheap-model' });
+    expect((await AssistantRun.findOne({ conversationId }))?.model).toBe('cheap-model');
+
+    await Settings.updateOne({ _id: 'assistant' }, { $set: { sharedModel: '' } });
+    resetAssistantSettingsCache();
+    await request(`/conversations/${conversationId}/messages`, 'alice', {
+      body: 'And again',
+      clientId: 'shared-model-again',
+      assistantId: assistant.id
+    });
+    await worker.tick();
+    expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ shared: true, model: 'test' });
   });
 
   it('denies outsiders and refuses unregistered or paused assistants', async () => {

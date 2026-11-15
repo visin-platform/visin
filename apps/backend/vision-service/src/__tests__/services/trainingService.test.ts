@@ -1,5 +1,7 @@
 import { vi, type Mock } from 'vitest';
 import { assertResourceWrite } from '../../services/writeAccessService';
+import { notifyRunFinished } from '../../clients/chatNotifier';
+vi.mock('../../clients/chatNotifier', () => ({ notifyRunFinished: vi.fn() }));
 import { ForbiddenError } from '@visin/backend-core';
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
@@ -396,6 +398,9 @@ describe('getTrainingTags', () => {
   });
 });
 
+/** A query as `.lean()` ends it: the rows, as plain objects. */
+const lean = (rows: unknown) => ({ lean: vi.fn().mockResolvedValue(rows) });
+
 describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
   it('404s when missing', async () => {
     mockedTraining.findOne.mockResolvedValue(null);
@@ -424,7 +429,7 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
     await expect(trainingService.getTrainingByUuid('uuid-t1', 'u1')).resolves.toBe(doc);
 
     const epochs = [{ epoch: 1 }];
-    const sort = vi.fn().mockResolvedValue(epochs);
+    const sort = vi.fn().mockReturnValue(lean(epochs));
     mockedEpoch.find.mockReturnValue({ sort });
 
     const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1);
@@ -442,9 +447,9 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
     mockedCheckAccess.mockResolvedValue(true);
 
     const ids = Array.from({ length: 100 }, (_, i) => ({ _id: `e${i}` }));
-    const select = vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue(ids) });
+    const select = vi.fn().mockReturnValue({ sort: vi.fn().mockReturnValue(lean(ids)) });
     const fetched = [{ epoch: 0 }, { epoch: 99 }];
-    mockedEpoch.find.mockReturnValueOnce({ select }).mockReturnValueOnce({ sort: vi.fn().mockResolvedValue(fetched) });
+    mockedEpoch.find.mockReturnValueOnce({ select }).mockReturnValueOnce({ sort: vi.fn().mockReturnValue(lean(fetched)) });
 
     const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1, 5);
 
@@ -462,7 +467,7 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
     mockedCheckAccess.mockResolvedValue(true);
 
     const epochs = [{ epoch: 1 }, { epoch: 2 }];
-    mockedEpoch.find.mockReturnValue({ sort: vi.fn().mockResolvedValue(epochs) });
+    mockedEpoch.find.mockReturnValue({ sort: vi.fn().mockReturnValue(lean(epochs)) });
 
     const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1);
 
@@ -476,8 +481,8 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
 
     const ids = [{ _id: 'e0' }, { _id: 'e1' }];
     mockedEpoch.find
-      .mockReturnValueOnce({ select: vi.fn().mockReturnValue({ sort: vi.fn().mockResolvedValue(ids) }) })
-      .mockReturnValueOnce({ sort: vi.fn().mockResolvedValue(ids) });
+      .mockReturnValueOnce({ select: vi.fn().mockReturnValue({ sort: vi.fn().mockReturnValue(lean(ids)) }) })
+      .mockReturnValueOnce({ sort: vi.fn().mockReturnValue(lean(ids)) });
 
     await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1, 12);
 
@@ -593,6 +598,39 @@ describe('updateTraining', () => {
     expect((doc as Record<string, unknown>).metadata).toEqual({ k: 1 });
     expect(doc.description).toBe('old');
     expect(doc.save).toHaveBeenCalled();
+  });
+});
+
+describe('telling a run\'s owner it has finished', () => {
+  const finish = async (before: string, after: string, extra: AnyDoc = {}) => {
+    vi.mocked(notifyRunFinished).mockClear();
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1', { ownerId: 'u1', status: before, ...extra }));
+    await trainingService.updateTraining(VALID_ID, 'u1', { status: after });
+  };
+
+  it('does, once, when a run completes or fails', async () => {
+    await finish('running', 'completed');
+    expect(notifyRunFinished).toHaveBeenCalledWith({
+      userId: 'u1',
+      trainingId: 't1',
+      name: 'Training t1',
+      status: 'completed'
+    });
+    await finish('running', 'failed');
+    expect(notifyRunFinished).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
+  });
+
+  it('does not when the status did not change, is not an ending, or the run has no owner', async () => {
+    await finish('completed', 'completed');
+    expect(notifyRunFinished).not.toHaveBeenCalled();
+    await finish('pending', 'running');
+    expect(notifyRunFinished).not.toHaveBeenCalled();
+    await finish('running', 'completed', { ownerId: undefined });
+    expect(notifyRunFinished).not.toHaveBeenCalled();
+    // A rename without a status is not news either.
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1', { ownerId: 'u1', status: 'completed' }));
+    await trainingService.updateTraining(VALID_ID, 'u1', { name: 'renamed' });
+    expect(notifyRunFinished).not.toHaveBeenCalled();
   });
 });
 
@@ -846,8 +884,8 @@ describe('compareTrainings', () => {
     mockedCheckAccess.mockImplementation(async function (_u: string, projectId: string) {
       return projectId !== 'private';
     });
-    const sort = vi.fn().mockResolvedValue([]);
-    mockedEpoch.find.mockReturnValue({ sort });
+    const sort = vi.fn().mockReturnValue(lean([]));
+    mockedEpoch.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
     mockedAggregated.mockResolvedValue({ comparison: [] });
     const populate = vi.fn().mockResolvedValue([]);
     mockedBenchmark.find.mockReturnValue({ populate });
@@ -866,8 +904,8 @@ describe('compareTrainings', () => {
       { trainingId: { toString: () => 't1' }, epoch: 1, epoch_time: 3600, epoch_uuid: 'e1', results: {}, timestamp: 1 },
       { trainingId: { toString: () => 't1' }, epoch: 2, epoch_time: 7200, epoch_uuid: 'e2', results: {}, timestamp: 2 }
     ];
-    const sort = vi.fn().mockResolvedValue(epochs);
-    mockedEpoch.find.mockReturnValue({ sort });
+    const sort = vi.fn().mockReturnValue(lean(epochs));
+    mockedEpoch.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
     mockedAggregated.mockResolvedValue({
       comparison: [
         {
@@ -912,8 +950,8 @@ describe('compareTrainings', () => {
 
   it('handles trainings with no epochs, results, or benchmarks', async () => {
     mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
-    const sort = vi.fn().mockResolvedValue([]);
-    mockedEpoch.find.mockReturnValue({ sort });
+    const sort = vi.fn().mockReturnValue(lean([]));
+    mockedEpoch.find.mockReturnValue({ select: vi.fn().mockReturnValue({ sort }) });
     mockedAggregated.mockResolvedValue({ comparison: [] });
     const populate = vi.fn().mockResolvedValue([]);
     mockedBenchmark.find.mockReturnValue({ populate });

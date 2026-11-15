@@ -9,6 +9,7 @@ import { Message } from '../models/Message';
 import { authorize, historyFilter } from '../services/access';
 import { visibleRuns } from '../services/runService';
 import { pendingScreenCalls } from '../services/screen';
+import { listen, pollDelay } from '../services/wakeBus';
 import { paramId } from '../utils/request';
 import { streamCursorSchema } from '../validation/messageSchemas';
 import { parsed } from '../validation/parse';
@@ -20,6 +21,10 @@ const tabSchema = z
 
 /** How often an open event stream polls for new messages and run progress. */
 const STREAM_POLL_MS = 2000;
+/** The same while wake signals reach this replica: a change is then noticed at once, and this only backstops a lost one. */
+const STREAM_SIGNALLED_POLL_MS = 5000;
+/** The closest two polls of one stream may be when signals call for them. */
+const STREAM_MIN_GAP_MS = 200;
 /** How often a stream polls while its tab has a run that can move the page, so the page follows within about half a second. */
 const STREAM_FAST_POLL_MS = 500;
 /** How often it polls while the asker's analyst is working, so the answer reads as it is written. */
@@ -63,11 +68,26 @@ export function createStreamController(): RequestHandler {
     const sentDrafts = new Map<string, { messageId: string; text: string }>();
     // Whether the asker has an answer on its way (queued or being written), known from the last poll.
     let answering = false;
+    // A signal that arrives while a poll is running is not lost: the next poll follows at once. Signals never bring
+    // polls closer than STREAM_MIN_GAP_MS apart, so a busy room is not one database read per message per stream.
+    let signalled = false;
+    let tickedAt = 0;
+    const soon = () => Math.max(0, STREAM_MIN_GAP_MS - (Date.now() - tickedAt));
     const later = (delay: number) => {
       if (!stopped) timer = setTimeout(() => void tick(), delay);
     };
+    const unwatch = listen(`conv:${conversationId}`, () => {
+      if (stopped) return;
+      if (loading) {
+        signalled = true;
+        return;
+      }
+      clearTimeout(timer);
+      later(soon());
+    });
     res.on('close', () => {
       stopped = true;
+      unwatch();
       clearTimeout(timer);
       const remaining = (streams.get(userId) || 1) - 1;
       if (remaining) streams.set(userId, remaining);
@@ -76,7 +96,8 @@ export function createStreamController(): RequestHandler {
     const tick = async () => {
       if (stopped || loading) return;
       loading = true;
-      let delay = STREAM_POLL_MS;
+      tickedAt = Date.now();
+      let delay = pollDelay(STREAM_POLL_MS, STREAM_SIGNALLED_POLL_MS);
       try {
         // Access is re-checked every few polls, not every one: each check asks the session
         // store, group-service and vision-service, per open stream.
@@ -194,7 +215,8 @@ export function createStreamController(): RequestHandler {
         res.end();
       } finally {
         loading = false;
-        later(delay);
+        later(signalled ? Math.min(soon(), delay) : delay);
+        signalled = false;
       }
     };
     void tick();

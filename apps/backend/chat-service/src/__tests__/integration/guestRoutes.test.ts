@@ -277,6 +277,22 @@ describe('anonymous public project questions', () => {
     expect(run?.state).toBe('failed');
     expect(run?.answer).toBeUndefined();
   });
+  it('answers visitors on the guest model, priced as that model, when one is set', async () => {
+    await Settings.updateOne({ _id: 'assistant' }, { $set: { guestModel: 'small-model' } });
+    resetAssistantSettingsCache();
+    // The main model is priced; the guest model is not, so the visitor is refused before any provider work.
+    const visitor = '203.0.113.79';
+    expect((await request('/questions', 'POST', question(), cookie, visitor)).status).toBe(503);
+    expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
+    await Pricing.updateOne(
+      { _id: 'pricing' },
+      { $push: { entries: { provider: 'anthropic', model: 'small-model', inputPerMillion: 0.1, outputPerMillion: 0.2 } } }
+    );
+    const result = (await (await request('/questions', 'POST', question(), cookie, visitor)).json()) as { data: { runId: string } };
+    await finished(result.data.runId);
+    expect(vi.mocked(ADAPTERS.anthropic.send).mock.calls.at(-1)![0]).toMatchObject({ model: 'small-model' });
+    expect((await ProviderUsage.findOne({ runId: result.data.runId }))?.model).toBe('small-model');
+  });
   it('refuses unpriced models and missing sessions before provider work', async () => {
     expect((await request('/questions', 'POST', question(), '')).status).toBe(403);
     await Pricing.deleteMany({});

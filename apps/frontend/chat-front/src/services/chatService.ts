@@ -29,6 +29,12 @@ export const chatService = {
   openGroup: (groupId: string) => api<Conversation>(`/groups/${groupId}/channel`, {}),
   messages: (id: string, signal?: AbortSignal, before?: number) =>
     read<Message[]>(`/conversations/${id}/messages${before === undefined ? '' : `?before=${before}`}`, signal),
+  /** Messages in one conversation containing the text, newest first; `before` is the oldest `seq` already shown. */
+  search: (id: string, q: string, before?: number, signal?: AbortSignal) =>
+    read<Message[]>(
+      `/conversations/${id}/messages/search?q=${encodeURIComponent(q)}${before === undefined ? '' : `&before=${before}`}`,
+      signal
+    ),
   runs: (id: string, signal?: AbortSignal) => read<Run[]>(`/conversations/${id}/runs`, signal),
   send: (id: string, input: SendMessageInput) => api<Message>(`/conversations/${id}/messages`, input),
   react: (id: string, messageId: string, emoji: string | null) =>

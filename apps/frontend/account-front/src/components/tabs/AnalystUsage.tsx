@@ -344,9 +344,16 @@ const AnalystUsagePanel: React.FC = () => {
 
       {report.performance && (
         <Typography variant="body2" color="text.secondary">
-          {compact(report.performance.cacheReadTokens)} cached input tokens ·{' '}
-          {compact(report.performance.cacheWriteTokens)} cache writes · {number(report.performance.providerRequests)}{' '}
-          provider requests · {number(report.performance.toolCalls)} research calls ·{' '}
+          {compact(report.performance.cacheReadTokens)} cached input tokens
+          {report.totals.inputTokens > 0
+            ? ` (${Math.round((report.performance.cacheReadTokens / report.totals.inputTokens) * 100)}% of input)`
+            : ''}{' '}
+          · {compact(report.performance.cacheWriteTokens)} cache writes ·{' '}
+          {number(report.performance.providerRequests)} provider requests
+          {report.performance.measuredQuestions
+            ? ` (${(report.performance.providerRequests / report.performance.measuredQuestions).toFixed(1)} per answer)`
+            : ''}{' '}
+          · {number(report.performance.toolCalls)} research calls ·{' '}
           {report.performance.measuredQuestions
             ? `${Math.round(report.performance.durationMs / report.performance.measuredQuestions / 1000)}s average measured answer time`
             : 'No timed answers yet'}

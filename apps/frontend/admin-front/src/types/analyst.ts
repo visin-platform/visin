@@ -17,6 +17,9 @@ export interface AnalystSettings {
   provider: AnalystProviderId;
   /** The provider's model id; empty until one is chosen. */
   model: string;
+  /** The same provider's model for visitors and for shared conversations; empty means the main model answers. */
+  guestModel?: string;
+  sharedModel?: string;
   /** Tokens one person may use a day, counting every question's reservation until its answer is in. */
   dailyTokenLimit: number;
   toolRounds: number;
@@ -65,6 +68,8 @@ export interface AnalystSettingsUpdate {
   enabled: boolean;
   provider: AnalystProviderId;
   model: string;
+  guestModel?: string;
+  sharedModel?: string;
   dailyTokenLimit: number;
   toolRounds: number;
 }

@@ -14,9 +14,16 @@ import { verifyAttachments } from './attachments';
 import { appendMessage } from './messages';
 import { notifyNewMessage } from './pushNotify';
 import { assistantStatus } from './settings';
+import { notify } from './wakeBus';
 import { requireSharedBot, sharedEnabled } from './sharedAssistants';
 import { actorName } from '../utils/request';
-import { messageCursorSchema, readSequenceSchema, sendSchema, reactionSchema } from '../validation/messageSchemas';
+import {
+  messageCursorSchema,
+  readSequenceSchema,
+  reactionSchema,
+  searchQuerySchema,
+  sendSchema
+} from '../validation/messageSchemas';
 import { parsed } from '../validation/parse';
 
 export async function listMessages(req: Request, conversationId: string, beforeValue: unknown) {
@@ -31,6 +38,39 @@ export async function listMessages(req: Request, conversationId: string, beforeV
     .limit(50);
   await redactQuotes(rows);
   return rows.reverse();
+}
+
+/** Messages shown per search, newest first; the person asks for more by passing the oldest `seq` as `before`. */
+const SEARCH_PAGE = 30;
+const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Messages in one conversation whose text contains the term, in any case, newest first. A plain substring match,
+ * since people type the start of a word. Only what the person may already read: the same filter as the history, and
+ * never an unsent message. Bounded in time as well as in size, so a long thread cannot hold the database.
+ */
+export async function searchMessages(req: Request, conversationId: string, query: unknown) {
+  const c = await authorize(req, conversationId);
+  await flushMembershipEvents(conversationId);
+  const { q, before } = parsed(searchQuerySchema, query);
+  const rows = await Message.find({
+    conversationId: c.id,
+    unsentAt: null,
+    kind: { $ne: 'system' },
+    body: { $regex: escapeRegex(q), $options: 'i' },
+    $and: [historyFilter(c, req.user!.id), ...(before ? [{ seq: { $lt: before } }] : [])]
+  })
+    .sort({ seq: -1 })
+    .limit(SEARCH_PAGE)
+    .maxTimeMS(3000)
+    .catch((error: unknown) => {
+      // MaxTimeMSExpired: a long thread and a common term. Said as something the person can act on, not a 500.
+      if ((error as { code?: number }).code === 50)
+        throw new BadRequestError('That search took too long. Try a longer or more specific phrase.');
+      throw error;
+    });
+  await redactQuotes(rows);
+  return rows;
 }
 
 export async function sendMessage(req: Request, conversationId: string, body: unknown) {
@@ -235,6 +275,7 @@ export async function react(req: Request, conversationId: string, messageId: unk
   );
   if (!updated) throw new BadRequestError('This message cannot receive that reaction');
   await Conversation.updateOne({ _id: conversation._id }, { $inc: { messageVersion: 1 } });
+  notify(`conv:${conversation.id}`);
   await redactQuotes([updated]);
   return updated;
 }
@@ -271,5 +312,6 @@ export async function unsend(req: Request, conversationId: string, messageId: un
     }
   );
   await Conversation.updateOne({ _id: conversation._id }, { $inc: { messageVersion: 1 } });
+  notify(`conv:${conversation.id}`);
   return await Message.findById(message._id);
 }

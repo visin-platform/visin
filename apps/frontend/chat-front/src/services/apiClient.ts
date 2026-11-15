@@ -32,3 +32,8 @@ export async function apiDelete(path: string, body: unknown, signal?: AbortSigna
 export async function apiSend(path: string, body: unknown, signal?: AbortSignal): Promise<void> {
   await client.post(path, body, { signal });
 }
+
+/** PUT with a JSON body, unwrapped like `api`. */
+export async function apiPut<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return (await client.put<{ data: T }>(path, body, { signal })).data;
+}

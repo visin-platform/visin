@@ -28,6 +28,9 @@ services:
       FILE_SERVICE_URL: ${FILE_SERVICE_URL:-http://file-service:5002}
       FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:?Set the same FILE_SERVICE_API_KEY as file-service}
       # Optional, and chat works without any of them. See .env.example.
+      # Optional. With Redis, replicas tell each other about new messages and questions, so streams and the worker poll
+      # less often. Without it (or while it is down) they poll at the usual rate; nothing breaks.
+      REDIS_URL: ${REDIS_URL:-}
       CALLS_ENABLED: ${CALLS_ENABLED:-true}
       STUN_URLS: ${STUN_URLS:-}
       TURN_URLS: ${TURN_URLS:-}

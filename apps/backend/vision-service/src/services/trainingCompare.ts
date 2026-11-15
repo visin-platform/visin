@@ -29,10 +29,12 @@ export async function compareTrainings(userId: string | undefined, trainingIds: 
     }
   }
   const foundTrainingIds = trainings.map((t) => t._id.toString());
-  const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null }).sort({
-    trainingId: 1,
-    epoch: 1
-  });
+  // Only what the comparison reads, as plain objects: up to 30 runs of every epoch's results are already a lot.
+  type ComparedEpoch = Pick<IEpoch, 'trainingId' | 'epoch_uuid' | 'epoch' | 'results' | 'epoch_time' | 'timestamp'>;
+  const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null })
+    .select('trainingId epoch_uuid epoch results epoch_time timestamp')
+    .sort({ trainingId: 1, epoch: 1 })
+    .lean<ComparedEpoch[]>();
 
   // Get all epoch UUIDs for fetching benchmarks
   const epochUuids = epochs.map((e) => e.epoch_uuid);
@@ -47,7 +49,7 @@ export async function compareTrainings(userId: string | undefined, trainingIds: 
   }).populate('training_id', 'name uuid');
 
   // Group epochs by training ID
-  const epochsByTraining: Record<string, IEpoch[]> = epochs.reduce(
+  const epochsByTraining: Record<string, ComparedEpoch[]> = epochs.reduce(
     (acc, epoch) => {
       const trainingId = epoch.trainingId.toString();
       if (!acc[trainingId]) {
@@ -56,7 +58,7 @@ export async function compareTrainings(userId: string | undefined, trainingIds: 
       acc[trainingId].push(epoch);
       return acc;
     },
-    {} as Record<string, IEpoch[]>
+    {} as Record<string, ComparedEpoch[]>
   );
 
   // Group benchmarks by training ID

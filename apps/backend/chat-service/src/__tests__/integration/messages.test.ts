@@ -136,3 +136,80 @@ it('does not republish pre-join room history through quoted replies', async () =
   expect(JSON.stringify(visible.body.data)).not.toContain('Before Charlie joined');
   expect(JSON.stringify(visible.body.data)).toContain('Everyone can see this');
 });
+
+describe('searching a conversation', () => {
+  const say = (id: string, user: string, body: string, clientId: string) =>
+    request(`/conversations/${id}/messages`, user, { body, clientId });
+  type Found = { body: string; seq: number }[];
+  const search = (id: string, user: string, q: string, extra = '') =>
+    request<Found>(`/conversations/${id}/messages/search?q=${encodeURIComponent(q)}${extra}`, user);
+
+  /** A direct conversation both people are in, so either may keep writing. */
+  const joined = async () => {
+    const id = await create();
+    await request(`/conversations/${id}/membership`, 'bob', { action: 'accept' });
+    return id;
+  };
+  it('finds messages containing the text in any case, newest first, taking the text literally', async () => {
+    const id = await joined();
+    await say(id, 'alice', 'Dinner at the Italian place', 'search-msg-001');
+    await say(id, 'alice', 'Nothing relevant', 'search-msg-002');
+    await say(id, 'alice', 'italian again (really?)', 'search-msg-003');
+    const found = await search(id, 'alice', 'ITALIAN');
+    expect(found.status).toBe(200);
+    expect(found.body.data.map((m: { body: string }) => m.body)).toEqual([
+      'italian again (really?)',
+      'Dinner at the Italian place'
+    ]);
+    // Characters with a meaning in a pattern are only characters.
+    expect((await search(id, 'alice', '(really?)')).body.data).toHaveLength(1);
+    expect((await search(id, 'alice', '.*')).body.data).toHaveLength(0);
+    // Nothing the stored outbox or owner fields are shown.
+    expect(JSON.stringify(found.body.data)).not.toContain('assistantRequest');
+  });
+
+  it('pages back with the oldest sequence, and refuses terms that are too short or too long', async () => {
+    const id = await joined();
+    // Written directly: the send route is limited to 30 a minute.
+    for (let i = 0; i < 35; i++)
+      await appendMessage({
+        conversationId: id,
+        senderId: 'alice',
+        senderName: 'Alice',
+        kind: 'person',
+        body: `match number ${i}`,
+        clientId: `search-page-${String(i).padStart(3, '0')}`
+      });
+    const first = await search(id, 'alice', 'match');
+    expect(first.body.data).toHaveLength(30);
+    const oldest = first.body.data.at(-1)!.seq;
+    const second = await search(id, 'alice', 'match', `&before=${oldest}`);
+    expect(second.body.data).toHaveLength(5);
+    expect(second.body.data.every((m: { seq: number }) => m.seq < oldest)).toBe(true);
+    expect((await search(id, 'alice', 'a')).status).toBe(400);
+    expect((await search(id, 'alice', 'x'.repeat(101))).status).toBe(400);
+    expect((await request(`/conversations/${id}/messages/search`, 'alice')).status).toBe(400);
+  });
+
+  it('never returns unsent messages, and never searches a conversation the caller is not in', async () => {
+    const id = await joined();
+    const sent = await say(id, 'alice', 'a secret plan', 'search-unsent-1');
+    await say(id, 'alice', 'a public plan', 'search-unsent-2');
+    await request(`/conversations/${id}/messages/${sent.body.data._id}/unsend`, 'alice', {});
+    expect((await search(id, 'alice', 'plan')).body.data.map((m: { body: string }) => m.body)).toEqual([
+      'a public plan'
+    ]);
+    expect((await search(id, 'mallory', 'plan')).status).toBe(404);
+  });
+
+  it('only searches what a room member could already read', async () => {
+    const id = await create('room', ['bob']);
+    await request(`/conversations/${id}/membership`, 'bob', { action: 'accept' });
+    await say(id, 'alice', 'before bob joined: budget', 'search-room-001');
+    await request(`/conversations/${id}/participants`, 'alice', { handle: 'charlie' });
+    await request(`/conversations/${id}/membership`, 'charlie', { action: 'accept' });
+    await say(id, 'alice', 'after charlie joined: budget', 'search-room-002');
+    const seen = (await search(id, 'charlie', 'budget')).body.data.map((m: { body: string }) => m.body);
+    expect(seen).toEqual(['after charlie joined: budget']);
+  });
+});

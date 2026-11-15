@@ -2,6 +2,7 @@ import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import PipelineKeys from './PipelineKeys';
 import FirstRunPanel from './FirstRunPanel';
 import ProjectReadme from './ProjectReadme';
+import ProjectAnalystNotes from './ProjectAnalystNotes';
 import React from 'react';
 import ScrollableTabs from '../common/ScrollableTabs';
 import { Box, Paper, Tab } from '@mui/material';
@@ -229,6 +230,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         <TabPanel tab="settings" active={tab}>
           <Box sx={{ px: { xs: 0, sm: 3 } }}>
             <ProjectSettings project={project} discovered={discoveredVocabulary} onMoveToTrash={onMoveToTrash} />
+            <ProjectAnalystNotes project={project} />
           </Box>
         </TabPanel>
       )}

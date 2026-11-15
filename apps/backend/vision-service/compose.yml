@@ -35,6 +35,8 @@ services:
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
       # Gates /internal/*, which auth-service calls when issuing a project-limited API key.
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      # Optional. Where a finished run is announced, so its owner can be notified; unset, nothing is sent.
+      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL:-}
       # Where the names and avatars of project owners come from (auth-service, over the private network).
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - FILE_SERVICE_HMAC_SECRET=${FILE_SERVICE_HMAC_SECRET}

@@ -7,6 +7,7 @@ import { ChatProvider } from './components/chat/ChatDock';
 import { ChatBackground } from './components/chat/ChatBackground';
 import { ScreenCue } from './components/chat/ScreenCue';
 import VisionUploads from './components/VisionUploads';
+import { UpdatePrompt } from './components/UpdatePrompt';
 import { ObservabilityNavigation } from './components/ObservabilityNavigation';
 
 // The shell's own queries: the home page's. Each remote brings its own client,
@@ -32,6 +33,7 @@ function App() {
             </ShellLayout>
             <ChatBackground />
             <ScreenCue />
+            <UpdatePrompt />
           </ChatProvider>
           <VisionUploads />
         </AuthProvider>

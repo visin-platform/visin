@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -69,11 +70,53 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<Visualization | null>(null);
 
+  // The open image is in the address (`frame=`), so a link to it opens it, and the chat beside the page can tell the
+  // analyst exactly which frame is on screen. Replaced rather than pushed: opening and closing pictures is not a
+  // trail of pages to go back through.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const frameInAddress = searchParams.get('frame');
+  const shown = useRef<string | null>(null);
+  const setFrameInAddress = useCallback(
+    (uuid: string | null) =>
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (uuid) next.set('frame', uuid);
+          else next.delete('frame');
+          return next;
+        },
+        { replace: true }
+      ),
+    [setSearchParams]
+  );
+  const openFrame = useCallback(
+    (viz: Visualization) => {
+      shown.current = viz.visualization_uuid;
+      setSelectedImage(viz);
+      setImageDialogOpen(true);
+      setFrameInAddress(viz.visualization_uuid);
+    },
+    [setFrameInAddress]
+  );
+  const closeFrame = () => {
+    shown.current = null;
+    setImageDialogOpen(false);
+    setFrameInAddress(null);
+  };
+  // An address that names a frame opens it once that frame has loaded.
+  useEffect(() => {
+    if (!frameInAddress || shown.current === frameInAddress) return;
+    const viz = visualizations.find((candidate) => candidate.visualization_uuid === frameInAddress);
+    if (!viz) return;
+    shown.current = frameInAddress;
+    setSelectedImage(viz);
+    setImageDialogOpen(true);
+  }, [frameInAddress, visualizations]);
+
   useScreenAction(visualizations.map((viz) => viz.visualization_uuid), (id) => {
     const frame = visualizations.find((viz) => viz.visualization_uuid === id);
     if (!frame) return { ok: false, summary: 'That frame is no longer loaded' };
-    setSelectedImage(frame);
-    setImageDialogOpen(true);
+    openFrame(frame);
     return { ok: true, summary: `Opened frame ${id}` };
   }, visualizations.map((viz) => viz.filename || viz.visualization_uuid));
 
@@ -92,10 +135,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   };
 
   // Handle image click
-  const handleImageClick = (viz: Visualization) => {
-    setSelectedImage(viz);
-    setImageDialogOpen(true);
-  };
+  const handleImageClick = (viz: Visualization) => openFrame(viz);
 
   return (
     <Box>
@@ -229,7 +269,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
       {/* Image View Dialog */}
       <ImageViewDialog
         open={imageDialogOpen}
-        onClose={() => setImageDialogOpen(false)}
+        onClose={closeFrame}
         selectedImage={selectedImage}
         classes={classes}
       />

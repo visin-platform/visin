@@ -41,6 +41,9 @@ export async function loadImageInputs(
       timeoutMs: 30_000,
       serviceName: 'file-service'
     });
+    // Gone is not the same as not answering: trying again cannot bring a deleted file back.
+    if (response.status === 404)
+      throw new Error(`The image ${ref.name} is no longer stored. Attach it again to ask about it.`);
     if (!response.ok || !response.body)
       throw new Error(`Could not load image ${ref.name} from file-service. Try again.`);
     const reader = response.body.getReader();

@@ -31,6 +31,7 @@ export const projectSchema = z
     name: z.string(),
     slug: z.string().optional(),
     description: z.string().optional(),
+    analystNotes: z.string().optional(),
     visibility: z.enum(['private', 'public']).catch('private'),
     owner: z.object({ kind: z.enum(['user', 'group']), id: z.string(), name: z.string().optional() }).optional(),
     createdAt: z.string().optional(),

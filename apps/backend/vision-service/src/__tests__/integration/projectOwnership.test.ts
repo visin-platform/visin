@@ -297,6 +297,31 @@ describe('project ownership with in-memory MongoDB', () => {
     });
   });
 
+  describe('the analyst notes', () => {
+    const notes = 'The metric that matters is val mIoU\nThe baseline is run resnet-18';
+    const put = (id: string, user: string, body: Record<string, unknown>) =>
+      call(`/projects/${id}`, { method: 'PUT', user, body });
+
+    it('are written by whoever manages the project, trimmed, and shown to those who can read it', async () => {
+      const id = await teamProject({ visibility: 'public' });
+
+      expect((await put(id, MEMBER, { analystNotes: notes })).status).toBe(403);
+      expect((await put(id, ADMIN, { analystNotes: `  ${notes}\n` })).body.data.analystNotes).toBe(notes);
+      expect((await call(`/projects/${id}`, { user: STRANGER })).body.data.analystNotes).toBe(notes);
+    });
+
+    it('are left out of lists, are cleared by an empty one, and stop at 1,500 characters', async () => {
+      const id = await teamProject({ visibility: 'public' });
+      await put(id, ADMIN, { analystNotes: notes });
+      const listed = (await call('/projects', { user: STRANGER })).body.data as { _id: string }[];
+      expect(listed.every((project) => !('analystNotes' in project))).toBe(true);
+
+      expect((await put(id, ADMIN, { analystNotes: ' \n ' })).body.data).not.toHaveProperty('analystNotes');
+      expect((await put(id, ADMIN, { analystNotes: 'x'.repeat(1500) })).status).toBe(200);
+      expect((await put(id, ADMIN, { analystNotes: 'x'.repeat(1501) })).status).toBe(400);
+    });
+  });
+
   describe('creating a project', () => {
     it("makes it private and the creator's unless told otherwise", async () => {
       const created = await call('/projects', { method: 'POST', body: { name: 'New' } });

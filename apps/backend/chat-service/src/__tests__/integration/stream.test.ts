@@ -67,3 +67,29 @@ it('streams reactions and unsend mutations even when their message sequence is a
     controller.abort();
   }
 });
+
+it('sends a new message at once when told of it, without waiting for the next poll', async () => {
+  const id = await create();
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`${base}/api/chat/conversations/${id}/events`, {
+      headers: { 'x-test-user': 'alice' },
+      signal: controller.signal
+    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = decoder.decode((await reader.read()).value);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Straight away', clientId: 'wake-stream-1' });
+    // An idle stream polls every two seconds, so seeing it within one is the signal's doing.
+    const started = Date.now();
+    while (!text.includes('Straight away') && Date.now() - started < 1200) {
+      const next = await Promise.race([reader.read(), new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200))]);
+      if (next?.value) text += decoder.decode(next.value);
+      else break;
+    }
+    expect(text).toContain('Straight away');
+    expect(Date.now() - started).toBeLessThan(1200);
+  } finally {
+    controller.abort();
+  }
+});

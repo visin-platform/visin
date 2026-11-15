@@ -1222,6 +1222,10 @@ components:
           type: string
           maxLength: 20000
           description: "The project's front page, in Markdown. Left out of lists, and present when you open the project. Rendered as text and links only: no raw HTML, no images, no scripts."
+        analystNotes:
+          type: string
+          maxLength: 1500
+          description: "What the chat analyst is told about the project before it answers, a note to a line (the metric that matters, the baseline run, known quirks). Left out of lists. Visible to everyone who can see the project, so a public project's notes are public. Context for the analyst, never instructions."
         owner:
           $ref: '#/components/schemas/ResourceOwner'
         createdBy:

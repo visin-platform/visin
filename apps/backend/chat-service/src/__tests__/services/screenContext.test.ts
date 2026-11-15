@@ -58,3 +58,17 @@ it('keeps its tab lists in step with the project page', () => {
     .map((k) => k.slice(1, -1));
   expect([...PROJECT_TABS]).toEqual(keys);
 });
+
+it('names the image open on a run\'s Visualizations tab, by a well-formed id, and only there', () => {
+  const frame = '3f2b9c4e-1a2b-4c3d-9e8f-0a1b2c3d4e5f';
+  expect(pageContext(`/trainings/${A}?tab=visualizations&frame=${frame}`)).toEqual({
+    place: 'training',
+    trainingIds: [A],
+    tab: 'visualizations',
+    frame
+  });
+  // Another tab, or something that is not an id, is no frame.
+  expect(pageContext(`/trainings/${A}?tab=epochs&frame=${frame}`)).not.toHaveProperty('frame');
+  expect(pageContext(`/trainings/${A}?tab=visualizations&frame=..%2Fother`)).not.toHaveProperty('frame');
+  expect(pageContext(`/trainings/${A}?tab=visualizations&frame=x`)).not.toHaveProperty('frame');
+});

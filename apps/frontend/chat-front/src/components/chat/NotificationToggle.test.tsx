@@ -12,6 +12,7 @@ const push = vi.hoisted(() => ({
   disableNotifications: vi.fn()
 }));
 vi.mock('../../services/pushNotifications', () => push);
+vi.mock('../../services/runAlerts', () => ({ getRunAlerts: vi.fn(async () => true), setRunAlerts: vi.fn() }));
 
 beforeEach(() => {
   Object.values(push).forEach((fn) => fn.mockReset());

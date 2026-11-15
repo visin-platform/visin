@@ -1133,6 +1133,70 @@
         }
       }
     },
+    "/conversations/{id}/messages/search": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "searchChatMessages",
+        "summary": "Find messages in one conversation that contain some text",
+        "description": "A case-insensitive substring match over messages the caller may already read, newest first, at most 30 per page. Unsent and system messages are never matched.",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exclusive sequence cursor: pass the oldest `seq` of the previous page"
+          }
+        ]
+      }
+    },
     "/conversations/{id}/read": {
       "post": {
         "tags": [
@@ -2590,6 +2654,197 @@
           },
           "401": {
             "description": "Sign-in required"
+          }
+        }
+      }
+    },
+    "/push/preferences": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "getPushPreferences",
+        "summary": "What this person wants pushed besides messages and calls",
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "runs": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "savePushPreferences",
+        "summary": "Turn run alerts on or off",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "runs"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "runs": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "runs": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/run-finished": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "announceFinishedRun",
+        "summary": "Tell a run owner's devices that a run finished or failed (services only, by internal token)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId",
+                  "trainingId",
+                  "name",
+                  "status"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  },
+                  "trainingId": {
+                    "type": "string",
+                    "pattern": "^[a-fA-F0-9]{24}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "completed",
+                      "failed"
+                    ]
+                  },
+                  "projectName": {
+                    "type": "string",
+                    "maxLength": 120
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "delivered": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

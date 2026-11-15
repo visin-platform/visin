@@ -1,4 +1,5 @@
 import { resolveDatasetReference } from './datasetReferenceService';
+import { notifyRunFinished } from '../clients/chatNotifier';
 import { requireDatasetStorage } from './sourceRegistry';
 import Config from '../models/Config';
 import { assertResourceWrite, requireActor } from './writeAccessService';
@@ -153,7 +154,7 @@ export const trainingService = {
     const sort = { [sortBy]: order } as Record<string, 1 | -1>;
 
     if (sample === undefined) {
-      const epochs = await Epoch.find(query).sort(sort);
+      const epochs = await Epoch.find(query).sort(sort).lean();
       return { training, epochs, totalEpochs: epochs.length };
     }
 
@@ -162,10 +163,10 @@ export const trainingService = {
     // loading and serializing every epoch, which is the larger half of it.
     // Keyed on `_id` rather than epoch number so it stays correct whatever the
     // rows are sorted by.
-    const ids = await Epoch.find(query).select('_id').sort(sort);
+    const ids = await Epoch.find(query).select('_id').sort(sort).lean();
     const picked = evenlySpaced(ids, sample).map((row) => row._id);
 
-    const epochs = await Epoch.find({ ...query, _id: { $in: picked } }).sort(sort);
+    const epochs = await Epoch.find({ ...query, _id: { $in: picked } }).sort(sort).lean();
     return { training, epochs, totalEpochs: ids.length };
   },
 
@@ -285,6 +286,7 @@ export const trainingService = {
     }
     if (configId !== undefined) training.configId = configId;
     if (data.provenance !== undefined) training.provenance = data.provenance;
+    const statusBefore = training.status;
     if (status !== undefined) {
       training.status = status as ITraining['status'];
       if (status === 'running') training.lastSeenAt = new Date();
@@ -295,6 +297,19 @@ export const trainingService = {
     if (metadata !== undefined) training.metadata = metadata;
 
     const updatedTraining = await training.save();
+    // A run that has just finished, or failed, tells its owner. Only the change counts: saving the same status again,
+    // or a rename of a finished run, must not buzz anyone.
+    if (
+      training.ownerId &&
+      statusBefore !== training.status &&
+      (training.status === 'completed' || training.status === 'failed')
+    )
+      void notifyRunFinished({
+        userId: training.ownerId,
+        trainingId: String(training._id),
+        name: training.name,
+        status: training.status
+      });
     return updatedTraining;
   },
 

@@ -2,6 +2,7 @@ import { NotificationsActive, NotificationsNone, NotificationsOff } from '@mui/i
 import { CircularProgress, IconButton, Snackbar, Tooltip } from '@mui/material';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import type { PushSupport } from '../../services/pushNotifications';
+import { RunAlertsToggle } from './RunAlertsToggle';
 
 /** Why the switch cannot be turned on, where it cannot. */
 const BLOCKED: Partial<Record<PushSupport, string>> = {
@@ -41,6 +42,7 @@ export function NotificationToggle() {
           </IconButton>
         </span>
       </Tooltip>
+      {on && !blocked && <RunAlertsToggle />}
       <Snackbar open={Boolean(error)} message={error} autoHideDuration={6000} />
     </>
   );

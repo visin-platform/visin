@@ -14,6 +14,12 @@ export interface IProject extends Document {
    * people who `manage` it and read by everyone who can see it, so it is only ever rendered as text and links.
    */
   readme?: string;
+  /**
+   * What the chat analyst should know about this project before it answers: one note to a line (which metric matters,
+   * the baseline run, known quirks). Written by people who `manage` it and read by everyone who can see the project,
+   * so a public project's notes are public. Context for the analyst, never instructions.
+   */
+  analystNotes?: string;
   /** who controls it: a person, or a group whose current roles decide who may do what */
   owner: ResourceOwner;
   /** attribution only: never changes and grants nothing */
@@ -74,6 +80,7 @@ const ProjectSchema: Schema = new Schema(
     },
     // Not trimmed: indentation is meaning in Markdown. Capped at what the app renders (`MAX_MARKDOWN_LENGTH`).
     readme: { type: String, maxlength: 20_000 },
+    analystNotes: { type: String, maxlength: 1500 },
     owner: { type: OwnerSchema, required: true },
     createdBy: { type: String, required: true },
     // No schema default: one would fill in every project older than the field, on read, as active just now.

@@ -30,6 +30,12 @@ export interface AssistantSettings {
   provider: ProviderId;
   /** The provider's model id. Empty until one is chosen. */
   model: string;
+  /**
+   * The same provider's model for anonymous visitors, and for replies in shared conversations (which use no research
+   * tools). Empty means `model` answers them as well; a cheaper one is usually enough for both.
+   */
+  guestModel: string;
+  sharedModel: string;
   /** Tokens one person may use a day, counting every question's reservation until its answer is in. */
   dailyTokenLimit: number;
   toolRounds: number;
@@ -67,6 +73,8 @@ async function savedSettings() {
           enabled: found.enabled,
           provider: isProviderId(found.provider) ? found.provider : 'anthropic',
           model: found.model || '',
+          guestModel: found.guestModel || '',
+          sharedModel: found.sharedModel || '',
           dailyTokenLimit: found.dailyTokenLimit || DEFAULT_DAILY_TOKEN_LIMIT,
           toolRounds: found.toolRounds ?? DEFAULT_TOOL_ROUNDS
         }
@@ -89,6 +97,8 @@ export async function assistantSettings(): Promise<AssistantSettings> {
         enabled: true,
         provider,
         model: '',
+        guestModel: '',
+        sharedModel: '',
         dailyTokenLimit: DEFAULT_DAILY_TOKEN_LIMIT,
         toolRounds: DEFAULT_TOOL_ROUNDS,
         source: 'default'
@@ -98,11 +108,17 @@ export async function assistantSettings(): Promise<AssistantSettings> {
     enabled: true,
     provider: PROVIDER_IDS[0],
     model: '',
+    guestModel: '',
+    sharedModel: '',
     dailyTokenLimit: DEFAULT_DAILY_TOKEN_LIMIT,
     toolRounds: DEFAULT_TOOL_ROUNDS,
     source: 'default'
   };
 }
+
+/** The model that answers a kind of question: the one set for it, else the main one. */
+export const modelFor = (settings: Pick<AssistantSettings, 'model' | 'guestModel' | 'sharedModel'>, kind: 'analyst' | 'guest' | 'shared'): string =>
+  (kind === 'guest' ? settings.guestModel : kind === 'shared' ? settings.sharedModel : '') || settings.model;
 
 /**
  * What only the server's operator can provide: neither is something to type into a page. (The provider key is
@@ -151,8 +167,8 @@ export async function saveAssistantSettings(input: Saved, userId: string, expect
           $or: [{ revision: expectedRevision }, ...(expectedRevision === 0 ? [{ revision: { $exists: false } }] : [])]
         })
   };
-  const { enabled, provider, model, dailyTokenLimit, toolRounds } = input;
-  const safe = { enabled, provider, model, dailyTokenLimit, toolRounds };
+  const { enabled, provider, model, guestModel, sharedModel, dailyTokenLimit, toolRounds } = input;
+  const safe = { enabled, provider, model, guestModel, sharedModel, dailyTokenLimit, toolRounds };
   try {
     const result = await Settings.updateOne(
       filter,
@@ -170,6 +186,8 @@ export async function saveAssistantSettings(input: Saved, userId: string, expect
                       enabled: before.enabled,
                       provider: before.provider,
                       model: before.model,
+                      guestModel: before.guestModel,
+                      sharedModel: before.sharedModel,
                       dailyTokenLimit: before.dailyTokenLimit,
                       toolRounds: before.toolRounds
                     }

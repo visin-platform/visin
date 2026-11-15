@@ -6,18 +6,19 @@ import { AssistantRun } from '../models/AssistantRun';
 import { Budget } from '../models/Budget';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
-import { analyze } from './analyst';
+import { analyze, type AnalysisSpend } from './analyst';
 import { MAX_ANALYSIS_IMAGES, type ImageRef } from './imageInput';
-import { budgetPlans, FRAME_IMAGES } from './analysisLimits';
+import { budgetPlans, FRAME_IMAGES, reservationFor } from './analysisLimits';
 import { createDraftWriter } from './draft';
 import { resolveProviderKey } from './keys';
 import { appendMessage } from './messages';
 import { PAPER_REQUEST_BYTES, PROVIDERS, PROVIDER_REPLAY_VERSION, ProviderRequestError } from './providers';
-import { assistantSettings } from './settings';
+import { assistantSettings, modelFor } from './settings';
 import { runAllowed } from './sharedAssistants';
 import { expireScreenCalls, screenContextSchema } from './screen';
 import { steerScreen } from './screenSteering';
 import { priceSnapshot } from './usage';
+import { listen, notify, pollDelay } from './wakeBus';
 
 /** How often a running question re-reads its account's state and Vivi policy. */
 const VIVI_CHECK_MS = 5000;
@@ -30,6 +31,9 @@ const MAX_CONCURRENT_RUNS = 4;
 /** Queued runs looked at per claim, so one busy conversation cannot hold up the rest. */
 const CLAIM_CANDIDATES = 20;
 const LEASE_MS = 300000;
+/** How often the worker looks for work, and how often it does while wake signals reach this replica. */
+const TICK_MS = 1000;
+const SIGNALLED_TICK_MS = 5000;
 
 /**
  * The oldest queued run whose conversation is free. A database lock per conversation
@@ -161,6 +165,9 @@ export function startWorker() {
 
   const execute = async ({ run, conversation: c }: Claimed) => {
     let key: Awaited<ReturnType<typeof createApiKey>> | undefined;
+    // What this run holds of the day's budget, until it is settled one way or the other.
+    let held: { day: string; reserve: number; oneRound: number } | undefined;
+    const spent: AnalysisSpend = { inputTokens: 0, outputTokens: 0, requests: 0, inFlight: false };
     // Only a private thread shows the answer as it is written: shared replies are not exposed before they are final.
     const drafts = c.kind === 'assistant' ? createDraftWriter(run.id) : undefined;
     const controller = new AbortController();
@@ -210,7 +217,10 @@ export function startWorker() {
       }
       // The provider, model and limit are read as the run starts, so a change in the settings applies to the next
       // question. A run that cannot happen is refused before it is charged anything.
-      const { provider, model, dailyTokenLimit, toolRounds } = await assistantSettings();
+      const configured = await assistantSettings();
+      const { provider, dailyTokenLimit, toolRounds } = configured;
+      // A reply in a shared conversation uses no research tools, so it can run on a cheaper model.
+      const model = modelFor(configured, c.kind === 'assistant' ? 'analyst' : 'shared');
       const policy = await assertViviUser(run.userId);
       const limit = Math.min(dailyTokenLimit, policy.dailyTokenLimit);
       if (!model) throw new Error('No assistant model is configured');
@@ -262,7 +272,7 @@ export function startWorker() {
         { userId: run.userId, day, $expr: { $lt: [{ $ifNull: ['$requests', 0] }, policy.dailyRequestLimit] } },
         { $inc: { requests: 1 } }
       );
-      if (!admitted) throw new Error('Your daily Vivi question allowance is used. Try again tomorrow.');
+      if (!admitted) throw new Error('Your daily Vivi question allowance is used. It resets at midnight UTC.');
       // The best plan the day's budget still holds: page changes need more room, and are given up before the question.
       let plan: ReturnType<typeof budgetPlans>[number] | undefined;
       for (const candidate of budgetPlans(
@@ -286,9 +296,15 @@ export function startWorker() {
       if (!plan) {
         // Nothing was sent, so the question does not count against the day's allowance.
         await Budget.updateOne({ userId: run.userId, day }, { $inc: { requests: -1 } });
-        throw new Error('Your daily assistant token budget is used. Try again tomorrow.');
+        throw new Error('Your daily assistant token budget is used. It resets at midnight UTC.');
       }
       const reserve = plan.reserve;
+      const requestBytes = c.kind === 'assistant' && c.paperId ? PAPER_REQUEST_BYTES : undefined;
+      held = {
+        day,
+        reserve,
+        oneRound: reservationFor(false, 1, imageCount, requestBytes, plan.frames === true)
+      };
       const steering = plan.screen;
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
       // provider may have consumed tokens even if the connection did not return usage.
@@ -388,6 +404,7 @@ export function startWorker() {
         trainingIds: c.kind === 'assistant' ? c.trainingIds : [],
         shared: c.kind !== 'assistant',
         guard,
+        spent,
         screenContext: screen,
         screen: steering
           ? (request, signal) =>
@@ -464,12 +481,26 @@ export function startWorker() {
         }
       );
       if (!finished.modifiedCount) throw new Error('Analysis cancelled');
+      held = undefined;
       await Budget.updateOne(
         { userId: run.userId, day },
         { $inc: { reserved: -(reserve - result.inputTokens - result.outputTokens) } }
       );
     } catch (error) {
       drafts?.stop();
+      // A failed run gives back what it reserved beyond what its completed requests used. A request still out may
+      // have been billed without reporting usage, so one round stays held; a run that sent nothing gives back all.
+      if (held) {
+        const refund = held.reserve - spent.inputTokens - spent.outputTokens - (spent.inFlight ? held.oneRound : 0);
+        if (refund > 0)
+          await Budget.updateOne({ userId: run.userId, day: held.day }, { $inc: { reserved: -refund } }).catch(
+            (failure: unknown) =>
+              logger.warn('Could not return an unused reservation', {
+                error: failure instanceof Error ? failure.message : 'unknown'
+              })
+          );
+        held = undefined;
+      }
       await AssistantRun.updateOne(
         { _id: run.id, state: 'running' },
         {
@@ -489,6 +520,8 @@ export function startWorker() {
       controllers.delete(run.id);
       if (key) await deleteApiKey(run.userId, key.summary.id);
       await Conversation.updateOne({ _id: c.id, workerRunId: run.id }, { $unset: { workerUntil: 1, workerRunId: 1 } });
+      // The answer is published, and this conversation's next queued question claimed, by the next look.
+      notify('worker');
     }
   };
 
@@ -525,14 +558,32 @@ export function startWorker() {
     } finally {
       busy = false;
     }
+    // Before the runs are awaited, which can take minutes: the next look must not wait for them.
+    schedule(woken ? 0 : active.size > 0 ? TICK_MS : pollDelay(TICK_MS, SIGNALLED_TICK_MS));
+    woken = false;
     await Promise.all(started);
   };
-  const timer = setInterval(() => {
-    void tick();
-  }, 1000);
+  // The next look is a timeout, not an interval, so a signal can bring it forward. A signal means a question may
+  // be waiting (or an answer to publish); the poll is what finds work when a signal never arrived.
+  let timer: NodeJS.Timeout | undefined;
+  let stopped = false;
+  const schedule = (delay: number) => {
+    if (stopped) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => void tick(), delay);
+  };
+  // A signal that arrives during a look is remembered: that look ends by scheduling the next one straight away.
+  let woken = false;
+  const unwatch = listen('worker', () => {
+    if (busy) woken = true;
+    else schedule(0);
+  });
+  schedule(TICK_MS);
   return Object.assign(
     () => {
-      clearInterval(timer);
+      stopped = true;
+      clearTimeout(timer);
+      unwatch();
       controllers.forEach((c) => c.abort());
     },
     { tick }

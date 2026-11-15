@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as renderPlain, screen, fireEvent } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import TrainingVisualizationsTab from './TrainingVisualizationsTab';
 import type { Visualization } from '../types';
 
@@ -25,7 +27,13 @@ vi.mock('./visualizations/CompareVisualizationsDialog', () => ({
     props.open ? <div>compare-dialog:{props.selectedForCompare.length}</div> : null,
 }));
 vi.mock('./visualizations/ImageViewDialog', () => ({
-  default: (props: { open: boolean }) => (props.open ? <div>image-dialog</div> : null),
+  default: (props: { open: boolean; onClose: () => void }) =>
+    props.open ? (
+      <div>
+        image-dialog
+        <button onClick={props.onClose}>close-image</button>
+      </div>
+    ) : null,
 }));
 
 const defaultHookReturn = {
@@ -47,6 +55,19 @@ const defaultHookReturn = {
 };
 
 const baseProps = { training_uuid: 'tu1', epochs: [], isAuthenticated: true };
+
+/** The address the tab is on, shown so a test can read what opening a frame did to it. */
+const Address = () => {
+  const { search } = useLocation();
+  return <div data-testid="address">{search}</div>;
+};
+const render = (ui: ReactElement, path = '/trainings/t1?tab=visualizations') =>
+  renderPlain(
+    <MemoryRouter initialEntries={[path]}>
+      {ui}
+      <Address />
+    </MemoryRouter>
+  );
 
 beforeEach(() => {
   mockHook.mockReturnValue(defaultHookReturn);
@@ -121,6 +142,42 @@ describe('TrainingVisualizationsTab', () => {
 
     expect(screen.getByText('image-dialog')).toBeInTheDocument();
   });
+
+  it('names the open image in the address, keeping the tab, and takes it out again on close', () => {
+    const viz = { visualization_uuid: 'v1', signedUrl: 'x' } as unknown as Visualization;
+    mockHook.mockReturnValue({ ...defaultHookReturn, visualizations: [viz] });
+    render(<TrainingVisualizationsTab {...baseProps} />);
+
+    fireEvent.click(screen.getByText('open-first'));
+    expect(screen.getByTestId('address')).toHaveTextContent('?tab=visualizations&frame=v1');
+
+    fireEvent.click(screen.getByText('close-image'));
+    expect(screen.queryByText('image-dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('address')).toHaveTextContent(/^\?tab=visualizations$/);
+  });
+
+  it('opens the image an address names once it has loaded, and nothing for one it does not have', () => {
+    const viz = { visualization_uuid: 'v2', signedUrl: 'x' } as unknown as Visualization;
+    mockHook.mockReturnValue({ ...defaultHookReturn, visualizations: [] });
+    const { rerender } = render(<TrainingVisualizationsTab {...baseProps} />, '/trainings/t1?tab=visualizations&frame=v2');
+    expect(screen.queryByText('image-dialog')).not.toBeInTheDocument();
+
+    mockHook.mockReturnValue({ ...defaultHookReturn, visualizations: [viz] });
+    rerender(
+      <MemoryRouter initialEntries={['/trainings/t1?tab=visualizations&frame=v2']}>
+        <TrainingVisualizationsTab {...baseProps} />
+        <Address />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('image-dialog')).toBeInTheDocument();
+  });
+
+  it('does not open anything for a frame the run does not have', () => {
+    const viz = { visualization_uuid: 'v1', signedUrl: 'x' } as unknown as Visualization;
+    mockHook.mockReturnValue({ ...defaultHookReturn, visualizations: [viz] });
+    render(<TrainingVisualizationsTab {...baseProps} />, '/trainings/t1?tab=visualizations&frame=other');
+    expect(screen.queryByText('image-dialog')).not.toBeInTheDocument();
+  });
 });
 
 it('opens a currently loaded frame through its registered page action', () => {
@@ -130,6 +187,7 @@ it('opens a currently loaded frame through its registered page action', () => {
   const detail = { action: 'open_frame', id };
   fireEvent(window, new CustomEvent('visin:page-action', { detail }));
   expect(screen.getByText('image-dialog')).toBeInTheDocument();
+  expect(screen.getByTestId('address')).toHaveTextContent(`frame=${id}`);
   expect(detail).toMatchObject({ result: { ok: true } });
   unmount();
   expect(window.__visinScreenActions).toEqual([]);

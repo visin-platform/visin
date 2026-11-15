@@ -19,6 +19,7 @@ import { PushSubscription } from './models/PushSubscription';
 import { Settings } from './models/Settings';
 import { startCallSweep } from './services/callService';
 import { startWorker } from './services/worker';
+import { startWakeBus } from './services/wakeBus';
 assertRequiredEnv([
   'MONGODB_URI',
   'JWT_SECRET',
@@ -59,9 +60,11 @@ void connectDb({ serviceName: 'chat-service' })
     }, 30 * 60000);
     guestCleanup.unref();
     process.once('SIGTERM', () => clearInterval(guestCleanup));
+    const stopWakeBus = startWakeBus();
     const stop = startWorker();
     const stopSweep = startCallSweep();
     process.once('SIGTERM', stop);
+    process.once('SIGTERM', () => void stopWakeBus());
     process.once('SIGINT', stop);
     process.once('SIGTERM', stopSweep);
     process.once('SIGINT', stopSweep);

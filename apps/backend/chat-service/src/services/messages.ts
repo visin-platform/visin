@@ -4,6 +4,7 @@ import { flushMembershipEvents } from './membershipAudit';
 import { Conversation } from '../models/Conversation';
 import type { ScreenContext } from './screen';
 import { Message } from '../models/Message';
+import { notify } from './wakeBus';
 
 export async function appendMessage(input: {
   expectedMembershipVersion?: number;
@@ -65,6 +66,8 @@ export async function appendMessage(input: {
       { _id: input.conversationId, lastMessageSeq: { $lt: message.seq } },
       { $max: { lastMessageSeq: message.seq } }
     );
+    // The stream of this conversation looks now, and a worker looks for the question it may carry.
+    notify(`conv:${input.conversationId}`, ...(assistantRequest ? ['worker'] : []));
     return message;
   } catch (error) {
     if ((error as { code?: number }).code === 11000) {

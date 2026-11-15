@@ -104,6 +104,46 @@ describe('analyst settings', () => {
     restoreFetch();
   });
 
+  it('keeps a cheaper model for visitors and shared conversations, held to the same list, and keeps it when left out', async () => {
+    await makeAdmin();
+    await saveKeys();
+    provider({ anthropic: ['claude-opus-5-5', 'claude-haiku-5-5'] });
+    const base = { enabled: true, provider: 'anthropic', model: 'claude-opus-5-5' };
+    const put = await putSettings(ADMIN, { ...base, guestModel: 'claude-haiku-5-5', sharedModel: 'claude-haiku-5-5' });
+    expect(((await put.json()) as { data: object }).data).toMatchObject({
+      model: 'claude-opus-5-5',
+      guestModel: 'claude-haiku-5-5',
+      sharedModel: 'claude-haiku-5-5'
+    });
+    // Left out, they stay; an empty one means the main model answers again.
+    expect(((await (await putSettings(ADMIN, base)).json()) as { data: object }).data).toMatchObject({
+      guestModel: 'claude-haiku-5-5',
+      sharedModel: 'claude-haiku-5-5'
+    });
+    const cleared = await putSettings(ADMIN, { ...base, guestModel: '' });
+    expect(((await cleared.json()) as { data: object }).data).toMatchObject({
+      guestModel: '',
+      sharedModel: 'claude-haiku-5-5'
+    });
+    const refused = await putSettings(ADMIN, { ...base, sharedModel: 'claude-made-up' });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { message: string }).message).toContain('does not offer claude-made-up');
+    // A kept model the provider has since retired goes back to the main one instead of blocking the save.
+    provider({ anthropic: ['claude-opus-5-5'] });
+    resetAssistantSettingsCache();
+    const retired = await putSettings(ADMIN, base);
+    expect(retired.status).toBe(200);
+    expect(((await retired.json()) as { data: object }).data).toMatchObject({ sharedModel: '' });
+    provider({ anthropic: ['claude-opus-5-5', 'claude-haiku-5-5'] });
+    resetAssistantSettingsCache();
+    // Switching provider without naming them drops the old provider's models.
+    await putSettings(ADMIN, { ...base, sharedModel: 'claude-haiku-5-5' });
+    provider({ openai: [{ id: 'gpt-5.1', created: 1 }] });
+    const switched = await putSettings(ADMIN, { enabled: true, provider: 'openai', model: 'gpt-5.1' });
+    expect(((await switched.json()) as { data: object }).data).toMatchObject({ sharedModel: '', guestModel: '' });
+    restoreFetch();
+  });
+
   it("switches provider, and is ready only with that provider's own key", async () => {
     await makeAdmin();
     await saveKeys();

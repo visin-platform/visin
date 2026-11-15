@@ -1,7 +1,7 @@
 import { Alert, Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Link, Stack } from '@mui/material';
 import { Close, Download } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { attachmentUrls } from '../../services/attachmentUrls';
 import type { Attachment } from '../../types/chat';
 
@@ -22,8 +22,32 @@ export function MessageAttachments({ conversationId, files }: { conversationId: 
     refetchOnWindowFocus: false,
     retry: 1
   });
-  const expired = () => void refetch();
-  const loaded = () => window.dispatchEvent(new Event('visin:chat-media-loaded'));
+  // Files signed again after failing to load, and files that failed again after that. A file is signed again once per
+  // failure: a fresh address cures an expired one, but one that fails anyway (a deleted file, an unreachable file
+  // host) would otherwise be signed and reloaded without end, and each reload moves the whole thread up and down.
+  const resigned = useRef(new Set<string>());
+  const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
+  const expired = (fileId: string) => {
+    if (resigned.current.has(fileId)) {
+      setBroken((previous) => new Set(previous).add(fileId));
+      return;
+    }
+    resigned.current.add(fileId);
+    void refetch();
+  };
+  const loaded = (fileId: string) => {
+    resigned.current.delete(fileId);
+    window.dispatchEvent(new Event('visin:chat-media-loaded'));
+  };
+  const retry = (fileId: string) => {
+    resigned.current.add(fileId);
+    setBroken((previous) => {
+      const next = new Set(previous);
+      next.delete(fileId);
+      return next;
+    });
+    void refetch();
+  };
   if (error)
     return (
       <Alert severity="warning" action={<Button onClick={() => void refetch()}>Retry</Button>}>
@@ -34,6 +58,15 @@ export function MessageAttachments({ conversationId, files }: { conversationId: 
     <Stack spacing={1} sx={{ my: 0.5, maxWidth: '100%' }}>
       {files.map((file) => {
         const url = data?.urls[file.fileId];
+        if (url && broken.has(file.fileId))
+          return (
+            <Box key={file.fileId} role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {file.name} · Could not load
+              <Button size="small" onClick={() => retry(file.fileId)}>
+                Retry
+              </Button>
+            </Box>
+          );
         if (!url)
           return (
             <Box key={file.fileId} role="status">
@@ -54,8 +87,8 @@ export function MessageAttachments({ conversationId, files }: { conversationId: 
                   src={url}
                   alt={file.name}
                   loading="lazy"
-                  onLoad={loaded}
-                  onError={expired}
+                  onLoad={() => loaded(file.fileId)}
+                  onError={() => expired(file.fileId)}
                   sx={{ display: 'block', maxWidth: '100%', maxHeight: 360, borderRadius: 2, objectFit: 'contain' }}
                 />
               </Box>
@@ -66,8 +99,8 @@ export function MessageAttachments({ conversationId, files }: { conversationId: 
                 controls
                 playsInline
                 preload="metadata"
-                onLoadedMetadata={loaded}
-                onError={expired}
+                onLoadedMetadata={() => loaded(file.fileId)}
+                onError={() => expired(file.fileId)}
                 aria-label={file.name}
                 sx={{ display: 'block', maxWidth: '100%', maxHeight: 360, borderRadius: 2 }}
               />
@@ -77,7 +110,8 @@ export function MessageAttachments({ conversationId, files }: { conversationId: 
                 src={url}
                 controls
                 preload="metadata"
-                onError={expired}
+                onLoadedMetadata={() => resigned.current.delete(file.fileId)}
+                onError={() => expired(file.fileId)}
                 aria-label={`Voice message: ${file.name}`}
                 sx={{ display: 'block', width: 280, maxWidth: '100%' }}
               />

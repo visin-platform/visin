@@ -7,6 +7,9 @@ const settingsSchema = new Schema(
     enabled: { type: Boolean, required: true },
     provider: { type: String, enum: ['anthropic', 'openai'], default: 'anthropic' },
     model: { type: String, default: '' },
+    // Same provider as `model`. Empty means that model answers too.
+    guestModel: { type: String, default: '' },
+    sharedModel: { type: String, default: '' },
     // Absent on settings saved before there was one: the default applies.
     dailyTokenLimit: Number,
     toolRounds: Number,

@@ -202,6 +202,8 @@ services:
       SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+      # A finished run is announced to chat, which notifies its owner on devices that turned notifications on.
+      CHAT_SERVICE_URL: http://chat-service:5012
 
   label-service:
     build: ./apps/backend/label-service
@@ -287,6 +289,8 @@ services:
       # with keys the service makes on first start. Calls connect on one local network as they are; a STUN server
       # widens that to most home and mobile networks, and a relay (TURN) to all of them. The STUN default below is
       # Cloudflare's free public server, which sees the callers' addresses: `STUN_URLS=` (set but empty) turns it off.
+      # Replicas wake each other through Redis so streams and the worker poll less; chat works without it.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CALLS_ENABLED: ${CALLS_ENABLED:-true}
       STUN_URLS: ${STUN_URLS-stun:stun.cloudflare.com:3478}
       TURN_URLS: ${TURN_URLS:-}

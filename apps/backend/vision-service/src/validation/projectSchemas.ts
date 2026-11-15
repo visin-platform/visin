@@ -42,6 +42,8 @@ export const updateProjectBodySchema = z.object({
   description: z.string().optional(),
   /** Markdown, at most 20,000 characters. An empty string clears it. */
   readme: z.string().max(20_000).optional(),
+  /** What the chat analyst should know about the project, a note to a line; at most 1,500 characters. An empty string clears it. */
+  analystNotes: z.string().max(1500).optional(),
   editorGroupIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/).transform(id => id.toLowerCase())).max(100).optional(),
   visibility: visibilitySchema.optional(),
   slug: z.string().optional(),

@@ -4,6 +4,7 @@ import { Add, AddTask, GitHub, MenuBook, PhotoLibrary } from '@mui/icons-materia
 import {
   AppLayout,
   createVisinNavigation,
+  useCompactLayout,
   useRecentVisits,
   type AppLayoutNavItem,
   type AppLayoutSiteLink
@@ -13,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { APPS, appForPath } from '../apps';
 import { visitIcon, visitLabel } from './home/visitKinds';
 import { ChatButton, ChatSidePanel } from './chat/ChatDock';
+import { MobileChat } from './chat/MobileChat';
 import { useChatDock } from './chat/chatDock';
 import { useCanConfigureAnalyst } from '../hooks/useCanConfigureAnalyst';
 import { useIsPlatformAdmin } from '../hooks/useIsPlatformAdmin';
@@ -53,6 +55,7 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const config = useConfig();
   const { user, isAuthenticated, isLoading, login, signup, logout } = useAuth();
   const chat = useChatDock();
+  const compact = useCompactLayout();
   const app = appForPath(pathname);
   const definition = app ? APPS[app] : null;
   const layout = definition ? definition.layout(pathname) : NO_APP_LAYOUT;
@@ -91,6 +94,9 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       : []),
     { text: 'GitHub', href: GITHUB_URL, icon: <GitHub />, newTab: true }
   ];
+
+  // On a phone, chat is the whole screen with its own way back, not a page inside the menus.
+  if (compact && app === 'chat') return <MobileChat title={chat.available ? 'Chat' : 'Ask Vivi'} />;
 
   return (
     <AppLayout

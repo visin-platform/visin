@@ -38,6 +38,8 @@ it('rejects foreign, encoded traversal and non-image references without requesti
 });
 it('fails clearly for inaccessible files and invalid image data', async () => {
   peer.mockResolvedValueOnce(new Response('', { status: 404 }));
+  await expect(loadImageInputs('c', [ref], new AbortController().signal)).rejects.toThrow('no longer stored');
+  peer.mockResolvedValueOnce(new Response('', { status: 503 }));
   await expect(loadImageInputs('c', [ref], new AbortController().signal)).rejects.toThrow('Could not load');
   peer.mockResolvedValueOnce(new Response('not an image'));
   await expect(loadImageInputs('c', [ref], new AbortController().signal)).rejects.toThrow('Could not read image');

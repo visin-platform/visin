@@ -34,7 +34,7 @@ import { ADAPTERS, imageContent } from '../services/providers';
 import { GUEST_FRAMES, linkedPage } from '../services/guestRun';
 import { FRAME_TOKENS_PER_ROUND } from '../services/analysisLimits';
 import { resolveProviderKey } from '../services/keys';
-import { assistantSettings } from '../services/settings';
+import { assistantSettings, modelFor } from '../services/settings';
 import { priceSnapshot } from '../services/usage';
 import { meteredCall } from '../services/providerUsage';
 import { parsed } from '../validation/parse';
@@ -273,7 +273,8 @@ export function createGuestRoutes() {
       if (!input.challengeToken) throw new ForbiddenError('Complete the guest verification again');
       await challenge(input.challengeToken, new URL(req.get('origin')!).hostname);
     }
-    const price = await priceSnapshot(settings.provider, settings.model);
+    const guestModel = modelFor(settings, 'guest');
+    const price = await priceSnapshot(settings.provider, guestModel);
     if (!price || price.currency !== 'USD')
       throw new ServiceUnavailableError('Guest model requires configured USD pricing');
     // A token per request byte is the worst case, so the reservation bounds what the question can cost.
@@ -386,11 +387,11 @@ export function createGuestRoutes() {
         if (!current.enabled || !current.guestEnabled || !(await assistantSettings()).enabled)
           throw new Error('Guest Vivi was disabled');
         const turn = await meteredCall(
-          { runId, userId: sessionId, kind: 'guest', provider: settings.provider, model: settings.model },
+          { runId, userId: sessionId, kind: 'guest', provider: settings.provider, model: guestModel },
           () =>
             ADAPTERS[settings.provider].send({
               apiKey: key.key,
-              model: settings.model,
+              model: guestModel,
               system,
               messages: [
                 {

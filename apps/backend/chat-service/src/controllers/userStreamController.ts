@@ -3,12 +3,15 @@ import type { RequestHandler } from 'express';
 import { CallFeed } from '../services/callFeed';
 import { callsEnabled } from '../services/callService';
 import { onWake } from '../services/callWake';
+import { pollDelay } from '../services/wakeBus';
 import { deviceId } from '../validation/callSchemas';
 import { parsed } from '../validation/parse';
 
 /** How often the stream asks the database while this device has a call, and while it has none. */
 const BUSY_POLL_MS = 250;
 const IDLE_POLL_MS = 1000;
+/** While wake signals reach this replica a new call is noticed at once; the poll only backstops a lost signal. */
+const SIGNALLED_IDLE_POLL_MS = 3000;
 /** Session and access are re-checked on this schedule, as for a conversation's stream. */
 const REAUTHORIZE_MS = 10_000;
 /** A named heartbeat lets clients detect a silently stalled connection. */
@@ -44,7 +47,7 @@ export function createUserStreamController(): RequestHandler {
     let timer: NodeJS.Timeout | undefined;
 
     const later = (busy: boolean) => {
-      if (!stopped) timer = setTimeout(() => void tick(), busy ? BUSY_POLL_MS : IDLE_POLL_MS);
+      if (!stopped) timer = setTimeout(() => void tick(), busy ? BUSY_POLL_MS : pollDelay(IDLE_POLL_MS, SIGNALLED_IDLE_POLL_MS));
     };
     const write = (frame: string) => {
       wroteAt = Date.now();

@@ -7,6 +7,7 @@ import { createAttachmentRoutes } from './attachmentRoutes';
 import { createCallRoutes } from './callRoutes';
 import { createConversationRoutes } from './conversationRoutes';
 import { createDiscoveryRoutes } from './discoveryRoutes';
+import { createInternalRoutes } from './internalRoutes';
 import { createFindingRoutes } from './findingRoutes';
 import { createMembershipRoutes } from './membershipRoutes';
 import { createMessageRoutes } from './messageRoutes';
@@ -20,6 +21,7 @@ import { createStreamRoutes } from './streamRoutes';
 export function createChatRoutes() {
   const router = Router();
   const limits = createChatRateLimits();
+  router.use(createInternalRoutes());
   router.use(authenticateToken);
   router.use(createAdminControlRoutes());
   router.use(createAssistantRoutes(limits));

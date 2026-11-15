@@ -6,6 +6,7 @@ export function createMessageRoutes(limits: ChatRateLimits) {
   const router = Router();
   const { writeLimit } = limits;
   router.get('/conversations/:id/messages', controller.listMessages);
+  router.get('/conversations/:id/messages/search', controller.searchMessages);
   router.post('/conversations/:id/messages', writeLimit, controller.sendMessage);
   router.post('/conversations/:id/messages/:messageId/reaction', writeLimit, controller.react);
   router.post('/conversations/:id/messages/:messageId/unsend', writeLimit, controller.unsend);

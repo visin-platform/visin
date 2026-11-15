@@ -70,6 +70,8 @@ interface Draft {
   enabled?: boolean;
   provider?: AnalystProviderId;
   model?: string;
+  guestModel?: string;
+  sharedModel?: string;
   /** A preset's token count, or 'custom'. */
   allowance?: string;
   /** As typed under Custom: it may be empty, or not a number, until it is fixed. */
@@ -180,6 +182,9 @@ const AnalystSetup: React.FC = () => {
   const allOptions =
     model && !offered.some((option) => option.id === model) ? [{ id: model, name: model }, ...offered] : offered;
 
+  // Empty means the main model answers visitors and shared conversations too. Only the saved provider's are kept.
+  const guestModel = draft.guestModel ?? (provider === current.provider ? (current.guestModel ?? '') : '');
+  const sharedModel = draft.sharedModel ?? (provider === current.provider ? (current.sharedModel ?? '') : '');
   const toolRoundsText = draft.toolRounds ?? String(current.toolRounds);
   const toolRounds = Number(toolRoundsText);
   const roundsError =
@@ -205,6 +210,8 @@ const AnalystSetup: React.FC = () => {
     enabled !== current.enabled ||
     provider !== current.provider ||
     model !== current.model ||
+    guestModel !== (current.guestModel ?? '') ||
+    sharedModel !== (current.sharedModel ?? '') ||
     (!limitError && limit !== current.dailyTokenLimit);
   // Turning it on needs something to answer with; switching it off can always be saved.
   const blocker = !enabled
@@ -230,7 +237,10 @@ const AnalystSetup: React.FC = () => {
       ...previous,
       revision: previous.revision ?? current.revision ?? 0,
       provider: next,
-      model: undefined
+      model: undefined,
+      // A model belongs to its provider, so the cheaper ones go back to the main model's.
+      guestModel: '',
+      sharedModel: ''
     }));
     setNewKey('');
     setShowAll(false);
@@ -244,6 +254,8 @@ const AnalystSetup: React.FC = () => {
         enabled,
         provider,
         model,
+        guestModel,
+        sharedModel,
         dailyTokenLimit: limit,
         toolRounds
       },
@@ -465,6 +477,48 @@ const AnalystSetup: React.FC = () => {
                   Show all models
                 </Button>
               )}
+              {(
+                [
+                  [
+                    'guestModel',
+                    'Model for visitors',
+                    guestModel,
+                    'Answers questions from people who have not signed in. Visitors are answered only once this model has a USD price under Tokens and cost.'
+                  ],
+                  [
+                    'sharedModel',
+                    'Model for shared conversations',
+                    sharedModel,
+                    'Answers in conversations between people. It uses no research tools, so a smaller model is usually enough.'
+                  ]
+                ] as const
+              ).map(([field, label, value, help]) => (
+                <TextField
+                  key={field}
+                  select
+                  label={label}
+                  value={value}
+                  onChange={(event) =>
+                    setDraft((previous) => ({
+                      ...previous,
+                      revision: previous.revision ?? current.revision ?? 0,
+                      [field]: event.target.value
+                    }))
+                  }
+                  slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                  sx={{ maxWidth: 420 }}
+                  helperText={help}
+                >
+                  <MenuItem value="">Same as the main model</MenuItem>
+                  {(value && !offered.some((option) => option.id === value) ? [{ id: value, name: value }] : [])
+                    .concat(offered.map(({ id, name }) => ({ id, name })))
+                    .map((option) => (
+                      <MenuItem key={option.id} value={option.id}>
+                        {option.name}
+                      </MenuItem>
+                    ))}
+                </TextField>
+              ))}
             </>
           )}
         </Step>

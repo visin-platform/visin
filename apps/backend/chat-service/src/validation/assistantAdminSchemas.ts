@@ -11,6 +11,10 @@ export const settingsSchema = z
     provider: z.enum(PROVIDER_IDS),
     // Chosen from the provider's own list, which is checked below; empty only while turning it off.
     model: z.string().trim().max(120),
+    // The same provider's model for visitors and for shared conversations. Left out, it stays as it is; empty
+    // means the main model answers them too.
+    guestModel: z.string().trim().max(120).optional(),
+    sharedModel: z.string().trim().max(120).optional(),
     // Tokens a person may use a day. Left out, it stays as it is; its lower bound is checked below.
     dailyTokenLimit: z.number().int().max(MAX_DAILY_TOKEN_LIMIT, 'That limit is too large').optional()
   })

@@ -34,6 +34,8 @@ const settingsView = async () => {
     enabled: settings.enabled,
     provider: settings.provider,
     model: settings.model,
+    guestModel: settings.guestModel,
+    sharedModel: settings.sharedModel,
     dailyTokenLimit: settings.dailyTokenLimit,
     // What one question reserves of that limit until its answer is in, so the page can say how far it goes.
     toolRounds: settings.toolRounds,
@@ -65,16 +67,25 @@ export async function listModels(query: unknown) {
 export async function updateSettings(userId: string, body: unknown) {
   const input = parsed(settingsSchema, body);
   if (input.enabled && !input.model) throw new BadRequestError('Choose a model before turning the analyst on');
+  const current = await assistantSettings();
+  // A model belongs to its provider: a switch of provider that does not name them takes them back to the main model.
+  const sameProvider = input.provider === current.provider;
+  let guestModel = input.guestModel ?? (sameProvider ? current.guestModel : '');
+  let sharedModel = input.sharedModel ?? (sameProvider ? current.sharedModel : '');
   // Only what is being turned on is held to the provider's list: switching off must always work, whatever
   // an earlier choice was and whether the provider is reachable.
   if (input.enabled) {
     const { name } = PROVIDERS[input.provider];
     const offered = await providerModels(input.provider);
     if (!offered) throw new BadRequestError(`${name}'s models could not be listed. Add a valid ${name} key first.`);
-    if (!offered.some((model) => model.id === input.model))
-      throw new BadRequestError(`${name} does not offer ${input.model}`);
+    const isOffered = (id: string) => offered.some((model) => model.id === id);
+    // A model chosen now must exist. One kept from before (a page that does not show these choices sent none) that the
+    // provider has since retired goes back to the main model, rather than failing visitors or blocking this save.
+    for (const chosen of [input.model, input.guestModel, input.sharedModel])
+      if (chosen && !isOffered(chosen)) throw new BadRequestError(`${name} does not offer ${chosen}`);
+    if (guestModel && !isOffered(guestModel)) guestModel = '';
+    if (sharedModel && !isOffered(sharedModel)) sharedModel = '';
   }
-  const current = await assistantSettings();
   const dailyTokenLimit = input.dailyTokenLimit ?? current.dailyTokenLimit;
   const toolRounds = input.toolRounds ?? current.toolRounds;
   const reservation = reservationFor(true, toolRounds);
@@ -83,7 +94,7 @@ export async function updateSettings(userId: string, body: unknown) {
     throw new BadRequestError(
       `The daily limit must be at least ${reservation.toLocaleString('en-US')} tokens: one question reserves that much`
     );
-  await saveAssistantSettings({ ...input, dailyTokenLimit, toolRounds }, userId, input.revision);
+  await saveAssistantSettings({ ...input, guestModel, sharedModel, dailyTokenLimit, toolRounds }, userId, input.revision);
   logger.info('Assistant settings changed', { by: userId, ...input, dailyTokenLimit });
   return await settingsView();
 }

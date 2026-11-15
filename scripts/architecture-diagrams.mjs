@@ -771,7 +771,7 @@ files['chat.svg'] = doc(
   800,
   730,
   'Visin: research chat',
-  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations, durable analyst jobs and call state in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision. Optionally it sends Web Push notifications through the browsers\' push services and gives calls a STUN or TURN relay; the people on a call connect to each other directly.',
+  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations, durable analyst jobs and call state in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision, which in turn tells chat-service (with the internal token) when a run finishes or fails, so its owner can be notified. Optionally it sends Web Push notifications through the browsers\' push services and gives calls a STUN or TURN relay; the people on a call connect to each other directly.',
   [
     node.web({
       x: 20,
@@ -841,7 +841,7 @@ files['chat.svg'] = doc(
       w: 230,
       h: 95,
       title: 'MCP + Vision',
-      lines: ['Read-only project tools', 'Reviewed, idempotent finding saves']
+      lines: ['Read-only project tools; idempotent finding saves', 'Announces finished runs to chat']
     }),
     node.external({
       x: 550,
@@ -870,7 +870,7 @@ files['chat.svg'] = doc(
       h: 95,
       title: 'Push services and call relay (optional)',
       lines: [
-        'Web Push to the browser vendors; STUN / TURN from your own coturn, Cloudflare, or none',
+        'Web Push (messages, calls, finished runs); STUN / TURN from your own coturn, Cloudflare, or none',
         'Chat and one-to-one calls work without either; calls then reach one local network'
       ]
     }),

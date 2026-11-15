@@ -1,4 +1,5 @@
 import { type Request } from 'express';
+import { notify } from './wakeBus';
 import { AssistantRun } from '../models/AssistantRun';
 import { Message } from '../models/Message';
 import { authorize, historyFilter } from './access';
@@ -82,5 +83,6 @@ export async function cancelRuns(req: Request, conversationId: string) {
     { conversationId: c.id, userId: req.user!.id, state: { $in: ['queued', 'screen_queued', 'running'] } },
     { $set: { state: 'cancelled', finishedAt: new Date(), activity: 'Cancelled' }, $unset: { draft: 1 } }
   );
+  notify(`conv:${c.id}`);
   return;
 }

@@ -3520,6 +3520,10 @@
         "type": "string",
         "maxLength": 20000
       },
+      "analystNotes": {
+        "type": "string",
+        "maxLength": 1500
+      },
       "editorGroupIds": {
         "maxItems": 100,
         "type": "array",
