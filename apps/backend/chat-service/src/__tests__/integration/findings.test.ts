@@ -8,21 +8,34 @@ import { request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
 
-it('saves a reviewed finding with assistant attribution credentials and deletes the temporary key', async () => {
-  const created = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'Analysis',
-    projectId: '111111111111111111111111'
-  });
+const PROJECT = '111111111111111111111111';
+/** A chat with the assistant, a question about a project in it, and the answer to that question. */
+async function answered(clientId: string) {
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
   const id = String(created.body.data._id);
+  const question = await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'alice',
+    kind: 'person',
+    body: 'What peaked?',
+    clientId: `${clientId}-q`,
+    context: { projectId: PROJECT, projectName: 'Lab', trainingIds: [], trainingLabels: [] }
+  });
   const answer = await appendMessage({
     conversationId: id,
     senderId: 'analyst',
     senderName: 'Analyst',
     kind: 'assistant',
     body: 'Measured result',
-    clientId: 'save-result-001'
+    clientId,
+    replyTo: question.id
   });
+  return { id, answer };
+}
+
+it('saves a reviewed finding with assistant attribution credentials and deletes the temporary key', async () => {
+  const { id, answer } = await answered('save-result-001');
   (fetchWithTimeout as Mock).mockImplementation(async function () {
     return new Response(JSON.stringify({ data: { _id: 'saved-finding' } }));
   });
@@ -45,20 +58,7 @@ it('saves a reviewed finding with assistant attribution credentials and deletes 
 
 it('returns an already saved finding without minting another write key', async () => {
   vision(() => new Response(JSON.stringify({ data: { _id: 'should-not-be-called' } })));
-  const created = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'Analysis',
-    projectId: '111111111111111111111111'
-  });
-  const id = String(created.body.data._id);
-  const answer = await appendMessage({
-    conversationId: id,
-    senderId: 'analyst',
-    senderName: 'Analyst',
-    kind: 'assistant',
-    body: 'Measured result',
-    clientId: 'saved-already-1'
-  });
+  const { id, answer } = await answered('saved-already-1');
   await Message.updateOne({ _id: answer.id }, { $set: { findingId: 'existing-finding' } });
   const { createApiKey } = await import('@visin/backend-core');
   vi.mocked(createApiKey).mockClear();
@@ -75,20 +75,7 @@ it('returns an already saved finding without minting another write key', async (
 });
 
 it('passes a refusal from vision-service through and reports its outages as a bad gateway', async () => {
-  const created = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'Analysis',
-    projectId: '111111111111111111111111'
-  });
-  const id = String(created.body.data._id);
-  const answer = await appendMessage({
-    conversationId: id,
-    senderId: 'analyst',
-    senderName: 'Analyst',
-    kind: 'assistant',
-    body: 'Measured result',
-    clientId: 'refused-save-1'
-  });
+  const { id, answer } = await answered('refused-save-1');
   const save = () =>
     request(`/conversations/${id}/findings`, 'alice', { messageId: answer.id, title: 'Peak', body: 'x' });
   vision(() => new Response(JSON.stringify({ message: 'A cited run was removed' }), { status: 400 }));
@@ -100,4 +87,28 @@ it('passes a refusal from vision-service through and reports its outages as a ba
   (fetchWithTimeout as Mock).mockImplementation(
     (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
   );
+});
+
+it('refuses to save a finding from an answer to a question that was not about a project', async () => {
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  const id = String(created.body.data._id);
+  const question = await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'alice',
+    kind: 'person',
+    body: 'Hello',
+    clientId: 'general-question-1'
+  });
+  const answer = await appendMessage({
+    conversationId: id,
+    senderId: 'analyst',
+    senderName: 'Analyst',
+    kind: 'assistant',
+    body: 'Hi',
+    clientId: 'general-answer-1',
+    replyTo: question.id
+  });
+  const saved = await request(`/conversations/${id}/findings`, 'alice', { messageId: answer.id, title: 'x', body: 'x' });
+  expect(saved.status).toBe(400);
 });

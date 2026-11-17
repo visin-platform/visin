@@ -32,6 +32,19 @@ const assistantRequestSchema = new Schema(
   { _id: false }
 );
 
+/** What a question to the analyst is about: a project and some of its runs, or a paper. Checked when it is sent. */
+const askedAboutSchema = new Schema(
+  {
+    projectId: String,
+    projectName: { type: String, maxlength: 200 },
+    trainingIds: { type: [String], default: [] },
+    trainingLabels: { type: [new Schema({ id: String, name: String }, { _id: false })], default: [] },
+    paperId: String,
+    paperTitle: { type: String, maxlength: 200 }
+  },
+  { _id: false }
+);
+
 const messageSchema = new Schema(
   {
     conversationId: { type: String, required: true },
@@ -74,6 +87,8 @@ const messageSchema = new Schema(
       ],
       default: undefined
     },
+    /** What this question is about; only on a person's question in a private analysis chat. */
+    context: { type: askedAboutSchema },
     clientId: { type: String, required: true },
     seq: { type: Number, required: true },
     replyTo: String,

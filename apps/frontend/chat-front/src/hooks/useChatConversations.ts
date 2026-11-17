@@ -17,6 +17,9 @@ export function useChatConversations({
 
   const [loaded, setLoaded] = useState(false);
 
+  /** The conversations this person has put away: shown apart, so putting one away is never losing it. */
+  const [hidden, setHidden] = useState<Conversation[]>([]);
+
   const [groups, setGroups] = useState<{ groupId: string; name: string }[]>([]);
 
   const [assistantModel, setAssistantModel] = useState<Capabilities['assistantModel']>();
@@ -28,6 +31,7 @@ export function useChatConversations({
   const [sharedAvailable, setSharedAvailable] = useState(false);
 
   const [canConfigure, setCanConfigure] = useState(false);
+  const hiddenRead = useRef(false);
   const currentUser = useRef(userId);
   currentUser.current = userId;
   useEffect(() => {
@@ -38,11 +42,20 @@ export function useChatConversations({
     setCanConfigure(false);
     setAssistantModel(undefined);
     setConversations([]);
+    setHidden([]);
+    hiddenRead.current = false;
     setLoaded(false);
   }, [userId]);
   const refreshList = useCallback(async () => {
     const rows = await chatService.list();
-    if (currentUser.current === userId) setConversations(rows);
+    if (currentUser.current !== userId) return;
+    setConversations(rows);
+    // Writing in a hidden chat brings it back; it is in the list again and no longer among the hidden.
+    setHidden((away) => away.filter((item) => !rows.some((row) => row._id === item._id)));
+  }, [userId]);
+  const refreshHidden = useCallback(async () => {
+    const away = await chatService.listHidden();
+    if (currentUser.current === userId) setHidden(away);
   }, [userId]);
 
   useEffect(() => {
@@ -84,7 +97,15 @@ export function useChatConversations({
         const list = await chatService.list(controller.signal);
         if (controller.signal.aborted) return;
         setConversations(list);
+        // A hidden chat that someone wrote in is back in the list: it is no longer hidden. Read once, then kept
+        // from the list, rather than asked for again on every poll.
+        setHidden((away) => away.filter((item) => !list.some((row) => row._id === item._id)));
         setLoaded(true);
+        if (!hiddenRead.current) {
+          hiddenRead.current = true;
+          const away = await chatService.listHidden(controller.signal).catch(() => undefined);
+          if (away && !controller.signal.aborted) setHidden(away);
+        }
       } catch (e) {
         failed(e);
       }
@@ -106,6 +127,8 @@ export function useChatConversations({
     assistantModel,
     conversations,
     setConversations,
+    hidden,
+    refreshHidden,
     loaded,
     groups,
     enabled,

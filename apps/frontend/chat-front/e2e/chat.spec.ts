@@ -35,7 +35,8 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
     if (url.pathname.endsWith('/events')) return route.abort();
     let data: unknown = [];
     if (url.pathname.endsWith('/capabilities')) data = { assistant: false };
-    else if (url.pathname.endsWith('/conversations')) data = [conversation];
+    else if (url.pathname.endsWith('/conversations'))
+      data = url.searchParams.has('hidden') ? [] : [conversation];
     else if (/\/messages\/[^/]+\/(reaction|unsend)$/.test(url.pathname)) {
       const messageId = url.pathname.split('/').at(-2);
       const target = messages.find((message) => message._id === messageId)!;
@@ -252,7 +253,9 @@ test('the shell loads the real chat panel and expands the selected conversation'
       });
     if (url.pathname.endsWith('/events')) return route.abort();
     const data = url.pathname.endsWith('/conversations')
-      ? [conversation]
+      ? url.searchParams.has('hidden')
+        ? []
+        : [conversation]
       : url.pathname.endsWith('/capabilities')
         ? { assistant: false }
         : [];
@@ -339,7 +342,8 @@ test('direct chats keep assistant mentions as text on desktop and mobile', async
     if (url.pathname.endsWith('/events')) return route.abort();
     let data: unknown = [];
     if (url.pathname.endsWith('/capabilities')) data = { assistant: true, sharedAssistant: true };
-    else if (url.pathname.endsWith('/conversations')) data = [conversation];
+    else if (url.pathname.endsWith('/conversations'))
+      data = url.searchParams.has('hidden') ? [] : [conversation];
     else if (url.pathname.endsWith('/messages')) {
       if (req.method() === 'POST') {
         invocation = req.postDataJSON().assistantId;
@@ -419,7 +423,8 @@ for (const transport of ['polling', 'stream'])
       }
       let data: unknown = [];
       if (url.pathname.endsWith('/capabilities')) data = { assistant: true };
-      else if (url.pathname.endsWith('/conversations')) data = [conversation];
+      else if (url.pathname.endsWith('/conversations'))
+      data = url.searchParams.has('hidden') ? [] : [conversation];
       else if (url.pathname.endsWith('/messages')) {
         if (req.method() === 'POST') {
           const input = req.postDataJSON();

@@ -23,7 +23,9 @@ import { KIND_LABEL, displayTitle } from '../../utils/chatContext';
 import { AnalystSetupNotice } from './AnalystSetupNotice';
 import { CallButtons } from './CallButtons';
 import { BackToConversations } from './BackToConversations';
+import { AskingAbout } from './AskingAbout';
 import { ChatContextChips } from './ChatContextChips';
+import { useConversationMenuItems } from './conversationMenuItems';
 import { MediaComposer } from './MediaComposer';
 import { analystSettingsHref } from '../../utils/analystSettingsLink';
 import { lastActiveLabel } from '../../utils/activity';
@@ -40,7 +42,9 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     user,
     setShowPeople,
     enabled,
-    analyze,
+    openAbout,
+    about,
+    clearAbout,
     me,
     membership,
     sending,
@@ -65,6 +69,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     setExporting(null);
     setSearching(false);
   }, [c?._id]);
+  const menuItems = useConversationMenuItems(c, () => setSettingsAnchor(null), { topic: true });
   if (!c) return null;
   return (
     <>
@@ -122,7 +127,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
           <Button
             size="small"
             startIcon={<AutoAwesome />}
-            onClick={() => analyze({ projectId: c.projectId, trainingIds: c.trainingIds, title: c.projectName })}
+            onClick={() => openAbout({ projectId: c.projectId, trainingIds: c.trainingIds, title: c.projectName })}
           >
             Ask privately
           </Button>
@@ -189,9 +194,11 @@ export function ConversationThread({ panel }: { panel: boolean }) {
               Analyst settings
             </MenuItem>
           )}
+          <Divider />
+          {menuItems}
         </Menu>
       </Stack>
-      {<ChatContextChips context={c} labels={c.trainingLabels} />}
+      {c.kind !== 'assistant' && <ChatContextChips context={c} labels={c.trainingLabels} />}
       <Divider />
       {me?.state === 'invited' && (
         <Alert
@@ -225,6 +232,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
       {searching && <SearchConversationDialog conversationId={c._id} onClose={() => setSearching(false)} />}
       <MessageList />
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
+      {c.kind === 'assistant' && <AskingAbout about={about} name={c.profile?.name} onClear={clearAbout} />}
       {replyTarget && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}
       <MediaComposer
         key={c._id}

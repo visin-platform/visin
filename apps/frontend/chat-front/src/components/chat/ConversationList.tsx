@@ -1,10 +1,13 @@
 import {
   Add,
   AutoAwesome,
+  ExpandLess,
+  ExpandMore,
   FolderOutlined,
   Forum,
   GroupsOutlined,
   PersonOutlined,
+  MoreVert,
   PaletteOutlined,
   Settings
 } from '@mui/icons-material';
@@ -13,19 +16,25 @@ import {
   Badge,
   Box,
   Button,
+  Collapse,
   IconButton,
   List,
+  ListItem,
   ListItemButton,
   ListItemText,
+  Menu,
   Stack,
   Typography
 } from '@mui/material';
+import { useState } from 'react';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import type { Conversation } from '../../types/chat';
 import { analystSettingsHref } from '../../utils/analystSettingsLink';
 import { KIND_LABEL, displayTitle } from '../../utils/chatContext';
 import { lastActiveLabel } from '../../utils/activity';
+import { plainPreview } from '../../utils/preview';
 import { unreadCount } from '../../utils/unread';
+import { useConversationMenuItems } from './conversationMenuItems';
 import { NotificationToggle } from './NotificationToggle';
 const KIND_ICON: Record<Conversation['kind'], typeof AutoAwesome> = {
   assistant: AutoAwesome,
@@ -47,6 +56,76 @@ function conversationDate(value: string) {
     day: 'numeric',
     ...(date.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {})
   });
+}
+
+/** The ⋯ of a row: put it away, delete it, leave it. Always there on a touch screen; on a pointer, when it is looked at. */
+function RowMenu({ conversation, title }: { conversation: Conversation; title: string }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <IconButton
+        size="small"
+        className="row-menu"
+        aria-label={`Options for ${title}`}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(anchor)}
+        onClick={(event) => setAnchor(event.currentTarget)}
+      >
+        <MoreVert fontSize="small" />
+      </IconButton>
+      {anchor && <RowMenuItems conversation={conversation} anchor={anchor} close={() => setAnchor(null)} />}
+    </>
+  );
+}
+
+/** Built only while open: a list of a hundred rows does not make a hundred menus on every update. */
+function RowMenuItems({ conversation, anchor, close }: { conversation: Conversation; anchor: HTMLElement; close: () => void }) {
+  const items = useConversationMenuItems(conversation, close);
+  return (
+    <Menu anchorEl={anchor} open onClose={close}>
+      {items}
+    </Menu>
+  );
+}
+
+const rowSx = {
+  '& .row-menu': { opacity: 0 },
+  '&:hover .row-menu, &:focus-within .row-menu, & .row-menu[aria-expanded="true"]': { opacity: 1 },
+  '@media (hover: none)': { '& .row-menu': { opacity: 1 } }
+} as const;
+
+/** Conversations put away: out of the list, never lost. Opening one shows it; Unhide puts it back. */
+function HiddenChats() {
+  const { hidden, show, unhideChat, user } = useChatWorkspaceContext();
+  const [open, setOpen] = useState(false);
+  if (!hidden.length) return null;
+  return (
+    <>
+      <ListItemButton onClick={() => setOpen(!open)} aria-expanded={open} sx={{ borderRadius: 1.5, mt: 1 }}>
+        <ListItemText primary={`Hidden (${hidden.length})`} slotProps={{ primary: { variant: 'body2' } }} />
+        {open ? <ExpandLess /> : <ExpandMore />}
+      </ListItemButton>
+      <Collapse in={open} unmountOnExit>
+        <List dense aria-label="Hidden conversations" disablePadding>
+          {hidden.map((item) => (
+            <ListItem
+              key={item._id}
+              disablePadding
+              secondaryAction={
+                <Button size="small" onClick={() => void unhideChat(item._id)}>
+                  Unhide
+                </Button>
+              }
+            >
+              <ListItemButton onClick={() => show(item._id)} sx={{ borderRadius: 1.5, pr: 10 }}>
+                <ListItemText primary={displayTitle(item, user?.id)} secondary={KIND_LABEL[item.kind]} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Collapse>
+    </>
+  );
 }
 
 export function ConversationList({ panel }: { panel: boolean }) {
@@ -108,11 +187,16 @@ export function ConversationList({ panel }: { panel: boolean }) {
           const unread = item._id === selected ? 0 : unreadCount(item, user?.id);
           const Icon = KIND_ICON[item.kind];
           return (
-            <ListItemButton
+            <ListItem
               key={item._id}
+              disablePadding
+              sx={rowSx}
+              secondaryAction={<RowMenu conversation={item} title={displayTitle(item, user?.id)} />}
+            >
+            <ListItemButton
               selected={selected === item._id}
               onClick={() => show(item._id)}
-              sx={{ borderRadius: 1.5, gap: 1.5, py: 1.5, borderBottom: 1, borderColor: 'divider' }}
+              sx={{ borderRadius: 1.5, gap: 1.5, py: 1.5, pr: 6, borderBottom: 1, borderColor: 'divider' }}
             >
               <Avatar src={item.profile?.picture} alt="" sx={{ width: 40, height: 40 }}>
                 {item.kind === 'direct' || item.kind === 'assistant' ? (
@@ -145,7 +229,7 @@ export function ConversationList({ panel }: { panel: boolean }) {
                     </Typography>
                     {item.latestMessage && (
                       <Typography component="span" variant="body2" noWrap sx={{ display: 'block' }}>
-                        {item.latestMessage.body}
+                        {plainPreview(item.latestMessage.body)}
                       </Typography>
                     )}
                   </>
@@ -163,8 +247,10 @@ export function ConversationList({ panel }: { panel: boolean }) {
                 />
               )}
             </ListItemButton>
+            </ListItem>
           );
         })}
+        <HiddenChats />
       </List>
       {loaded && !conversations.length && (
         <Typography sx={{ px: 2, py: 1 }} color="text.secondary">

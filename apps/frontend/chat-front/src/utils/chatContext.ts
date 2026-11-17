@@ -15,22 +15,53 @@ export const PAGE_CONTEXT_EVENT = 'visin:page-context';
 export const OPEN_EVENT = 'visin:chat-context';
 
 /** One project and the same runs, in any order. Empty without a project: a general question matches nothing. */
-export const contextKey = (context?: PageContext): string =>
+export const contextKey = (context?: Pick<PageContext, 'projectId' | 'trainingIds' | 'paperId'>): string =>
   context?.paperId
     ? `paper:${context.paperId}`
     : context?.projectId
       ? `${context.projectId}:${[...(context.trainingIds ?? [])].sort().join(',')}`
       : '';
 
-/** The analysis thread already about exactly this. */
-export const matchesContext = (conversation: Conversation, context: PageContext): boolean =>
-  conversation.kind === 'assistant' &&
-  conversation.assistantId === context.assistantId &&
-  contextKey(conversation) !== '' &&
-  contextKey(conversation) === contextKey(context);
+/**
+ * The person's one chat with an assistant. With no assistant named it is the newest of their private chats, which is
+ * the one the server also opens when it is asked for "the assistant" without a name.
+ */
+export const assistantChat = (conversations: Conversation[], assistantId?: string): Conversation | undefined =>
+  conversations.find((item) => item.kind === 'assistant' && (!assistantId || item.assistantId === assistantId));
+
+/** What a question is about, in words for a chip or a label above a message. Empty when it is about nothing. */
+export function aboutLabel(
+  about:
+    | {
+        projectId?: string;
+        projectName?: string;
+        trainingIds?: string[];
+        trainingLabels?: { id: string; name: string }[];
+        paperId?: string;
+        paperTitle?: string;
+        title?: string;
+      }
+    | undefined
+): string {
+  if (!about) return '';
+  if (about.paperId) return `Paper: ${about.paperTitle || about.title || 'paper'}`;
+  if (!about.projectId) return '';
+  // A page names itself ("Compare 3 runs", a run's name) when it does not know its project's name.
+  if (!about.projectName) return about.title || 'Project';
+  const runs = about.trainingIds?.length ?? 0;
+  if (!runs) return about.projectName;
+  const run = runs === 1 ? (about.trainingLabels?.[0]?.name ?? about.title) : undefined;
+  return `${about.projectName} · ${run || `${runs} ${runs === 1 ? 'run' : 'runs'}`}`;
+}
+
+/** Whether a question's context is the same as the one before it, so its label is shown once. */
+export const sameAbout = (
+  a: { projectId?: string; paperId?: string; trainingIds?: string[] } | undefined,
+  b: { projectId?: string; paperId?: string; trainingIds?: string[] } | undefined
+): boolean => contextKey(a) === contextKey(b);
 
 export const KIND_LABEL: Record<Conversation['kind'], string> = {
-  assistant: 'Analysis',
+  assistant: 'Assistant',
   direct: 'Direct message',
   room: 'Room',
   group: 'Group channel',

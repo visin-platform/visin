@@ -24,6 +24,8 @@ export interface Participant {
   joinedAt?: string;
   joinedSeq?: number;
   readSeq: number;
+  /** In a private chat with an assistant: the "new topic" marker, which the assistant does not read back past. */
+  topicSeq?: number;
 }
 
 export interface Conversation {
@@ -65,7 +67,19 @@ export interface Attachment {
 
 export type AttachmentRef = Pick<Attachment, 'fileId' | 'name' | 'mime'>;
 
+/** What a question to the analyst was about, as the server checked and kept it with the question. */
+export interface MessageContext {
+  projectId?: string;
+  projectName?: string;
+  trainingIds?: string[];
+  trainingLabels?: { id: string; name: string }[];
+  paperId?: string;
+  paperTitle?: string;
+}
+
 export interface Message {
+  /** What this question was about, in a private chat with an assistant. */
+  context?: MessageContext;
   unsentAt?: string | null;
   revision?: number;
   reactions?: { userId: string; emoji: string }[];
@@ -163,6 +177,8 @@ export interface SendMessageInput {
   clientId: string;
   assistantId?: string;
   replyTo?: string;
+  /** What the question is about. Ids only: the server checks them, as the sender, and keeps the names. */
+  context?: { projectId?: string; trainingIds?: string[]; paperId?: string };
   /** The side panel's tab and page, so the analyst can change the page beside it. */
   screen?: {
     tabId: string;

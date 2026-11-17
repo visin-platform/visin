@@ -14,7 +14,7 @@ export async function steerScreen(
 ) {
   const request = screenRequestSchema.safeParse(input);
   if (!request.success || request.data.place !== 'compare') return requestScreen(run, input, signal);
-  if (!projectId || !token) return { ok: false, text: 'Select a project before comparing runs.' };
+  if (!projectId || !token) return { ok: false, text: 'Ask this from a project’s page to compare its runs.' };
   const ids = [...new Set(request.data.ids)];
   if (ids.length < 2) return { ok: false, text: 'A comparison needs at least two different runs.' };
   const labels: { id: string; name: string }[] = [];
@@ -26,7 +26,7 @@ export async function steerScreen(
         headers: { authorization: `Bearer ${token}` }
       } as Request);
       if (String(training.projectId) !== projectId)
-        return { ok: false, text: 'All compared runs must belong to this thread’s project.' };
+        return { ok: false, text: 'All compared runs must belong to the project this question is about.' };
       labels.push({ id, name: training.name });
     } catch {
       signal.throwIfAborted();
@@ -40,7 +40,6 @@ export async function steerScreen(
     {
       _id: run.conversationId,
       kind: 'assistant',
-      projectId,
       deletedAt: null,
       workerRunId: run.id,
       participants: { $elemMatch: { userId: run.userId, state: 'active' } }
@@ -49,5 +48,5 @@ export async function steerScreen(
   );
   return updated.matchedCount
     ? outcome
-    : { ok: false, text: 'The page opened, but this thread’s selection could not be updated.' };
+    : { ok: false, text: 'The page opened, but the chat’s selection could not be updated.' };
 }

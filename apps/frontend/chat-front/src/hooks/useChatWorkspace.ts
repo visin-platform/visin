@@ -1,7 +1,8 @@
 import { useChatAppearance } from '../appearance/useChatAppearance';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import type { Message } from '../types/chat';
+import type { Message, PageContext } from '../types/chat';
+import { OPEN_EVENT, contextKey } from '../utils/chatContext';
 import { useChatActions } from './useChatActions';
 import { useChatConversations } from './useChatConversations';
 import { useChatNavigation } from './useChatNavigation';
@@ -31,6 +32,7 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
   const navigation = useChatNavigation({
     userId: isAuthenticated ? user?.id : undefined,
     conversations: list.conversations,
+    hidden: list.hidden,
     loaded: list.loaded
   });
   const thread = useChatThread({
@@ -46,11 +48,16 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     ...navigation,
     c: navigation.c && thread.selection ? { ...navigation.c, ...thread.selection } : navigation.c
   };
+  // What the next question is about: the page the person is on, until they clear it. Each question carries it, so
+  // the same chat serves every page and a question is answered about the page it was asked on.
+  const aboutRef = useRef<PageContext | undefined>(undefined);
   const actions = useChatActions({
     navigation: currentNavigation,
     thread,
     refreshList: list.refreshList,
+    refreshHidden: list.refreshHidden,
     perform,
+    aboutRef,
     panel
   });
   const pageContext = usePageChatContext({
@@ -59,9 +66,21 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     enabled: list.enabled,
     current: currentNavigation.c,
     composing: navigation.composing,
+    pending: navigation.pending,
     handle: actions.handle,
     analyze: navigation.analyze
   });
+  const [clearedAbout, setClearedAbout] = useState<string>();
+  // Asking about something on purpose shows it again, even when it is what the person had cleared.
+  useEffect(() => {
+    const reset = () => setClearedAbout(undefined);
+    window.addEventListener(OPEN_EVENT, reset);
+    return () => window.removeEventListener(OPEN_EVENT, reset);
+  }, []);
+  const aboutKey = contextKey(pageContext);
+  // Clearing it lasts until the page, or what was asked about, changes.
+  const about = aboutKey && aboutKey !== clearedAbout ? pageContext : undefined;
+  aboutRef.current = about;
   return {
     appearance,
     appearanceOpen,
@@ -79,6 +98,11 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     c: currentNavigation.c,
     ...actions,
     pageContext,
+    about,
+    clearAbout: () => setClearedAbout(aboutKey),
+    /** Opens the chat with the assistant, asking about this: what the next question is about. */
+    openAbout: (context: PageContext) =>
+      window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { kind: 'assistant', ...context } })),
     showPeople,
     setShowPeople,
     finding,

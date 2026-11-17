@@ -35,16 +35,31 @@ it('shows measured evidence and submits a reviewed finding through the separate 
   const training = '111111111111111111111111';
   state.enabled = true;
   state.conversations[0].kind = 'assistant';
-  state.conversations[0].projectId = 'project1';
-  state.conversations[0].trainingIds = [training];
-  state.conversations[0].trainingLabels = [{ id: training, name: 'Base model' }];
   state.messages = [
+    {
+      _id: 'question1',
+      kind: 'person',
+      senderId: 'alice',
+      senderName: 'Alice',
+      body: 'What peaked?',
+      seq: 1,
+      createdAt: '2026-11-02T11:59:00Z',
+      evidence: [],
+      // What the question was about is kept with it: the chat is the same for every project.
+      context: {
+        projectId: 'project1',
+        projectName: 'Road scene',
+        trainingIds: [training],
+        trainingLabels: [{ id: training, name: 'Base model' }]
+      }
+    },
     {
       _id: 'answer1',
       kind: 'assistant',
+      replyTo: 'question1',
       senderName: 'Visin analyst',
       body: 'Validation peaked at epoch 42.',
-      seq: 1,
+      seq: 2,
       createdAt: '2026-11-02T12:00:00Z',
       evidence: [
         { tool: 'get_training', input: { training, trainings: [training, 'not-an-id'] }, at: '2026-11-02T12:00:00Z' }
@@ -54,10 +69,9 @@ it('shows measured evidence and submits a reviewed finding through the separate 
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   expect(await screen.findByText('Validation peaked at epoch 42.')).toBeInTheDocument();
-  // The thread's header and the answer both name the run; each links to it.
-  expect(screen.getAllByRole('link', { name: 'Base model' })).toHaveLength(2);
-  // The answer names the run it read (the thread's header names it too, so the answer's is the last).
-  expect(screen.getAllByRole('link', { name: 'Base model' }).at(-1)).toHaveAttribute('href', `/trainings/${training}`);
+  // The question says what it was about; the answer names the run it read and links to it.
+  expect(screen.getByTestId('asked-about')).toHaveTextContent('Road scene · Base model');
+  expect(screen.getByRole('link', { name: 'Base model' })).toHaveAttribute('href', `/trainings/${training}`);
   expect(screen.queryByRole('link', { name: /not-an-id/ })).toBeNull();
   fireEvent.click(screen.getAllByRole('button', { name: 'Message actions' }).at(-1)!);
   fireEvent.click(screen.getByRole('menuitem', { name: 'Save as finding' }));
@@ -98,10 +112,13 @@ it('offers to retry the question behind a failed analysis, and only while it is 
       body: 'Where did it peak?',
       seq: 1,
       createdAt: '2026-11-02T12:00:00Z',
-      evidence: []
+      evidence: [],
+      context: { projectId: 'p1', projectName: 'IseAuto', trainingIds: ['t1'], trainingLabels: [{ id: 't1', name: 'Base' }] }
     }
   ];
   state.runs = [{ _id: 'job1', messageId: 'q1', state: 'failed', activity: 'Failed', error: 'Provider unavailable' }];
+  // The person has since moved to another page: the retried question is still about the one it was asked on.
+  window.__visinPageContext = { projectId: 'p9', trainingIds: [], title: 'Elsewhere' };
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
   expect(await screen.findByText('Provider unavailable')).toBeInTheDocument();
@@ -109,7 +126,11 @@ it('offers to retry the question behind a failed analysis, and only while it is 
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith(
       '/conversations/c1/messages',
-      expect.objectContaining({ body: 'Where did it peak?', clientId: expect.any(String) })
+      expect.objectContaining({
+        body: 'Where did it peak?',
+        clientId: expect.any(String),
+        context: { projectId: 'p1', trainingIds: ['t1'] }
+      })
     )
   );
 });

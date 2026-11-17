@@ -748,7 +748,22 @@
           "503": {
             "description": "An authorization dependency is unavailable"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "hidden",
+            "in": "query",
+            "required": false,
+            "description": "`1` lists only the conversations this person has hidden, which the default list leaves out.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            }
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -800,6 +815,48 @@
         "x-internal": true,
         "operationId": "chatConversation",
         "summary": "Read conversation metadata",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "deleteChatConversation",
+        "summary": "Delete your own private chat with an assistant (soft delete)",
         "responses": {
           "200": {
             "description": "Success"
@@ -2848,6 +2905,136 @@
           }
         }
       }
+    },
+    "/conversations/{id}/hide": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "hideChatConversation",
+        "summary": "Put a conversation away from your own list",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "unhideChatConversation",
+        "summary": "Bring a hidden conversation back to your list",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      }
+    },
+    "/conversations/{id}/topic": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "startChatTopic",
+        "summary": "Start a new topic in a private chat with an assistant",
+        "responses": {
+          "201": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input or service not configured"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Action not permitted"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2900,12 +3087,13 @@
           },
           "projectId": {
             "type": "string",
-            "pattern": "^[a-fA-F0-9]{24}$"
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "description": "For a `project` discussion. Not accepted for an `assistant` chat: send the project with the question instead (`SendMessage.context`)."
           },
           "paperId": {
             "type": "string",
             "pattern": "^[a-fA-F0-9]{24}$",
-            "description": "A research paper to analyse in a private (`assistant`) chat, on its own: not together with a project or runs. The caller must be able to read the paper, which is rechecked on every read of the conversation. The analyst reads the paper's text and the results it cites through read-only tools."
+            "description": "Not accepted for an `assistant` chat. Send the paper with the question instead (`SendMessage.context`)."
           },
           "trainingIds": {
             "type": "array",
@@ -2924,7 +3112,8 @@
             "maxItems": 19,
             "description": "Contacts from rosters the caller may currently read; membership is rechecked"
           }
-        }
+        },
+        "description": "A private (`assistant`) chat is one per person and assistant: asking again returns the chat that exists. What a question is about is sent with the question (`SendMessage.context`), never when the chat is opened."
       },
       "SendMessage": {
         "type": "object",
@@ -3015,6 +3204,29 @@
             "maxItems": 5,
             "items": {
               "$ref": "#/components/schemas/AttachmentRef"
+            }
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "What a question to the analyst is about, for a private (`assistant`) chat: a project and some of its runs, or a paper on its own. Checked as the sender when the message is sent (a project or paper they cannot read is refused) and kept with the message, so one chat can hold questions about many things. Leave it out for a general question.",
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{24}$"
+              },
+              "trainingIds": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$"
+                }
+              },
+              "paperId": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{24}$"
+              }
             }
           }
         },

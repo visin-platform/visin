@@ -3,16 +3,22 @@ import { chatService } from '../services/chatService';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Conversation, Message, PageContext } from '../types/chat';
 import type { SharedAssistantSettings } from '../types/assistant';
-import { matchesContext } from '../utils/chatContext';
+import { assistantChat } from '../utils/chatContext';
 import { defaultAssistantId } from '../utils/defaultAssistant';
+
+/** One empty list, so an effect that depends on it does not run again on every render. */
+const NO_CONVERSATIONS: Conversation[] = [];
 
 export function useChatNavigation({
   userId,
   conversations,
+  hidden = NO_CONVERSATIONS,
   loaded = false
 }: {
   userId?: string;
   conversations: Conversation[];
+  /** Conversations the person put away: still theirs to open, from the Hidden section or by asking again. */
+  hidden?: Conversation[];
   loaded?: boolean;
 }) {
   const [selected, setSelected] = useState<string>();
@@ -39,6 +45,7 @@ export function useChatNavigation({
   const [restored, setRestored] = useState<{ userId?: string; conversation: Conversation }>();
   const c =
     conversations.find((c) => c._id === selected) ||
+    hidden.find((c) => c._id === selected) ||
     (restored && restored.userId === userId && restored.conversation._id === selected
       ? restored.conversation
       : undefined);
@@ -113,7 +120,7 @@ export function useChatNavigation({
 
   useEffect(() => {
     setRestoreError('');
-    if (!loaded || !selected || conversations.some((item) => item._id === selected)) return;
+    if (!loaded || !selected || [...conversations, ...hidden].some((item) => item._id === selected)) return;
     const controller = new AbortController();
     // The list is capped at 100. A missing row may still be an accessible older conversation.
     void chatService
@@ -130,27 +137,30 @@ export function useChatNavigation({
         else setRestoreError('Could not reopen this conversation. Retrying…');
       });
     return () => controller.abort();
-  }, [loaded, selected, conversations, userId, forgetSelection]);
+  }, [loaded, selected, conversations, hidden, userId, forgetSelection]);
 
-  const latest = useRef({ conversations, current: c, composing });
+  const latest = useRef({ conversations, hidden, current: c, composing });
 
   useEffect(() => {
-    latest.current = { conversations, current: c, composing };
+    latest.current = { conversations, hidden, current: c, composing };
   });
 
   const analyze = useCallback(
     async (asked: PageContext) => {
-      // A page asks for "this run" or "this paper" without naming who answers: the person's default analyst does, so a
-      // thread already started with it is found again, and a new one starts with it.
+      // Opens the person's one chat with an assistant, whatever it was asked from: what a question is about goes with
+      // the question, not with the chat. A page asks without naming who answers, so the default analyst does. Only
+      // someone with no chat with it yet gets an empty one to start.
       const version = ++analyzeVersion.current;
       const preferred = asked.assistantId ? undefined : await defaultAssistantId();
       if (currentUser.current !== userId || version !== analyzeVersion.current) return;
-      const context = preferred ? { ...asked, assistantId: preferred } : asked;
-      const match = latest.current.conversations.find((item) => matchesContext(item, context));
+      const assistantId = asked.assistantId ?? preferred;
+      // A hidden chat with the assistant is still the one chat: asking again opens it rather than starting another.
+      const match =
+        assistantChat(latest.current.conversations, assistantId) ?? assistantChat(latest.current.hidden, assistantId);
       if (match) show(match._id);
       else {
         show(undefined);
-        setPending(context);
+        setPending({ ...asked, assistantId });
       }
     },
     [show, userId]

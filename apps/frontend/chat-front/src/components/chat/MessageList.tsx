@@ -23,6 +23,7 @@ import { visibleDrafts } from '../../utils/drafts';
 import { PAGE, mergeMessages, applyMessageUpdates } from '../../utils/messages';
 import { AnalysisHint } from './AnalysisHint';
 import { continuesRun } from '../../utils/messageRuns';
+import { aboutLabel, sameAbout } from '../../utils/chatContext';
 
 /** A message this young eases in as it arrives. */
 const FRESH_MS = 8000;
@@ -86,6 +87,22 @@ export function MessageList() {
   // The answer being written, shown until it is a message. Only in the asker's own analyst thread, which is all the
   // server sends drafts for.
   const writing = c.kind === 'assistant' ? visibleDrafts(drafts, messages) : [];
+  // One pass over the page: the question each answer replies to, and the label a question shows. In the one chat
+  // with an assistant a question says what it was about, when that is not what the question before it was about.
+  const byId = new Map(messages.map((message) => [message._id, message]));
+  const askedAbout: string[] = [];
+  let previousQuestion: (typeof messages)[number] | undefined;
+  for (const message of messages) {
+    let label = '';
+    if (c.kind === 'assistant' && message.kind === 'person') {
+      const here = aboutLabel(message.context);
+      if (here && !(previousQuestion && sameAbout(message.context, previousQuestion.context))) label = here;
+      previousQuestion = message;
+    }
+    askedAbout.push(label);
+  }
+  const questionOf = (message: (typeof messages)[number]) =>
+    message.replyTo ? byId.get(message.replyTo) : undefined;
 
   return (
     <Box
@@ -122,6 +139,14 @@ export function MessageList() {
               />
             </Box>
           )}
+          {askedAbout[index] && (
+            <Box
+              sx={{ textAlign: 'right', color: 'text.secondary', typography: 'caption', mt: 1.5, px: 0.5 }}
+              data-testid="asked-about"
+            >
+              {askedAbout[index]}
+            </Box>
+          )}
           <MessageBubble
             key={message._id}
             message={message}
@@ -138,9 +163,10 @@ export function MessageList() {
                 ? c.profile
                 : undefined
             }
-            labels={c.trainingLabels}
+            labels={[...(questionOf(message)?.context?.trainingLabels ?? []), ...(c.trainingLabels ?? [])]}
             fresh={Date.now() - Date.parse(message.createdAt) < FRESH_MS}
-            canSave={c.kind === 'assistant' && Boolean(c.projectId)}
+            // An answer can be saved as a finding when the question it answers was about a project.
+            canSave={c.kind === 'assistant' && Boolean(questionOf(message)?.context?.projectId)}
             onSave={setFinding}
             userId={user?.id}
             onReact={(target, emoji) =>
@@ -207,7 +233,7 @@ export function MessageList() {
                 size="small"
                 startIcon={<Refresh />}
                 disabled={sending}
-                onClick={() => void post(failedQuestion.body, false, failedQuestion.replyTo)}
+                onClick={() => void post(failedQuestion.body, false, failedQuestion.replyTo, [], failedQuestion.context)}
               >
                 Retry
               </Button>

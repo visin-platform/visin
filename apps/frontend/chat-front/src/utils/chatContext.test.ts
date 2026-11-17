@@ -1,24 +1,43 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Conversation } from '../types/chat';
-import { analysisOf, contextKey, matchesContext, requestFromUrl } from './chatContext';
-it('keeps assistants separate when reusing project analysis conversations', () => {
-  const conversation = { kind: 'assistant', projectId: 'p1', trainingIds: ['t1'], assistantId: 'a1' } as Conversation;
-  expect(matchesContext(conversation, { projectId: 'p1', trainingIds: ['t1'], assistantId: 'a1' })).toBe(true);
-  expect(matchesContext(conversation, { projectId: 'p1', trainingIds: ['t1'], assistantId: 'a2' })).toBe(false);
-  expect(matchesContext(conversation, { projectId: 'p1', trainingIds: ['t1'] })).toBe(false);
+import { aboutLabel, analysisOf, assistantChat, contextKey, requestFromUrl, sameAbout } from './chatContext';
+it('finds the one chat with an assistant, and keeps assistants apart', () => {
+  const chats = [
+    { _id: 'direct', kind: 'direct' },
+    { _id: 'two', kind: 'assistant', assistantId: 'a2' },
+    { _id: 'one', kind: 'assistant', assistantId: 'a1' }
+  ] as unknown as Conversation[];
+  expect(assistantChat(chats, 'a1')?._id).toBe('one');
+  expect(assistantChat(chats, 'a3')).toBeUndefined();
+  // With no assistant named, the first private chat in the list.
+  expect(assistantChat(chats)?._id).toBe('two');
+  expect(assistantChat([chats[0]], undefined)).toBeUndefined();
 });
 
-it('reuses the thread already about the same paper, and no other', () => {
-  const conversation = { kind: 'assistant', paperId: 'paper1', trainingIds: [] } as unknown as Conversation;
-  expect(contextKey({ paperId: 'paper1' })).toBe('paper:paper1');
-  expect(matchesContext(conversation, { paperId: 'paper1' })).toBe(true);
-  expect(matchesContext(conversation, { paperId: 'paper2' })).toBe(false);
-  // A project's analysis is never mistaken for a paper's, even with no runs selected.
+it('says in words what a question is about, and nothing when it is about nothing', () => {
+  expect(aboutLabel(undefined)).toBe('');
+  expect(aboutLabel({ title: 'General' })).toBe('');
+  expect(aboutLabel({ projectId: 'p1', projectName: 'IseAuto', trainingIds: [] })).toBe('IseAuto');
+  expect(aboutLabel({ projectId: 'p1', projectName: 'IseAuto', trainingIds: ['a', 'b'] })).toBe('IseAuto · 2 runs');
   expect(
-    matchesContext({ kind: 'assistant', projectId: 'p1', trainingIds: [] } as unknown as Conversation, {
-      paperId: 'paper1'
-    })
-  ).toBe(false);
+    aboutLabel({ projectId: 'p1', projectName: 'IseAuto', trainingIds: ['a'], trainingLabels: [{ id: 'a', name: 'run-7' }] })
+  ).toBe('IseAuto · run-7');
+  expect(aboutLabel({ projectId: 'p1', title: 'IseAuto trainings' })).toBe('IseAuto trainings');
+  expect(aboutLabel({ projectId: 'p1', trainingIds: ['a', 'b'], title: 'Compare 2 runs' })).toBe('Compare 2 runs');
+  expect(aboutLabel({ projectId: 'p1', projectName: 'IseAuto', trainingIds: ['a'], title: 'run-9' })).toBe('IseAuto · run-9');
+  expect(aboutLabel({ projectId: 'p1' })).toBe('Project');
+  expect(aboutLabel({ paperId: 'x', paperTitle: 'CLFTv2' })).toBe('Paper: CLFTv2');
+});
+
+it('treats the same project and runs, in any order, as the same thing asked about', () => {
+  expect(sameAbout({ projectId: 'p', trainingIds: ['a', 'b'] }, { projectId: 'p', trainingIds: ['b', 'a'] })).toBe(true);
+  expect(sameAbout({ projectId: 'p', trainingIds: ['a'] }, { projectId: 'p', trainingIds: [] })).toBe(false);
+  expect(sameAbout(undefined, { paperId: 'x' })).toBe(false);
+  expect(sameAbout(undefined, undefined)).toBe(true);
+});
+
+it('names a paper by itself as a context', () => {
+  expect(contextKey({ paperId: 'paper1' })).toBe('paper:paper1');
 });
 
 it('carries the paper through a request to analyse it', () => {

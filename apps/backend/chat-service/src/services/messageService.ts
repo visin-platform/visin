@@ -5,6 +5,8 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-c
 import { type Request } from 'express';
 import { Assistant } from '../models/Assistant';
 import { Conversation } from '../models/Conversation';
+import { ConversationHidden } from '../models/ConversationHidden';
+import { verifyAbout } from './analysisContext';
 import { Message } from '../models/Message';
 import { authorize, historyFilter } from './access';
 import { AssistantRun } from '../models/AssistantRun';
@@ -132,7 +134,10 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     ? await Assistant.findOne({ _id: c.assistantId, ...usableAssistant(req.user!.id) })
     : null;
   if (c.assistantId && !selectedAssistant) throw new BadRequestError('This assistant is paused or removed');
-  const { assistantId: _invocation, screen, attachments: refs, ...messageInput } = input;
+  const { assistantId: _invocation, screen, attachments: refs, context: asked, ...messageInput } = input;
+  // What the question is about is checked as the asker, now: a project or paper they cannot read refuses the send.
+  const about = asked && (asked.projectId || asked.paperId) ? await verifyAbout(req, asked) : undefined;
+  if (about && c.kind !== 'assistant') throw new BadRequestError('Only a question to an assistant is about something');
   // Described from what file-service holds, not from what the browser said.
   const attachments = await verifyAttachments(c.id, c.kind, refs ?? []);
   const message = await appendMessage({
@@ -142,6 +147,7 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     senderName: actorName(req),
     kind: 'person',
     ...messageInput,
+    ...(about ? { context: about } : {}),
     ...(attachments.length ? { attachments } : {}),
     ...(reply
       ? {
@@ -169,6 +175,8 @@ export async function sendMessage(req: Request, conversationId: string, body: un
         }
       : {})
   });
+  // Writing in a chat that was put away brings it back.
+  await ConversationHidden.deleteOne({ userId: req.user!.id, conversationId: c.id });
   const {
     assistantRequest: _request,
     screenRequest: _screenRequest,

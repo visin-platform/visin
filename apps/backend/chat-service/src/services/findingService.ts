@@ -18,9 +18,13 @@ import { parsed } from '../validation/parse';
 export async function saveFinding(req: Request, conversationId: string, body: unknown) {
   const c = await authorize(req, conversationId, true);
   const input = parsed(saveFindingSchema, body);
-  if (c.kind !== 'assistant' || !c.projectId) throw new BadRequestError('Save findings from a project analysis');
+  if (c.kind !== 'assistant') throw new BadRequestError('Save findings from a project analysis');
   const message = await Message.findOne({ _id: input.messageId, conversationId: c.id, kind: 'assistant' });
   if (!message) throw new NotFoundError('Assistant answer not found');
+  // The project is the one the answered question was about: one chat holds questions about many.
+  const question = message.replyTo ? await Message.findOne({ _id: message.replyTo, conversationId: c.id }) : null;
+  const about = question?.context;
+  if (!about?.projectId) throw new BadRequestError('Save findings from a project analysis');
   if (message.findingId) {
     return { _id: message.findingId };
   }
@@ -31,7 +35,7 @@ export async function saveFinding(req: Request, conversationId: string, body: un
     userName: actorName(req),
     name: 'Visin analyst',
     scopes: ['analysis:write'],
-    project: { id: c.projectId, name: c.projectName || c.title },
+    project: { id: about.projectId, name: about.projectName || c.title },
     expiresAt: new Date(Date.now() + 60000)
   });
   try {
@@ -41,13 +45,13 @@ export async function saveFinding(req: Request, conversationId: string, body: un
       serviceName: 'vision-service',
       headers: { authorization: `Bearer ${key.token}`, 'content-type': 'application/json' },
       body: JSON.stringify({
-        project: c.projectId,
+        project: about.projectId,
         title: input.title,
         body: input.body,
         recommendations: input.recommendations,
         trainingIds: [
           ...new Set([
-            ...c.trainingIds,
+            ...about.trainingIds,
             ...message.evidence.flatMap((e) => {
               const args = e.input as Record<string, unknown> | undefined;
               return [args?.training, ...(Array.isArray(args?.trainings) ? args.trainings : [])].filter(

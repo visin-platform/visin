@@ -8,7 +8,10 @@ import {
 } from '@visin/backend-core';
 import type { Request } from 'express';
 import { repairBotDirect } from './botConversations';
+import { liveConversation } from './liveConversation';
 import { Conversation, type ChatConversation } from '../models/Conversation';
+
+export { assistantBinding, liveConversation } from './liveConversation';
 
 export const groups = createGroupServiceClient('chat-service');
 export function endpoint(service: string): string {
@@ -47,7 +50,7 @@ export const accessCache = (groupIds?: Iterable<string>): AccessCache => ({
   projects: new Map()
 });
 export async function authorize(req: Request, id: string, write = false) {
-  const conversation = await Conversation.findOne({ _id: id, deletedAt: null });
+  const conversation = await Conversation.findOne({ _id: id, ...liveConversation });
   if (!conversation) throw new NotFoundError('Conversation not found');
   await checkAccess(req, conversation, write);
   return repairBotDirect(conversation, req.user!.id);
@@ -94,17 +97,6 @@ export async function checkAccess<C extends ChatConversation>(
     ) {
       throw new ForbiddenError('This conversation is closed');
     }
-  }
-  if (conversation.kind === 'assistant' && conversation.projectId) await project(conversation.projectId);
-  // A conversation about a paper reads it as the asker may: a paper made private or trashed since stops being readable here.
-  if (conversation.kind === 'assistant' && conversation.paperId) {
-    const key = `paper:${conversation.paperId}`;
-    let pending = cache.projects.get(key);
-    if (!pending) {
-      pending = peer<Project>('VISION', `/api/papers/${conversation.paperId}`, req);
-      cache.projects.set(key, pending);
-    }
-    await pending;
   }
   return conversation;
 }

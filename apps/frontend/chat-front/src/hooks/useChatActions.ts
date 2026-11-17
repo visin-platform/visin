@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import { chatService } from '../services/chatService';
 
-import type { AttachmentRef, Conversation, OpenRequest, PageContext } from '../types/chat';
+import type { AttachmentRef, Conversation, MessageContext, OpenRequest, PageContext } from '../types/chat';
 import { analysisOf } from '../utils/chatContext';
 import { mergeMessages } from '../utils/messages';
 import { screenContext } from '../utils/screen';
@@ -12,13 +12,19 @@ export function useChatActions({
   navigation,
   thread,
   refreshList,
+  refreshHidden,
   perform,
+  aboutRef,
   panel = false
 }: {
   navigation: ReturnType<typeof useChatNavigation>;
   thread: ReturnType<typeof useChatThread>;
   refreshList: () => Promise<void>;
+  /** Reads the conversations put away again, after one was put away or brought back. */
+  refreshHidden?: () => Promise<void>;
   perform: (operation: () => Promise<void>) => Promise<void>;
+  /** What the next question is about: the page the person is on, unless they cleared it. */
+  aboutRef?: RefObject<PageContext | undefined>;
   /** In the shell's side panel, where a page sits beside the chat. */
   panel?: boolean;
 }) {
@@ -27,15 +33,32 @@ export function useChatActions({
   const { c, pending, selected, draft, setDraft, replyTarget, setReplyTarget, show, analyze } = navigation;
   const { messages, runs, setMessages, setRuns, atBottom } = thread;
   const [sending, setSending] = useState(false);
+  /** A chat whose deletion is waiting for the person to confirm. */
+  const [deleting, setDeleting] = useState<Conversation>();
+  /** The chat just put away, offered back for a moment. */
+  const [justHidden, setJustHidden] = useState<Conversation>();
 
   const screenFor = () => {
     const screen = screenContext(panel);
     return screen ? { screen } : {};
   };
 
+  /** What a question to the assistant is about, as the server takes it: ids only, and at most the twenty it checks. */
+  const idsOf = (about: PageContext | MessageContext | undefined) => {
+    if (about?.paperId) return { paperId: about.paperId };
+    if (about?.projectId)
+      return {
+        projectId: about.projectId,
+        ...(about.trainingIds?.length ? { trainingIds: about.trainingIds.slice(0, 20) } : {})
+      };
+    return undefined;
+  };
+  const aboutNow = () => idsOf(aboutRef?.current);
+
   const retry = useRef<
     | {
         body: string;
+        context?: ReturnType<typeof aboutNow>;
         attachmentsKey?: string;
         clientId: string;
         conversation: string;
@@ -89,21 +112,34 @@ export function useChatActions({
     [analyze, openConversation]
   );
 
-  const post = async (body: string, fromDraft: boolean, requestedReply?: string, attachments: AttachmentRef[] = []) => {
+  /**
+   * Sends a message. A question to the assistant is about the page the person is on, unless it is sent again
+   * (`asked`): a retried question keeps what it was first asked about, wherever the person is now.
+   */
+  const post = async (
+    body: string,
+    fromDraft: boolean,
+    requestedReply?: string,
+    attachments: AttachmentRef[] = [],
+    asked?: MessageContext
+  ) => {
     let delivered = false;
     await perform(async () => {
       const text = body.trim();
       if (!c || (!text && !attachments.length)) return;
       const attachmentsKey = JSON.stringify(attachments);
       const replyTo = fromDraft ? replyTarget?._id : requestedReply;
+      const context = c.kind === 'assistant' ? (asked ? idsOf(asked) : aboutNow()) : undefined;
       if (
         retry.current?.body !== text ||
+        JSON.stringify(retry.current.context) !== JSON.stringify(context) ||
         retry.current.conversation !== c._id ||
         retry.current.replyTo !== replyTo ||
         retry.current.attachmentsKey !== attachmentsKey
       )
         retry.current = {
           body: text,
+          context,
           attachmentsKey,
           clientId: crypto.randomUUID(),
           conversation: c._id,
@@ -117,6 +153,7 @@ export function useChatActions({
           clientId: retry.current.clientId,
           ...(attachments.length ? { attachments } : {}),
           ...(replyTo ? { replyTo } : {}),
+          ...(retry.current.context ? { context: retry.current.context } : {}),
           ...(retry.current.screen ? { screen: retry.current.screen } : {})
         });
         delivered = true;
@@ -145,17 +182,19 @@ export function useChatActions({
       if (!text) return;
       setSending(true);
       try {
+        // The chat is only opened here; what the question is about goes with the question.
         const created = await chatService.create({
           kind: 'assistant',
           ...(context.assistantId ? { assistantId: context.assistantId } : {}),
-          title: (context.title || 'Analysis').slice(0, 120),
-          ...(context.paperId
-            ? { paperId: context.paperId }
-            : context.projectId
-              ? { projectId: context.projectId, trainingIds: context.trainingIds ?? [] }
-              : {})
+          title: 'Assistant'
         });
-        await chatService.send(created._id, { body: text, clientId: crypto.randomUUID(), ...screenFor() });
+        const about = aboutNow();
+        await chatService.send(created._id, {
+          body: text,
+          clientId: crypto.randomUUID(),
+          ...(about ? { context: about } : {}),
+          ...screenFor()
+        });
         await refreshList();
         show(created._id);
       } finally {
@@ -182,8 +221,46 @@ export function useChatActions({
       await refreshList();
       if (action !== 'accept') show(undefined);
     });
+  /** Puts a chat away, deletes it or leaves it, then shows the list rather than a chat that is no longer there. */
+  const dismissChat = (id: string, operation: () => Promise<unknown>) =>
+    perform(async () => {
+      await operation();
+      await Promise.all([refreshList(), refreshHidden?.()]);
+      // Forgotten, not only closed: a reload would otherwise reopen the chat that was just put away.
+      if (latestNavigation.current.selected === id) latestNavigation.current.forgetSelection();
+    });
+  const hideChat = (conversation: Conversation) =>
+    dismissChat(conversation._id, async () => {
+      await chatService.hide(conversation._id);
+      setJustHidden(conversation);
+    });
+  const deleteChat = (id: string) => dismissChat(id, () => chatService.remove(id));
+  const leaveChat = (id: string) => dismissChat(id, () => chatService.membership(id, 'leave'));
+  const unhideChat = (id: string) =>
+    perform(async () => {
+      await chatService.unhide(id);
+      await Promise.all([refreshList(), refreshHidden?.()]);
+    });
+  /** A new topic in the chat with the assistant: it forgets what was asked before, which stays in the chat. */
+  const startNewTopic = () =>
+    perform(async () => {
+      if (!c) return;
+      await chatService.newTopic(c._id);
+      const rows = await chatService.messages(c._id);
+      setMessages((old) => mergeMessages(old, rows));
+      await refreshList();
+    });
   return {
     sending,
+    deleting,
+    askDelete: setDeleting,
+    justHidden,
+    forgetJustHidden: () => setJustHidden(undefined),
+    hideChat,
+    unhideChat,
+    deleteChat,
+    leaveChat,
+    startNewTopic,
     openConversation,
     handle,
     post,

@@ -123,7 +123,8 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
       return route.fulfill({ headers, json: { success: true, authenticated: true, user: { id: 'alice', name: 'Alice', email: 'a@test.invalid' } } });
     let data: unknown = [];
     if (url.pathname.endsWith('/capabilities')) data = { assistant: true };
-    else if (url.pathname.endsWith('/conversations')) data = [conversation];
+    else if (url.pathname.endsWith('/conversations'))
+      data = url.searchParams.has('hidden') ? [] : [conversation];
     else if (url.pathname.endsWith('/messages')) data = messages;
     else if (url.pathname.endsWith('/runs')) data = runs;
     return route.fulfill({ headers, json: { success: true, data } });

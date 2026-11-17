@@ -1,8 +1,9 @@
 import '../helpers/mocks';
-import { fetchWithTimeout } from '@visin/backend-core';
 import { vi, type Mock } from 'vitest';
 import { Conversation } from '../../models/Conversation';
+import { Message } from '../../models/Message';
 import { groups, historyFilter, peer, publicPerson } from '../../services/access';
+import { enableAnalyst } from '../helpers/analystFixtures';
 import { create, request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
@@ -82,17 +83,67 @@ it('lets room owners invite and remove participants without granting project acc
   expect((await Conversation.findById(id))?.projectId).toBeUndefined();
 });
 
-it('rechecks a private analysis project on every read', async () => {
-  const created = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'Analysis',
-    projectId: '111111111111111111111111'
+it('opens one private chat per person and assistant, however often it is asked for', async () => {
+  const first = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  const again = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi, again' });
+  expect(first.status).toBe(201);
+  expect(again.body.data._id).toBe(first.body.data._id);
+  expect(await Conversation.countDocuments({ kind: 'assistant' })).toBe(1);
+  // Someone else has their own.
+  const other = await request('/conversations', 'bob', { kind: 'assistant', title: 'Vivi' });
+  expect(other.body.data._id).not.toBe(first.body.data._id);
+});
+
+it('does not take what a question is about when the chat is opened', async () => {
+  for (const context of [{ projectId: '111111111111111111111111' }, { paperId: '222222222222222222222222' }]) {
+    const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Analysis', ...context });
+    expect(created.status).toBe(400);
+  }
+  expect(await Conversation.countDocuments()).toBe(0);
+});
+
+it('checks what a question is about as the asker, and keeps it with the question', async () => {
+  await enableAnalyst('test');
+  const { NotFoundError } = await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core');
+  const chat = String((await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' })).body.data._id);
+  vi.mocked(peer).mockResolvedValueOnce({ _id: '111111111111111111111111', name: 'IseAuto', owner: { kind: 'user', id: 'alice' } });
+  const asked = await request(`/conversations/${chat}/messages`, 'alice', {
+    body: 'How is it going?',
+    clientId: 'about-project-1',
+    context: { projectId: '111111111111111111111111' }
   });
-  expect(created.status).toBe(201);
-  (fetchWithTimeout as Mock).mockRejectedValueOnce(
-    new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).NotFoundError()
-  );
-  expect((await request(`/conversations/${created.body.data._id}/messages`)).status).toBe(404);
+  expect(asked.status).toBe(201);
+  expect(vi.mocked(peer).mock.calls.at(-1)?.[1]).toBe('/api/projects/111111111111111111111111');
+  expect((await Message.findById(asked.body.data._id))?.context).toMatchObject({
+    projectId: '111111111111111111111111',
+    projectName: 'IseAuto'
+  });
+  // A project they cannot read refuses the question, and nothing is stored.
+  vi.mocked(peer).mockRejectedValueOnce(new NotFoundError('Resource unavailable'));
+  const hidden = await request(`/conversations/${chat}/messages`, 'alice', {
+    body: 'And this one?',
+    clientId: 'about-project-2',
+    context: { projectId: '333333333333333333333333' }
+  });
+  expect(hidden.status).toBe(404);
+  expect(await Message.countDocuments({ conversationId: chat })).toBe(1);
+  // A paper on its own is fine, a paper with a project is not.
+  const mixed = await request(`/conversations/${chat}/messages`, 'alice', {
+    body: 'Both?',
+    clientId: 'about-both-001',
+    context: { projectId: '111111111111111111111111', paperId: '222222222222222222222222' }
+  });
+  expect(mixed.status).toBe(400);
+});
+
+it('only a question to an assistant is about something', async () => {
+  const id = await create('direct', ['bob']);
+  const sent = await request(`/conversations/${id}/messages`, 'alice', {
+    body: 'Hi',
+    clientId: 'about-direct-01',
+    context: { projectId: '111111111111111111111111' }
+  });
+  expect(sent.status).toBe(400);
 });
 
 it('withholds all room messages for an invitation without a history boundary', () => {
@@ -172,47 +223,7 @@ it('looks up a direct recipient once when distinguishing people from bots', asyn
   expect((publicPerson as Mock).mock.calls.length - calls).toBe(1);
 });
 
-it('opens a private analysis of a paper the asker can read, and rechecks it on every read', async () => {
-  const paper = { id: '222222222222222222222222', title: 'CLFTv2: fusion' };
-  vi.mocked(peer).mockResolvedValueOnce(paper);
-  const created = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'CLFTv2: fusion',
-    paperId: paper.id
-  });
-  expect(created.status).toBe(201);
-  expect(created.body.data).toMatchObject({ kind: 'assistant', paperId: paper.id, paperTitle: 'CLFTv2: fusion' });
-  expect(created.body.data.projectId).toBeUndefined();
-  expect(vi.mocked(peer).mock.calls.at(-1)?.[1]).toBe(`/api/papers/${paper.id}`);
-
-  (fetchWithTimeout as Mock).mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: paper })));
-  expect((await request(`/conversations/${created.body.data._id}/messages`)).status).toBe(200);
-
-  // The paper is made private, or trashed: the chat about it no longer reads it.
-  (fetchWithTimeout as Mock).mockRejectedValueOnce(
-    new (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).NotFoundError()
-  );
-  expect((await request(`/conversations/${created.body.data._id}/messages`)).status).toBe(404);
-});
-
-it('refuses a paper the asker cannot read, and a paper mixed with a project or in a shared chat', async () => {
-  const { NotFoundError } = await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core');
-  vi.mocked(peer).mockRejectedValueOnce(new NotFoundError('Resource unavailable'));
-  const hidden = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'x',
-    paperId: '222222222222222222222222'
-  });
-  expect(hidden.status).toBe(404);
-  expect(await Conversation.countDocuments()).toBe(0);
-
-  const mixed = await request('/conversations', 'alice', {
-    kind: 'assistant',
-    title: 'x',
-    paperId: '222222222222222222222222',
-    projectId: '111111111111111111111111'
-  });
-  expect(mixed.status).toBe(400);
+it('refuses a paper in a shared chat', async () => {
   const shared = await request('/conversations', 'alice', {
     kind: 'room',
     title: 'x',

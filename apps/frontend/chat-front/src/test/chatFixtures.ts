@@ -8,6 +8,7 @@ export const state = {
   admin: false,
   accountUrl: undefined as string | undefined,
   conversations: [] as Conversation[],
+  hidden: [] as Conversation[],
   messages: [] as Message[],
   runs: [] as Run[]
 };
@@ -22,9 +23,12 @@ vi.mock('../config/ConfigProvider', () => ({
 }));
 
 vi.mock('../services/apiClient', () => ({
+  apiSend: vi.fn(async () => undefined),
+  apiDelete: vi.fn(async () => undefined),
   api: vi.fn(async (path: string, body?: unknown) => {
     if (path === '/conversations' && body) return { ...state.conversations[0], _id: 'created' };
     if (path === '/conversations') return state.conversations;
+    if (path === '/conversations?hidden=1') return state.hidden;
     if (path === '/capabilities') return { assistant: state.enabled, canConfigure: state.admin };
     if (path.endsWith('/runs')) return state.runs;
     if (path === '/groups') return [];
@@ -56,6 +60,7 @@ beforeEach(() => {
   state.admin = false;
   state.accountUrl = undefined;
   state.conversations = [dm()];
+  state.hidden = [];
   state.messages = [];
   state.runs = [];
   delete window.__visinChatContext;
@@ -66,9 +71,10 @@ export const analysisOf = (overrides: Partial<Conversation> = {}): Conversation 
   ...dm(),
   _id: 'a1',
   kind: 'assistant',
-  title: 'Base model analysis',
-  projectId: 'p1',
-  trainingIds: ['t1'],
+  title: 'Vivi',
+  assistantId: 'vivi',
+  createdBy: 'alice',
+  trainingIds: [],
   participants: [{ userId: 'alice', name: 'Alice', state: 'active', role: 'owner', readSeq: 0 }],
   ...overrides
 });

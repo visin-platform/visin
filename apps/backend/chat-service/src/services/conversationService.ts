@@ -6,9 +6,15 @@ import { Assistant } from '../models/Assistant';
 import { Message } from '../models/Message';
 import { Block } from '../models/Block';
 import { Conversation } from '../models/Conversation';
+import { ConversationHidden } from '../models/ConversationHidden';
+import { appendMessage } from './messages';
+import { cancelRuns } from './runService';
+import { notify } from './wakeBus';
 import {
   accessCache,
+  assistantBinding,
   historyFilter,
+  liveConversation,
   authorize,
   checkAccess,
   groups,
@@ -23,12 +29,35 @@ import { id } from '../validation/commonSchemas';
 import { defaultAssistantFor } from './assistantService';
 import { createSchema } from '../validation/conversationSchemas';
 import { parsed } from '../validation/parse';
+import { listQuerySchema } from '../validation/conversationSchemas';
 
-export async function listConversations(req: Request) {
+/**
+ * Hidden chats of this person, less those someone else has written in since: they come back. A bot answering the
+ * person's own question is not someone else, and the person's own message brings it back too (see `sendMessage`).
+ */
+async function hiddenIds(actor: string): Promise<Set<string>> {
+  const hidden = await ConversationHidden.find({ userId: actor }).limit(500);
+  if (!hidden.length) return new Set();
+  const returned = new Set<string>(
+    await Message.find({
+      kind: 'person',
+      senderId: { $ne: actor },
+      $or: hidden.map((row) => ({ conversationId: row.conversationId, seq: { $gt: row.seq } }))
+    }).distinct('conversationId')
+  );
+  if (returned.size)
+    await ConversationHidden.deleteMany({ userId: actor, conversationId: { $in: [...returned] } });
+  return new Set(hidden.map((row) => row.conversationId).filter((conversationId) => !returned.has(conversationId)));
+}
+
+export async function listConversations(req: Request, query: unknown = {}) {
+  const { hidden: onlyHidden } = parsed(listQuerySchema, query);
   const actor = req.user!.id;
   const memberships = await groups.getMyGroups(actor);
+  const hiding = await hiddenIds(actor);
   const candidates = await Conversation.find({
-    deletedAt: null,
+    ...liveConversation,
+    ...(onlyHidden ? { _id: { $in: [...hiding] } } : hiding.size ? { _id: { $nin: [...hiding] } } : {}),
     $or: [
       { participants: { $elemMatch: { userId: actor, state: { $in: ['active', 'invited'] } } } },
       { groupId: { $in: memberships.map((g) => g.groupId) }, kind: { $in: ['group', 'project'] } }
@@ -127,9 +156,14 @@ export async function createConversation(req: Request, body: unknown) {
   }
   if (input.assistantId) {
     if (input.kind !== 'assistant') throw new BadRequestError('Assistants are only available in private analysis');
-    if (!(await Assistant.exists({ _id: input.assistantId, ...usableAssistant(actor) })))
-      throw new NotFoundError('Assistant is unavailable');
+    const bot = await Assistant.findOne({ _id: input.assistantId, ...usableAssistant(actor) }).select('name');
+    if (!bot) throw new NotFoundError('Assistant is unavailable');
+    // The one chat with an assistant is named for it, as a conversation with a person is.
+    input.title = bot.name.slice(0, 120);
   }
+  if (input.kind === 'assistant' && (input.projectId || input.paperId || input.trainingIds.length))
+    throw new BadRequestError('Say what a question is about when you send it, not when the chat is opened');
+  if (input.paperId) throw new BadRequestError('A paper is asked about in a private chat with an assistant');
   if (input.groupId && input.kind !== 'group') throw new BadRequestError('A group binding is only for group channels');
   if (input.kind === 'group' && (input.projectId || input.trainingIds.length))
     throw new BadRequestError('Use a project discussion to attach training context');
@@ -189,7 +223,6 @@ export async function createConversation(req: Request, body: unknown) {
     }
   }
   let projectName: string | undefined;
-  let paperId: string | undefined, paperTitle: string | undefined;
   const trainingLabels: { id: string; name: string }[] = [];
   let groupId: string | undefined, projectId: string | undefined;
   if (input.kind === 'group') {
@@ -198,35 +231,23 @@ export async function createConversation(req: Request, body: unknown) {
     if (!membership.member || !['owner', 'admin'].includes(membership.role!))
       throw new ForbiddenError('A group administrator creates channels');
     groupId = input.groupId;
-  } else if (input.kind === 'project' || input.kind === 'assistant') {
-    if (input.kind === 'project' && !input.projectId) throw new BadRequestError('Choose a project');
-    if (input.projectId) {
-      const project = await peer<Project>('VISION', `/api/projects/${input.projectId}`, req);
-      projectId = project._id;
-      projectName = project.name;
-      if (input.kind === 'project') {
-        if (project.owner.kind === 'group') {
-          if (!(await groups.checkMembership(project.owner.id, actor)).member)
-            throw new ForbiddenError('Project discussion is for its owning group');
-          groupId = project.owner.id;
-        } else if (project.owner.id !== actor) throw new ForbiddenError('Project discussion is private');
-      }
-      for (const training of input.trainingIds) {
-        const run = await peer<{ projectId: string; name: string }>('VISION', `/api/trainings/${training}`, req);
-        if (String(run.projectId) !== projectId)
-          throw new BadRequestError('Selected runs must belong to the selected project');
-        trainingLabels.push({ id: training, name: run.name });
-      }
-    } else if (input.trainingIds.length) throw new BadRequestError('Select a project for these runs');
-    if (input.paperId) {
-      // A paper is read in a private chat of its own, never mixed with a project's runs, and only if the asker may read it.
-      if (input.kind !== 'assistant') throw new BadRequestError('A paper is analysed in a private chat');
-      if (input.projectId || input.trainingIds.length) throw new BadRequestError('Analyse a paper on its own, not with a project');
-      const paper = await peer<{ id: string; title: string }>('VISION', `/api/papers/${input.paperId}`, req);
-      paperId = paper.id;
-      paperTitle = paper.title;
+  } else if (input.kind === 'project') {
+    if (!input.projectId) throw new BadRequestError('Choose a project');
+    const project = await peer<Project>('VISION', `/api/projects/${input.projectId}`, req);
+    projectId = project._id;
+    projectName = project.name;
+    if (project.owner.kind === 'group') {
+      if (!(await groups.checkMembership(project.owner.id, actor)).member)
+        throw new ForbiddenError('Project discussion is for its owning group');
+      groupId = project.owner.id;
+    } else if (project.owner.id !== actor) throw new ForbiddenError('Project discussion is private');
+    for (const training of input.trainingIds) {
+      const run = await peer<{ projectId: string; name: string }>('VISION', `/api/trainings/${training}`, req);
+      if (String(run.projectId) !== projectId)
+        throw new BadRequestError('Selected runs must belong to the selected project');
+      trainingLabels.push({ id: training, name: run.name });
     }
-  } else if (input.projectId || input.groupId || input.paperId || input.trainingIds.length)
+  } else if (input.kind !== 'assistant' && (input.projectId || input.groupId || input.trainingIds.length))
     throw new BadRequestError('Attach protected results through a project analysis chat');
   const directKey =
     input.kind === 'direct'
@@ -240,7 +261,10 @@ export async function createConversation(req: Request, body: unknown) {
       ? `project:${projectId}:${groupId || actor}`
       : input.kind === 'group'
         ? `group:${groupId}:${input.title.toLowerCase()}`
-        : undefined;
+        : // One private chat per person and assistant, so asking again opens it instead of starting another.
+          input.kind === 'assistant'
+          ? assistantBinding(input.assistantId, actor)
+          : undefined;
   let conversation;
   try {
     conversation = await Conversation.create({
@@ -250,8 +274,6 @@ export async function createConversation(req: Request, body: unknown) {
       groupId,
       projectId,
       projectName,
-      paperId,
-      paperTitle,
       trainingLabels,
       directKey,
       bindingKey
@@ -271,6 +293,8 @@ export async function createConversation(req: Request, body: unknown) {
     }
     conversation = await authorize(req, conversation.id);
   }
+  // Asking an assistant again puts its chat back where it was, if the person had put it away.
+  if (conversation.kind === 'assistant') await ConversationHidden.deleteOne({ userId: actor, conversationId: conversation.id });
   return conversation;
 }
 
@@ -314,4 +338,70 @@ export async function getConversation(req: Request, conversationId: string) {
   }
   const identity = userId ? (await lookupHeaderIdentity([{ kind: 'user', id: userId }])).get(userId) : undefined;
   return { ...conversation.toObject(), ...(identity?.handle ? { profile: identity } : {}) };
+}
+
+/** Puts a conversation away from this person's list. Only theirs: nobody else's list changes. */
+export async function hideConversation(req: Request, conversationId: string) {
+  const c = await authorize(req, conversationId);
+  await ConversationHidden.updateOne(
+    { userId: req.user!.id, conversationId: c.id },
+    { $set: { seq: c.lastMessageSeq } },
+    { upsert: true }
+  );
+}
+
+export async function unhideConversation(req: Request, conversationId: string) {
+  const c = await authorize(req, conversationId);
+  await ConversationHidden.deleteOne({ userId: req.user!.id, conversationId: c.id });
+}
+
+/**
+ * Deletes a person's own private chat with an assistant. Nobody else is in it, so it is the one kind that can go; for
+ * any other, "hide" or "leave" is the way out. A soft delete: the chat is marked deleted and its binding is moved
+ * aside so the next question starts an empty one; messages, runs and files stay where they are but are no longer
+ * reachable, because every read goes through `authorize`.
+ */
+export async function deleteConversation(req: Request, conversationId: string) {
+  const actor = req.user!.id;
+  const c = await authorize(req, conversationId);
+  if (c.kind !== 'assistant' || c.createdBy !== actor)
+    throw new ForbiddenError('Only your own chat with an assistant can be deleted. Hide it instead.');
+  // An answer being written stops with it: the worker gives up on a run that is no longer running.
+  await cancelRuns(req, c.id);
+  const deleted = await Conversation.updateOne(
+    { _id: c.id, deletedAt: null },
+    {
+      $set: { deletedAt: new Date(), ...(c.bindingKey ? { deletedBindingKey: c.bindingKey } : {}) },
+      $unset: { bindingKey: 1 }
+    }
+  );
+  if (!deleted.matchedCount) throw new NotFoundError('Conversation not found');
+  await ConversationHidden.deleteMany({ conversationId: c.id });
+  notify(`conv:${c.id}`);
+}
+
+/**
+ * A new topic in a private chat with an assistant: it forgets the earlier questions from here on. They stay in the
+ * chat, above a line saying so, which is a message like any other.
+ */
+export async function startNewTopic(req: Request, conversationId: string) {
+  const actor = req.user!.id;
+  const c = await authorize(req, conversationId, true);
+  if (c.kind !== 'assistant') throw new BadRequestError('Only a chat with an assistant has topics');
+  // Asking twice in a row is one new topic, not two lines saying so.
+  const last = await Message.findOne({ conversationId: c.id }).sort({ seq: -1 });
+  if (last?.kind === 'system' && last.clientId.startsWith('topic-')) return last;
+  const marker = await appendMessage({
+    conversationId: c.id,
+    senderId: actor,
+    senderName: actorName(req),
+    kind: 'system',
+    body: 'New topic: earlier messages are no longer used',
+    clientId: `topic-${crypto.randomUUID()}`
+  });
+  await Conversation.updateOne(
+    { _id: c.id, participants: { $elemMatch: { userId: actor, state: 'active' } } },
+    { $max: { 'participants.$.topicSeq': marker.seq } }
+  );
+  return marker;
 }

@@ -59,7 +59,6 @@ export function useScreenCalls(panelOpen: boolean, onCue?: (cue: ScreenCue) => v
       const outcome = resolvePlace({ ...params, place: call.place });
       if (outcome.ok) {
         const before = here.current;
-        window.dispatchEvent(new CustomEvent('visin:screen-navigation', { detail: outcome.path }));
         navigate(outcome.path);
         onCue?.({
           id: ++cues,

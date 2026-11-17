@@ -68,7 +68,7 @@ for (const kind of ['direct', 'assistant', 'group'] as const) {
       if (path.endsWith('/events')) return route.abort();
       let data: unknown = [];
       if (path.endsWith('/capabilities')) data = { assistant: true, attachments: true };
-      else if (path.endsWith('/conversations')) data = [conversation];
+      else if (path.endsWith('/conversations')) data = new URL(req.url()).searchParams.has('hidden') ? [] : [conversation];
       else if (path.endsWith('/attachments')) {
         const input = req.postDataJSON();
         data = { fileId: `chat/${id}/${input.name}`, uploadUrl: `http://localhost:3014/mock-upload/${input.name}` };

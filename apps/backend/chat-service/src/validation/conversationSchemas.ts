@@ -16,6 +16,11 @@ export const createSchema = z
   })
   .strict();
 
+/** `?hidden=1` lists the conversations this person has put away, and only those. */
+export const listQuerySchema = z
+  .object({ hidden: z.enum(['1', 'true']).optional().transform((value) => value !== undefined) })
+  .strict();
+
 export const membershipActionSchema = z.enum(['accept', 'decline', 'leave', 'block']);
 export const participantHandleSchema = z.string().trim().min(1).max(80);
 export const participantIdSchema = z.string().min(1).max(80);

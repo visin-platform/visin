@@ -79,55 +79,50 @@ it('preserves the selected older thread and draft on a transient restore failure
   expect(sessionStorage.getItem('visin.chat.selected.alice')).toBe('older');
 });
 
-describe('asking for an analysis without naming who answers', () => {
-  const open = () => renderHook(() => useChatNavigation({ userId: 'alice', conversations: threads, loaded: true }));
+describe('asking the assistant', () => {
+  const open = (list = threads) => renderHook(() => useChatNavigation({ userId: 'alice', conversations: list, loaded: true }));
   const threads = [
-    {
-      _id: 'with-vivi',
-      kind: 'assistant',
-      assistantId: 'vivi',
-      projectId: 'p1',
-      trainingIds: ['t1'],
-      participants: []
-    },
-    { _id: 'anonymous', kind: 'assistant', projectId: 'p1', trainingIds: ['t2'], participants: [] }
+    { _id: 'with-vivi', kind: 'assistant', assistantId: 'vivi', participants: [] },
+    { _id: 'with-other', kind: 'assistant', assistantId: 'other', participants: [] }
   ] as unknown as Conversation[];
 
-  it('finds the thread already started with the person’s default analyst', async () => {
+  it('opens the one chat with the person’s default analyst, whatever it is asked about', async () => {
     assistants.default.mockResolvedValue({ _id: 'vivi', name: 'Vivi' });
     const { result } = open();
     await act(async () => result.current.analyze({ projectId: 'p1', trainingIds: ['t1'] }));
     expect(result.current.selected).toBe('with-vivi');
+    await act(async () => result.current.analyze({ projectId: 'p2', trainingIds: ['t9'] }));
+    expect(result.current.selected).toBe('with-vivi');
+    await act(async () => result.current.analyze({}));
+    expect(result.current.selected).toBe('with-vivi');
+    expect(result.current.pending).toBeUndefined();
   });
 
-  it('starts a new analysis with the default analyst named, so the first message is answered by it', async () => {
+  it('starts an empty chat with the default analyst named only when there is none yet', async () => {
     assistants.default.mockResolvedValue({ _id: 'vivi', name: 'Vivi' });
-    const { result } = open();
+    const { result } = open([threads[1]]);
     await act(async () => result.current.analyze({ projectId: 'p1', trainingIds: ['t9'], title: 'Run' }));
-    expect(result.current.pending).toMatchObject({ assistantId: 'vivi', projectId: 'p1', trainingIds: ['t9'] });
+    expect(result.current.selected).toBeUndefined();
+    expect(result.current.pending).toMatchObject({ assistantId: 'vivi' });
   });
 
-  it('keeps the built-in analyst where no default is set, or it is paused, or it cannot be looked up', async () => {
+  it('keeps the first private chat where no default is set or it cannot be looked up', async () => {
     const { result } = open();
     assistants.default.mockResolvedValue(null);
-    await act(async () => result.current.analyze({ projectId: 'p1', trainingIds: ['t2'] }));
-    expect(result.current.selected).toBe('anonymous');
-
-    assistants.default.mockResolvedValue(null);
-    await act(async () => result.current.analyze({ projectId: 'p1', trainingIds: ['t9'] }));
-    expect(result.current.pending?.assistantId).toBeUndefined();
+    await act(async () => result.current.analyze({ projectId: 'p1' }));
+    expect(result.current.selected).toBe('with-vivi');
 
     assistants.default.mockRejectedValue(new Error('offline'));
-    await act(async () => result.current.analyze({ projectId: 'p1', trainingIds: ['t8'] }));
-    expect(result.current.pending).toMatchObject({ trainingIds: ['t8'] });
-    expect(result.current.pending?.assistantId).toBeUndefined();
+    const empty = open([]);
+    await act(async () => empty.result.current.analyze({ projectId: 'p1', trainingIds: ['t8'] }));
+    expect(empty.result.current.pending?.assistantId).toBeUndefined();
   });
 
   it('keeps an assistant the page named, without asking who the default is', async () => {
     const { result } = open();
     await act(async () => result.current.analyze({ assistantId: 'other', projectId: 'p1', trainingIds: ['t9'] }));
     expect(assistants.default).not.toHaveBeenCalled();
-    expect(result.current.pending?.assistantId).toBe('other');
+    expect(result.current.selected).toBe('with-other');
   });
 });
 

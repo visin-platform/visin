@@ -11,7 +11,7 @@ import type {
   SendMessageInput
 } from '../types/chat';
 
-import { api } from './apiClient';
+import { api, apiDelete, apiSend } from './apiClient';
 import type { ScreenCall } from '../utils/screen';
 
 const read = <T>(path: string, signal?: AbortSignal) => (signal ? api<T>(path, undefined, signal) : api<T>(path));
@@ -20,6 +20,14 @@ const read = <T>(path: string, signal?: AbortSignal) => (signal ? api<T>(path, u
 export const chatService = {
   get: (id: string, signal?: AbortSignal) => read<Conversation>(`/conversations/${id}`, signal),
   list: (signal?: AbortSignal) => read<Conversation[]>('/conversations', signal),
+  /** The conversations this person has put away. */
+  listHidden: (signal?: AbortSignal) => read<Conversation[]>('/conversations?hidden=1', signal),
+  hide: (id: string) => apiSend(`/conversations/${id}/hide`, {}),
+  unhide: (id: string) => apiDelete(`/conversations/${id}/hide`, {}),
+  /** Deletes this person's own chat with an assistant. */
+  remove: (id: string) => apiDelete(`/conversations/${id}`, {}),
+  /** A new topic in a chat with an assistant: it forgets what was asked before. */
+  newTopic: (id: string) => api<Message>(`/conversations/${id}/topic`, {}),
   capabilities: (signal?: AbortSignal) => read<Capabilities>('/capabilities', signal),
   groups: (signal?: AbortSignal) => read<ChatGroup[]>('/groups', signal),
   projects: (signal?: AbortSignal) => read<ChatProject[]>('/projects', signal),

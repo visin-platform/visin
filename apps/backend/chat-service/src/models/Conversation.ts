@@ -8,7 +8,9 @@ const participant = new Schema(
     role: { type: String, enum: ['owner', 'admin', 'member'], default: 'member' },
     joinedAt: { type: Date, default: null },
     joinedSeq: { type: Number, default: 0 },
-    readSeq: { type: Number, default: 0 }
+    readSeq: { type: Number, default: 0 },
+    /** The seq of this person's latest "new topic" in a private assistant chat: the assistant forgets what came before. */
+    topicSeq: { type: Number, default: 0 }
   },
   { _id: false }
 );
@@ -49,6 +51,8 @@ const conversationSchema = new Schema(
     },
     directKey: { type: String },
     bindingKey: { type: String },
+    /** A deleted chat's old `bindingKey`, moved aside so the person's next chat can take it. */
+    deletedBindingKey: { type: String },
     groupId: String,
     projectId: String,
     /** a research paper this private analysis is about; its text is read through the paper tools */

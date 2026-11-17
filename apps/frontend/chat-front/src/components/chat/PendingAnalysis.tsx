@@ -3,11 +3,11 @@ import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { AnalysisHint } from './AnalysisHint';
 import { AnalystSetupNotice } from './AnalystSetupNotice';
 import { BackToConversations } from './BackToConversations';
-import { ChatContextChips } from './ChatContextChips';
+import { AskingAbout } from './AskingAbout';
 import { Composer } from './Composer';
 
 export function PendingAnalysis({ panel }: { panel: boolean }) {
-  const { show, pending, enabled, canConfigure, draft, setDraft, send, sending, composerInput } =
+  const { show, pending, enabled, canConfigure, draft, setDraft, send, sending, composerInput, about, clearAbout } =
     useChatWorkspaceContext();
   if (!pending) return null;
   return (
@@ -16,26 +16,17 @@ export function PendingAnalysis({ panel }: { panel: boolean }) {
         <BackToConversations panel={panel} onBack={() => show(undefined)} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 700 }}>
-            {pending.title || 'New analysis'}
+            Ask the assistant
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            New analysis · only you can read it
+            New chat · only you can read it
           </Typography>
         </Box>
       </Stack>
-      {
-        <ChatContextChips
-          context={{ ...pending, paperTitle: pending.title }}
-          labels={
-            pending.trainingIds?.length === 1 && pending.title
-              ? [{ id: pending.trainingIds[0], name: pending.title }]
-              : undefined
-          }
-        />
-      }
       <Divider />
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}><AnalysisHint /></Box>
       {!enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
+      <AskingAbout about={about} onClear={clearAbout} />
       <Composer
         label="Ask the analyst"
         value={draft}

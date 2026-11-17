@@ -5,6 +5,7 @@ import { Conversation } from '../models/Conversation';
 import type { ScreenContext } from './screen';
 import { Message } from '../models/Message';
 import { notify } from './wakeBus';
+import type { VerifiedAbout } from './analysisContext';
 
 export async function appendMessage(input: {
   expectedMembershipVersion?: number;
@@ -27,6 +28,8 @@ export async function appendMessage(input: {
     personality?: string;
     screen?: ScreenContext;
   };
+  /** What a person's question to the analyst is about, already checked. */
+  context?: VerifiedAbout;
   evidence?: { tool: string; input: unknown; at: Date }[];
   thoughts?: { text: string; at: Date }[];
 }) {

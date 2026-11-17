@@ -3,6 +3,15 @@ import { screenContextSchema } from '../services/screen';
 import { attachmentRefSchema, MAX_ATTACHMENTS } from './attachmentSchemas';
 import { id } from './commonSchemas';
 
+/** What a question to the analyst is about. Ids only: the names are looked up, as the asker, when it is sent. */
+export const askedAboutSchema = z
+  .object({
+    projectId: id.optional(),
+    trainingIds: z.array(id).max(20).default([]),
+    paperId: id.optional()
+  })
+  .strict();
+
 export const sendSchema = z
   .object({
     // Text may be left out when there are files.
@@ -12,7 +21,9 @@ export const sendSchema = z
     replyTo: id.optional(),
     assistantId: id.optional(),
     // Where the asker's chat panel is, so the analyst can change the page beside it. Never stored on the message.
-    screen: screenContextSchema.optional()
+    screen: screenContextSchema.optional(),
+    // What the question is about, for a private chat with an assistant. Left out for a general question.
+    context: askedAboutSchema.optional()
   })
   .strict()
   .refine((input) => input.body.length > 0 || (input.attachments?.length ?? 0) > 0, {

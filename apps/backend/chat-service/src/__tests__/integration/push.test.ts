@@ -2,6 +2,7 @@ import '../helpers/mocks';
 import webpush from 'web-push';
 import { vi, type Mock } from 'vitest';
 import { Conversation } from '../../models/Conversation';
+import { Message } from '../../models/Message';
 import { DeploymentSecret } from '../../models/DeploymentSecret';
 import { PushSubscription } from '../../models/PushSubscription';
 import { notifyNewMessage, previewOf, recipientsOf } from '../../services/pushNotify';
@@ -329,6 +330,35 @@ describe('unread', () => {
     expect(total.body.data).toEqual({ unread: 1 });
     await request(`/conversations/${id}/read`, 'alice', { seq: conversation.seq });
     expect((await request('/push/unread', 'alice')).body.data).toEqual({ unread: 0 });
+  });
+
+  it('leaves out what the person cannot open, and a hidden chat until someone else writes in it', async () => {
+    const id = await activeRoom();
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Hi', clientId: 'unread-hide-1' });
+    await request(`/conversations/${id}/hide`, 'bob', {});
+    expect((await request('/push/unread', 'bob')).body.data).toEqual({ unread: 0 });
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Still there?', clientId: 'unread-hide-2' });
+    expect((await request('/push/unread', 'bob')).body.data).toEqual({ unread: 1 });
+
+    // A chat with an assistant from before there was one per person: never listed, so never counted.
+    const old = await Conversation.create({
+      kind: 'assistant',
+      title: 'Old analysis',
+      createdBy: 'carol',
+      seq: 2,
+      lastMessageSeq: 2,
+      participants: [{ userId: 'carol', name: 'carol', state: 'active', role: 'owner', joinedAt: new Date() }]
+    });
+    await Message.create({
+      conversationId: old.id,
+      senderId: 'assistant:analyst',
+      senderName: 'Vivi',
+      kind: 'assistant',
+      body: 'An answer nobody can open',
+      clientId: 'old-answer-1',
+      seq: 2
+    });
+    expect((await request('/push/unread', 'carol')).body.data).toEqual({ unread: 0 });
   });
 
   it('treats a conversation the person is not in as already read, and refuses a bad id', async () => {

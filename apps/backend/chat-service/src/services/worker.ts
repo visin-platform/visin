@@ -20,6 +20,22 @@ import { steerScreen } from './screenSteering';
 import { priceSnapshot } from './usage';
 import { listen, notify, pollDelay } from './wakeBus';
 
+/**
+ * What an earlier question was about, told to the model beside it: in one long chat the person asks about different
+ * projects, and an answer must not be read as being about the project of the next question. Data, like the rest.
+ */
+function aboutOf(question: { context?: { projectName?: string | null; trainingLabels?: { name?: string | null }[]; paperTitle?: string | null; projectId?: string | null; paperId?: string | null } | null }) {
+  const about = question.context;
+  if (!about || (!about.projectId && !about.paperId)) return {};
+  return {
+    about: {
+      ...(about.projectId ? { project: about.projectName || about.projectId } : {}),
+      ...(about.trainingLabels?.length ? { runs: about.trainingLabels.map((run) => run.name).filter(Boolean) } : {}),
+      ...(about.paperId ? { paper: about.paperTitle || about.paperId } : {})
+    }
+  };
+}
+
 /** How often a running question re-reads its account's state and Vivi policy. */
 const VIVI_CHECK_MS = 5000;
 
@@ -49,7 +65,7 @@ async function claim() {
     if (skipped.has(next.conversationId)) continue;
     skipped.add(next.conversationId);
     const conversation = await Conversation.findOneAndUpdate(
-      { _id: next.conversationId, $or: [{ workerUntil: { $lt: new Date() } }, { workerUntil: null }] },
+      { _id: next.conversationId, deletedAt: null, $or: [{ workerUntil: { $lt: new Date() } }, { workerUntil: null }] },
       { $set: { workerUntil: new Date(Date.now() + LEASE_MS), workerRunId: next.id } },
       { returnDocument: 'after' }
     );
@@ -243,10 +259,15 @@ export function startWorker() {
           : undefined
       );
       const screen = c.kind === 'assistant' && checkedScreen.success ? checkedScreen.data : undefined;
+      // What the question is about travels with it: the chat is the same wherever the person asked from.
+      const asked = c.kind === 'assistant' ? (trigger.context ?? undefined) : undefined;
       const historyAfter =
         c.kind === 'room'
           ? Math.max(0, ...c.participants.filter((p) => p.state === 'active').map((p) => p.joinedSeq))
-          : 0;
+          : // A "new topic" in a private chat: what came before it is no longer part of what the assistant is told.
+            c.kind === 'assistant'
+            ? (c.participants.find((p) => p.userId === run.userId)?.topicSeq ?? 0)
+            : 0;
       const questions = await Message.find({
         conversationId: c.id,
         kind: 'person',
@@ -282,9 +303,9 @@ export function startWorker() {
         toolRounds,
         screen?.allowActions === true,
         imageCount,
-        c.kind === 'assistant' && c.paperId ? PAPER_REQUEST_BYTES : undefined,
+        asked?.paperId ? PAPER_REQUEST_BYTES : undefined,
         // Frames belong to a project's runs, and share the provider's per-request image limit with uploads.
-        c.kind === 'assistant' && Boolean(c.projectId) && imageCount + FRAME_IMAGES <= MAX_ANALYSIS_IMAGES
+        Boolean(asked?.projectId) && imageCount + FRAME_IMAGES <= MAX_ANALYSIS_IMAGES
       )) {
         const budget = await Budget.findOneAndUpdate(
           { userId: run.userId, day, reserved: { $lte: limit - candidate.reserve } },
@@ -301,7 +322,7 @@ export function startWorker() {
         throw new Error('Your daily assistant token budget is used. It resets at midnight UTC.');
       }
       const reserve = plan.reserve;
-      const requestBytes = c.kind === 'assistant' && c.paperId ? PAPER_REQUEST_BYTES : undefined;
+      const requestBytes = asked?.paperId ? PAPER_REQUEST_BYTES : undefined;
       held = {
         day,
         reserve,
@@ -310,7 +331,7 @@ export function startWorker() {
       const steering = plan.screen;
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
       // provider may have consumed tokens even if the connection did not return usage.
-      if (c.kind === 'assistant' && (c.projectId || c.paperId || steering))
+      if (c.kind === 'assistant' && (asked?.projectId || asked?.paperId || steering))
         key = await createApiKey({
           userId: run.userId,
           userEmail: run.email,
@@ -318,7 +339,7 @@ export function startWorker() {
           name: 'Visin analyst',
           scopes: ['vision:read', 'analysis:read'],
           expiresAt: new Date(Date.now() + LEASE_MS),
-          ...(c.projectId ? { project: { id: c.projectId, name: c.projectName || c.title } } : {})
+          ...(asked?.projectId ? { project: { id: asked.projectId, name: asked.projectName || c.title } } : {})
         });
       if (key) await AssistantRun.updateOne({ _id: run.id }, { $set: { keyId: key.summary.id } });
       const replies = await Message.find({
@@ -336,6 +357,7 @@ export function startWorker() {
             imageRefs: imageRefs.get(question.id),
             content: question.attachments?.length
               ? JSON.stringify({
+                  ...aboutOf(question),
                   question:
                     question.body ||
                     ((imageRefs.get(question.id)?.length ?? 0) > 0
@@ -350,8 +372,10 @@ export function startWorker() {
                   }))
                 })
               : question.quote
-                ? JSON.stringify({ quote: question.quote, question: question.body })
-                : question.body
+                ? JSON.stringify({ ...aboutOf(question), quote: question.quote, question: question.body })
+                : question.context?.projectId || question.context?.paperId
+                  ? JSON.stringify({ ...aboutOf(question), question: question.body })
+                  : question.body
           },
           ...(reply ? [{ role: 'assistant' as const, content: reply.body }] : [])
         ];
@@ -400,10 +424,10 @@ export function startWorker() {
         model,
         apiKey: resolved.key,
         token: key?.token || '',
-        projectId: c.kind === 'assistant' ? (c.projectId ?? undefined) : undefined,
-        paperId: c.kind === 'assistant' ? (c.paperId ?? undefined) : undefined,
-        paperTitle: c.kind === 'assistant' ? (c.paperTitle ?? undefined) : undefined,
-        trainingIds: c.kind === 'assistant' ? c.trainingIds : [],
+        projectId: asked?.projectId ?? undefined,
+        paperId: asked?.paperId ?? undefined,
+        paperTitle: asked?.paperTitle ?? undefined,
+        trainingIds: asked?.trainingIds ? [...asked.trainingIds] : [],
         shared: c.kind !== 'assistant',
         guard,
         spent,
@@ -412,7 +436,7 @@ export function startWorker() {
           ? (request, signal) =>
               steerScreen(
                 { id: run.id, conversationId: run.conversationId, userId: run.userId, screen },
-                c.projectId ?? undefined,
+                asked?.projectId ?? undefined,
                 key?.token || '',
                 request,
                 signal,

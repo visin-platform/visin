@@ -10,6 +10,7 @@ import { chatService } from '../services/chatService';
 
 import { analystSettingsHref } from '../utils/analystSettingsLink';
 
+import { ChatActionDialogs } from '../components/chat/ChatActionDialogs';
 import { ConversationList } from '../components/chat/ConversationList';
 import { ConversationThread } from '../components/chat/ConversationThread';
 import { FindingDialog } from '../components/chat/FindingDialog';
@@ -67,7 +68,7 @@ function WorkspaceView({ panel }: { panel: boolean }) {
     c,
     enabled,
     assistantModel,
-    analyze,
+    openAbout,
     pageContext,
     groups,
     sending,
@@ -107,7 +108,7 @@ function WorkspaceView({ panel }: { panel: boolean }) {
             groups={groups}
             busy={sending}
             onBack={() => show(undefined)}
-            onAnalysis={analyze}
+            onAnalysis={openAbout}
             onPerson={(person) => void handle({ kind: 'direct', ...person })}
             onGroup={(groupId, title) => void handle({ kind: 'group', groupId, title })}
             onRoom={(title, handles, userIds) =>
@@ -132,6 +133,7 @@ function WorkspaceView({ panel }: { panel: boolean }) {
       <AppearanceDialog open={appearanceOpen} onClose={() => setAppearanceOpen(false)} appearance={appearance} />
       <PeopleDialog />
       <FindingDialog />
+      <ChatActionDialogs panel={panel} />
     </Box>
   );
 }

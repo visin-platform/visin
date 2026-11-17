@@ -1,7 +1,9 @@
 import { logger } from '@visin/backend-core';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Conversation, type ChatConversation } from '../models/Conversation';
+import { ConversationHidden } from '../models/ConversationHidden';
 import { Message } from '../models/Message';
+import { liveConversation } from './liveConversation';
 import { attachmentSummary } from './attachments';
 import { hasSubscription, sendToUsers } from './pushService';
 
@@ -96,16 +98,22 @@ export async function notifyNewMessage(
  * looks behind is confirmed against the messages themselves.
  */
 export async function unreadFor(userId: string, conversationId?: string) {
-  const rows = await Conversation.find({
-    deletedAt: null,
-    participants: { $elemMatch: { userId, state: 'active' } }
-  })
-    .select('participants seq lastMessageSeq')
-    .limit(200);
+  // Only chats the person can open: an old chat with an assistant is never listed, so it could never be read either.
+  const [rows, hidden] = await Promise.all([
+    Conversation.find({ ...liveConversation, participants: { $elemMatch: { userId, state: 'active' } } })
+      .select('participants seq lastMessageSeq')
+      .limit(200),
+    ConversationHidden.find({ userId }).select('conversationId seq').limit(500)
+  ]);
+  const hiddenAt = new Map(hidden.map((row) => [row.conversationId, row.seq]));
   const behind = rows.flatMap((row) => {
     const me = row.participants.find((p) => p.userId === userId);
-    const seen = Math.max(me?.readSeq ?? 0, me?.joinedSeq ?? 0);
-    return (row.lastMessageSeq ?? row.seq) > seen ? [{ conversationId: row._id.toString(), seq: { $gt: seen } }] : [];
+    const id = row._id.toString();
+    const away = hiddenAt.get(id);
+    const seen = Math.max(me?.readSeq ?? 0, me?.joinedSeq ?? 0, away ?? 0);
+    if ((row.lastMessageSeq ?? row.seq) <= seen) return [];
+    // A hidden chat counts only for what brings it back: someone else writing in it, not an assistant answering.
+    return [{ conversationId: id, seq: { $gt: seen }, ...(away === undefined ? {} : { kind: 'person' as const }) }];
   });
   // One query for all of them, each branch on the (conversationId, seq) index, rather than one per conversation.
   const unread = new Set<string>(

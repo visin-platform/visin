@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Conversation, OpenRequest, PageContext } from '../types/chat';
-import { OPEN_EVENT, PAGE_CONTEXT_EVENT, contextKey, requestFromUrl } from '../utils/chatContext';
+import { OPEN_EVENT, PAGE_CONTEXT_EVENT, analysisOf, contextKey, requestFromUrl } from '../utils/chatContext';
 import { forgetRequestedProject, rememberRequestedProject } from '../components/guest/requested';
 
 export function usePageChatContext({
@@ -9,6 +9,7 @@ export function usePageChatContext({
   enabled,
   current,
   composing,
+  pending,
   handle,
   analyze
 }: {
@@ -17,40 +18,36 @@ export function usePageChatContext({
   enabled: boolean;
   current?: Conversation;
   composing: boolean;
+  /** An empty chat with an assistant is open, waiting for its first question. */
+  pending?: PageContext;
   handle: (request: OpenRequest) => void | Promise<void>;
   analyze: (context: PageContext) => void;
 }) {
   const [pageContext, setPageContext] = useState<PageContext | undefined>(() => window.__visinPageContext);
 
   const [request, setRequest] = useState<OpenRequest>();
-  const steeredPath = useRef<string | undefined>(undefined);
-  const latest = useRef({ current, composing });
+  const latest = useRef({ current, composing, pending });
   useEffect(() => {
-    latest.current = { current, composing };
+    latest.current = { current, composing, pending };
   });
   useEffect(() => {
     const onPage = (event: Event) => {
-      if (steeredPath.current !== `${window.location.pathname}${window.location.search}`)
-        steeredPath.current = undefined;
       const context = (event as CustomEvent<PageContext | null>).detail;
       if (context?.projectId) rememberRequestedProject(context);
       else forgetRequestedProject();
       setPageContext(context ?? undefined);
     };
-    const onSteer = (event: Event) => {
-      const path = (event as CustomEvent<unknown>).detail;
-      if (typeof path === 'string') steeredPath.current = path;
-    };
     const onOpen = (event: Event) => {
       const value = (event as CustomEvent<OpenRequest>).detail;
       if (!value) return;
-      steeredPath.current = undefined;
+      // What the person asked about is what their next question is about, until the page they are on says otherwise.
+      const asked = analysisOf(value);
+      if (asked?.projectId || asked?.paperId) setPageContext(asked);
       // A visitor has no conversation to open it in: the guest panel uses the project, if there is one.
       rememberRequestedProject(value);
       delete window.__visinChatContext;
       setRequest(value);
     };
-    window.addEventListener('visin:screen-navigation', onSteer);
     window.addEventListener(PAGE_CONTEXT_EVENT, onPage);
     window.addEventListener(OPEN_EVENT, onOpen);
     // A newly loaded chat takes the most recent request, or the full page's address.
@@ -61,7 +58,6 @@ export function usePageChatContext({
       setRequest(waiting);
     }
     return () => {
-      window.removeEventListener('visin:screen-navigation', onSteer);
       window.removeEventListener(PAGE_CONTEXT_EVENT, onPage);
       window.removeEventListener(OPEN_EVENT, onOpen);
     };
@@ -76,12 +72,12 @@ export function usePageChatContext({
   const pageKey = contextKey(pageContext);
 
   useEffect(() => {
-    if (!loaded || !enabled || !pageKey || !pageContext) return;
-    // Analyst navigation keeps this conversation; deliberate browsing still follows the page.
-    if (steeredPath.current === `${window.location.pathname}${window.location.search}`) return;
-    const { current, composing } = latest.current;
-    if (composing || (current && current.kind !== 'assistant')) return;
-    analyze(pageContext);
+    if (!loaded || !enabled || !pageKey) return;
+    // The chat never switches because the page did: the person keeps asking the same assistant while they move
+    // around, and each question carries the page it was asked on. Only a chat panel with nothing open opens it.
+    const { current, composing, pending } = latest.current;
+    if (composing || current || pending) return;
+    analyze({});
     // Follows the page, not each new copy of the same context.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, enabled, pageKey, analyze]);

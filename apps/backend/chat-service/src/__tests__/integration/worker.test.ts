@@ -18,6 +18,13 @@ import { base, create, request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
 
+/** The private chat with the assistant that this person has. */
+async function createFor(user: string) {
+  const result = await request('/conversations', user, { kind: 'assistant', title: 'Research', handles: [] });
+  expect(result.status).toBe(201);
+  return String(result.body.data._id);
+}
+
 it('stores assistant questions as a recoverable hidden outbox', async () => {
   await enableAnalyst('test');
   const id = await create('assistant', []);
@@ -133,9 +140,9 @@ it('does not generate when a cancelled question races with outbox recovery', asy
 it('answers other conversations while one conversation is locked by another worker', async () => {
   await enableAnalyst('test');
   const busy = await create('assistant', []);
-  const free = await create('assistant', []);
+  const free = await createFor('bob');
   await request(`/conversations/${busy}/messages`, 'alice', { body: 'First', clientId: 'locked-question' });
-  await request(`/conversations/${free}/messages`, 'alice', { body: 'Second', clientId: 'free-question-1' });
+  await request(`/conversations/${free}/messages`, 'bob', { body: 'Second', clientId: 'free-question-1' });
   await Conversation.updateOne(
     { _id: busy },
     { $set: { workerUntil: new Date(Date.now() + 60000), workerRunId: 'elsewhere' } }
@@ -150,9 +157,9 @@ it('answers other conversations while one conversation is locked by another work
 it('runs queued analyses of different conversations side by side', async () => {
   await enableAnalyst('test');
   const first = await create('assistant', []);
-  const second = await create('assistant', []);
+  const second = await createFor('bob');
   await request(`/conversations/${first}/messages`, 'alice', { body: 'One', clientId: 'parallel-one-1' });
-  await request(`/conversations/${second}/messages`, 'alice', { body: 'Two', clientId: 'parallel-two-1' });
+  await request(`/conversations/${second}/messages`, 'bob', { body: 'Two', clientId: 'parallel-two-1' });
   let running = 0,
     peak = 0;
   (analyze as Mock).mockImplementation(async function () {
@@ -279,15 +286,16 @@ it('asks what objects are in an image-only post, and retains its images for the 
 it('answers a question about a paper with the paper and an unscoped read-only key', async () => {
   await enableAnalyst();
   const paperId = '222222222222222222222222';
-  vi.mocked(peer).mockResolvedValueOnce({ id: paperId, title: 'CLFTv2: fusion' });
-  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'CLFTv2: fusion', paperId });
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
   expect(created.status).toBe(201);
+  vi.mocked(peer).mockResolvedValueOnce({ id: paperId, title: 'CLFTv2: fusion' });
   (fetchWithTimeout as Mock).mockResolvedValue(new Response(JSON.stringify({ success: true, data: { id: paperId } })));
   vi.mocked(createApiKey).mockClear();
 
   const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
     body: 'Summarize this paper',
-    clientId: 'paper-question-001'
+    clientId: 'paper-question-001',
+    context: { paperId }
   });
   expect(sent.status).toBe(201);
   const worker = startWorker();
@@ -295,7 +303,7 @@ it('answers a question about a paper with the paper and an unscoped read-only ke
   await worker.tick();
 
   const input = (analyze as Mock).mock.calls.at(-1)![0];
-  expect(input).toMatchObject({ paperId, projectId: undefined, trainingIds: [] });
+  expect(input).toMatchObject({ paperId, paperTitle: 'CLFTv2: fusion', projectId: undefined, trainingIds: [] });
   // Not limited to a project, since a paper belongs to none, and never able to write.
   const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
   expect(key).toMatchObject({ scopes: ['vision:read', 'analysis:read'], userId: 'alice' });
