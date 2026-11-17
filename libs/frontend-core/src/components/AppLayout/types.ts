@@ -55,6 +55,23 @@ export interface AppLayoutSiteLink {
   newTab?: boolean;
 }
 
+/**
+ * A tab of the phone's bar that is not one of the groups: an app's own place (the shell's Chat), drawn between them,
+ * under the thumb.
+ */
+export interface AppLayoutCenterTab {
+  label: string;
+  icon: ReactNode;
+  /** Where it leads, within the app. */
+  path: string;
+  /** Lit: the person is in it. Left out, lit while the path is the page or a prefix of it. */
+  active?: boolean;
+  /** A count on the icon (unread messages); nothing at 0. */
+  badge?: number;
+  /** Read out in place of the label, when the badge carries more ("Chat, 2 unread"). */
+  ariaLabel?: string;
+}
+
 export interface AppLayoutUser {
   name?: string;
   email?: string;
@@ -120,6 +137,21 @@ export interface AppLayoutProps {
   siteLinks?: AppLayoutSiteLink[];
   /** The app's own controls in the top bar (a chat toggle), before the colour-scheme switch. */
   headerActions?: ReactNode;
+  /**
+   * The app's own place on a phone, in the middle of the tab bar where a thumb rests. The desktop does not draw it:
+   * an app that has one there offers it through `headerActions` and `sidePanel`.
+   */
+  centerTab?: AppLayoutCenterTab;
+  /**
+   * On a phone, the page fills the space between the bars without the page's padding or a scroll of its own: a
+   * conversation list or a thread, which scroll inside themselves. Not drawn differently on a desktop.
+   */
+  flush?: boolean;
+  /**
+   * On a phone, the page takes the whole screen: no app bar, no tab bar, sized to what is above the on-screen
+   * keyboard. A conversation, which has its own way back. Implies `flush`.
+   */
+  immersive?: boolean;
   /**
    * A column docked on the right of a desktop screen, beside the top bar and the page and as tall as the window,
    * so it stays in view while the page scrolls. It sizes itself. Not drawn in the compact layout, which has no room.

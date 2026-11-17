@@ -1,5 +1,5 @@
-import { ReactNode } from 'react';
-import { Box, ButtonBase, useTheme } from '@mui/material';
+import { MouseEvent, ReactNode } from 'react';
+import { Badge, Box, ButtonBase, useTheme } from '@mui/material';
 import { chrome, livePalette, surface } from '../../theme';
 import { AppLayoutNavItem } from './types';
 import { linkProps } from './navLinks';
@@ -12,11 +12,18 @@ interface NavButtonProps {
   /** The group being shown, announced as such. */
   current: boolean;
   mobile: boolean;
-  /** Where the entry leads. */
-  target: AppLayoutNavItem;
+  /** Where the entry leads. Left out, the entry is a button that opens something (the phone's More sheet). */
+  target?: AppLayoutNavItem;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
+  /** For a button: whether what it opens is showing. */
+  expanded?: boolean;
+  /** A count on the icon; nothing at 0. */
+  badge?: number;
+  /** Read out in place of the label, when the badge carries more. */
+  ariaLabel?: string;
 }
 
-export function NavButton({ label, icon, active, current, mobile, target }: NavButtonProps) {
+export function NavButton({ label, icon, active, current, mobile, target, onClick, expanded, badge = 0, ariaLabel }: NavButtonProps) {
   const theme = useTheme();
 
   const palette = livePalette(theme);
@@ -63,7 +70,13 @@ export function NavButton({ label, icon, active, current, mobile, target }: NavB
     <>
       {/* Hidden from the accessible name, which the label alone gives: an avatar's initial would prefix it. */}
       <Box className="nav-pill" aria-hidden>
-        {icon}
+        {badge > 0 ? (
+          <Badge badgeContent={badge} color="error" max={99}>
+            {icon}
+          </Badge>
+        ) : (
+          icon
+        )}
       </Box>
       <Box
         component="span"
@@ -82,8 +95,29 @@ export function NavButton({ label, icon, active, current, mobile, target }: NavB
     </>
   );
 
+  if (!target) {
+    return (
+      <ButtonBase
+        onClick={onClick}
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={expanded}
+        disableRipple
+        sx={sx}
+      >
+        {body}
+      </ButtonBase>
+    );
+  }
+
   return (
-    <ButtonBase {...linkProps(target)} aria-current={current ? ('true' as const) : undefined} disableRipple sx={sx}>
+    <ButtonBase
+      {...linkProps(target)}
+      aria-current={current ? ('true' as const) : undefined}
+      aria-label={ariaLabel}
+      disableRipple
+      sx={sx}
+    >
       {body}
     </ButtonBase>
   );

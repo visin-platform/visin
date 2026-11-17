@@ -78,7 +78,7 @@ const TrainingsPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
       <PageBreadcrumbs items={[{ label: 'Trainings', current: true }]} />
-      <PageHeader title="Trainings" subtitle="Your latest runs, grouped by project." />
+      <PageHeader title="Trainings" subtitle="Your latest runs, grouped by project." hideTitleOnPhone />
       <TrainingFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}

@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { Avatar, Box, Button, ButtonBase, CssBaseline, IconButton, Link as MuiLink, ListItemIcon, ListItemText, Menu, MenuItem, Typography, useColorScheme, useMediaQuery, useTheme } from '@mui/material';
-import { Add, DarkModeOutlined, ExpandMore, LightModeOutlined, Search } from '@mui/icons-material';
+import { Add, ChevronLeft, DarkModeOutlined, ExpandMore, LightModeOutlined, Menu as MenuIcon, Search } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import { chrome, livePalette, pageBackground, surface } from '../../theme';
-import { TAB_BAR_HEIGHT, useCompactLayout } from '../Page/layout';
+import { FAB_CLEARANCE_VAR, TAB_BAR_HEIGHT, useCompactLayout, useKeyboardAwareHeight } from '../Page/layout';
 import { AppLayoutNavItem, AppLayoutNavGroup, AppLayoutProps } from './types';
 import { ownsPath, linkProps } from './navLinks';
 import AccountMenu, { userInitial } from './AccountMenu';
+import { MoreSheet } from './MoreSheet';
+import { publishBarBack } from './barBack';
 import { SHORTCUT, SearchDialog } from './SearchDialog';
 import { NavButton } from './NavButton';
 
 export type {
   AppLayoutProps,
+  AppLayoutCenterTab,
   AppLayoutNavGroup,
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
@@ -23,6 +26,10 @@ export type {
 
 const RAIL_WIDTH = 88;
 const APP_BAR_HEIGHT = 56;
+/** The page's gutters, by breakpoint. */
+const GUTTER = { xs: 2, sm: 3, md: 5 };
+/** Tabs a phone's bar holds, More included: five is as many as carry a label at 360px. */
+const PHONE_TABS = 5;
 
 /**
  * The navigation behind every Visin front. Groups sit in a rail beside the
@@ -32,6 +39,11 @@ const APP_BAR_HEIGHT = 56;
  * sit at the end of that bar: search, Sign in / Sign up for a visitor, and for
  * a member a New menu and the account menu, the only place account actions live. The appearance
  * button (light or dark) is there for everyone, signed in or not.
+ *
+ * A phone's bar is crowded by that list, so it keeps only search (and Sign in for a visitor); the rest moves under
+ * the tab bar's last tab, More. Five tabs at most: the groups that fit, the app's own `centerTab` between them where
+ * a thumb rests, and More. On a page inside a section (a project, a training) the bar names the way back instead of
+ * a dropdown of sections.
  *
  * Every entry carries a visible label. The sidebar this replaced hid its menu
  * behind a burger button on phones, and collapsed on desktop to an icon rail
@@ -58,7 +70,10 @@ export function AppLayout({
   createItems = [],
   siteLinks = [],
   headerActions: appActions,
-  sidePanel
+  sidePanel,
+  centerTab,
+  flush = false,
+  immersive = false
 }: AppLayoutProps) {
   const { pathname } = useLocation();
   const theme = useTheme();
@@ -66,12 +81,19 @@ export function AppLayout({
   // bottom-sheet account — gets the full width; from 600 to 900 there is room
   // for the rail but not the rail *and* a readable content column.
   const mobile = useCompactLayout();
+  // A conversation owns the screen, sized to what the keyboard leaves; a list between the bars only fills them.
+  const takesScreen = mobile && immersive;
+  const fills = mobile && (flush || immersive);
+  const screenHeight = useKeyboardAwareHeight(takesScreen);
 
   const palette = livePalette(theme);
   const { mode, systemMode, setMode } = useColorScheme();
   // What is showing, whether chosen or the device's: the switch flips that, so it always does something visible.
   const dark = (mode && mode !== 'system' ? mode : systemMode) === 'dark';
 
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Whatever moved the page (a link in it, the back button) or the layout (a rotated tablet) closes More.
+  useEffect(() => setMoreOpen(false), [pathname, mobile]);
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
   const [sectionAnchor, setSectionAnchor] = useState<HTMLElement | null>(null);
   const [createAnchor, setCreateAnchor] = useState<HTMLElement | null>(null);
@@ -124,25 +146,58 @@ export function AppLayout({
     </MenuItem>
   );
 
-  const railEntries = (
+  const groupEntry = (group: AppLayoutNavGroup) => (
+    <NavButton
+      key={group.label}
+      label={group.label}
+      icon={group.icon}
+      target={group.items[0]}
+      active={group === activeGroup}
+      current={group === activeGroup}
+      mobile={mobile}
+    />
+  );
+  const railEntries = <>{navGroups.map(groupEntry)}</>;
+
+  // The phone's tabs: the groups that fit (More is one of the five, and so is the centre tab where there is one), the
+  // centre tab in the middle of them, and More last with whatever did not fit.
+  const groupSlots = PHONE_TABS - 1 - (centerTab ? 1 : 0);
+  const tabGroups = navGroups.slice(0, groupSlots);
+  const overflowGroups = navGroups.slice(groupSlots);
+  const centerAt = Math.ceil(tabGroups.length / 2);
+  const centerActive =
+    centerTab && (centerTab.active ?? (pathname === centerTab.path || pathname.startsWith(`${centerTab.path}/`)));
+  const tabEntries = (
     <>
-      {navGroups.map((group) => (
+      {tabGroups.slice(0, centerAt).map(groupEntry)}
+      {centerTab && (
         <NavButton
-          key={group.label}
-          label={group.label}
-          icon={group.icon}
-          target={group.items[0]}
-          active={group === activeGroup}
-          current={group === activeGroup}
-          mobile={mobile}
+          label={centerTab.label}
+          icon={centerTab.icon}
+          target={{ text: centerTab.label, icon: centerTab.icon, path: centerTab.path }}
+          active={Boolean(centerActive)}
+          current={Boolean(centerActive)}
+          badge={centerTab.badge}
+          ariaLabel={centerTab.ariaLabel}
+          mobile
         />
-      ))}
+      )}
+      {tabGroups.slice(centerAt).map(groupEntry)}
+      <NavButton
+        label="More"
+        // Three lines: what a menu looks like, and the tab holds the account, the extra places and the settings.
+        icon={<MenuIcon />}
+        active={moreOpen || overflowGroups.some((group) => group === activeGroup)}
+        current={false}
+        expanded={moreOpen}
+        onClick={() => setMoreOpen(true)}
+        mobile
+      />
     </>
   );
 
   const accountMenu = (
     <AccountMenu
-      mobile={mobile}
       anchor={accountAnchor}
       onClose={closeAccount}
       user={user}
@@ -196,31 +251,20 @@ export function AppLayout({
     </IconButton>
   );
 
-  const createMenu = isAuthenticated && createItems.length > 0 && (
+  const createMenu = !mobile && isAuthenticated && createItems.length > 0 && (
     <>
-      {mobile ? (
-        <IconButton
-          onClick={(event) => setCreateAnchor(event.currentTarget)}
-          aria-label="New"
-          aria-haspopup="menu"
-          aria-expanded={Boolean(createAnchor)}
-        >
-          <Add />
-        </IconButton>
-      ) : (
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<Add />}
-          endIcon={<ExpandMore />}
-          onClick={(event) => setCreateAnchor(event.currentTarget)}
-          aria-haspopup="menu"
-          aria-expanded={Boolean(createAnchor)}
-          sx={{ flexShrink: 0, height: 36 }}
-        >
-          New
-        </Button>
-      )}
+      <Button
+        variant="contained"
+        size="small"
+        startIcon={<Add />}
+        endIcon={<ExpandMore />}
+        onClick={(event) => setCreateAnchor(event.currentTarget)}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(createAnchor)}
+        sx={{ flexShrink: 0, height: 36 }}
+      >
+        New
+      </Button>
       <Menu
         anchorEl={createAnchor}
         open={Boolean(createAnchor)}
@@ -263,7 +307,12 @@ export function AppLayout({
         </Typography>
       </ButtonBase>
     ) : (
-      <IconButton onClick={() => setSearchOpen(true)} aria-label="Search" sx={{ color: chrome.inkMuted }}>
+      <IconButton
+        onClick={() => setSearchOpen(true)}
+        aria-label="Search"
+        // 44px on a phone, where it is thumbed rather than pointed at.
+        sx={{ color: chrome.inkMuted, ...(mobile && { width: 44, height: 44 }) }}
+      >
         <Search />
       </IconButton>
     ));
@@ -299,11 +348,11 @@ export function AppLayout({
 
   const visitorActions = !isAuthenticated && (
     <>
-      <Button onClick={onLogin} size="small" sx={{ flexShrink: 0, height: 36, color: chrome.ink }}>
+      <Button onClick={onLogin} size="small" sx={{ flexShrink: 0, height: mobile ? 44 : 36, color: chrome.ink }}>
         Sign in
       </Button>
       {onSignup && (
-        <Button onClick={onSignup} variant="contained" size="small" sx={{ flexShrink: 0, height: 36 }}>
+        <Button onClick={onSignup} variant="contained" size="small" sx={{ flexShrink: 0, height: mobile ? 44 : 36 }}>
           Sign up
         </Button>
       )}
@@ -330,16 +379,58 @@ export function AppLayout({
       {searchTrigger}
       {siteLinkButtons}
       {appActions}
-      {themeButton}
+      {/* On a phone these live in the More sheet: the bar keeps room for the page's name. */}
+      {!mobile && themeButton}
       {!authPending && visitorActions}
       {!authPending && createMenu}
-      {!authPending && isAuthenticated && avatarButton}
+      {!authPending && !mobile && isAuthenticated && avatarButton}
     </Box>
   );
 
+  // A page inside a section (a project, a training, a benchmark) is not one of the section's pages, so a dropdown of
+  // them says nothing about where the person is; the way back to the list does. The section's first page is the
+  // group's own: "Projects", not "All projects".
+  const here = pathname.replace(/\/+$/, '') || '/';
+  const inSection = activeItem?.path !== undefined && here !== activeItem.path ? activeItem : null;
+  const backTarget = inSection ?? (!activeItem && activeGroup && activeGroup !== accountGroup ? activeGroup.items[0] : null);
+  const backLabel = !backTarget
+    ? ''
+    : backTarget === activeGroup?.items[0]
+      ? (activeGroup?.label ?? backTarget.text)
+      : backTarget.text;
+
+  // A page that offers the same way back (a breadcrumb) leaves it out, so the phone says it once.
+  const barBackPath = mobile ? backTarget?.path : undefined;
+  useLayoutEffect(() => {
+    publishBarBack(barBackPath === undefined ? undefined : { path: barBackPath, label: backLabel });
+    return () => publishBarBack(undefined);
+  }, [barBackPath, backLabel]);
+
   const header = mobile ? (
     <Box component="header" sx={{ ...appBarSx, minHeight: APP_BAR_HEIGHT, px: 1 }}>
-      {sectionGroup ? (
+      {backTarget && activeGroup ? (
+        <Box component="nav" aria-label={activeGroup.label} sx={{ minWidth: 0 }}>
+          <Button
+            {...linkProps(backTarget)}
+            startIcon={<ChevronLeft />}
+            aria-label={`Back to ${backLabel}`}
+            sx={{
+              fontWeight: 700,
+              fontSize: '1.125rem',
+              color: 'inherit',
+              minWidth: 0,
+              maxWidth: '100%',
+              pl: 0.5,
+              pr: 1.25,
+              '&:hover': { bgcolor: surface.hover }
+            }}
+          >
+            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {backLabel}
+            </Box>
+          </Button>
+        </Box>
+      ) : sectionGroup ? (
         <Box component="nav" aria-label={sectionGroup.label} sx={{ minWidth: 0 }}>
           <Button
             onClick={(event) => setSectionAnchor(event.currentTarget)}
@@ -420,7 +511,13 @@ export function AppLayout({
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', ...pageBackground }}>
+    <Box
+      sx={{
+        display: 'flex',
+        ...(fills ? { height: takesScreen ? screenHeight : '100dvh', overflow: 'hidden' } : { minHeight: '100vh' }),
+        ...pageBackground
+      }}
+    >
       <CssBaseline />
 
       {!mobile && (
@@ -470,25 +567,46 @@ export function AppLayout({
         </Box>
       )}
 
-      <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        {header}
+      <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', ...(fills && { minHeight: 0 }) }}>
+        {!takesScreen && header}
 
         <Box
           component="main"
           sx={{
             flexGrow: 1,
             // Gutters stay narrow for as long as the compact layout runs; 4 was
-            // a desktop margin applied to a tablet's much shorter line.
-            p: { xs: 2, sm: 3, md: 5 },
-            // Clear of the fixed tab bar. On the padding rather than a spacer,
-            // since the workbench sizes its frame to what main's padding leaves.
-            ...(mobile && { pb: `calc(${TAB_BAR_HEIGHT}px + ${theme.spacing(2)} + env(safe-area-inset-bottom))` }),
+            // a desktop margin applied to a tablet's much shorter line. A list or
+            // a thread between the bars has none: the height is theirs to fill.
+            px: fills ? 0 : GUTTER,
+            pt: takesScreen ? 'env(safe-area-inset-top)' : fills ? 0 : GUTTER,
+            // Clear of the fixed tab bar (and of a page's floating button). On the
+            // padding rather than a spacer, since the workbench sizes its frame to
+            // what main's padding leaves. Each side on its own: a responsive `p`
+            // beside it is written into media queries that come later and win,
+            // which left the end of every phone page under the tab bar.
+            pb: takesScreen
+              ? 'env(safe-area-inset-bottom)'
+              : fills
+                ? `calc(${TAB_BAR_HEIGHT}px + env(safe-area-inset-bottom))`
+                : mobile
+                  ? `calc(${TAB_BAR_HEIGHT}px + ${theme.spacing(2)} + env(safe-area-inset-bottom) + var(${FAB_CLEARANCE_VAR}, 0px))`
+                  : GUTTER,
+            // With no app bar above it, a conversation keeps clear of the notch and the status bar the installed app
+            // draws under (viewport-fit=cover) itself.
+            ...(takesScreen && { pl: 'env(safe-area-inset-left)', pr: 'env(safe-area-inset-right)' }),
+            ...(fills && { minHeight: 0, overflow: 'hidden' }),
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center'
           }}
         >
-          <Box sx={{ width: '100%', maxWidth: maxContentWidth }}>
+          <Box
+            sx={{
+              width: '100%',
+              maxWidth: maxContentWidth,
+              ...(fills && { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' })
+            }}
+          >
             {pageHeader}
             {children}
           </Box>
@@ -502,7 +620,7 @@ export function AppLayout({
         </Box>
       )}
 
-      {mobile && (
+      {mobile && !takesScreen && (
         <Box
           component="nav"
           aria-label="Main"
@@ -521,11 +639,30 @@ export function AppLayout({
             borderTop: `1px solid ${chrome.edge}`
           }}
         >
-          {railEntries}
+          {tabEntries}
         </Box>
       )}
 
-      {isAuthenticated && accountMenu}
+      {isAuthenticated && !mobile && accountMenu}
+      {mobile && (
+        <MoreSheet
+          open={moreOpen}
+          onClose={() => setMoreOpen(false)}
+          isAuthenticated={isAuthenticated && !authPending}
+          authPending={authPending}
+          user={user}
+          places={overflowGroups}
+          isPlaceActive={(group) => group === activeGroup}
+          createItems={createItems}
+          menuItems={menuItems}
+          accountHome={accountItems[0]}
+          siteLinks={siteLinks}
+          renderItem={menuItem}
+          onLogin={onLogin}
+          onSignup={onSignup}
+          onLogout={onLogout}
+        />
+      )}
 
       {onSearch && (
         <SearchDialog

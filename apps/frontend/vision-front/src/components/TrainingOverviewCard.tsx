@@ -9,7 +9,9 @@ import {
   Stack,
   useTheme,
   Tooltip,
-  Link
+  Link,
+  Button,
+  Collapse
 } from '@mui/material';
 import {
   AccessTime as AccessTimeIcon,
@@ -22,9 +24,10 @@ import {
   AttachMoney as MoneyIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  Timer as TimerIcon
+  Timer as TimerIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { livePalette, tint } from '@visin/frontend-core';
+import { livePalette, tint, useCompactLayout } from '@visin/frontend-core';
 import { Training, Epoch } from '../types';
 import type { HubModelReference } from '../types/training';
 import ModelCardDialog from './models/ModelCardDialog';
@@ -48,6 +51,9 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   epochs,
 }) => {
   const theme = useTheme();
+  // On a phone the numbers come first and the run's particulars (id, dataset, files, dates) fold away.
+  const compact = useCompactLayout();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [cardFor, setCardFor] = useState<HubModelReference | null>(null);
   const [tryFor, setTryFor] = useState<HubModelReference | null>(null);
   const costing = useCosting();
@@ -188,13 +194,24 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
 
   return (
     <Card variant="outlined" sx={{ borderRadius: 2 }}>
-      <CardContent sx={{ p: 3 }}>
-        <Grid container spacing={4}>
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Grid container spacing={{ xs: 2, md: 4 }}>
           {/* Left Column: Info & Metadata */}
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid size={{ xs: 12, md: 4 }} sx={{ order: { xs: 2, md: 1 } }}>
             <Stack spacing={3}>
               {/* The run's name, state and description are the page header's: said once. */}
+              {compact && (
+                <Button
+                  onClick={() => setDetailsOpen((open) => !open)}
+                  aria-expanded={detailsOpen}
+                  endIcon={<ExpandMoreIcon sx={{ transform: detailsOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />}
+                  sx={{ justifyContent: 'space-between', color: 'text.primary', fontWeight: 600 }}
+                >
+                  Details
+                </Button>
+              )}
 
+              <Collapse in={!compact || detailsOpen} sx={compact && !detailsOpen ? { mt: '0 !important' } : undefined}>
               <Stack spacing={2}>
                 <InfoItem 
                   icon={<FingerprintIcon fontSize="small" />} 
@@ -263,11 +280,12 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                   value={formatDate(training.updatedAt)} 
                 />
               </Stack>
+              </Collapse>
             </Stack>
           </Grid>
 
           {/* Right Column: Metrics & Stats */}
-          <Grid size={{ xs: 12, md: 8 }}>
+          <Grid size={{ xs: 12, md: 8 }} sx={{ order: { xs: 1, md: 2 } }}>
             <Stack spacing={3}>
               <Box>
                 <Typography
@@ -304,6 +322,8 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                       color={livePalette(theme).secondary.main} 
                     />
                   </Grid>
+ {/* With no rates set there is no price: a phone has no room for a card that says "-". */}
+                  {(!compact || costData?.totalCost !== undefined) && (
                   <Grid size={{ xs: 6, sm: 3 }}>
                     <MetricCard 
                       title="Est. Cost" 
@@ -313,6 +333,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                       color={livePalette(theme).warning.main} 
                     />
                   </Grid>
+                  )}
                 </Grid>
               </Box>
 

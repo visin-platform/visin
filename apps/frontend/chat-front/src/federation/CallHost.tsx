@@ -237,7 +237,8 @@ export function CallLayer() {
 /** As the shell mounts it: with chat's own config and sign-in check, read from chat's origin. */
 export default function CallHost() {
   return (
-    <ConfigProvider>
+    // Nothing of its own to show while chat's config loads: a loader here would be a screen-tall box beside the page.
+    <ConfigProvider fallback={null}>
       <AuthProvider>
         <BackgroundLayer />
         <CallLayer />

@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Box, Button, IconButton, Tooltip, Typography } from '@mui/material';
-import { AutoAwesome, ChatBubbleOutlined, Close, OpenInFull } from '@mui/icons-material';
+import { AutoAwesome, ForumOutlined, Close, OpenInFull } from '@mui/icons-material';
 import { Loader, chrome, tint, useCompactLayout } from '@visin/frontend-core';
 import { useConfig } from '../../config/ConfigProvider';
 import { useAuth } from '../../contexts/AuthContext';
@@ -186,7 +186,7 @@ export function ChatButton() {
           '&:hover': { color: dock.open ? 'primary.main' : chrome.ink }
         }}
       >
-        <ChatBubbleOutlined />
+        <ForumOutlined />
       </IconButton>
     </Tooltip>
   );
@@ -318,7 +318,7 @@ export function ChatSidePanel() {
           borderBottom: `1px solid ${chrome.edge}`
         }}
       >
-        <ChatBubbleOutlined fontSize="small" sx={{ color: 'primary.main' }} />
+        <ForumOutlined fontSize="small" sx={{ color: 'primary.main' }} />
         <Typography component="h2" sx={{ flex: 1, fontWeight: 700, fontSize: '1rem', ml: 0.5 }}>
           {dock.available ? 'Chat' : 'Ask Vivi'}
         </Typography>

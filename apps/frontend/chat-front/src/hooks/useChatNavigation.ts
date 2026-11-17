@@ -101,6 +101,18 @@ export function useChatNavigation({
     return () => window.removeEventListener('visin:chat-open', open);
   }, [userId, show]);
 
+  // The shell tells a phone's back button from the arrow in the thread by whether a conversation is showing.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('visin:chat-detail', { detail }));
+  }, [detail]);
+
+  // The phone's back button: the shell took the conversation's history entry away, so show the list.
+  useEffect(() => {
+    const showList = () => show(undefined);
+    window.addEventListener('visin:chat-show-list', showList);
+    return () => window.removeEventListener('visin:chat-show-list', showList);
+  }, [show]);
+
   useEffect(() => {
     if (userId && selected) {
       sessionStorage.setItem(`visin.chat.selected.${userId}`, selected);

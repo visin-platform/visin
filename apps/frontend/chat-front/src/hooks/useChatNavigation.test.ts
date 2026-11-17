@@ -196,3 +196,29 @@ it('does not announce a late default lookup after chat unmounts', async () => {
     window.removeEventListener('visin:chat-selected', selected);
   }
 });
+it('tells the shell whether a conversation is showing, and goes back to the list when asked', () => {
+  const seen: boolean[] = [];
+  const listen = (event: Event) => seen.push((event as CustomEvent<boolean>).detail);
+  window.addEventListener('visin:chat-detail', listen);
+  try {
+    const { result } = renderHook(() => useChatNavigation({ userId: 'alice', conversations, loaded: true }));
+    expect(seen.at(-1)).toBe(false);
+
+    act(() => result.current.show('c1'));
+    expect(seen.at(-1)).toBe(true);
+    expect(result.current.selected).toBe('c1');
+
+    // The phone's back button: the shell took the history entry away.
+    act(() => {
+      window.dispatchEvent(new Event('visin:chat-show-list'));
+    });
+    expect(result.current.selected).toBeUndefined();
+    expect(seen.at(-1)).toBe(false);
+
+    // A new chat being written is a conversation screen too.
+    act(() => result.current.setComposing(true));
+    expect(seen.at(-1)).toBe(true);
+  } finally {
+    window.removeEventListener('visin:chat-detail', listen);
+  }
+});

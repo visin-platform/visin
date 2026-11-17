@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Badge,
   Box,
+  Button,
+  Collapse,
   TextField,
   InputAdornment,
   Autocomplete,
@@ -9,7 +12,7 @@ import {
   useTheme
 } from '@mui/material';
 import { Search as SearchIcon, FilterList as FilterIcon } from '@mui/icons-material';
-import { livePalette, tint } from '@visin/frontend-core';
+import { livePalette, tint, useCompactLayout } from '@visin/frontend-core';
 
 interface TrainingFiltersProps {
   searchTerm: string;
@@ -31,6 +34,10 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
   availableTags
 }) => {
   const theme = useTheme();
+  // On a phone the tag pickers (about 120px) would sit above the first run: they open from a button beside the search.
+  const compact = useCompactLayout();
+  const [open, setOpen] = useState(false);
+  const active = selectedTags.length + excludedTags.length;
 
   return (
     <Paper 
@@ -66,9 +73,26 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
               sx: { borderRadius: 2 }
             }
           }}
-          sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 300 } }}
+          sx={{ flex: { xs: '1 1 140px', md: '1 1 auto' }, minWidth: { xs: 0, md: 300 } }}
         />
 
+        {compact && (
+          <Button
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            aria-controls="training-tag-filters"
+            startIcon={
+              <Badge color="primary" badgeContent={active} invisible={active === 0}>
+                <FilterIcon />
+              </Badge>
+            }
+            sx={{ flexShrink: 0, borderRadius: 2, height: 40 }}
+          >
+            Filters
+          </Button>
+        )}
+
+        <Collapse in={!compact || open} unmountOnExit={compact} id="training-tag-filters" sx={{ width: compact ? '100%' : 'auto', flexGrow: 1 }}>
         <Box sx={{ display: 'flex', gap: 2, flexGrow: 1, flexWrap: 'wrap' }}>
           <Autocomplete
             multiple
@@ -115,7 +139,7 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                 }}
               />
             )}
-            sx={{ minWidth: 250, flexGrow: 1 }}
+            sx={{ minWidth: { xs: '100%', md: 250 }, flexGrow: 1 }}
           />
 
           <Autocomplete
@@ -152,9 +176,10 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                 }}
               />
             )}
-            sx={{ minWidth: 250, flexGrow: 1 }}
+            sx={{ minWidth: { xs: '100%', md: 250 }, flexGrow: 1 }}
           />
         </Box>
+        </Collapse>
       </Box>
     </Paper>
   );

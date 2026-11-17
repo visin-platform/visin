@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { clearVisits, recordVisit } from '@visin/frontend-core';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 
 const authState = {
   user: { id: 'u1', name: 'Jane Doe', email: 'jane@example.com' } as { id: string; name: string; email: string } | null,
@@ -15,7 +17,7 @@ vi.mock('../hooks/useGuestVivi', () => ({ useGuestVivi: () => false }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 
 const config: Record<string, string | undefined> = {};
-vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config }));
+vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 let analystAdmin = false;
 vi.mock('../hooks/useCanConfigureAnalyst', () => ({ useCanConfigureAnalyst: () => analystAdmin }));
 let platformAdmin = false;
@@ -31,11 +33,13 @@ const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
 
 const renderAt = (path: string) =>
   render(
-    <MemoryRouter initialEntries={[path]}>
-      <ShellLayout>
-        <Path />
-      </ShellLayout>
-    </MemoryRouter>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={[path]}>
+        <ShellLayout>
+          <Path />
+        </ShellLayout>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 
 const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
@@ -373,16 +377,24 @@ describe('ShellLayout', () => {
   });
 });
 
+const withClient = (children: ReactNode) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    {children}
+  </QueryClientProvider>
+);
+
 describe('chat', () => {
   const renderWithChat = (path: string) =>
     render(
-      <MemoryRouter initialEntries={[path]}>
-        <ChatProvider>
-          <ShellLayout>
-            <Path />
-          </ShellLayout>
-        </ChatProvider>
-      </MemoryRouter>
+      withClient(
+        <MemoryRouter initialEntries={[path]}>
+          <ChatProvider>
+            <ShellLayout>
+              <Path />
+            </ShellLayout>
+          </ChatProvider>
+        </MemoryRouter>
+      )
     );
 
   it('is a button in the bar, not a place in the menu, and docks beside the page', () => {
@@ -392,6 +404,20 @@ describe('chat', () => {
     fireEvent.click(within(container.querySelector('header')!).getByRole('button', { name: 'Chat' }));
     const panel = screen.getByRole('complementary', { name: 'Chat' });
     expect(container.querySelector('main')!.contains(panel)).toBe(false);
+  });
+
+  it('asks for no unread count on a desktop, which draws no badge', async () => {
+    config.CHAT_FRONT_URL = 'https://chat.test';
+    config.CHAT_SERVICE_URL = 'https://chat-api.test';
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      renderWithChat('/projects');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('is left out where chat is not configured', () => {
@@ -415,28 +441,164 @@ describe('chat on a phone', () => {
         dispatchEvent: vi.fn()
       }))
     );
+  const unread = (count: number) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ success: true, data: { unread: count } }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    );
+  const Back = () => {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate(-1)}>history back</button>;
+  };
+  const renderPhone = (path: string, initialEntries: string[] = [path]) =>
+    render(
+      withClient(
+        <MemoryRouter initialEntries={initialEntries} initialIndex={initialEntries.length - 1}>
+          <ChatProvider>
+            <ShellLayout>
+              <Path />
+            </ShellLayout>
+          </ChatProvider>
+          <Back />
+          <Search />
+        </MemoryRouter>
+      )
+    );
+  const Search = () => <div data-testid="search">{useLocation().search}</div>;
+  const detail = (open: boolean) => act(() => void window.dispatchEvent(new CustomEvent('visin:chat-detail', { detail: open })));
+  const tabs = () => [...main().getAllByRole('link')].map((tab) => tab.textContent);
+
+  beforeEach(() => {
+    config.CHAT_FRONT_URL = 'https://chat.test';
+    config.CHAT_SERVICE_URL = 'https://chat-api.test';
+    unread(0);
+  });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('takes the whole screen: no app bar or tab bar, one arrow out, and the conversations below it', async () => {
+  it('puts Chat in the middle of the tab bar, not in the top bar', () => {
     asPhone();
-    renderAt('/chat');
-    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
-    expect(await screen.findByText('Embedded conversations')).toBeInTheDocument();
-    expect(screen.queryByTestId('path')).not.toBeInTheDocument();
+    const { container } = renderPhone('/projects');
+
+    expect(tabs()).toEqual(['Home', 'Projects', 'Chat', 'Data']);
+    expect(main().getByRole('link', { name: 'Chat' })).toHaveAttribute('href', '/chat');
+    expect(within(container.querySelector('header')!).queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
   });
 
-  it('leaves to Home when chat was opened straight from a link', async () => {
+  it('says how many conversations are waiting, on the tab', async () => {
     asPhone();
-    renderAt('/chat');
-    fireEvent.click(screen.getByRole('button', { name: 'Leave chat' }));
-    expect(await screen.findByTestId('path')).toHaveTextContent('/');
+    unread(3);
+    renderPhone('/projects');
+
+    expect(await main().findByRole('link', { name: 'Chat, 3 unread' })).toBeInTheDocument();
+  });
+
+  it('offers a visitor Ask Vivi in the same place, and nothing where there is no Vivi to ask', () => {
+    asPhone();
+    authState.isAuthenticated = false;
+    authState.user = null;
+    renderPhone('/projects');
+    expect(main().queryByRole('link', { name: /chat|vivi/i })).not.toBeInTheDocument();
+    cleanup();
+    authState.isAuthenticated = true;
+    authState.user = { id: 'u1', name: 'Jane Doe', email: 'jane@example.com' };
+    delete config.CHAT_FRONT_URL;
+    renderPhone('/projects');
+    expect(main().queryByRole('link', { name: /chat|vivi/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the bars on the conversation list, with the Chat tab lit', async () => {
+    asPhone();
+    const { container } = renderPhone('/chat');
+
+    expect(await screen.findByText('Embedded conversations')).toBeInTheDocument();
+    expect(main().getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'true');
+    expect(container.querySelector('header')).toHaveTextContent('Chat');
+    expect(screen.queryByTestId('path')).not.toBeInTheDocument();
+    expect(document.title).toBe('Chat · Visin');
+  });
+
+  it('takes the whole screen for a conversation, and the browser’s back button returns to the list', async () => {
+    asPhone();
+    const { container } = renderPhone('/chat');
+    await screen.findByText('Embedded conversations');
+
+    detail(true);
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('?thread=1'));
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    expect(container.querySelector('header')).toBeNull();
+    // The same chat is still mounted: the conversation was not reloaded.
+    expect(screen.getByText('Embedded conversations')).toBeInTheDocument();
+
+    const listAsked = vi.fn();
+    window.addEventListener('visin:chat-show-list', listAsked);
+    fireEvent.click(screen.getByRole('button', { name: 'history back' }));
+    await waitFor(() => expect(listAsked).toHaveBeenCalledTimes(1));
+    window.removeEventListener('visin:chat-show-list', listAsked);
+    expect(screen.getByTestId('search')).toHaveTextContent(/^$/);
+
+    detail(false);
+    await waitFor(() => expect(main().getByRole('link', { name: 'Chat' })).toBeInTheDocument());
+  });
+
+  it('drops the conversation’s history entry when the arrow in it goes back to the list', async () => {
+    asPhone();
+    renderPhone('/chat');
+    await screen.findByText('Embedded conversations');
+    detail(true);
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('?thread=1'));
+
+    const listAsked = vi.fn();
+    window.addEventListener('visin:chat-show-list', listAsked);
+    detail(false);
+
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(/^$/));
+    // chat-front already shows the list: it is not told again.
+    expect(listAsked).not.toHaveBeenCalled();
+    window.removeEventListener('visin:chat-show-list', listAsked);
+    expect(main().getByRole('link', { name: 'Chat' })).toBeInTheDocument();
+  });
+
+  it('asks for the count again on leaving chat, not on every page change', async () => {
+    asPhone();
+    unread(1);
+    const Go = () => {
+      const navigate = useNavigate();
+      return (
+        <>
+          <button onClick={() => navigate('/datasets')}>to datasets</button>
+          <button onClick={() => navigate('/chat')}>to chat</button>
+          <button onClick={() => navigate('/projects')}>to projects</button>
+        </>
+      );
+    };
+    render(
+      withClient(
+        <MemoryRouter initialEntries={['/projects']}>
+          <ChatProvider>
+            <ShellLayout>
+              <Path />
+            </ShellLayout>
+          </ChatProvider>
+          <Go />
+        </MemoryRouter>
+      )
+    );
+    await main().findByRole('link', { name: 'Chat, 1 unread' });
+    const calls = () => (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    const first = calls();
+
+    fireEvent.click(screen.getByRole('button', { name: 'to datasets' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls()).toBe(first);
+
+    fireEvent.click(screen.getByRole('button', { name: 'to chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'to projects' }));
+    await waitFor(() => expect(calls()).toBeGreaterThan(first));
   });
 
   it('keeps the menus on every other page of a phone', () => {
     asPhone();
-    renderAt('/projects');
+    renderPhone('/projects');
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Leave chat' })).not.toBeInTheDocument();
   });
 });

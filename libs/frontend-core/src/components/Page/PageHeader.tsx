@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Fab, Typography } from '@mui/material';
 import { livePalette, mainAction } from '../../theme';
-import { TAB_BAR_HEIGHT, useCompactLayout } from './layout';
+import { FAB_CLEARANCE_VAR, TAB_BAR_HEIGHT, useCompactLayout } from './layout';
 
 const visuallyHidden = {
   position: 'absolute',
@@ -48,6 +48,26 @@ export interface PageHeaderProps {
 export function PageHeader({ title, subtitle, actions, primaryAction, hideTitleOnPhone = false }: PageHeaderProps) {
   const compact = useCompactLayout();
   const showTitle = title !== undefined && !(compact && hideTitleOnPhone);
+  const floating = compact && primaryAction !== undefined;
+  // The page ends above the floating button rather than under it: the layout reads this to pad the bottom of the
+  // page. A variable on the root, since the layout and the page may be drawn by different bundles.
+  // Counted on the root too, so one header leaving does not take the room from another still showing its button.
+  useEffect(() => {
+    if (!floating) return;
+    const root = document.documentElement;
+    const count = () => Number(root.dataset.visinFabs ?? 0);
+    root.dataset.visinFabs = String(count() + 1);
+    root.style.setProperty(FAB_CLEARANCE_VAR, '64px');
+    return () => {
+      const left = count() - 1;
+      if (left > 0) {
+        root.dataset.visinFabs = String(left);
+        return;
+      }
+      delete root.dataset.visinFabs;
+      root.style.removeProperty(FAB_CLEARANCE_VAR);
+    };
+  }, [floating]);
   const link = primaryAction?.to !== undefined ? { component: RouterLink, to: primaryAction.to } : {};
 
   const primary =

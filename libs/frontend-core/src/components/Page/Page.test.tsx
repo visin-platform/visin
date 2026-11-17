@@ -61,6 +61,33 @@ describe('PageHeader', () => {
     expect(screen.getByRole('button', { name: 'New project' })).toHaveClass('MuiFab-root');
   });
 
+  it('on a phone, tells the layout to leave room under its floating action, and takes it back when it goes', () => {
+    onPhone();
+    const view = inRouter(<PageHeader title="Projects" primaryAction={{ label: 'New project', onClick: vi.fn() }} />);
+    expect(document.documentElement.style.getPropertyValue('--visin-fab-clearance')).toBe('64px');
+
+    view.unmount();
+    expect(document.documentElement.style.getPropertyValue('--visin-fab-clearance')).toBe('');
+  });
+
+  it('keeps the room while another header still floats its action', () => {
+    onPhone();
+    const first = inRouter(<PageHeader title="Projects" primaryAction={{ label: 'New project', onClick: vi.fn() }} />);
+    const second = inRouter(<PageHeader title="Papers" primaryAction={{ label: 'Add paper', onClick: vi.fn() }} />);
+
+    first.unmount();
+    expect(document.documentElement.style.getPropertyValue('--visin-fab-clearance')).toBe('64px');
+
+    second.unmount();
+    expect(document.documentElement.style.getPropertyValue('--visin-fab-clearance')).toBe('');
+  });
+
+  it('asks for no room where the action is an ordinary button', () => {
+    inRouter(<PageHeader title="Projects" primaryAction={{ label: 'New project', onClick: vi.fn() }} />);
+
+    expect(document.documentElement.style.getPropertyValue('--visin-fab-clearance')).toBe('');
+  });
+
   it('on a phone, still shows a title the app bar does not', () => {
     onPhone();
     inRouter(<PageHeader title="A project" />);

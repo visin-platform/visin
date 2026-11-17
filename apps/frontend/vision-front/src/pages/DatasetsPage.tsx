@@ -62,15 +62,18 @@ const DatasetCard: React.FC<DatasetCardProps> = ({ dataset, userId, groups, down
   const navigate = useNavigate();
   const upload = useDatasetUpload(dataset._id);
   const sending = isActive(upload);
+  // A cover that fails to load gives way to the placeholder rather than an empty frame with a broken-image icon.
+  const [coverFailed, setCoverFailed] = useState<string>();
   return (
     <Card sx={{ display: 'flex', flexDirection: 'column', ...liftOnHover() }}>
       <CardActionArea onClick={() => navigate(`/datasets/${dataset._id}`)} sx={{ flexGrow: 1, alignItems: 'stretch' }}>
-        {dataset.coverUrl ? (
+        {dataset.coverUrl && dataset.coverUrl !== coverFailed ? (
           <CardMedia
             component="img"
             image={dataset.coverUrl}
             alt=""
             loading="lazy"
+            onError={() => setCoverFailed(dataset.coverUrl)}
             sx={{ height: 150, objectFit: 'cover' }}
           />
         ) : (

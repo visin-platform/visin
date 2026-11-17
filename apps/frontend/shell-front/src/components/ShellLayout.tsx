@@ -1,11 +1,12 @@
 import { ReactNode, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Add, AddTask, GitHub, MenuBook, PhotoLibrary } from '@mui/icons-material';
+import { Add, AddTask, AutoAwesome, Forum, GitHub, MenuBook, PhotoLibrary } from '@mui/icons-material';
 import {
   AppLayout,
   createVisinNavigation,
   useCompactLayout,
   useRecentVisits,
+  type AppLayoutCenterTab,
   type AppLayoutNavItem,
   type AppLayoutSiteLink
 } from '@visin/frontend-core';
@@ -16,6 +17,9 @@ import { visitIcon, visitLabel } from './home/visitKinds';
 import { ChatButton, ChatSidePanel } from './chat/ChatDock';
 import { MobileChat } from './chat/MobileChat';
 import { useChatDock } from './chat/chatDock';
+import { useChatThread } from './chat/useChatThread';
+import { useChatUnread } from './chat/useChatUnread';
+import { useCarriedPageContext } from './chat/carryPageContext';
 import { useCanConfigureAnalyst } from '../hooks/useCanConfigureAnalyst';
 import { useIsPlatformAdmin } from '../hooks/useIsPlatformAdmin';
 import { usePublicHandle } from '../hooks/usePublicHandle';
@@ -95,8 +99,23 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     { text: 'GitHub', href: GITHUB_URL, icon: <GitHub />, newTab: true }
   ];
 
-  // On a phone, chat is the whole screen with its own way back, not a page inside the menus.
-  if (compact && app === 'chat') return <MobileChat title={chat.available ? 'Chat' : 'Ask Vivi'} />;
+  // On a phone chat is a tab in the middle of the bar, where a thumb rests, not an icon at the top. Its list sits
+  // between the bars; a conversation takes the whole screen and the browser's back button returns to the list.
+  const chatTitle = chat.available ? 'Chat' : 'Ask Vivi';
+  const phoneChat = compact && app === 'chat';
+  const inThread = useChatThread(phoneChat);
+  const unread = useChatUnread(chat.available && compact);
+  useCarriedPageContext(phoneChat);
+  const centerTab: AppLayoutCenterTab | undefined =
+    compact && (chat.available || chat.guest)
+      ? {
+          label: chatTitle,
+          icon: chat.available ? <Forum /> : <AutoAwesome />,
+          path: '/chat',
+          badge: unread,
+          ariaLabel: unread > 0 ? `Chat, ${unread} unread` : undefined
+        }
+      : undefined;
 
   return (
     <AppLayout
@@ -120,10 +139,13 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       showPageHeader={layout.showPageHeader}
       // Chat is a companion to whatever page is open, not a place in the menu: a button in the bar, and a panel
       // docked beside the page.
-      headerActions={chat.available || chat.guest ? <ChatButton /> : undefined}
+      headerActions={!compact && (chat.available || chat.guest) ? <ChatButton /> : undefined}
       sidePanel={chat.open ? <ChatSidePanel /> : undefined}
+      centerTab={centerTab}
+      flush={phoneChat}
+      immersive={inThread}
     >
-      {children}
+      {phoneChat ? <MobileChat title={chatTitle} /> : children}
     </AppLayout>
   );
 };

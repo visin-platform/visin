@@ -27,10 +27,11 @@ import {
   Typography
 } from '@mui/material';
 import { useState } from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import type { Conversation } from '../../types/chat';
 import { analystSettingsHref } from '../../utils/analystSettingsLink';
-import { KIND_LABEL, displayTitle } from '../../utils/chatContext';
+import { KIND_LABEL, aboutLabel, displayTitle } from '../../utils/chatContext';
 import { lastActiveLabel } from '../../utils/activity';
 import { plainPreview } from '../../utils/preview';
 import { unreadCount } from '../../utils/unread';
@@ -129,8 +130,23 @@ function HiddenChats() {
 }
 
 export function ConversationList({ panel }: { panel: boolean }) {
-  const { setAppearanceOpen, detail, canConfigure, show, setComposing, conversations, user, selected, loaded } =
-    useChatWorkspaceContext();
+  const {
+    setAppearanceOpen,
+    detail,
+    canConfigure,
+    show,
+    setComposing,
+    conversations,
+    user,
+    selected,
+    loaded,
+    about,
+    openAbout
+  } = useChatWorkspaceContext();
+  // On a phone chat is a tab, one tap from the run or project the person was looking at: so the list leads with a way
+  // to ask about it, instead of a trip back to that page's own button.
+  const compact = useCompactLayout();
+  const aboutThis = compact ? aboutLabel(about) : '';
 
   return (
     <Box
@@ -181,6 +197,22 @@ export function ConversationList({ panel }: { panel: boolean }) {
           </Button>
         </Stack>
       </Stack>
+      {about && aboutThis && (
+        <Box sx={{ px: 1.5, pb: 1 }}>
+          <ListItemButton
+            onClick={() => openAbout(about)}
+            sx={{ gap: 1.5, borderRadius: 2, border: 1, borderColor: 'primary.main', color: 'primary.main' }}
+          >
+            <AutoAwesome fontSize="small" />
+            <ListItemText
+              primary="Ask about this"
+              secondary={aboutThis}
+              slotProps={{ primary: { sx: { fontWeight: 700 } }, secondary: { noWrap: true } }}
+              sx={{ minWidth: 0, my: 0 }}
+            />
+          </ListItemButton>
+        </Box>
+      )}
       <List aria-label="Conversations" sx={{ px: 1 }}>
         {conversations.map((item) => {
           const member = item.participants.find((p) => p.userId === user?.id);

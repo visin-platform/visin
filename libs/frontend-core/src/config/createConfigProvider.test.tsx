@@ -124,6 +124,39 @@ describe('createConfigProvider', () => {
     expect(screen.getByText('custom loading')).toBeInTheDocument();
   });
 
+  it('lets one provider wait with nothing drawn, for a part with nothing of its own to show', () => {
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+    const { ConfigProvider, useConfig } = makeProvider();
+
+    const { container } = render(
+      <ConfigProvider fallback={null}>
+        <Consumer useConfig={useConfig} />
+      </ConfigProvider>
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('gives a second provider mounted in the same render the config the first one loaded', () => {
+    // Two parts of one app on the same page (chat's panel and its background part): the first one's effect loads the
+    // config after the second has already rendered without it.
+    const { ConfigProvider, useConfig } = makeProvider({ isDev: true });
+
+    render(
+      <>
+        <ConfigProvider>
+          <span>first</span>
+        </ConfigProvider>
+        <ConfigProvider>
+          <Consumer useConfig={useConfig} />
+        </ConfigProvider>
+      </>
+    );
+
+    expect(screen.getByTestId('api-url')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
   it('renders the ErrorPage when the config fetch fails (default onFetchError)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 500 })));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});

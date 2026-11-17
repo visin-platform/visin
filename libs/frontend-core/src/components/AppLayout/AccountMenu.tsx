@@ -1,7 +1,6 @@
 import { ReactNode } from 'react';
-import { Avatar, Box, Divider, Drawer, ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Typography } from '@mui/material';
+import { Avatar, Box, Divider, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import { Logout, Person } from '@mui/icons-material';
-import { glass } from '../../theme';
 import { linkProps } from './navLinks';
 import type { AppLayoutNavItem, AppLayoutUser } from './types';
 
@@ -9,8 +8,6 @@ import type { AppLayoutNavItem, AppLayoutUser } from './types';
 export const userInitial = (user?: AppLayoutUser | null): ReactNode => user?.name?.charAt(0) || <Person fontSize="small" />;
 
 interface AccountMenuProps {
-  /** A phone gets a bottom sheet; a desktop gets a menu under the avatar. */
-  mobile: boolean;
   /** The avatar the menu opens from; the menu is open while this is set. */
   anchor: HTMLElement | null;
   onClose: () => void;
@@ -24,8 +21,11 @@ interface AccountMenuProps {
   onLogout: () => void;
 }
 
-/** The account menu: who is signed in (a link to their account), a few places, and signing out. */
-export function AccountMenu({ mobile, anchor, onClose, user, menuItems, accountHome, renderItem, onLogout }: AccountMenuProps) {
+/**
+ * The account menu under a desktop's avatar: who is signed in (a link to their account), a few places, and signing
+ * out. A phone has the More sheet instead.
+ */
+export function AccountMenu({ anchor, onClose, user, menuItems, accountHome, renderItem, onLogout }: AccountMenuProps) {
   const initial = userInitial(user);
 
   // An array rather than a fragment: Menu and MenuList walk their direct
@@ -67,30 +67,7 @@ export function AccountMenu({ mobile, anchor, onClose, user, menuItems, accountH
     </MenuItem>
   ];
 
-  return mobile ? (
-    <Drawer
-      anchor="bottom"
-      open={Boolean(anchor)}
-      onClose={onClose}
-      slotProps={{
-        paper: {
-          sx: {
-            ...glass,
-            borderBottom: 'none',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxHeight: '85dvh',
-            pb: 'calc(8px + env(safe-area-inset-bottom))'
-          }
-        }
-      }}
-    >
-      <Box aria-hidden sx={{ width: 36, height: 4, borderRadius: 2, bgcolor: 'divider', mx: 'auto', mt: 1.25 }} />
-      <MenuList aria-label="Account" autoFocusItem={Boolean(anchor)}>
-        {accountMenuItems}
-      </MenuList>
-    </Drawer>
-  ) : (
+  return (
     <Menu
       anchorEl={anchor}
       open={Boolean(anchor)}

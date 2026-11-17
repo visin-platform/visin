@@ -74,7 +74,11 @@ const PublicLeaderboardsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <PageHeader title="Leaderboards" subtitle="Recorded evaluation scores, with a checkmark for verified results." />
+      <PageHeader
+        title="Leaderboards"
+        subtitle="Recorded evaluation scores, with a checkmark for verified results."
+        hideTitleOnPhone
+      />
       <RecordedLeaderboard />
       <Typography variant="h6" gutterBottom>Published suite leaderboards</Typography>
       {content}

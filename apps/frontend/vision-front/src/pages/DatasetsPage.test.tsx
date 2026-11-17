@@ -73,6 +73,18 @@ describe('DatasetsPage', () => {
     await waitFor(() => expect(service.listDatasets).toHaveBeenLastCalledWith({ search: 'zod', owner: undefined, page: 1, limit: 24 }));
   });
 
+  it('shows the placeholder, not a broken-image icon, for a cover that fails to load', async () => {
+    renderWithClient(<DatasetsPage />, { route: '/datasets', path: '/datasets' });
+    await screen.findByText('ZOD');
+    const covers = () => document.querySelectorAll('img[src="cover.jpg"]');
+    const before = covers().length;
+    expect(before).toBeGreaterThan(0);
+
+    fireEvent.error(covers()[0]);
+
+    await waitFor(() => expect(covers()).toHaveLength(before - 1));
+  });
+
   it('downloads a zip and opens a dataset', async () => {
     service.getDownloadUrl.mockRejectedValue(new Error('No zip'));
     renderWithClient(<DatasetsPage />, { route: '/datasets', path: '/datasets' });

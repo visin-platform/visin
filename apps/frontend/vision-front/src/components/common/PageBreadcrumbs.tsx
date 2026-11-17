@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { ChevronLeft } from '@mui/icons-material';
-import { useCompactLayout } from '@visin/frontend-core';
+import { useBarBack, useCompactLayout } from '@visin/frontend-core';
 
 export interface BreadcrumbItem {
   label: string;
@@ -24,6 +24,8 @@ interface PageBreadcrumbsProps {
 
 const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({ items, sx }) => {
   const compact = useCompactLayout();
+  // The phone's app bar may already say "back" to this very place.
+  const barBack = useBarBack();
 
   // A trail of one leads nowhere: the page is a top-level section the app bar
   // already names.
@@ -32,10 +34,12 @@ const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({ items, sx }) => {
   }
 
   // On a phone a four-level trail wrapped over three lines. What it is used for
-  // there is going back one step, so that is all it offers — an app's back link.
+  // there is going back one step, so that is all it offers — an app's back link —
+  // and not even that where the app bar already goes back to the same place.
   if (compact) {
     const parent = [...items].reverse().find((item) => item.href && !item.current);
-    if (!parent) return null;
+    // Same place, or the same name for another one (a project's "Trainings" tab, the bar's list of all of them): said once.
+    if (!parent || parent.href === barBack?.path || parent.label === barBack?.label) return null;
     return (
       <Box sx={{ mb: 1.5, ...sx }}>
         <MuiLink

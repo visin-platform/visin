@@ -54,7 +54,11 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
     return useContext(ConfigContext);
   }
 
-  function ConfigProvider({ children }: { children: ReactNode }) {
+  /**
+   * `fallback` replaces the loading fallback for this one provider: a part that renders nothing of its own (chat's
+   * background part) passes `null` rather than drawing a screen-tall loader beside the page.
+   */
+  function ConfigProvider({ children, fallback = loadingFallback }: { children: ReactNode; fallback?: ReactNode }) {
     // Starts from an already-loaded config: shell-front mounts a remote's
     // provider every time the user navigates into that app, and re-fetching
     // (with a loader in between) on each visit is the reload this avoids.
@@ -63,6 +67,9 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
 
     useEffect(() => {
       if (globalConfig) {
+        // Another provider of this app (a second part mounted in the same render) loaded it after this one's first
+        // render: take it, or this one waits on its loader for good.
+        setConfig((current) => current ?? globalConfig);
         return;
       }
 
@@ -101,7 +108,7 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
     }
 
     if (!config) {
-      return <>{loadingFallback}</>;
+      return <>{fallback}</>;
     }
 
     return (

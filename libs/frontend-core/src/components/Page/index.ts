@@ -10,7 +10,7 @@ export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
 export { ResponsiveActions } from './ResponsiveActions';
 export type { ResponsiveAction, ResponsiveActionsProps } from './ResponsiveActions';
-export { TAB_BAR_HEIGHT, useCompactLayout } from './layout';
+export { TAB_BAR_HEIGHT, useCompactLayout, useKeyboardAwareHeight } from './layout';
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
 export { ListSkeleton } from './ListSkeleton';

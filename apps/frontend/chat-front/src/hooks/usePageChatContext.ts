@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
 import type { Conversation, OpenRequest, PageContext } from '../types/chat';
 import { OPEN_EVENT, PAGE_CONTEXT_EVENT, analysisOf, contextKey, requestFromUrl } from '../utils/chatContext';
 import { forgetRequestedProject, rememberRequestedProject } from '../components/guest/requested';
@@ -70,9 +71,12 @@ export function usePageChatContext({
   }, [loaded, request, handle]);
 
   const pageKey = contextKey(pageContext);
+  // On a phone chat is a tab, reached on purpose: it opens on the list, which offers "Ask about this", rather than
+  // jumping into the analyst every time it is tapped from a project.
+  const compact = useCompactLayout();
 
   useEffect(() => {
-    if (!loaded || !enabled || !pageKey) return;
+    if (!loaded || !enabled || !pageKey || compact) return;
     // The chat never switches because the page did: the person keeps asking the same assistant while they move
     // around, and each question carries the page it was asked on. Only a chat panel with nothing open opens it.
     const { current, composing, pending } = latest.current;
@@ -80,6 +84,6 @@ export function usePageChatContext({
     analyze({});
     // Follows the page, not each new copy of the same context.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, enabled, pageKey, analyze]);
+  }, [loaded, enabled, pageKey, analyze, compact]);
   return pageContext;
 }

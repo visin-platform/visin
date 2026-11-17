@@ -262,17 +262,29 @@ test('the shell loads the real chat panel and expands the selected conversation'
     return route.fulfill({ headers, json: { success: true, data } });
   });
   await page.goto('http://localhost:3010/nowhere');
-  // Chat is a button in the top bar, not a place in the menu.
-  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chat' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Chat', exact: true }).click();
   if (test.info().project.name === 'mobile') {
-    // A phone has no room beside the page: the button opens the chat page.
+    // A phone has no room beside the page: Chat is a tab in the middle of the tab bar, not an icon at the top.
+    const tabs = page.getByRole('navigation', { name: 'Main' });
+    await expect(page.getByRole('banner').getByRole('button', { name: 'Chat', exact: true })).toHaveCount(0);
+    await tabs.getByRole('link', { name: 'Chat' }).click();
     await expect(page).toHaveURL(/\/chat$/);
+    // The list keeps the tab bar, with Chat lit; a conversation takes the whole screen.
+    await expect(tabs.getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'true');
     await page.getByText('Team conversation', { exact: true }).click();
     await expect(page.getByLabel('Message', { exact: true })).toBeVisible();
+    await expect(tabs).toHaveCount(0);
+    await expect(page).toHaveURL(/\/chat\?thread=1$/);
+    // The browser's back button returns to the list instead of leaving chat.
+    await page.goBack();
+    await expect(page.getByText('Team conversation', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Message', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
     expect(errors).toEqual([]);
     return;
   }
+  // Chat is a button in the top bar, not a place in the menu.
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chat' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Chat', exact: true });
   await expect(panel).toBeVisible();
   // As tall as the window, beside the bar rather than under it.

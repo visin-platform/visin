@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import TrainingFilters from './TrainingFilters';
 
@@ -49,5 +49,54 @@ describe('TrainingFilters', () => {
     fireEvent.click(within(screen.getByRole('listbox')).getByText('tag2'));
 
     expect(onExcludedTagsChange).toHaveBeenCalledWith(['tag2']);
+  });
+});
+
+describe('TrainingFilters on a phone', () => {
+  const asPhone = () =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    );
+  afterEach(() => vi.unstubAllGlobals());
+  const props = {
+    searchTerm: '',
+    onSearchChange: vi.fn(),
+    selectedTags: ['fusion'],
+    onTagsChange: vi.fn(),
+    excludedTags: ['old'],
+    onExcludedTagsChange: vi.fn(),
+    availableTags: ['fusion', 'old', 'rgb']
+  };
+
+  it('keeps the search in view and the tag pickers behind a Filters button that counts what is applied', () => {
+    asPhone();
+    render(<TrainingFilters {...props} />);
+
+    expect(screen.getByPlaceholderText('Search trainings...')).toBeVisible();
+    const button = screen.getByRole('button', { name: /Filters/ });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveTextContent('2');
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+
+    fireEvent.click(button);
+
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getAllByRole('combobox')[0]).toBeVisible();
+  });
+
+  it('has no Filters button on a desktop, where the pickers are always there', () => {
+    render(<TrainingFilters {...props} />);
+
+    expect(screen.queryByRole('button', { name: /Filters/ })).not.toBeInTheDocument();
   });
 });

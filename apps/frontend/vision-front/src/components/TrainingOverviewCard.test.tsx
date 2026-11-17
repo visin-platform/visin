@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { modelService } from '../services/modelService';
 import { renderWithClient } from '../test/renderWithClient';
@@ -226,3 +226,53 @@ describe('TrainingOverviewCard models Visin keeps', () => {
     expect(screen.queryByRole('link', { name: /Download/ })).not.toBeInTheDocument();
   });
 });
+
+describe('TrainingOverviewCard on a phone', () => {
+  const asPhone = () =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    );
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('folds the particulars away behind Details', () => {
+    asPhone();
+    render(<TrainingOverviewCard training={baseTraining} epochs={[makeEpoch(1)]} />);
+
+    // (The numbers come first through CSS `order`, which a test has no layout to check.)
+    const uuid = screen.getByText('Training UUID');
+    expect(screen.getByRole('button', { name: 'Details' })).toHaveAttribute('aria-expanded', 'false');
+    expect(uuid).not.toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+
+    expect(screen.getByRole('button', { name: 'Details' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Training UUID')).toBeVisible();
+  });
+
+  it('leaves out an estimated cost that has no price, which is a card of dashes', () => {
+    asPhone();
+    render(<TrainingOverviewCard training={baseTraining} epochs={[makeEpoch(1)]} />);
+
+    expect(screen.queryByText(/Est\. Cost/)).not.toBeInTheDocument();
+    expect(screen.getByText('Avg / Epoch')).toBeInTheDocument();
+  });
+
+  it('keeps everything open on a desktop, with no Details button', () => {
+    render(<TrainingOverviewCard training={baseTraining} epochs={[makeEpoch(1)]} />);
+
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Est\. Cost/)).toBeInTheDocument();
+    expect(screen.getByText('Training UUID')).toBeVisible();
+  });
+});
+

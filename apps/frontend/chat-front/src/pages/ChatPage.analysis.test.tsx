@@ -1,6 +1,6 @@
 import { state } from '../test/chatFixtures';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../services/apiClient';
 import '../utils/chatContext';
 import Chat from './ChatPage';
@@ -261,4 +261,60 @@ it('does not offer retry for another participant’s failed shared question', as
   fireEvent.click(await screen.findByText('Research discussion'));
   expect(await screen.findByText('The assistant could not complete this reply.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+});
+
+describe('asking about the page the person came from, on a phone', () => {
+  const stubPhone = (phone: boolean) =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: phone && query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    );
+  beforeEach(() => {
+    window.__visinPageContext = { projectId: 'p1', projectName: 'Road scene', trainingIds: [], title: 'Road scene' };
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete window.__visinPageContext;
+  });
+
+  it('leads the conversation list with it, and opens the analyst on that page when tapped', async () => {
+    stubPhone(true);
+    const opened = vi.fn();
+    window.addEventListener('visin:chat-context', opened);
+    render(<Chat panel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ask about this/ }));
+
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect((opened.mock.calls[0][0] as CustomEvent).detail).toMatchObject({ kind: 'assistant', projectId: 'p1' });
+    window.removeEventListener('visin:chat-context', opened);
+  });
+
+  it('opens on the list on a phone, rather than jumping into the analyst for the page it came from', async () => {
+    stubPhone(true);
+    state.enabled = true;
+    state.conversations[0].kind = 'assistant';
+    render(<Chat panel />);
+
+    expect(await screen.findByRole('button', { name: /Ask about this/ })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Conversations' })).toBeVisible();
+    expect(screen.queryByLabelText('Ask a follow-up')).not.toBeInTheDocument();
+  });
+
+  it('is not on the desktop panel, where the open conversation already says what Vivi sees', async () => {
+    stubPhone(false);
+    render(<Chat panel />);
+
+    await screen.findByText('Research discussion');
+    expect(screen.queryByRole('button', { name: /Ask about this/ })).not.toBeInTheDocument();
+  });
 });

@@ -9,6 +9,7 @@ import { Training } from '../types';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { useAuth } from '../contexts/AuthContext';
 import { pollWhileRunning } from '../utils/liveRuns';
+import { useCompactLayout } from '@visin/frontend-core';
 
 export const useTrainingsPage = () => {
   const navigate = useNavigate();
@@ -17,7 +18,10 @@ export const useTrainingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(100);
+  // A phone starts with a page it can scroll through (the page was 18,000px tall at 100 runs); the table's own
+  // selector still offers more.
+  const compact = useCompactLayout();
+  const [rowsPerPage, setRowsPerPage] = useState(compact ? 25 : 100);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState<

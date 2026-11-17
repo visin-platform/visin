@@ -10,31 +10,37 @@ import LeaderboardPagination from './LeaderboardPagination';
 import { checkpointLabel, formatFixed } from './verdict';
 import { MobileListRow } from '../common/MobileList';
 
+/** Rows a phone shows at once. */
+const PHONE_PAGE = 10;
+
 /** Recorded scores, including migrated tests; verification is a label rather than an entry requirement. */
 const RecordedLeaderboard: React.FC = () => {
   const { user } = useAuth();
   const compact = useCompactLayout();
+  // A phone gets a short page, with the pager below it: the full one ran to thousands of pixels.
+  const limit = compact ? PHONE_PAGE : undefined;
   const [verification, setVerification] = useState<NonNullable<RecordedLeaderboardQuery['verification']>>('all');
   const [metric, setMetric] = useState<string>();
   const [direction, setDirection] = useState<'max' | 'min'>();
   const [page, setPage] = useState(1);
   const { data, isLoading, error } = useQuery({
-    queryKey: ['recorded-leaderboard', user?.id, verification, metric, direction, page],
-    queryFn: () => evaluationService.leaderboard({ verification, metric, direction, page })
+    queryKey: ['recorded-leaderboard', user?.id, verification, metric, direction, page, limit],
+    queryFn: () => evaluationService.leaderboard({ verification, metric, direction, page, ...(limit ? { limit } : {}) })
   });
   return (
     <Box component="section" aria-labelledby="recorded-heading" sx={{ mb: 4 }}>
       <Typography id="recorded-heading" variant="h6" gutterBottom>Recorded results</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Latest completed result per model or run. Compare results using the same data and metric. Verification can come from a manager or an automated job.</Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-        <TextField select size="small" label="Verification" value={verification} onChange={event => { setVerification(event.target.value as typeof verification); setPage(1); }} sx={{ minWidth: 180 }}>
+      {/* On a phone the metric, which has the longest names, takes a row; the two short choices share the next. */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2, '& > *': { flex: { xs: '1 1 40%', sm: '0 0 auto' } } }}>
+        <TextField select size="small" label="Verification" value={verification} onChange={event => { setVerification(event.target.value as typeof verification); setPage(1); }} sx={{ minWidth: { sm: 180 }, order: { xs: 1, sm: 0 } }}>
           <MenuItem value="all">All</MenuItem><MenuItem value="verified">Verified</MenuItem><MenuItem value="unverified">Not verified</MenuItem>
         </TextField>
         {!!data?.metrics.length && <>
-          <TextField select size="small" label="Metric" value={metric ?? data.metric ?? ''} onChange={event => { setMetric(event.target.value); setDirection(undefined); setPage(1); }} sx={{ minWidth: 200, maxWidth: '100%' }}>
+          <TextField select size="small" label="Metric" value={metric ?? data.metric ?? ''} onChange={event => { setMetric(event.target.value); setDirection(undefined); setPage(1); }} sx={{ minWidth: { sm: 200 }, maxWidth: '100%', flexBasis: { xs: '100% !important', sm: 'auto' }, order: { xs: 0, sm: 0 } }}>
             {data.metrics.map(path => <MenuItem key={path} value={path}>{path}</MenuItem>)}
           </TextField>
-          <TextField select size="small" label="Best score" value={direction ?? data.direction} onChange={event => { setDirection(event.target.value as 'max' | 'min'); setPage(1); }} sx={{ minWidth: 150 }}>
+          <TextField select size="small" label="Best score" value={direction ?? data.direction} onChange={event => { setDirection(event.target.value as 'max' | 'min'); setPage(1); }} sx={{ minWidth: { sm: 150 }, order: { xs: 2, sm: 0 } }}>
             <MenuItem value="max">Highest</MenuItem><MenuItem value="min">Lowest</MenuItem>
           </TextField>
         </>}

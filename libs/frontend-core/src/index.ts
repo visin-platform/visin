@@ -9,10 +9,11 @@ export { Loader } from './components/Loader';
 export type { LoaderProps } from './components/Loader';
 export { ErrorPage } from './components/ErrorPage';
 export type { ErrorPageProps } from './components/ErrorPage';
-export { AppLayout } from './components/AppLayout';
+export { AppLayout, useBarBack } from './components/AppLayout';
 export { Markdown, MAX_MARKDOWN_LENGTH } from './components/Markdown';
 export type {
   AppLayoutProps,
+  AppLayoutCenterTab,
   AppLayoutNavGroup,
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
@@ -32,7 +33,8 @@ export {
   ConfirmDialog,
   ListSkeleton,
   TAB_BAR_HEIGHT,
-  useCompactLayout
+  useCompactLayout,
+  useKeyboardAwareHeight
 } from './components/Page';
 export type {
   PageHeaderProps,

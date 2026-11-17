@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { createSvgIcon } from '@mui/material/utils';
 import {
   AdminPanelSettings,
   Article,
@@ -19,10 +20,15 @@ import {
   PhotoLibrary,
   Public,
   Scoreboard,
-  Settings,
-  Storage
+  Settings
 } from '@mui/icons-material';
 import type { AppLayoutNavGroup, AppLayoutNavItem } from './components/AppLayout';
+
+/** A database: three stacked discs. MUI has no such icon, and Storage (bars) read as a server, not as data. */
+const Database = createSvgIcon(
+  <path d="M12 3C7.58 3 4 4.79 4 7v10c0 2.21 3.59 4 8 4s8-1.79 8-4V7c0-2.21-3.58-4-8-4zm0 2c3.87 0 6 1.5 6 2s-2.13 2-6 2-6-1.5-6-2 2.13-2 6-2zm6 12c0 .5-2.13 2-6 2s-6-1.5-6-2v-2.23c1.61.78 3.72 1.23 6 1.23s4.39-.45 6-1.23V17zm0-5c0 .5-2.13 2-6 2s-6-1.5-6-2V9.77C7.61 10.55 9.72 11 12 11s4.39-.45 6-1.23V12z" />,
+  'Database'
+);
 
 /**
  * The fronts whose sections make up the shared menu. `admin` is a standalone app that is never a remote, so its
@@ -116,7 +122,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Data',
-    icon: <Storage />,
+    icon: <Database />,
     sections: [{ app: 'vision', text: 'Datasets', icon: <PhotoLibrary />, path: '/datasets' }]
   },
   {

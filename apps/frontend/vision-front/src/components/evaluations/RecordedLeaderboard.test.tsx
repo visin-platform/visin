@@ -30,6 +30,20 @@ it('shows scores and verification together on a phone without scrolling sideways
   expect(screen.getByText('Project · Test data · Epoch 0')).toBeInTheDocument();
 });
 
+it('asks for a short page on a phone, and for the server’s own page size on a desktop', async () => {
+  layout.compact = true;
+  const phone = renderWithClient(<RecordedLeaderboard />);
+  await screen.findByRole('link', { name: /2. Migrated run/ });
+  expect(service.leaderboard).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 10 }));
+  phone.unmount();
+
+  service.leaderboard.mockClear();
+  layout.compact = false;
+  renderWithClient(<RecordedLeaderboard />);
+  await screen.findByRole('table');
+  expect(service.leaderboard).toHaveBeenCalledWith(expect.not.objectContaining({ limit: expect.anything() }));
+});
+
 it('shows migrated and verified results together, with labels and links', async () => {
   renderWithClient(<RecordedLeaderboard />);
   const table = await screen.findByRole('table', { name: 'Recorded result leaderboard' });

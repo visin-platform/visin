@@ -1,6 +1,7 @@
 export { AppLayout } from './AppLayout';
 export type {
   AppLayoutProps,
+  AppLayoutCenterTab,
   AppLayoutNavGroup,
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
@@ -9,3 +10,4 @@ export type {
   AppLayoutSiteLink,
   AppLayoutUser
 } from './AppLayout';
+export { useBarBack } from './barBack';
