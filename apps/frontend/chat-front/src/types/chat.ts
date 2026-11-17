@@ -82,8 +82,15 @@ export interface Message {
   replyTo?: string;
   quote?: ReplyQuote;
   evidence: { tool: string; input: Record<string, unknown>; at: string }[];
-  /** Next questions the analyst offered after this answer. */
-  suggestions?: string[];
+  /** The notes the analyst wrote before each round of reading: its thinking, shown folded with the answer. */
+  thoughts?: { text: string; at: string }[];
+}
+
+export interface RunStep {
+  tool?: string;
+  thought?: string;
+  startedAt: string;
+  endedAt?: string;
 }
 
 export interface Run {
@@ -98,8 +105,11 @@ export interface Run {
   state: string;
   activity: string;
   error?: string;
-  /** What the analyst has done so far, in order, while it works. Only in the asker's own analyst thread. */
-  steps?: { tool: string; startedAt: string; endedAt?: string }[];
+  /**
+   * What the analyst has thought and done so far, in order, while it works: a read (`tool`) or a note it wrote before
+   * reading (`thought`). Only in the asker's own analyst thread.
+   */
+  steps?: RunStep[];
 }
 
 /** An answer as the analyst has written it so far, before it is a message. */

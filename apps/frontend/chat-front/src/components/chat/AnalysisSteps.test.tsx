@@ -63,3 +63,25 @@ it('is announced as a status, and shows a repeated tool as the separate steps th
   expect(screen.getByRole('status', { name: 'The analyst is working' })).toBeInTheDocument();
   expect(screen.getAllByText('Read the run')).toHaveLength(2);
 });
+
+it('shows what the analyst thought as it works, in order with what it read', () => {
+  render(
+    <AnalysisSteps
+      run={run({
+        steps: [
+          { thought: 'First the project, to find the baseline run.', startedAt: at(9), endedAt: at(9) },
+          { tool: 'get_project', startedAt: at(8), endedAt: at(7) },
+          { thought: 'The baseline is r50; now its curve.', startedAt: at(6), endedAt: at(6) },
+          { tool: 'get_training_curve', startedAt: at(5) },
+          { startedAt: at(4) }
+        ]
+      })}
+    />
+  );
+  expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+    'First the project, to find the baseline run.',
+    'Read the project',
+    'The baseline is r50; now its curve.',
+    'Reading the training curve5s'
+  ]);
+});

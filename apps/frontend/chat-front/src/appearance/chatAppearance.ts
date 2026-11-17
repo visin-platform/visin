@@ -33,9 +33,7 @@ export function appearanceSx(theme: Theme, appearance: ChatAppearance) {
     '--chat-message-bg': palette.background.paper,
     '--chat-chrome-bg': tint(palette.background.paper, 0.82),
     '--chat-blur': 'blur(18px) saturate(140%)',
-    '--chat-message-gap': '10px',
-    '--chat-bubble-y': '6px',
-    '--chat-message-shadow': tint(palette.text.primary, 0.06),
+    '--chat-message-gap': '14px',
     backgroundColor: palette.background.default,
     backgroundImage: `radial-gradient(ellipse at 95% 0%, ${tint(color.main, 0.14)}, transparent 60%), radial-gradient(ellipse at 0% 100%, ${tint(color.main, 0.07)}, transparent 55%)`,
     '& .MuiButton-contained.MuiButton-colorPrimary:not(.Mui-disabled)': {

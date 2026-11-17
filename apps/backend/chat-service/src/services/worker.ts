@@ -7,7 +7,7 @@ import { Budget } from '../models/Budget';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { analyze, type AnalysisSpend } from './analyst';
-import { MAX_ANALYSIS_IMAGES, type ImageRef } from './imageInput';
+import { IMAGE_ONLY_QUESTION, MAX_ANALYSIS_IMAGES, type ImageRef } from './imageInput';
 import { budgetPlans, FRAME_IMAGES, reservationFor } from './analysisLimits';
 import { createDraftWriter } from './draft';
 import { resolveProviderKey } from './keys';
@@ -102,7 +102,9 @@ export function startWorker() {
           clientId: `assistant:${job.messageId}`,
           replyTo: job.messageId,
           evidence: job.evidence.map((e) => ({ tool: e.tool || '', input: e.input, at: e.at || new Date() })),
-          ...(job.suggestions?.length ? { suggestions: job.suggestions } : {})
+          ...(job.thoughts?.length
+            ? { thoughts: job.thoughts.map((t) => ({ text: t.text || '', at: t.at || new Date() })) }
+            : {})
         });
       await AssistantRun.updateOne({ _id: job.id }, { $set: { published: true }, $unset: { draft: 1 } });
     }
@@ -337,7 +339,7 @@ export function startWorker() {
                   question:
                     question.body ||
                     ((imageRefs.get(question.id)?.length ?? 0) > 0
-                      ? 'Describe what you see in the attached images.'
+                      ? IMAGE_ONLY_QUESTION
                       : 'What can you tell me about these attachments?'),
                   ...(question.quote ? { quote: question.quote } : {}),
                   attachments: question.attachments.map(({ fileId, name, mime, size }) => ({
@@ -367,7 +369,7 @@ export function startWorker() {
         JSON.stringify({
           transcript,
           asker: run.name,
-          question: trigger.body || (imageCount ? 'Describe what you see in the attached images.' : ''),
+          question: trigger.body || (imageCount ? IMAGE_ONLY_QUESTION : ''),
           ...(trigger.attachments?.length
             ? {
                 attachments: trigger.attachments.map(({ name, mime }) => ({
@@ -439,6 +441,13 @@ export function startWorker() {
                     { _id: run.id, state: 'running', steps: { $elemMatch: { tool, endedAt: { $exists: false } } } },
                     { $set: { 'steps.$.endedAt': new Date() } }
                   );
+                },
+                thought: async (thought) => {
+                  const at = new Date();
+                  await AssistantRun.updateOne(
+                    { _id: run.id, state: 'running' },
+                    { $push: { steps: { thought, startedAt: at, endedAt: at } } }
+                  );
                 }
               }
             : undefined
@@ -467,7 +476,7 @@ export function startWorker() {
             // The whole answer, so the preview is complete until the published message replaces it.
             ...(drafts ? { draft: result.text } : {}),
             evidence: result.evidence,
-            ...(result.suggestions?.length ? { suggestions: result.suggestions } : {}),
+            ...(result.thoughts?.length ? { thoughts: result.thoughts } : {}),
             activity: 'Completed',
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,

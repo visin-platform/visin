@@ -114,7 +114,7 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
     blur: getComputedStyle(element).getPropertyValue('--chat-blur').trim(),
     gap: getComputedStyle(element).getPropertyValue('--chat-message-gap').trim()
   }));
-  expect(workspaceStyle).toEqual({ blur: 'blur(18px) saturate(140%)', gap: '10px' });
+  expect(workspaceStyle).toEqual({ blur: 'blur(18px) saturate(140%)', gap: '14px' });
   await page.getByRole('button', { name: 'Conversation settings' }).click();
   await page.getByRole('menuitem', { name: 'People', exact: true }).click();
   const people = page.getByRole('dialog', { name: 'People', exact: true });
@@ -130,26 +130,62 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
   await expect(page.locator('time').first()).toHaveText(/^\d{2}:\d{2}$/);
   await page.screenshot({ path: `/tmp/visin-input-regional-${test.info().project.name}.png` });
   const original = page.locator('[data-message-id="message1"]');
-  if (test.info().project.name === 'desktop') {
+  const desktop = test.info().project.name === 'desktop';
+  // A mouse finds the actions on hover; a finger has no hover and long-presses the bubble for the same menu.
+  const openMenu = async () => {
+    if (desktop) {
+      await original.hover();
+      await original.getByRole('button', { name: 'Message actions' }).click();
+      return;
+    }
+    const bubble = original.getByText('Can we compare validation peaks?', { exact: true });
+    const box = (await bubble.boundingBox())!;
+    const at = { pointerType: 'touch', isPrimary: true, clientX: box.x + 8, clientY: box.y + 8, bubbles: true };
+    await bubble.dispatchEvent('pointerdown', at);
+    await page.waitForTimeout(600);
+    await bubble.dispatchEvent('pointerup', at);
+    await expect(page.getByRole('menu')).toBeVisible();
+  };
+  if (desktop) {
     await page.mouse.move(0, 0);
     await expect(original.locator('.message-actions')).toHaveCSS('opacity', '0');
     await original.hover();
+    await expect(original.locator('.message-actions')).toHaveCSS('opacity', '1');
+  } else {
+    // No hover on a touch screen: the icons are kept for a screen reader but take no room.
+    await expect(original.locator('.message-actions')).toHaveCSS('width', '1px');
   }
-  await expect(original.locator('.message-actions')).toHaveCSS('opacity', '1');
-  await original.getByRole('button', { name: 'Copy', exact: true }).click();
+  await openMenu();
+  // A mouse has Reply and React beside the bubble, so the menu does not repeat them; a long press needs them all.
+  if (desktop) {
+    await expect(page.getByRole('menuitem', { name: 'Reply', exact: true })).toBeHidden();
+    await expect(page.getByRole('group', { name: 'Quick reactions' })).toBeHidden();
+  }
+  await page.getByRole('menuitem', { name: 'Copy text', exact: true }).click();
   await expect(page.getByText('Message copied', { exact: true })).toBeVisible();
-  await original.getByRole('button', { name: 'React to message' }).click();
-  await page.getByRole('button', { name: 'React ❤️' }).click();
+  if (desktop) {
+    await original.hover();
+    await original.getByRole('button', { name: 'React to message' }).click();
+    await page.getByRole('button', { name: 'React ❤️' }).click();
+  } else {
+    await openMenu();
+    await page.getByRole('group', { name: 'Quick reactions' }).getByRole('button', { name: 'React ❤️' }).click();
+  }
   await expect(original.getByRole('button', { name: '❤️: 1 reaction, including yours' })).toBeVisible();
-  await original.getByRole('button', { name: 'Reply to Alice' }).click();
+  if (desktop) {
+    await original.hover();
+    await original.getByRole('button', { name: 'Reply to Alice' }).click();
+  } else {
+    await openMenu();
+    await page.getByRole('menuitem', { name: 'Reply', exact: true }).click();
+  }
   await expect(page.getByText('Replying to Alice')).toBeVisible();
   await page.getByLabel('Message', { exact: true }).fill('Here is a quoted reply');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => messages.at(-1)?.replyTo).toBe('message1');
   await expect(page.locator('blockquote')).toContainText('Can we compare validation peaks?');
   await expect(page.getByRole('button', { name: 'Cancel reply' })).toHaveCount(0);
-  await original.hover();
-  await original.getByRole('button', { name: 'Message actions' }).click();
+  await openMenu();
   await page.getByRole('menuitem', { name: 'Unsend', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Unsend message?' })

@@ -2,6 +2,8 @@ import { fetchWithTimeout, fileServiceAuthHeaders, fileServiceUrl } from '@visin
 import type { Attachment } from './attachments';
 
 export const MAX_ANALYSIS_IMAGES = 5;
+/** What an image posted with no words asks: what is in it. The system prompt says how objects are listed. */
+export const IMAGE_ONLY_QUESTION = 'What objects are in the attached images, and what is the scene?';
 export const MAX_IMAGE_INPUT_BYTES = 4 * 1024 ** 2;
 /** Conservative image-token allowance per round, for provider-managed image sizing (OpenAI uses low detail). */
 export const IMAGE_TOKENS_PER_ROUND = 32_768;

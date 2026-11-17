@@ -39,11 +39,12 @@ const runSchema = new Schema(
     // The answer so far while it streams, kept until the answer is published. A preview only: `result` is the answer.
     draft: String,
     evidence: { type: [{ tool: String, input: Schema.Types.Mixed, at: Date }], default: [] },
-    /** Next questions the analyst offered with its answer, published with the message. */
-    suggestions: { type: [String], default: undefined },
-    // What the analyst did, in order, as it did it: the tool, and when it started and ended. Shown while it works.
+    /** The notes the analyst wrote before each round of reading: its thinking, published with the answer. */
+    thoughts: { type: [{ text: String, at: Date }], default: undefined },
+    // What the analyst did, in order, as it did it: each read (the tool, when it started and ended) and each note it
+    // wrote before reading (`thought`). Shown while it works.
     steps: {
-      type: [new Schema({ tool: String, startedAt: Date, endedAt: Date }, { _id: false })],
+      type: [new Schema({ tool: String, thought: String, startedAt: Date, endedAt: Date }, { _id: false })],
       default: []
     },
     published: { type: Boolean, default: false },

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Conversation } from '../types/chat';
-import { analysisOf, contextKey, matchesContext, requestFromUrl, starters } from './chatContext';
+import { analysisOf, contextKey, matchesContext, requestFromUrl } from './chatContext';
 it('keeps assistants separate when reusing project analysis conversations', () => {
   const conversation = { kind: 'assistant', projectId: 'p1', trainingIds: ['t1'], assistantId: 'a1' } as Conversation;
   expect(matchesContext(conversation, { projectId: 'p1', trainingIds: ['t1'], assistantId: 'a1' })).toBe(true);
@@ -26,13 +26,6 @@ it('carries the paper through a request to analyse it', () => {
     paperId: 'paper1',
     title: 'CLFTv2'
   });
-});
-
-it('offers questions about a paper: what it says, where its results are, and whether they hold', () => {
-  const asked = starters({ paperId: 'paper1' });
-  expect(asked).toContain('Summarize this paper');
-  expect(asked.join(' ')).toMatch(/recorded runs/);
-  expect(asked.join(' ')).not.toMatch(/epoch|configuration/);
 });
 
 describe('opening chat from an address', () => {

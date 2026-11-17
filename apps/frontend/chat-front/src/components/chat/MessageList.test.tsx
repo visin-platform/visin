@@ -163,7 +163,7 @@ describe('in a conversation between people', () => {
 });
 
 describe('the rest of the thread', () => {
-  it('says what failed, and when the thread has nothing yet offers the starters', () => {
+  it('says what failed, and what can be asked when the thread has nothing yet', () => {
     mount({ runs: [run({ state: 'failed', error: 'Provider unavailable' })], messages: [] });
     expect(screen.getByText('Provider unavailable')).toBeInTheDocument();
     expect(screen.getByText(/Ask about results/)).toBeInTheDocument();
@@ -176,52 +176,38 @@ describe('the rest of the thread', () => {
 });
 
 describe('after an answer', () => {
-  const answered = [
-    message({ body: 'What happened here?' }),
-    message({
-      _id: 'a1',
-      kind: 'assistant',
-      senderId: 'assistant:analyst',
-      senderName: 'Visin analyst',
-      body: 'Peak at 42.',
-      seq: 2,
-      replyTo: 'q1'
-    })
-  ];
-  const done = [run({ state: 'completed' })];
-  const group = () => screen.queryByRole('group', { name: 'Follow-up questions' });
-
-  it('offers next questions, and asks the one that is clicked', async () => {
-    const ask = vi.fn();
-    mount({ c: conversation({ projectId: 'p1', trainingIds: ['t1'] }), messages: answered, runs: done }, { ask });
-    expect(group()).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Summarize this run/ }));
-    expect(ask).toHaveBeenCalledWith('Summarize this run');
-  });
-
-  it('does not offer what was asked in the thread', () => {
+  it('offers no ready-made questions: the next question is the asker\'s own', () => {
     mount({
       c: conversation({ projectId: 'p1', trainingIds: ['t1'] }),
-      messages: [message({ body: 'Summarize this run' }), ...answered.slice(1)],
-      runs: done
+      messages: [
+        message({ body: 'What happened here?' }),
+        message({ _id: 'a1', kind: 'assistant', senderId: 'assistant:analyst', senderName: 'Visin analyst', body: 'Peak at 42.', seq: 2 })
+      ],
+      runs: [run({ state: 'completed' })]
     });
+    expect(screen.queryByRole('group', { name: 'Follow-up questions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Summarize this run/ })).not.toBeInTheDocument();
   });
 
-  it('waits until the analyst has finished, and until there is an answer to follow', () => {
-    mount({ messages: answered, runs: [run()] });
-    expect(group()).not.toBeInTheDocument();
-  });
-
-  it('is not offered after a question that has no answer yet, where the analyst is off, or between people', () => {
-    const { unmount } = mount({ messages: [message()], runs: done });
-    expect(group()).not.toBeInTheDocument();
-    unmount();
-    const off = mount({ messages: answered, runs: done }, { enabled: false });
-    expect(group()).not.toBeInTheDocument();
-    off.unmount();
-    mount({ c: conversation({ kind: 'direct' }), messages: answered, runs: done });
-    expect(group()).not.toBeInTheDocument();
+  it('folds the thinking above an answer while it is still being written', async () => {
+    mount({
+      messages: [message({ body: 'Does it overfit?' })],
+      runs: [
+        run({
+          messageId: 'm1',
+          steps: [
+            { thought: 'I will compare the best and last epochs.', startedAt: '2026-11-10T10:00:01Z', endedAt: '2026-11-10T10:00:01Z' },
+            { tool: 'get_training_curve', startedAt: '2026-11-10T10:00:02Z', endedAt: '2026-11-10T10:00:03Z' }
+          ]
+        })
+      ],
+      drafts: [{ runId: 'r1', messageId: 'm1', text: 'It peaked at' }]
+    });
+    const fold = screen.getByRole('button', { name: /Thinking · 1 source/ });
+    expect(screen.queryByText('I will compare the best and last epochs.')).not.toBeInTheDocument();
+    await userEvent.click(fold);
+    expect(screen.getByText('I will compare the best and last epochs.')).toBeInTheDocument();
+    expect(screen.getByText('Read the training curve')).toBeInTheDocument();
   });
 });
 
@@ -267,7 +253,8 @@ it('offers selectable text when browser clipboard access is unavailable', async 
   });
   try {
     mount({ runs: [] });
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Message actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy text' }));
     const input = await screen.findByRole('textbox', { name: 'Message text' });
     expect(input).toHaveValue('Summarize this run');
     fireEvent.focus(input);
@@ -277,4 +264,19 @@ it('offers selectable text when browser clipboard access is unavailable', async 
     if (previous) Object.defineProperty(navigator, 'clipboard', previous);
     else Reflect.deleteProperty(navigator, 'clipboard');
   }
+});
+
+it('names a run of messages once and times it once, and starts a new run after a pause', () => {
+  const { container } = mount({
+    c: conversation({ kind: 'direct' }),
+    runs: [],
+    messages: [
+      message({ _id: 'b1', senderId: 'bob', senderName: 'Bob', body: 'One' }),
+      message({ _id: 'b2', senderId: 'bob', senderName: 'Bob', body: 'Two', seq: 2, createdAt: '2026-11-10T10:01:00Z' }),
+      message({ _id: 'b3', senderId: 'bob', senderName: 'Bob', body: 'Later', seq: 3, createdAt: '2026-11-10T10:30:00Z' })
+    ]
+  });
+  expect(screen.getAllByText('Bob')).toHaveLength(2);
+  const times = [...container.querySelectorAll('time')].map((time) => time.getAttribute('dateTime'));
+  expect(times).toEqual(['2026-11-10T10:01:00Z', '2026-11-10T10:30:00Z']);
 });

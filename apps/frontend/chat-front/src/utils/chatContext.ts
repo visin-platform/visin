@@ -47,35 +47,6 @@ export function displayTitle(conversation: Conversation, userId: string | undefi
   return conversation.participants.find((p) => p.userId === conversation.createdBy)?.name || conversation.title;
 }
 
-/** Questions worth one click, for what is being analysed. */
-export function starters(context: PageContext | undefined): string[] {
-  if (context?.paperId)
-    return [
-      'Summarize this paper',
-      'What are its main results, and on which data?',
-      'Find the exact results table',
-      'Do its numbers match the recorded runs on Visin?'
-    ];
-  const runs = context?.trainingIds?.length ?? 0;
-  if (runs > 1)
-    return [
-      'Which run is best, and by how much?',
-      'Compare their best and final epochs',
-      'What differs in their configuration?',
-      'What should I try next?'
-    ];
-  if (runs === 1)
-    return [
-      'Summarize this run',
-      'Compare best and final epoch',
-      'Where does this model perform worst?',
-      'What should I try next?'
-    ];
-  if (context?.projectId)
-    return ['Summarize the best runs in this project', 'Which runs improved the most?', 'What should I try next?'];
-  return ['How do I read a validation curve?', 'When does training past the best epoch matter?'];
-}
-
 /** A request's analysis context, for the requests that are one. */
 export const analysisOf = (request: OpenRequest): PageContext | undefined =>
   request.kind === undefined || request.kind === 'assistant'

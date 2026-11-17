@@ -59,7 +59,8 @@ it('shows measured evidence and submits a reviewed finding through the separate 
   // The answer names the run it read (the thread's header names it too, so the answer's is the last).
   expect(screen.getAllByRole('link', { name: 'Base model' }).at(-1)).toHaveAttribute('href', `/trainings/${training}`);
   expect(screen.queryByRole('link', { name: /not-an-id/ })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Save as finding' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Message actions' }).at(-1)!);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Save as finding' }));
   fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Validation peak' } });
   fireEvent.change(screen.getByLabelText('Suggested next experiment (optional)'), {
     target: { value: 'Try earlier stopping' }

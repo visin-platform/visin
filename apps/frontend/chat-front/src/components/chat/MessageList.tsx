@@ -19,11 +19,10 @@ import { MessageBubble } from './MessageBubble';
 import { AnalysisSteps } from './AnalysisSteps';
 import { StreamingMessage } from './StreamingMessage';
 import { visibleDrafts } from '../../utils/drafts';
-import { followUps } from '../../utils/followUps';
-import { FollowUps } from './FollowUps';
 
 import { PAGE, mergeMessages, applyMessageUpdates } from '../../utils/messages';
-import { AnalysisStarters } from './AnalysisStarters';
+import { AnalysisHint } from './AnalysisHint';
+import { continuesRun } from '../../utils/messageRuns';
 
 /** A message this young eases in as it arrives. */
 const FRESH_MS = 8000;
@@ -57,7 +56,6 @@ export function MessageList() {
     enabled,
     sending,
     post,
-    ask,
     setReplyTarget,
     replyTarget,
     setSharedTarget,
@@ -97,7 +95,7 @@ export function MessageList() {
         const box = event.currentTarget;
         atBottom.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
       }}
-      sx={{ flex: 1, overflow: 'auto', p: 2 }}
+      sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: { xs: 1.5, sm: 2 }, pt: 0.5, pb: 2 }}
     >
       {hasOlder && messages.length > 0 && (
         <Button
@@ -128,6 +126,8 @@ export function MessageList() {
             key={message._id}
             message={message}
             conversationId={c._id}
+            first={!continuesRun(messages[index - 1], message)}
+            last={!continuesRun(message, messages[index + 1])}
             own={
               message.kind === 'person' &&
               (message.senderId === user?.id || (!message.senderId && c.kind === 'assistant'))
@@ -161,6 +161,7 @@ export function MessageList() {
               setSharedTarget('');
               composerInput.current?.focus();
             }}
+            onSelectText={(text) => setManualCopy({ messageId: message._id, text })}
             onCopy={(body) => {
               void (async () => {
                 try {
@@ -180,6 +181,7 @@ export function MessageList() {
           text={draft.text}
           name={runs.find((run) => run._id === draft.runId)?.assistantName || c.profile?.name || 'Visin analyst'}
           profile={c.profile}
+          steps={runs.find((run) => run._id === draft.runId)?.steps}
           onGrow={followEnd}
         />
       ))}
@@ -242,17 +244,7 @@ export function MessageList() {
         </DialogActions>
       </Dialog>
       <Snackbar open={copied} autoHideDuration={2000} onClose={() => setCopied(false)} message="Message copied" />
-      {c.kind === 'assistant' && !messages.length && <AnalysisStarters context={c} onAsk={ask} />}
-      {c.kind === 'assistant' && enabled && !running && messages.at(-1)?.kind === 'assistant' && (
-        <FollowUps
-          questions={followUps(
-            c,
-            messages.filter((m) => m.kind === 'person').map((m) => m.body),
-            messages.at(-1)?.suggestions
-          )}
-          onAsk={ask}
-        />
-      )}
+      {c.kind === 'assistant' && !messages.length && <AnalysisHint />}
     </Box>
   );
 }

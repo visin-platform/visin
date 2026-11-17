@@ -74,6 +74,7 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
     activity: 'Reading results and preparing an answer',
     canCancel: true,
     steps: [
+      { thought: 'First the project, then the run’s curve to see where validation peaked.', startedAt: new Date(Date.now() - 7000).toISOString(), endedAt: new Date(Date.now() - 7000).toISOString() },
       { tool: 'list_projects', startedAt: new Date(Date.now() - 6000).toISOString(), endedAt: new Date(Date.now() - 5000).toISOString() },
       { tool: 'get_training_curve', startedAt: new Date(Date.now() - 3000).toISOString() }
     ],
@@ -92,7 +93,8 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
       { tool: 'list_projects', input: {}, at: new Date().toISOString() },
       { tool: 'get_training', input: { training: TRAINING }, at: new Date().toISOString() },
       { tool: 'get_training_curve', input: { training: TRAINING }, at: new Date().toISOString() }
-    ]
+    ],
+    thoughts: [{ text: 'First the project, then the run’s curve to see where validation peaked.', at: new Date(Date.now() - 60_000).toISOString() }]
   };
   const conversation = {
     _id: CONVERSATION,
@@ -130,7 +132,8 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
   await page.goto('/chat');
   await page.getByText('Run analysis', { exact: true }).click();
 
-  // 1. Working: what it is doing, as a list.
+  // 1. Working: what it is thinking and doing, as a list.
+  await expect(page.getByText('First the project, then the run’s curve to see where validation peaked.')).toBeVisible();
   await expect(page.getByText('Found the project')).toBeVisible();
   await expect(page.getByText('Reading the training curve')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Stop the analyst' })).toBeVisible();
@@ -144,6 +147,8 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
   await expect(page.getByTestId('streaming-message')).toBeVisible();
   await expect(page.getByTestId('streaming-message')).toContainText('Validation peaked at epoch 42');
   await expect(page.getByText('Found the project')).toHaveCount(0);
+  // The thinking folds above the answer being written.
+  await expect(page.getByTestId('streaming-message').getByRole('button', { name: /Thinking · 2 sources/ })).toBeVisible();
   await draft(answer.body);
   await expect(page.getByTestId('streaming-message')).toContainText('Best checkpoint is earlier', { timeout: 5000 });
   // The end of the answer is in view, not hidden under the composer, however long it grows.
@@ -153,14 +158,15 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
   );
   // A caret ends the last line of the text (it blinks, so a picture may catch it either way).
   const caret = await bubble.evaluate((root) => {
-    const lastBlock = root.querySelector(':scope > div:last-of-type > div > :last-child');
+    const lastBlock = root.querySelector(':scope > div:last-of-type > div:last-child > :last-child');
     const style = getComputedStyle(lastBlock!, '::after');
     return { content: style.content, display: style.display };
   });
   expect(caret).toEqual({ content: '""', display: 'inline-block' });
   await page.screenshot({ path: info.outputPath('2-writing.png') });
 
-  // 3. Done: the message takes its place; the text is there once, with what it checked and what to ask next.
+  // 3. Done: the message takes its place; the text is there once, its thinking folded above it, and nothing ready-made
+  // to ask next.
   messages = [question, answer];
   runs = [run({ state: 'completed', steps: [] })];
   await page.evaluate(
@@ -171,9 +177,10 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
   await expect(page.getByText('Best checkpoint is earlier than the last one.')).toHaveCount(1);
   // The thread's own header names the run too; the answer's is the last.
   await expect(page.getByRole('link', { name: 'baseline-r50' }).last()).toBeVisible();
-  await page.getByRole('button', { name: /Checked 3 sources/ }).click();
+  await page.getByRole('button', { name: /Thinking · 3 sources/ }).click();
+  await expect(page.getByText('First the project, then the run’s curve to see where validation peaked.')).toBeVisible();
   await expect(page.getByText('Read the training curve')).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Follow-up questions' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Follow-up questions' })).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('3-answered.png') });
 
   // 4. The next question: a slash command writes it, and dictation can add to it.

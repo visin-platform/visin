@@ -1,8 +1,13 @@
-import { Avatar, Box, Link, Stack, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
-import { Markdown } from '@visin/frontend-core';
+import { Markdown, livePalette } from '@visin/frontend-core';
 import { memo, useEffect } from 'react';
 import { useSmoothText } from '../../hooks/useSmoothText';
+import type { RunStep } from '../../types/chat';
+import { runTrail } from '../../utils/thinking';
+import { ThinkingFold } from './ThinkingTrail';
+import { bubbleText, bubbleWidth } from './bubbleStyle';
+import { SenderLine } from './SenderLine';
 
 const blink = keyframes`
   0%, 49% { opacity: 1; }
@@ -18,9 +23,12 @@ export const StreamingMessage = memo(function StreamingMessage({
   text,
   name,
   profile,
+  steps,
   onGrow
 }: {
   text: string;
+  /** How the run got here: folded above the answer, as it will be on the finished one. */
+  steps?: RunStep[];
   name: string;
   profile?: { handle: string; picture?: string };
   /** Called as the bubble gets taller, so a reader at the end of the thread stays there. */
@@ -31,42 +39,29 @@ export const StreamingMessage = memo(function StreamingMessage({
   useEffect(() => {
     onGrow?.();
   }, [shown, onGrow]);
-  const initial = name.charAt(0);
   return (
     <Box
       aria-live="off"
       aria-busy="true"
       data-testid="streaming-message"
-      sx={{ mb: 'var(--chat-message-gap, 10px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
+      sx={{ mt: 'var(--chat-message-gap, 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
     >
-      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mb: 0.5, px: 0.5 }}>
-        {profile ? (
-          <Link href={`/u/${encodeURIComponent(profile.handle)}`} aria-label={`View ${name} profile`}>
-            <Avatar src={profile.picture} alt="" sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
-              {initial}
-            </Avatar>
-          </Link>
-        ) : (
-          <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>{initial}</Avatar>
-        )}
-        <Typography variant="caption" color="text.secondary">
-          {name}
-        </Typography>
-      </Stack>
+      <SenderLine name={name} profile={profile} />
       <Box
-        sx={{
-          maxWidth: { xs: '92%', sm: '85%' },
+        sx={(theme) => ({
+          ...bubbleWidth(true),
           minWidth: 0,
           px: 1.5,
-          py: 'var(--chat-bubble-y, 6px)',
-          borderRadius: 2.5,
+          py: 1,
+          borderRadius: '18px',
+          borderTopLeftRadius: '18px',
+          borderBottomLeftRadius: '6px',
           border: 1,
           borderColor: 'divider',
-          bgcolor: 'action.hover',
+          bgcolor: `var(--chat-message-bg, ${livePalette(theme).background.paper})`,
           color: 'text.primary',
           overflowWrap: 'anywhere',
-          '& > :first-child': { mt: 0 },
-          '& > :last-child': { mb: 0 },
+          ...bubbleText,
           // The caret is the end of the last line of text, not a line of its own.
           '& > :last-child > :last-child::after': {
             content: '""',
@@ -76,12 +71,13 @@ export const StreamingMessage = memo(function StreamingMessage({
             ml: '0.25em',
             verticalAlign: 'text-bottom',
             borderRadius: 0.5,
-            backgroundColor: 'primary.main',
+            backgroundColor: 'var(--chat-accent)',
             animation: `${blink} 1s steps(1) infinite`,
             '@media (prefers-reduced-motion: reduce)': { animation: 'none' }
           }
-        }}
+        })}
       >
+        <ThinkingFold entries={runTrail(steps)} />
         <Markdown>{shown}</Markdown>
       </Box>
     </Box>

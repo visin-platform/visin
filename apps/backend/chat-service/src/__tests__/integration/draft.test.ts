@@ -2,6 +2,7 @@ import '../helpers/mocks';
 import { type Mock } from 'vitest';
 import { Assistant } from '../../models/Assistant';
 import { AssistantRun } from '../../models/AssistantRun';
+import { Message } from '../../models/Message';
 import { analyze } from '../../services/analyst';
 import { startWorker } from '../../services/worker';
 import { enableAnalyst } from '../helpers/analystFixtures';
@@ -225,6 +226,41 @@ describe('the worker records what the analyst did', () => {
     expect(after?.steps.map((step) => [step.tool, Boolean(step.endedAt)])).toEqual([
       ['get_project', true],
       ['get_training_curve', true]
+    ]);
+  });
+
+  it('records a note the analyst wrote before reading as a thought, and publishes its thinking with the answer', async () => {
+    await enableAnalyst('test');
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Does it overfit?', clientId: 'thought-question-1' });
+    const at = new Date('2026-11-17T10:00:00Z');
+    (analyze as Mock).mockImplementationOnce(
+      async (input: { step?: { thought?: (text: string) => Promise<void>; start: (tool: string) => Promise<void>; end: (tool: string) => Promise<void> } }) => {
+        await input.step?.thought?.('I will compare the best and last epochs.');
+        await input.step?.start('get_training');
+        await input.step?.end('get_training');
+        return {
+          text: 'It does not.',
+          evidence: [],
+          thoughts: [{ text: 'I will compare the best and last epochs.', at }],
+          inputTokens: 10,
+          outputTokens: 5
+        };
+      }
+    );
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    await worker.tick();
+    const after = await AssistantRun.findOne({ conversationId: id }).lean();
+    expect(after?.steps.map((step) => [step.thought ?? step.tool, Boolean(step.endedAt)])).toEqual([
+      ['I will compare the best and last epochs.', true],
+      ['get_training', true]
+    ]);
+    const answer = await Message.findOne({ conversationId: id, kind: 'assistant' }).lean();
+    expect(answer?.body).toBe('It does not.');
+    expect(answer?.thoughts?.map((t) => [t.text, t.at?.toISOString()])).toEqual([
+      ['I will compare the best and last epochs.', at.toISOString()]
     ]);
   });
 

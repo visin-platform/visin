@@ -1,13 +1,13 @@
 import { Box, Divider, Stack, Typography } from '@mui/material';
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
-import { AnalysisStarters } from './AnalysisStarters';
+import { AnalysisHint } from './AnalysisHint';
 import { AnalystSetupNotice } from './AnalystSetupNotice';
 import { BackToConversations } from './BackToConversations';
 import { ChatContextChips } from './ChatContextChips';
 import { Composer } from './Composer';
 
 export function PendingAnalysis({ panel }: { panel: boolean }) {
-  const { show, pending, ask, enabled, canConfigure, draft, setDraft, send, sending, composerInput } =
+  const { show, pending, enabled, canConfigure, draft, setDraft, send, sending, composerInput } =
     useChatWorkspaceContext();
   if (!pending) return null;
   return (
@@ -34,7 +34,7 @@ export function PendingAnalysis({ panel }: { panel: boolean }) {
         />
       }
       <Divider />
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>{<AnalysisStarters context={pending} onAsk={ask} />}</Box>
+      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}><AnalysisHint /></Box>
       {!enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
       <Composer
         label="Ask the analyst"

@@ -1,9 +1,9 @@
-import { CheckCircle } from '@mui/icons-material';
-import { Box, CircularProgress, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 import { useEffect, useState } from 'react';
 import type { Run } from '../../types/chat';
-import { toolLabel } from '../../utils/toolLabels';
+import { runTrail } from '../../utils/thinking';
+import { ThinkingTrail } from './ThinkingTrail';
 
 const bounce = keyframes`
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
@@ -31,15 +31,6 @@ function TypingDots() {
   );
 }
 
-/** The same slot whether a step is done or working, so the words line up. */
-function Mark({ done }: { done: boolean }) {
-  return (
-    <Box aria-hidden sx={{ width: 16, height: 16, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
-      {done ? <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} /> : <CircularProgress size={16} thickness={5} />}
-    </Box>
-  );
-}
-
 /** Ticks once a second while `active`, for a count of seconds that moves. */
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -53,39 +44,28 @@ function useNow(active: boolean): number {
 }
 
 /**
- * What the analyst is doing, step by step, while it works: each thing it reads, ticked off when it is done, with the
- * seconds the current one has taken. Shown until the answer starts to appear, so the wait is a story rather than a
- * spinner. `activity` is the line for the moments between steps (thinking, writing).
+ * How the analyst is working, live: each note it writes before reading (its thinking) and each thing it reads, ticked
+ * off when done, with the seconds the current read has taken. Shown until the answer starts to appear, so the wait is
+ * a story rather than a spinner. `activity` is the line for the moments between reads (thinking, writing).
  */
 export function AnalysisSteps({ run, assistantName }: { run: Run; assistantName?: string }) {
   const steps = run.steps ?? [];
-  const working = steps.some((step) => !step.endedAt);
+  const entries = runTrail(steps);
+  const working = entries.some((entry) => entry.kind === 'read' && !entry.done);
   const now = useNow(working);
   const lead = assistantName ? `${assistantName} · ` : '';
+  // The trail drops empty steps; its indices are matched back to the steps' start times.
+  const started = steps.filter((step) => step.thought || step.tool).map((step) => Date.parse(step.startedAt));
   return (
-    <Box role="status" aria-label="The analyst is working" sx={{ mb: 1 }}>
-      <Stack spacing={0.5}>
-        {steps.map((step, index) => {
-          const done = Boolean(step.endedAt);
-          const seconds = Math.max(0, Math.round((now - Date.parse(step.startedAt)) / 1000));
-          return (
-            <Stack key={`${step.tool}-${index}`} direction="row" spacing={1} sx={{ alignItems: 'center', minHeight: 24 }}>
-              <Mark done={done} />
-              <Typography variant="body2" sx={{ color: done ? 'text.secondary' : 'text.primary' }}>
-                {toolLabel(step.tool, done ? 'done' : 'doing')}
-                {!done && seconds >= 2 && (
-                  <Typography component="span" variant="caption" sx={{ color: 'text.secondary', ml: 0.75 }}>
-                    {seconds}s
-                  </Typography>
-                )}
-              </Typography>
-            </Stack>
-          );
-        })}
+    <Box role="status" aria-label="The analyst is working" sx={{ mt: 'var(--chat-message-gap, 14px)', mb: 1, maxWidth: '46rem' }}>
+      <Stack spacing={0.75}>
+        {entries.length > 0 && (
+          <ThinkingTrail entries={entries} seconds={(index) => Math.max(0, Math.round((now - started[index]) / 1000))} />
+        )}
         {!working && (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minHeight: 24 }}>
             <TypingDots />
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {lead}
               {run.activity || 'Waiting for analyst…'}
             </Typography>

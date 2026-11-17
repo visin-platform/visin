@@ -14,7 +14,9 @@ it('opens a ready analysis of the run on a deliberate open, without creating any
   );
   expect(await screen.findByRole('link', { name: 'Analyze base model' })).toHaveAttribute('href', '/trainings/t1');
   expect(screen.getByText('New analysis · only you can read it')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Summarize this run' })).toBeInTheDocument();
+  // No ready-made questions: a line on what can be asked, and the asker writes the question.
+  expect(screen.getByText('Ask about results, validation peaks or your next experiment.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Summarize this run' })).toBeNull();
   expect(api).not.toHaveBeenCalledWith('/conversations', expect.objectContaining({ kind: 'assistant' }));
 });
 
@@ -52,7 +54,7 @@ describe('following the page', () => {
     render(<Chat panel />);
     await screen.findByText('Research discussion');
     showPage({ projectId: 'p1', trainingIds: ['t1'], title: 'Base model' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Summarize this run' }));
+    fireEvent.change(await screen.findByLabelText('Ask the analyst'), { target: { value: 'Summarize this run' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith('/conversations', {

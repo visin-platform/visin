@@ -76,7 +76,7 @@ export default defineConfig(() => ({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/main.tsx', 'src/**/*.d.ts'],
       // Baseline for the first chat release; raise as UI coverage grows.
-      thresholds: { statements: 89, branches: 84, functions: 85, lines: 92 }
+      thresholds: { statements: 90, branches: 84, functions: 85, lines: 93 }
     }
   }
 }));

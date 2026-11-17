@@ -90,8 +90,8 @@ const messageSchema = new Schema(
       )
     },
     evidence: { type: [{ tool: String, input: Schema.Types.Mixed, at: Date }], default: [] },
-    /** Next questions the analyst offered after this answer: shown as one-click suggestions, never run on their own. */
-    suggestions: { type: [{ type: String, maxlength: 120 }], default: undefined },
+    /** What the analyst wrote before each round of reading: its thinking, shown folded with the answer. */
+    thoughts: { type: [{ text: { type: String, maxlength: 600 }, at: Date }], default: undefined },
     assistantCancelled: { type: Boolean, default: false, select: false },
     assistantRequest: { type: assistantRequestSchema, select: false },
     // Kept outside the legacy outbox so workers without screen support cannot consume it.

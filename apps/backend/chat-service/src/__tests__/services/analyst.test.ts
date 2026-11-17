@@ -6,8 +6,8 @@ import {
   projectNotesOf,
   reservationFor,
   RESERVATION,
-  splitSuggestions,
-  withoutSuggestions
+  MAX_THOUGHT_CHARS,
+  MAX_THOUGHTS
 } from '../../services/analyst';
 vi.mock('@modelcontextprotocol/sdk/client/index.js', async () => {
   const module = await (() => ({ Client: vi.fn() }))();
@@ -1140,32 +1140,77 @@ describe('looking at rendered frames', () => {
   });
 });
 
-describe('next questions offered with an answer', () => {
-  it('takes them off the answer, and keeps a preview from ever showing the line', async () => {
+describe('the analyst\'s thinking', () => {
+  it('keeps what it wrote before reading as its thinking, in order, and never as the answer', async () => {
     provider.mockResolvedValueOnce(
-      answer([
-        {
-          type: 'text',
-          text: 'Run b leads by 2.1 mIoU.\n\nNext: Which condition is run b weakest in? | ok | How do they compare at their best epochs?'
-        }
-      ])
+      answer(
+        [
+          { type: 'text', text: '  The question is whether run1 overfits, so I will read its curve.  ' },
+          { type: 'tool_use', id: 'a', name: 'get_training', input: { training: 'run1' } }
+        ],
+        'tool_use'
+      )
     );
-    const result = await analyze(input());
-    expect(result.text).toBe('Run b leads by 2.1 mIoU.');
-    // Too short to be a question worth a click, so it is left out.
-    expect(result.suggestions).toEqual(['Which condition is run b weakest in?', 'How do they compare at their best epochs?']);
-    expect(JSON.parse(provider.mock.calls[0][1].body).system[0].text).toContain('Next: ');
-    expect(withoutSuggestions('The answer.\n\nNex')).toBe('The answer.');
-    expect(withoutSuggestions('The answer.\n\nNext: Which run')).toBe('The answer.');
-    expect(withoutSuggestions('Next steps are clear.')).toBe('Next steps are clear.');
-    expect(splitSuggestions('An answer with no line.')).toEqual({ text: 'An answer with no line.', suggestions: [] });
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Run1 peaked at epoch 31.' }]));
+    const order: string[] = [];
+    const step = {
+      start: vi.fn(async (tool: string) => void order.push(`start ${tool}`)),
+      end: vi.fn(async (tool: string) => void order.push(`end ${tool}`)),
+      thought: vi.fn(async (text: string) => void order.push(`thought ${text}`))
+    };
+    const result = await analyze({ ...input(), step });
+    expect(result.text).toBe('Run1 peaked at epoch 31.');
+    expect(result.thoughts.map((t) => t.text)).toEqual(['The question is whether run1 overfits, so I will read its curve.']);
+    // The note comes before the read it explains.
+    const noted = order.indexOf('thought The question is whether run1 overfits, so I will read its curve.');
+    expect(noted).toBeGreaterThanOrEqual(0);
+    expect(noted).toBeLessThan(order.lastIndexOf('start get_training'));
+    const system = JSON.parse(provider.mock.calls[0][1].body).system[0].text as string;
+    expect(system).toContain('your thinking while you work');
+    expect(system).not.toContain('Next: ');
   });
 
-  it('leaves a shared conversation alone: no instruction to offer them, and the text is kept as written', async () => {
-    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Agreed.\n\nNext: What about run c in the rain?' }]));
+  it('records nothing for a round with no note, and caps how much is kept', async () => {
+    provider.mockResolvedValueOnce(
+      answer([{ type: 'tool_use', id: 'a', name: 'get_training', input: { training: 'run1' } }], 'tool_use')
+    );
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Done.' }]));
+    const thought = vi.fn(async (_text: string) => undefined);
+    const quiet = await analyze({ ...input(), step: { start: vi.fn(), end: vi.fn(), thought } });
+    expect(quiet.thoughts).toEqual([]);
+    expect(thought).not.toHaveBeenCalled();
+
+    provider.mockReset();
+    const rounds = MAX_THOUGHTS + 2;
+    for (let i = 0; i < rounds; i++)
+      provider.mockResolvedValueOnce(
+        answer(
+          [
+            { type: 'text', text: `${i}`.padEnd(MAX_THOUGHT_CHARS + 50, 'x') },
+            { type: 'tool_use', id: `t${i}`, name: 'get_training', input: { training: `run${i}` } }
+          ],
+          'tool_use'
+        )
+      );
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Done.' }]));
+    const long = await analyze({ ...input(), toolRounds: rounds + 1 });
+    expect(long.thoughts).toHaveLength(MAX_THOUGHTS);
+    expect(long.thoughts.every((t) => t.text.length === MAX_THOUGHT_CHARS)).toBe(true);
+  });
+
+  it('tells it how to list the objects in an image, and not to pass guesses off as detector output', async () => {
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Two cars, top left.' }]));
+    await analyze({ ...input(), shared: true });
+    const system = JSON.parse(provider.mock.calls[0][1].body).system[0].text as string;
+    expect(system).toContain('each kind of object, how many, and where it is in the frame');
+    expect(system).toContain('Mark a count as approximate');
+    expect(system).toContain('never give pixel coordinates, bounding boxes or confidence scores');
+  });
+
+  it('asks for no notes in a shared conversation', async () => {
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Agreed.' }]));
     const result = await analyze({ ...input(), shared: true });
-    expect(result.suggestions).toEqual([]);
-    expect(result.text).toContain('Next: What about run c in the rain?');
-    expect(JSON.parse(provider.mock.calls[0][1].body).system[0].text).not.toContain('Next: ');
+    expect(result.thoughts).toEqual([]);
+    expect(JSON.parse(provider.mock.calls[0][1].body).system[0].text).not.toContain('your thinking while you work');
   });
 });

@@ -1,4 +1,5 @@
 import '../helpers/mocks';
+import { IMAGE_ONLY_QUESTION } from '../../services/imageInput';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 import { createApiKey, fetchWithTimeout } from '@visin/backend-core';
 import { AssistantRun } from '../../models/AssistantRun';
@@ -246,7 +247,7 @@ it('includes authorized image references and marks their content as available', 
   expect(input.history.at(-1).imageRefs).toEqual([expect.objectContaining({ fileId: `chat/${id}/test.png` })]);
 });
 
-it('describes image-only posts and retains their images for the next follow-up', async () => {
+it('asks what objects are in an image-only post, and retains its images for the next follow-up', async () => {
   await enableAnalyst();
   const id = await create('assistant', []);
   const membershipVersion = (await Conversation.findById(id))!.membershipVersion;
@@ -265,7 +266,7 @@ it('describes image-only posts and retains their images for the next follow-up',
   await worker.tick();
   expect(analyze).toHaveBeenCalled();
   const first = (analyze as Mock).mock.calls.at(-1)![0];
-  expect(JSON.parse(first.history.at(-1).content).question).toBe('Describe what you see in the attached images.');
+  expect(JSON.parse(first.history.at(-1).content).question).toBe(IMAGE_ONLY_QUESTION);
   expect(first.history.at(-1).imageRefs).toHaveLength(1);
   await worker.tick();
   await request(`/conversations/${id}/messages`, 'alice', { body: 'What color is it?', clientId: 'image-follow-up-1' });
