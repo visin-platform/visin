@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.15.0](https://github.com/visin-platform/visin/compare/v2.14.1...v2.15.0) (2026-11-17)
+
+### Features
+
+* improve chat user experience ([b69e2e8](https://github.com/visin-platform/visin/commit/b69e2e86b24d0f0adfaeae496621b08ae196dade))
+
 ## [2.14.1](https://github.com/visin-platform/visin/compare/v2.14.0...v2.14.1) (2026-11-15)
 
 ## [2.14.0](https://github.com/visin-platform/visin/compare/v2.13.0...v2.14.0) (2026-11-15)
