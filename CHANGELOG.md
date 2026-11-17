@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.16.0](https://github.com/visin-platform/visin/compare/v2.15.0...v2.16.0) (2026-11-17)
+
+### Features
+
+* **chat:** one chat per assistant, with hide and delete ([b78b180](https://github.com/visin-platform/visin/commit/b78b180133824e6b3f8085f78f0d951763c272dc))
+
 ## [2.15.0](https://github.com/visin-platform/visin/compare/v2.14.1...v2.15.0) (2026-11-17)
 
 ### Features
