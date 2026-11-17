@@ -1,5 +1,15 @@
 # Visin Changelog
 
+## [2.17.0](https://github.com/visin-platform/visin/compare/v2.16.0...v2.17.0) (2026-11-17)
+
+### Features
+
+* phone navigation with chat in the middle of the tab bar ([fae8c61](https://github.com/visin-platform/visin/commit/fae8c614efb395a0545298780d74494c0caefa58))
+
+### Chores
+
+* **release:** @visin/frontend-core 1.26.0 ([fad1430](https://github.com/visin-platform/visin/commit/fad1430f14b7b04e10908ad27c4358debc15a7e8))
+
 ## [2.16.0](https://github.com/visin-platform/visin/compare/v2.15.0...v2.16.0) (2026-11-17)
 
 ### Features
