@@ -1,5 +1,15 @@
 # Visin Changelog
 
+## [2.20.0](https://github.com/visin-platform/visin/compare/v2.19.0...v2.20.0) (2026-11-18)
+
+### Features
+
+* audit an inference run against the annotator, and show its own progress and results ([f60d255](https://github.com/visin-platform/visin/commit/f60d255390fce1f624bfe1c5f1be89fe2a264179))
+
+### Chores
+
+* **release:** @visin/backend-core 1.22.0 ([d693a2e](https://github.com/visin-platform/visin/commit/d693a2ea61bf565f02876855058338712f8f624c))
+
 ## [2.19.0](https://github.com/visin-platform/visin/compare/v2.18.0...v2.19.0) (2026-11-18)
 
 ### Features
