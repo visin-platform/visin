@@ -84,6 +84,9 @@ export async function getTrainingStats(userId: string | undefined, filters: Trai
       $group: {
         _id: null,
         totalTrainings: { $sum: 1 },
+        // Inference runs (a model's pass over a frame set): a project holding only these has no epochs, models
+        // or training comparisons to show, and its page leaves those tabs out.
+        inferenceTrainings: { $sum: { $cond: [{ $eq: ['$kind', 'inference'] }, 1, 0] } },
         totalTime: { $sum: '$trainingTime' },
         totalEpochs: { $sum: '$epochCount' }
       }
@@ -127,6 +130,7 @@ export async function getTrainingStats(userId: string | undefined, filters: Trai
   ]);
   const stats = result[0]?.totals[0] || {
     totalTrainings: 0,
+    inferenceTrainings: 0,
     totalTime: 0,
     totalHours: 0,
     totalEpochs: 0,

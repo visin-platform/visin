@@ -5,7 +5,7 @@ import { listItems } from '../../services/datasetService';
 import type { JudgeDisagreement } from '../../types/evaluation';
 import { sampleBox, sampleFrame } from './judgeCropGeometry';
 
-const JudgeCrop: React.FC<{ sample: JudgeDisagreement; datasetId: string; group: string }> = ({ sample, datasetId, group }) => {
+const JudgeCrop: React.FC<{ sample: Pick<JudgeDisagreement, 'id' | 'attrs'>; datasetId: string; group: string; maxHeight?: number }> = ({ sample, datasetId, group, maxHeight = 240 }) => {
   const box = React.useMemo(() => sampleBox(sample.attrs.bbox), [sample.attrs.bbox]);
   const frame = sampleFrame(sample);
   const canvas = React.useRef<HTMLCanvasElement>(null);
@@ -47,7 +47,7 @@ const JudgeCrop: React.FC<{ sample: JudgeDisagreement; datasetId: string; group:
   if (isLoading) return <Skeleton variant="rounded" height={120} aria-label="Loading crop" />;
   if (error) return <Alert severity="warning">The frame could not be looked up.</Alert>;
   if (!item?.url) return <Alert severity="info">{images.length > 1 ? 'More than one image matches this frame.' : 'This frame is not available in the selected image group.'}</Alert>;
-  return <Box>{imageError ? <Alert severity="warning">{imageError}</Alert> : null}<Box component="canvas" ref={canvas} role="img" aria-label={`Crop for ${sample.id}`} sx={{ display: imageError ? 'none' : 'block', maxWidth: '100%', maxHeight: 240, objectFit: 'contain' }} /></Box>;
+  return <Box>{imageError ? <Alert severity="warning">{imageError}</Alert> : null}<Box component="canvas" ref={canvas} role="img" aria-label={`Crop for ${sample.id}`} sx={{ display: imageError ? 'none' : 'block', maxWidth: '100%', maxHeight, objectFit: 'contain' }} /></Box>;
 };
 
 export default JudgeCrop;

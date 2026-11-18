@@ -29,7 +29,10 @@ const asRunEvaluation = (evaluation: ListedEvaluation): RunEvaluation => ({
   ...(evaluation.validation ? { validation: evaluation.validation } : {}),
   ...(evaluation.publishedAt ? { publishedAt: evaluation.publishedAt } : {}),
   ...(evaluation.checkpoint ? { checkpoint: evaluation.checkpoint } : {}),
-  ...(evaluation.epochInfo ? { epoch_info: { epoch: evaluation.epochInfo.epoch, epoch_time: evaluation.epochInfo.epoch_time ?? 0 } } : {})
+  ...(evaluation.epochInfo ? { epoch_info: { epoch: evaluation.epochInfo.epoch, epoch_time: evaluation.epochInfo.epoch_time ?? 0 } } : {}),
+  ...(evaluation.source?.trainingId && evaluation.source.epoch === undefined && !evaluation.source.epochUuid && !evaluation.epochInfo
+    ? { wholeRun: true }
+    : {})
 });
 
 export const runEvaluationService = {

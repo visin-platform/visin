@@ -74,3 +74,92 @@ test('an inference run shows its progress in frames, its running rates, and fits
   expect(overflow, 'the page scrolls sideways on a phone').toBeLessThanOrEqual(1);
   expect(errors).toEqual([]);
 });
+
+/** Every decision the run recorded, filtered by the suite's own vocabularies, readable on a phone. */
+test('an inference run lists its samples one by one and filters them by the suite vocabularies', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const training = {
+    _id: 'judge',
+    uuid: 'qwen-v2',
+    name: 'qwen2.5vl_72b_v2',
+    kind: 'inference',
+    status: 'completed',
+    suite: { slug: 'zod-sam-verification', version: 1, digest: 'd'.repeat(64) },
+    progress: { done: 4110, total: 4110, unit: 'frame' },
+    createdAt: '2026-11-18T00:00:00Z',
+    updatedAt: '2026-11-18T03:00:00Z',
+    metrics: { totalTime: 0, epochCount: 0, maxEpoch: 0, lastEpochTimestamp: null, cpuCost: 0, gpuCost: 0, totalCost: 0 }
+  };
+  const suite = {
+    _id: 's1',
+    slug: 'zod-sam-verification',
+    version: 1,
+    digest: 'd'.repeat(64),
+    protocol: {
+      classes: [{ id: 'sign' }, { id: 'vehicle' }],
+      conditions: [{ name: '<250', sampleCount: 1 }],
+      metrics: [],
+      samples: {
+        attrs: [{ key: 'class', values: ['sign', 'vehicle'] }, { key: 'size', values: ['<250', '250–4000'] }, { key: 'frame' }],
+        fields: [{ key: 'verdict', values: ['valid', 'invalid'] }, { key: 'outcome', values: ['keep', 'delete'] }]
+      }
+    }
+  };
+  const sample = (index: number, outcome: string) => ({
+    id: `frame_${String(index).padStart(6, '0')}/m${index}`,
+    attrs: { class: 'sign', size: '<250', frame: `frame_${String(index).padStart(6, '0')}` },
+    fields: { verdict: outcome === 'keep' ? 'valid' : 'invalid', outcome },
+    raw: outcome === 'keep' ? 'sign' : 'a long reply that wraps instead of pushing the table past the edge of a phone screen',
+    latencyMs: 11_000 + index
+  });
+  const asked: string[] = [];
+
+  // The dataset service answers at an address of its own (5010).
+  await page.route(/^http:\/\/localhost:(4010|5001|5010)\//, async (route) => {
+    const request = route.request();
+    const headers = {
+      'access-control-allow-origin': request.headers().origin ?? 'http://localhost:3012',
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-headers': 'content-type, authorization, x-request-id',
+      'access-control-allow-methods': 'GET, OPTIONS'
+    };
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    const url = new URL(request.url());
+    let data: unknown = [];
+    if (url.pathname === '/api/trainings/judge/epochs') data = { training, epochs: [] };
+    if (url.pathname === '/api/suites/zod-sam-verification/1') data = suite;
+    if (url.pathname === '/api/datasets') data = { datasets: [], pagination: { page: 1, limit: 100, total: 0, pages: 0 } };
+    if (url.pathname === '/api/trainings/judge/samples') {
+      asked.push(url.search);
+      const deleted = url.searchParams.get('fields')?.includes('delete');
+      const samples = deleted ? [sample(2, 'delete')] : [sample(1, 'keep'), sample(2, 'delete')];
+      data = { samples, pagination: { page: 1, limit: 25, total: deleted ? 27_285 : 145_432, pages: 1 } };
+    }
+    return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
+  });
+
+  await page.goto('/trainings/judge?tab=samples');
+  await expect(page.getByRole('tab', { name: 'Samples' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('145,432 samples match')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'frame_000001/m1' })).toBeVisible();
+  await expect(page.getByText('Image datasets could not be loaded')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'outcome' }).click();
+  await page.getByRole('option', { name: 'delete' }).click();
+  await expect(page.getByText('27,285 samples match')).toBeVisible();
+  expect(asked.at(-1)).toContain('fields=%7B%22outcome%22%3A%22delete%22%7D');
+
+  const scheme = info.project.name.endsWith('dark') ? 'dark' : 'light';
+  await page.screenshot({ path: info.outputPath(`samples-${scheme}-desktop.png`), fullPage: true });
+  const scan = await new AxeBuilder({ page }).analyze();
+  const serious = scan.violations.filter((violation) => violation.impact === 'serious' || violation.impact === 'critical');
+  expect(serious.map((violation) => `${violation.id}: ${violation.nodes[0]?.target}`)).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(150);
+  await expect(page.getByRole('listitem').filter({ hasText: 'frame_000002/m2' })).toBeVisible();
+  await page.screenshot({ path: info.outputPath(`samples-${scheme}-phone.png`), fullPage: true });
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow, 'the page scrolls sideways on a phone').toBeLessThanOrEqual(1);
+  expect(errors).toEqual([]);
+});

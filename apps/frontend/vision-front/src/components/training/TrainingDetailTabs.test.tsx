@@ -20,6 +20,14 @@ describe('TrainingDetailTabs', () => {
     expect(screen.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('offers Samples, right after Overview, on an inference run only', () => {
+    const { unmount } = render(<TrainingDetailTabs value="overview" onChange={vi.fn()} inference />);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent).slice(0, 3)).toEqual(['Overview', 'Samples', 'Progress']);
+    unmount();
+    render(<TrainingDetailTabs value="overview" onChange={vi.fn()} />);
+    expect(screen.queryByRole('tab', { name: 'Samples' })).not.toBeInTheDocument();
+  });
+
   it('calls the progress points of an inference run Progress, never Epochs', () => {
     render(<TrainingDetailTabs value="epochs" onChange={vi.fn()} inference />);
 

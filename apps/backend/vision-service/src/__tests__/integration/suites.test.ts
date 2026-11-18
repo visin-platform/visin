@@ -229,6 +229,14 @@ describe('suites with in-memory MongoDB', () => {
     expect(unscorable.status).toBe(400);
   });
 
+  it('counts the inference runs of a project among its totals, so its page can tell a judge project from a training one', async () => {
+    const projectId = await project();
+    await Training.create({ uuid: 'trained', name: 'Training', projectId, ownerId: OWNER });
+    await Training.create({ uuid: 'judged', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference' });
+    const stats = (await call(`/trainings/stats?projectId=${projectId}`)).body.data;
+    expect(stats).toMatchObject({ totalTrainings: 2, inferenceTrainings: 1 });
+  });
+
   it('refuses sample writes on a run without a pinned sample suite', async () => {
     const projectId = await project();
     const run = await Training.create({ uuid: 'ordinary', name: 'Training', projectId, ownerId: OWNER });

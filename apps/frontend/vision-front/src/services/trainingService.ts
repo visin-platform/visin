@@ -26,6 +26,8 @@ export interface CostCoverage {
 
 export interface TrainingStats {
   totalTrainings: number;
+  /** how many of them are inference runs; absent from older servers */
+  inferenceTrainings?: number;
   totalTime: number;
   totalEpochs: number;
   avgEpochTime: number;

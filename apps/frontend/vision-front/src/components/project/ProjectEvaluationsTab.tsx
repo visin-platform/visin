@@ -77,6 +77,9 @@ const SCOPES: { value: Scope; label: string }[] = [
   { value: 'attention', label: 'Needs attention' }
 ];
 
+/** A human reference evaluation: the decisions models are measured against. */
+const isReference = (result: RunEvaluation) => result.checkpoint?.kind === 'human';
+
 /** Whether a result belongs to the scope: ranked ones passed a suite, exploratory ones named none. */
 const inScope = (result: RunEvaluation, scope: Scope): boolean => {
   const state = result.validation?.state;
@@ -150,9 +153,17 @@ const ProjectEvaluationsTab: React.FC<ProjectEvaluationsTabProps> = ({ projectId
     return bestPerRun(results, metric, (a, b) => taxonomy.isBetter(metric.key, a, b));
   }, [results, metric, view, taxonomy]);
 
-  // Rank numbers only where there is a ranking.
+  // Rank numbers only where there is a ranking. A human reference is what the models are measured against, not one
+  // of them: it is listed after the ranking, unnumbered, as the suite leaderboard leaves it out.
   const ranked = view === 'best' && metric !== undefined;
-  const shown = view === 'all' ? entries.slice(page * rowsPerPage, (page + 1) * rowsPerPage) : entries;
+  const ordered = useMemo(
+    () => (ranked ? [...entries.filter(({ result }) => !isReference(result)), ...entries.filter(({ result }) => isReference(result))] : entries),
+    [entries, ranked]
+  );
+  const shown = view === 'all' ? ordered.slice(page * rowsPerPage, (page + 1) * rowsPerPage) : ordered;
+  // An inference run is scored as a whole, with no epoch behind the result: the column says nothing until one has.
+  const hasEpochs = shown.some(({ result }) => !result.wholeRun);
+  const rankOf = (result: RunEvaluation, index: number) => (isReference(result) ? 'Reference' : `${index + 1}`);
   const allSelected = shown.length > 0 && shown.every(({ result }) => selected.has(result._id));
   const someSelected = shown.some(({ result }) => selected.has(result._id));
   const format = (value: number | undefined) => (value === undefined ? '-' : value.toFixed(metric?.decimals ?? 4));
@@ -294,11 +305,11 @@ const ProjectEvaluationsTab: React.FC<ProjectEvaluationsTabProps> = ({ projectId
             <MobileListRow
               key={result._id}
               to={evaluationPath(result)}
-              title={ranked ? `${index + 1}. ${runName(result)}` : runName(result)}
+              title={ranked ? (isReference(result) ? `${runName(result)} (reference)` : `${index + 1}. ${runName(result)}`) : runName(result)}
               selected={selected.has(result._id)}
               onToggle={() => toggle(result._id)}
               selectLabel={`Select ${runName(result)} epoch ${result.epoch}`}
-              meta={`Epoch ${result.epoch} · ${formatDateTime(result.timestamp)}`}
+              meta={result.wholeRun ? formatDateTime(result.timestamp) : `Epoch ${result.epoch} · ${formatDateTime(result.timestamp)}`}
               figures={[
                 ...(metric && value !== undefined ? [{ label: metric.label, value: format(value) }] : []),
                 ...(tests !== undefined && tests > 1 ? [{ label: 'Evaluations', value: tests }] : [])
@@ -321,7 +332,7 @@ const ProjectEvaluationsTab: React.FC<ProjectEvaluationsTabProps> = ({ projectId
                 </TableCell>
                 {ranked && <TableCell sx={{ width: 56 }}>Rank</TableCell>}
                 <TableCell>Training</TableCell>
-                <TableCell>Epoch</TableCell>
+                {hasEpochs && <TableCell>Epoch</TableCell>}
                 {metric && <TableCell align="right">{metric.label}</TableCell>}
                 {view === 'best' && <TableCell align="right">Evaluations</TableCell>}
                 {hasSuites && <TableCell>Scored on</TableCell>}
@@ -344,7 +355,11 @@ const ProjectEvaluationsTab: React.FC<ProjectEvaluationsTabProps> = ({ projectId
                       slotProps={{ input: { 'aria-label': `Select ${runName(result)} epoch ${result.epoch}` } }}
                     />
                   </TableCell>
-                  {ranked && <TableCell>{index + 1}</TableCell>}
+                  {ranked && (
+                    <TableCell sx={isReference(result) ? { color: 'text.secondary', fontSize: '0.8125rem' } : undefined}>
+                      {rankOf(result, index)}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <RouterLink
                       to={evaluationPath(result)}
@@ -354,7 +369,7 @@ const ProjectEvaluationsTab: React.FC<ProjectEvaluationsTabProps> = ({ projectId
                       {runName(result)}
                     </RouterLink>
                   </TableCell>
-                  <TableCell>{result.epoch}</TableCell>
+                  {hasEpochs && <TableCell>{result.wholeRun ? '-' : result.epoch}</TableCell>}
                   {metric && (
                     <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                       {format(value)}

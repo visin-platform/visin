@@ -2044,6 +2044,9 @@ paths:
                     properties:
                       totalTrainings:
                         type: integer
+                      inferenceTrainings:
+                        type: integer
+                        description: How many of the runs are inference runs (kind inference).
                       totalHours:
                         type: number
                       weekly:

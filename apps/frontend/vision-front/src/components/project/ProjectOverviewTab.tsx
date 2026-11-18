@@ -4,13 +4,17 @@ import { TrainingStats } from '../../services/trainingService';
 import { ProjectDashboardStats } from '../../services/projectService';
 import { useCosting, useFormatCost } from '../../costing/useCosting';
 
-export type ProjectOverviewStats = Pick<TrainingStats, 'totalTrainings' | 'totalTime' | 'totalCost' | 'avgEpochTime'> & { currency?: string };
+export type ProjectOverviewStats = Pick<TrainingStats, 'totalTrainings' | 'inferenceTrainings' | 'totalTime' | 'totalCost' | 'avgEpochTime'> & {
+  currency?: string;
+};
 export type ProjectOverviewDashboardStats = Pick<ProjectDashboardStats, 'testResultsCount' | 'visualizationsCount' | 'benchmarksCount'>;
 
 interface ProjectOverviewTabProps {
   stats: ProjectOverviewStats | undefined;
   /** the totals are still being read: show the strip as loading, not as zeros */
   isLoading?: boolean;
+  /** every run is an inference run: its points are frames, not epochs */
+  inference?: boolean;
 }
 
 interface Figure {
@@ -23,7 +27,7 @@ interface Figure {
  * and benchmarks live on their own tabs, and what the best run reached is
  * the card above this.
  */
-const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoading }) => {
+const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoading, inference = false }) => {
   const costing = useCosting();
   const formatCost = useFormatCost();
 
@@ -37,9 +41,10 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoadin
   };
 
   const figures: Figure[] = [
-    { label: 'Trainings', value: stats?.totalTrainings || 0 },
-    { label: 'Training time', value: formatTime(stats?.totalTime || 0) },
-    { label: 'Avg. epoch time', value: stats?.avgEpochTime ? formatTime(stats.avgEpochTime) : '-' },
+    { label: inference ? 'Runs' : 'Trainings', value: stats?.totalTrainings || 0 },
+    { label: inference ? 'Run time' : 'Training time', value: formatTime(stats?.totalTime || 0) },
+    // An inference run's points are its frames, so the mean point is a frame.
+    { label: inference ? 'Avg. frame time' : 'Avg. epoch time', value: stats?.avgEpochTime ? formatTime(stats.avgEpochTime) : '-' },
     // A project with no rates has no cost to show, rather than a cost of nothing.
     ...(costing || stats?.currency
       ? [{ label: 'Cost', value: formatCost(stats?.totalCost || 0, stats?.currency) }]

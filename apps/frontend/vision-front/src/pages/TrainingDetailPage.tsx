@@ -21,6 +21,7 @@ import DeleteConfirmationDialog from '../components/training/DeleteConfirmationD
 import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
 import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
 import { TRAINING_TABS, type TrainingTab } from '../components/training/trainingTabs';
+import RunSamplesTab from '../components/training/RunSamplesTab';
 import TrainingModelsTab from '../components/training/TrainingModelsTab';
 import SampleTour from '../components/guide/SampleTour';
 import UseThisDialog from '../components/common/UseThisDialog';
@@ -130,7 +131,10 @@ const TrainingDetailPage: React.FC = () => {
   // The tab is the URL's, so a link to `?tab=models&model=…` from elsewhere on the page switches to it.
   const hasStoredModels = Boolean(training?.models?.some(isStoredModel));
   const requestedTab = TRAINING_TABS.find(([name]) => name === searchParams.get('tab'))?.[0];
-  const detailTab: TrainingTab = requestedTab && (requestedTab !== 'models' || hasStoredModels) ? requestedTab : 'overview';
+  const detailTab: TrainingTab =
+    requestedTab && (requestedTab !== 'models' || hasStoredModels) && (requestedTab !== 'samples' || training?.kind === 'inference')
+      ? requestedTab
+      : 'overview';
   const showTab = (tab: TrainingTab, model?: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
@@ -202,6 +206,8 @@ const TrainingDetailPage: React.FC = () => {
           }}
         />
       )}
+      {/* Samples Tab: an inference run's decisions, one by one */}
+      {detailTab === 'samples' && <RunSamplesTab training={training} />}
       {/* Epochs Tab */}
       {detailTab === 'epochs' && (
         <TrainingEpochsTab

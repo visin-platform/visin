@@ -161,6 +161,26 @@ describe('ProjectTabs', () => {
 
     expect(onTabChange).toHaveBeenCalledWith('trainings');
   });
+
+  it('leaves out, for a project of inference runs only, the tabs only training runs fill, and calls its runs runs', () => {
+    const inference = { ...baseProps, stats: { ...baseProps.stats, totalTrainings: 3, inferenceTrainings: 3 } };
+    render(<ProjectTabs {...inference} tab="overview" />);
+
+    expect(screen.getByRole('tab', { name: 'Runs' })).toBeInTheDocument();
+    for (const name of ['Trainings', 'Comparisons', 'Models', 'Visualizations', 'Benchmarks']) {
+      expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole('tab', { name: 'Analysis' })).toBeInTheDocument();
+    expect(screen.queryByText(/^best-run:/)).not.toBeInTheDocument();
+  });
+
+  it('opens the overview when the address asks an inference project for a tab it does not show', () => {
+    const inference = { ...baseProps, stats: { ...baseProps.stats, totalTrainings: 1, inferenceTrainings: 1 } };
+    render(<ProjectTabs {...inference} tab="models" />);
+
+    expect(screen.getByText('overview-tab')).toBeInTheDocument();
+    expect(screen.queryByText(/^models-tab:/)).not.toBeInTheDocument();
+  });
 });
 
 vi.mock('./PipelineKeys', () => ({ default: () => <div>pipeline-keys</div> }));

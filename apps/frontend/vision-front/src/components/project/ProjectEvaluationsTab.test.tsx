@@ -245,6 +245,29 @@ describe('ProjectEvaluationsTab', () => {
         .slice(1)
         .map((row) => row.textContent ?? '');
 
+    it('lists a human reference after the ranking, unnumbered, and leaves out the epoch of whole-run results', () => {
+      const judge = (id: string, trainingId: string, reject: number, extra = {}) => ({
+        ...evaluation(id, trainingId),
+        epoch: 0,
+        wholeRun: true,
+        test_results: { day: { overall: { mean_iou: reject } } },
+        ...extra,
+      });
+      renderTab({
+        evaluationsResponse: response(
+          judge('h', 'H', 0.99, { checkpoint: { kind: 'human', label: 'annotator_1' } }),
+          judge('l', 'L', 0.5),
+          judge('q', 'Q', 0.4)
+        ),
+      });
+
+      const rows = names();
+      expect(rows[0]).toMatch(/^1Training L/);
+      expect(rows[1]).toMatch(/^2Training Q/);
+      expect(rows[2]).toMatch(/^ReferenceTraining H/);
+      expect(screen.queryByRole('columnheader', { name: 'Epoch' })).not.toBeInTheDocument();
+    });
+
     it('lists one row per run at its best test, best run first', () => {
       renderTab({
         evaluationsResponse: response(

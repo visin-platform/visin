@@ -53,6 +53,14 @@ describe('runEvaluationService', () => {
     ]);
   });
 
+  it('marks a result that scored a whole run, with no epoch behind it, and no other', async () => {
+    const whole = evaluation({ _id: 'w', source: { trainingId: 'r1' }, epochInfo: undefined });
+    const unsourced = evaluation({ _id: 'u', source: undefined, epochInfo: undefined });
+    mockedApi.get.mockResolvedValue({ data: { success: true, data: { evaluations: [evaluation(), whole, unsourced], pagination: page } } });
+    const rows = (await runEvaluationService.list({ projectId: 'p1' })).data.evaluations;
+    expect(rows.map((row) => row.wholeRun)).toEqual([undefined, true, undefined]);
+  });
+
   it('asks for no parameters it was not given, and orders only the ways an evaluation list can', async () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { evaluations: [], pagination: page } } });
     await runEvaluationService.list();

@@ -90,6 +90,8 @@ export interface RunEvaluation {
   publishedAt?: string;
   /** which model was scored, for a result with no run behind it (a Hub checkpoint) */
   checkpoint?: Checkpoint;
+  /** the result scored a whole run (an inference run's samples), with no epoch behind it; `epoch` is then 0 */
+  wholeRun?: boolean;
 }
 
 export interface CreateRunEvaluationData {

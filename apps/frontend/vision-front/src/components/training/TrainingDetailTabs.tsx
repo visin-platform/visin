@@ -21,7 +21,7 @@ const MORE = 'more';
 const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange, showModels = false, inference = false }) => {
   const compact = useCompactLayout();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const tabs = TRAINING_TABS.filter(([name]) => showModels || name !== 'models').map(
+  const tabs = TRAINING_TABS.filter(([name]) => (showModels || name !== 'models') && (inference || name !== 'samples')).map(
     ([name, label]) => [name, inference && name === 'epochs' ? 'Progress' : label] as const
   );
   const shown = compact ? tabs.slice(0, PHONE_TABS) : tabs;

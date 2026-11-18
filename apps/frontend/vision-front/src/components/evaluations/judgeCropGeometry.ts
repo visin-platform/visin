@@ -7,7 +7,7 @@ export function sampleBox(value: unknown): [number, number, number, number] | un
   return left >= 0 && top >= 0 && right > left && bottom > top ? [left, top, right, bottom] : undefined;
 }
 
-export function sampleFrame(sample: JudgeDisagreement): string {
+export function sampleFrame(sample: Pick<JudgeDisagreement, 'id' | 'attrs'>): string {
   const frame = typeof sample.attrs.frame === 'string' ? sample.attrs.frame : sample.id.split('/')[0];
   return frame.replace(/\\/g, '/').split('/').pop()!.replace(/\.(?:png|jpe?g|webp)$/i, '');
 }

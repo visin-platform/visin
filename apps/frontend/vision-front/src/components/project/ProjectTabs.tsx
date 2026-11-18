@@ -25,7 +25,7 @@ import ProjectSettings from '../ProjectSettings';
 import { discoverClasses, discoverConditions } from '../../taxonomy/discover';
 import { Training, RunEvaluationsResponse, BenchmarksPaginatedResponse } from '../../types';
 import { Project } from '../../types/Project';
-import type { ProjectTabKey } from './projectTabs';
+import { hiddenProjectTabs, isInferenceProject, type ProjectTabKey } from './projectTabs';
 
 /** A tab's name, with how much is behind it once there is any. */
 const withCount = (label: string, count?: number) =>
@@ -124,51 +124,61 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
     return { conditions: discoverConditions(results), classes: discoverClasses(results) };
   }, [evaluationsResponse]);
 
+  const inference = isInferenceProject(stats);
+  const hidden = hiddenProjectTabs(stats, dashboardStats);
+  // A tab the address asks for that this project does not show opens the overview.
+  const active: ProjectTabKey = hidden.has(tab) ? 'overview' : tab;
+
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: { xs: 0.5, sm: 2 } }}>
         <ScrollableTabs
-          value={tab}
+          value={active}
           onChange={(_event, next: ProjectTabKey) => onTabChange(next)}
           aria-label="project tabs"
         >
           <Tab value="overview" id="project-tab-overview" label="Overview" />
-          <Tab value="trainings" id="project-tab-trainings" label="Trainings" />
+          <Tab value="trainings" id="project-tab-trainings" label={inference ? 'Runs' : 'Trainings'} />
           <Tab
             value="evaluations"
             id="project-tab-evaluations"
             label={withCount('Evaluations', dashboardStats?.testResultsCount)}
           />
-          <Tab
-            value="visualizations"
-            id="project-tab-visualizations"
-            label={withCount('Visualizations', dashboardStats?.visualizationsCount)}
-          />
-          <Tab
-            value="benchmarks"
-            id="project-tab-benchmarks"
-            label={withCount('Benchmarks', dashboardStats?.benchmarksCount)}
-          />
-          <Tab value="comparisons" id="project-tab-comparisons" label="Comparisons" />
+          {!hidden.has('visualizations') && (
+            <Tab
+              value="visualizations"
+              id="project-tab-visualizations"
+              label={withCount('Visualizations', dashboardStats?.visualizationsCount)}
+            />
+          )}
+          {!hidden.has('benchmarks') && (
+            <Tab
+              value="benchmarks"
+              id="project-tab-benchmarks"
+              label={withCount('Benchmarks', dashboardStats?.benchmarksCount)}
+            />
+          )}
+          {!hidden.has('comparisons') && <Tab value="comparisons" id="project-tab-comparisons" label="Comparisons" />}
           <Tab value="analysis" id="project-tab-analysis" label="Analysis" />
-          <Tab value="models" id="project-tab-models" label="Models" />
+          {!hidden.has('models') && <Tab value="models" id="project-tab-models" label="Models" />}
           {canManage && <Tab value="settings" id="project-tab-settings" label="Settings" />}
         </ScrollableTabs>
       </Box>
 
       {/* Overview Tab */}
-      <TabPanel tab="overview" active={tab}>
+      <TabPanel tab="overview" active={active}>
         {/* The landing page first: setup guidance leads only while there is no real run, and hides itself after. */}
         {canWrite(project._id) && <FirstRunPanel project={project} />}
         <ProjectReadme project={project} />
-        <BestRunCard projectId={project._id} />
-        <ProjectOverviewTab stats={stats} isLoading={isStatsLoading} />
+        {/* An inference run has no best epoch to name; its results are on the Evaluations tab. */}
+        {!inference && <BestRunCard projectId={project._id} />}
+        <ProjectOverviewTab stats={stats} isLoading={isStatsLoading} inference={inference} />
         <RunsOverview projectId={project._id} onSeeAll={() => onTabChange('trainings')} />
         {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
       </TabPanel>
 
       {/* Trainings Tab */}
-      <TabPanel tab="trainings" active={tab}>
+      <TabPanel tab="trainings" active={active}>
         <ProjectTrainingsTab
           projectId={projectId}
           trainings={trainings}
@@ -186,7 +196,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       </TabPanel>
 
       {/* Evaluations Tab: a run's tests and checkpoints scored on a suite are one record */}
-      <TabPanel tab="evaluations" active={tab}>
+      <TabPanel tab="evaluations" active={active}>
         <ProjectEvaluationsTab
           projectId={projectId}
           evaluationsResponse={evaluationsResponse}
@@ -195,12 +205,12 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       </TabPanel>
 
       {/* Visualizations Tab */}
-      <TabPanel tab="visualizations" active={tab}>
+      <TabPanel tab="visualizations" active={active}>
         <ProjectVisualizationsTab projectId={project._id} />
       </TabPanel>
 
       {/* Benchmarks Tab */}
-      <TabPanel tab="benchmarks" active={tab}>
+      <TabPanel tab="benchmarks" active={active}>
         <ProjectBenchmarksTab
           benchmarksResponse={benchmarksResponse}
           isLoading={isBenchmarksLoading}
@@ -209,17 +219,17 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       </TabPanel>
 
       {/* Comparisons Tab */}
-      <TabPanel tab="comparisons" active={tab}>
+      <TabPanel tab="comparisons" active={active}>
         <ProjectComparisonsTab projectId={project._id} />
       </TabPanel>
 
       {/* Analysis Tab — written conclusions, from the app or from an assistant */}
-      <TabPanel tab="analysis" active={tab}>
+      <TabPanel tab="analysis" active={active}>
         <FindingsPanel projectId={project._id} isOwner={canWrite(project._id)} />
       </TabPanel>
 
       {/* Models Tab */}
-      <TabPanel tab="models" active={tab}>
+      <TabPanel tab="models" active={active}>
         <Box sx={{ px: { xs: 0, sm: 3 } }}>
           <ModelRegistry projectId={project._id} title="Models" />
         </Box>
@@ -227,7 +237,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
 
       {/* Settings Tab */}
       {canManage && (
-        <TabPanel tab="settings" active={tab}>
+        <TabPanel tab="settings" active={active}>
           <Box sx={{ px: { xs: 0, sm: 3 } }}>
             <ProjectSettings project={project} discovered={discoveredVocabulary} onMoveToTrash={onMoveToTrash} />
             <ProjectAnalystNotes project={project} />
