@@ -1,74 +1,94 @@
 import { BadRequestError } from '@visin/backend-core';
-import type { PipelineStage } from 'mongoose';
-import RunSample from '../models/RunSample';
+import { canonicalJson } from './suiteProtocol';
+import { joinRuns } from './sampleJoin';
 import type { SuiteProtocol } from '../validation/suiteSchemas';
 
-type Expression = Record<string, unknown> | string | number | boolean | null;
 type Counter = { numerator: number; denominator: number };
 type Group = { _id: { condition: string; classId: string }; count: number; [key: string]: unknown };
 
-const eq = (a: unknown, b: unknown): Expression => ({ $eq: [a, b] });
-const and = (...conditions: unknown[]): Expression => ({ $and: conditions });
-const present = (value: unknown): Expression => ({ $ne: [{ $ifNull: [value, null] }, null] });
-const fieldAt = (key: string, source = '$fields'): Expression => ({ $getField: { field: { $literal: key }, input: source } });
-const conditionalCount = (condition: unknown): Expression => ({ $sum: { $cond: [condition, 1, 0] } });
+/** Present as the old aggregation read it (`$ifNull` to null): neither missing nor null. */
+const present = (value: unknown): boolean => value !== undefined && value !== null;
+/** Equal as MongoDB's `$ne` compared two attribute values, a missing one equal to another missing one. */
+const sameValue = (a: unknown, b: unknown): boolean => canonicalJson(a ?? null) === canonicalJson(b ?? null);
+const recordOf = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
-/** Aggregate individual samples in Mongo; only the small class-by-condition result is returned to the service. */
+/**
+ * Score a run from its samples in one ordered pass, joined to the reference run by sample id (see `joinRuns`), and
+ * return the small class-by-condition result. Linear in the run's size: no sample is looked up on its own.
+ */
 export async function scoreSampleRun(trainingId: string, protocol: SuiteProtocol, referenceTrainingId?: string) {
   if (!protocol.samples || protocol.metrics.some(metric => !metric.derivation)) {
     throw new BadRequestError('Every sample-suite metric needs a derivation');
   }
+  const samples = protocol.samples;
   const needsReference = protocol.metrics.some(metric => /^(?:error|fa|fr):/.test(metric.derivation!));
   if (needsReference && !referenceTrainingId) throw new BadRequestError('The reference run is required');
-  const stages: Record<string, unknown>[] = [{ $match: { trainingId } }];
-  if (needsReference) {
-    stages.push({ $lookup: {
-      from: RunSample.collection.name,
-      let: { sample: '$sampleId' },
-      pipeline: [
-        { $match: { trainingId: referenceTrainingId, $expr: { $eq: ['$sampleId', '$$sample'] } } },
-        { $project: { fields: 1, attrs: 1 } }
-      ],
-      as: 'referenceRows'
-    } }, { $set: { referenceRow: { $arrayElemAt: ['$referenceRows', 0] } } });
-  }
-  const group: Record<string, unknown> = { _id: { condition: '$attrs.size', classId: '$attrs.class' }, count: { $sum: 1 } };
-  if (needsReference) {
-    const differentAttrs = protocol.samples.attrs.map(attr => ({ $ne: [fieldAt(attr.key, '$attrs'), fieldAt(attr.key, '$referenceRow.attrs')] }));
-    group.referenceMismatch = conditionalCount(and(present('$referenceRow'), { $or: differentAttrs.length ? differentAttrs : [false] }));
-  }
-  protocol.metrics.forEach((metric, index) => {
+
+  // Each metric's derivation, read once rather than per sample.
+  const plans = protocol.metrics.map(metric => {
     const derivation = metric.derivation!;
-    const matchesFilter = and(...Object.entries(metric.filter ?? {}).map(([key, value]) => eq(fieldAt(key, '$attrs'), { $literal: value })));
-    if (derivation === 'latency:mean') {
-      group[`n${index}`] = { $sum: { $cond: [matchesFilter, { $ifNull: ['$latencyMs', 0] }, 0] } };
-      group[`d${index}`] = conditionalCount(and(matchesFilter, present('$latencyMs')));
-      return;
-    }
+    const filter = Object.entries(metric.filter ?? {});
+    if (derivation === 'latency:mean') return { kind: 'latency' as const, filter };
     const [kind, expression] = derivation.split(':');
     const [key, value] = expression.split('=');
-    const field = protocol.samples!.fields.find(item => item.key === key)!;
-    const actual = metric.missingValue ? { $ifNull: [fieldAt(key), { $literal: metric.missingValue }] } : fieldAt(key);
-    const actualValid = and(matchesFilter, present(actual), ...(field.abstain ? [{ $ne: [actual, { $literal: field.abstain }] }] : []));
-    let denominator: Expression = actualValid;
-    let numerator: Expression = and(actualValid, eq(actual, { $literal: value }));
-    if (kind !== 'share') {
-      const reference = fieldAt(key, '$referenceRow.fields');
-      const valid = and(actualValid, present(reference), ...(field.abstain ? [{ $ne: [reference, { $literal: field.abstain }] }] : []));
-      denominator = valid;
-      numerator = and(valid, { $ne: [actual, reference] });
-      if (kind === 'fa' || kind === 'fr') {
-        const actualAccepted = { $in: [actual, { $literal: field.accept! }] };
-        const referenceAccepted = { $in: [reference, { $literal: field.accept! }] };
-        denominator = and(valid, kind === 'fa' ? { $not: [referenceAccepted] } : referenceAccepted);
-        numerator = and(denominator, kind === 'fa' ? actualAccepted : { $not: [actualAccepted] });
-      }
-    }
-    group[`n${index}`] = conditionalCount(numerator);
-    group[`d${index}`] = conditionalCount(denominator);
+    const field = samples.fields.find(item => item.key === key)!;
+    return { kind: kind as 'share' | 'error' | 'fa' | 'fr', filter, key, value, field, missingValue: metric.missingValue };
   });
-  stages.push({ $group: group });
-  const groups = await RunSample.aggregate<Group>(stages as unknown as PipelineStage[]);
+
+  const groups = new Map<string, Group>();
+  for await (const { row, others: [reference] } of joinRuns(trainingId, [needsReference ? referenceTrainingId : undefined])) {
+    const attrs = recordOf(row.attrs);
+    const fields = recordOf(row.fields);
+    const condition = attrs.size as string;
+    const classId = attrs.class as string;
+    const groupKey = JSON.stringify([condition ?? null, classId ?? null]);
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = { _id: { condition, classId }, count: 0, referenceMismatch: 0 };
+      plans.forEach((_plan, index) => { group![`n${index}`] = 0; group![`d${index}`] = 0; });
+      groups.set(groupKey, group);
+    }
+    group.count += 1;
+    const referenceAttrs = reference ? recordOf(reference.attrs) : undefined;
+    if (needsReference && referenceAttrs && samples.attrs.some(attr => !sameValue(attrs[attr.key], referenceAttrs[attr.key]))) {
+      group.referenceMismatch = (group.referenceMismatch as number) + 1;
+    }
+    const referenceFields = reference ? recordOf(reference.fields) : {};
+    plans.forEach((plan, index) => {
+      if (!plan.filter.every(([key, value]) => attrs[key] === value)) return;
+      if (plan.kind === 'latency') {
+        group![`n${index}`] = (group![`n${index}`] as number) + (row.latencyMs ?? 0);
+        if (present(row.latencyMs)) group![`d${index}`] = (group![`d${index}`] as number) + 1;
+        return;
+      }
+      const actual = present(fields[plan.key]) ? fields[plan.key] : plan.missingValue;
+      if (!present(actual) || (plan.field.abstain !== undefined && actual === plan.field.abstain)) return;
+      let counted: boolean;
+      let hit: boolean;
+      if (plan.kind === 'share') {
+        counted = true;
+        hit = actual === plan.value;
+      } else {
+        const expected = referenceFields[plan.key];
+        if (!present(expected) || (plan.field.abstain !== undefined && expected === plan.field.abstain)) return;
+        if (plan.kind === 'error') {
+          counted = true;
+          hit = actual !== expected;
+        } else {
+          const accepts = plan.field.accept!;
+          const actualAccepted = accepts.includes(actual as string);
+          const referenceAccepted = accepts.includes(expected as string);
+          counted = plan.kind === 'fa' ? !referenceAccepted : referenceAccepted;
+          hit = plan.kind === 'fa' ? actualAccepted : !actualAccepted;
+        }
+      }
+      if (!counted) return;
+      group![`d${index}`] = (group![`d${index}`] as number) + 1;
+      if (hit) group![`n${index}`] = (group![`n${index}`] as number) + 1;
+    });
+  }
+
   const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   const totals = new Map<string, Counter[]>();
   const results: Record<string, Record<string, Record<string, number>>> = Object.create(null) as Record<string, Record<string, Record<string, number>>>;
@@ -80,7 +100,7 @@ export async function scoreSampleRun(trainingId: string, protocol: SuiteProtocol
     });
     totals.set(key, counters);
   };
-  for (const row of groups) {
+  for (const row of groups.values()) {
     if (Number(row.referenceMismatch ?? 0) > 0) throw new BadRequestError('Reference and run attributes differ for matching sample ids');
     const { condition, classId } = row._id;
     if (!protocol.conditions.some(item => item.name === condition) || !protocol.classes.some(item => item.id === classId)) {

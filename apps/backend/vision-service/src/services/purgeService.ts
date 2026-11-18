@@ -5,6 +5,7 @@ import Training from '../models/Training';
 import RunSample from '../models/RunSample';
 import RunSampleBatch from '../models/RunSampleBatch';
 import JudgePair from '../models/JudgePair';
+import JudgeDisagreement from '../models/JudgeDisagreement';
 import Epoch from '../models/Epoch';
 import Evaluation from '../models/Evaluation';
 import Suite from '../models/Suite';
@@ -24,6 +25,18 @@ import { deleteFiles } from '../clients/fileServiceClient';
 export const TRASH_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Remove cached judge comparisons, and the disagreements stored for them, that involve any of these evaluations. */
+async function purgeJudgePairs(evaluationIds: string[]): Promise<void> {
+  if (!evaluationIds.length) return;
+  const pairs = await JudgePair.find({
+    $or: [{ evaluationA: { $in: evaluationIds } }, { evaluationB: { $in: evaluationIds } }, { referenceEvaluationId: { $in: evaluationIds } }]
+  }).select('_id').lean();
+  const ids = pairs.map(pair => String(pair._id));
+  if (!ids.length) return;
+  await JudgeDisagreement.deleteMany({ pair: { $in: ids } });
+  await JudgePair.deleteMany({ _id: { $in: ids } });
+}
 
 /**
  * Delete trainings for good, with everything under them: epochs, test results,
@@ -47,7 +60,7 @@ export async function purgeTrainings(trainingIds: string[]): Promise<void> {
   await deleteFiles([...visualizations.map(visualization => visualization.fileId), ...modelFiles]);
 
   await EpochVisualization.deleteMany({ epoch_uuid: { $in: epochUuids } });
-  await JudgePair.deleteMany({ $or: [{ evaluationA: { $in: linkedIds } }, { evaluationB: { $in: linkedIds } }, { referenceEvaluationId: { $in: linkedIds } }] });
+  await purgeJudgePairs(linkedIds);
   await purgeRunEvaluations({ trainingIds, epochUuids });
   await Benchmark.deleteMany({ training_id: { $in: trainingIds } });
   await Epoch.deleteMany({ trainingId: { $in: trainingIds } });
@@ -90,7 +103,7 @@ export async function purgeProject(project: IProject): Promise<void> {
   await purgeTrainings(trainings.map(training => training._id.toString()));
   const judgedOn = (await Evaluation.distinct('suite.id', { projectId })).filter((id): id is string => isValidObjectId(id));
   const evaluationIds = (await Evaluation.find({ projectId }).select('_id').lean()).map(evaluation => String(evaluation._id));
-  await JudgePair.deleteMany({ $or: [{ evaluationA: { $in: evaluationIds } }, { evaluationB: { $in: evaluationIds } }, { referenceEvaluationId: { $in: evaluationIds } }] });
+  await purgeJudgePairs(evaluationIds);
   await Evaluation.deleteMany({ projectId });
   await deleteSuitesNoOneNeeds(projectId, judgedOn);
   await Comparison.deleteMany({ projectId });
@@ -126,7 +139,7 @@ export async function purgeExpiredTrash(now = new Date()): Promise<{ projects: n
 
   // An evaluation in the trash is purged on the same schedule as a run, with its (possibly large) results.
   const expiredEvaluations = (await Evaluation.find({ deletedAt: { $lte: cutoff } }).select('_id').lean()).map(evaluation => String(evaluation._id));
-  await JudgePair.deleteMany({ $or: [{ evaluationA: { $in: expiredEvaluations } }, { evaluationB: { $in: expiredEvaluations } }, { referenceEvaluationId: { $in: expiredEvaluations } }] });
+  await purgeJudgePairs(expiredEvaluations);
   const evaluations = (await Evaluation.deleteMany({ deletedAt: { $lte: cutoff } })).deletedCount ?? 0;
   if (evaluations > 0) invalidatePublic();
 

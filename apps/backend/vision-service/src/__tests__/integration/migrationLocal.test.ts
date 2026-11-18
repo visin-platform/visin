@@ -109,6 +109,20 @@ finally:
         expect(left.results.overall[name].reject_rate).toBeCloseTo(a, 3);
         expect(right.results.overall[name].reject_rate).toBeCloseTo(b, 3);
       }
+      // The disagreement list on full data: the first view stores the pair's disagreements, later pages read them.
+      const disagreements = `${url}/api/evaluations/${output.evaluations.llava_34b}/disagreements/${output.evaluations['qwen2.5vl_72b_v2']}`;
+      const timed = async (query: string) => {
+        const started = Date.now();
+        const response = await fetch(`${disagreements}?${query}`, { headers: { Authorization: `Bearer ${token}` } });
+        return { body: (await response.json()) as { data: { pagination: { total: number } } }, ms: Date.now() - started };
+      };
+      const first = await timed('field=outcome&limit=20');
+      const later = await timed('field=outcome&limit=20&page=50');
+      const filtered = await timed('field=outcome&class=pedestrian&a=keep&b=delete&limit=20');
+      expect(first.body.data.pagination.total).toBe(27_285);
+      expect(later.body.data.pagination.total).toBe(27_285);
+      expect(later.ms).toBeLessThan(1_000);
+      console.log('Disagreements:', { firstMs: first.ms, laterMs: later.ms, filteredMs: filtered.ms, filteredTotal: filtered.body.data.pagination.total });
       console.log('Local migration comparisons:', JSON.stringify(fields.map(({ field, groups }) => ({ field, mask: groups.find(item => item.groupBy === 'role' && item.value === 'classify') }))));
     } finally {
       if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));

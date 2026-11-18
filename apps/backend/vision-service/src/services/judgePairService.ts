@@ -1,14 +1,17 @@
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
-import { isValidObjectId, type PipelineStage } from 'mongoose';
+import { isValidObjectId } from 'mongoose';
 import Evaluation from '../models/Evaluation';
 import Training from '../models/Training';
-import RunSample from '../models/RunSample';
 import JudgePair from '../models/JudgePair';
+import JudgeDisagreement from '../models/JudgeDisagreement';
 import { getEvaluation } from './evaluationService';
 import { checkProjectAccess } from './projectAccessService';
 import { readableSuite } from './suiteService';
 import { sampleDigest } from './sampleDigest';
 import { evaluationScope, readerVisible } from './evaluationScope';
+import { canonicalJson } from './suiteProtocol';
+import { joinRuns } from './sampleJoin';
+import type { EvaluationView } from './evaluationView';
 
 interface Cell {
   _id: { field: string; classId?: string; size?: string; role?: string; a: string; b: string; reference?: string };
@@ -35,10 +38,21 @@ function kappa(matrix: Transition[]): number | null {
   return expected === 1 ? null : (agreement / total - expected) / (1 - expected);
 }
 
-const getField = (name: string, input: string) => ({ $getField: { field: { $literal: name }, input } });
+export interface ResolvedPair {
+  left: EvaluationView;
+  suite: Awaited<ReturnType<typeof readableSuite>>;
+  runA: string;
+  runB: string;
+  referenceRunId?: string;
+  referenceEvaluationId?: string;
+  cacheKey: { evaluationA: string; evaluationB: string; suiteId: string };
+}
 
-/** Access is rechecked before the cache is consulted: neither a trashed run nor a private reference is exposed. */
-export async function compareJudgePair(a: string, b: string, userId?: string) {
+/**
+ * Both evaluations, their completed runs and the suite's reference, each checked against the caller's access.
+ * Done on every request, before any cache is read: neither a trashed run nor a private reference is exposed.
+ */
+export async function resolveJudgePair(a: string, b: string, userId?: string): Promise<ResolvedPair> {
   if (!isValidObjectId(a) || !isValidObjectId(b)) throw new NotFoundError('Evaluation not found');
   const [left, right] = await Promise.all([getEvaluation(a, userId), getEvaluation(b, userId)]);
   if (!left.suite || !right.suite || left.suite.id !== right.suite.id || left.suite.digest !== right.suite.digest || !left.samplesDigest || !right.samplesDigest || !left.source?.trainingId || !right.source?.trainingId) {
@@ -66,56 +80,66 @@ export async function compareJudgePair(a: string, b: string, userId?: string) {
     if (!run || !(await checkProjectAccess(userId, run.projectId))) throw new NotFoundError('Reference run not found');
     referenceRunId = run._id.toString();
   }
-  const cacheKey = { evaluationA: a, evaluationB: b, suiteId: left.suite.id };
+  return {
+    left, suite, runA: runA._id.toString(), runB: runB._id.toString(), referenceRunId, referenceEvaluationId,
+    cacheKey: { evaluationA: a, evaluationB: b, suiteId: left.suite.id }
+  };
+}
+
+const recordOf = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+const sameValue = (x: unknown, y: unknown) => canonicalJson(x ?? null) === canonicalJson(y ?? null);
+const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+/**
+ * The pair's transition counts by field, class, size and role (and the reference's value, for fields that say which
+ * values accept), from one ordered pass over both runs and the reference. Samples one run lacks, and fields the other
+ * left without a value, do not count. Any matched sample whose attributes differ between the runs is refused.
+ */
+async function pairCells(pair: ResolvedPair): Promise<Cell[]> {
+  const samples = pair.suite.protocol.samples!;
+  const declared = new Set(samples.fields.map(field => field.key));
+  const judged = new Set(samples.fields.filter(field => field.accept).map(field => field.key));
+  const cells = new Map<string, Cell>();
+  for await (const { row, others: [other, reference] } of joinRuns(pair.runA, [pair.runB, pair.referenceRunId])) {
+    if (!other) continue;
+    const attrs = recordOf(row.attrs);
+    const otherAttrs = recordOf(other.attrs);
+    const referenceAttrs = reference ? recordOf(reference.attrs) : undefined;
+    const differs = samples.attrs.some(attr => !sameValue(attrs[attr.key], otherAttrs[attr.key]))
+      || Boolean(referenceAttrs && samples.attrs.some(attr => !sameValue(attrs[attr.key], referenceAttrs[attr.key])));
+    const weight = samples.weight ? Number(attrs[samples.weight] ?? 0) : 1;
+    const otherFields = recordOf(other.fields);
+    const referenceFields = reference ? recordOf(reference.fields) : {};
+    for (const [field, value] of Object.entries(recordOf(row.fields))) {
+      const otherValue = otherFields[field];
+      if (!declared.has(field) || typeof otherValue !== 'string') continue;
+      const referenceValue = pair.referenceRunId && judged.has(field) ? (referenceFields[field] ?? null) as string | null : null;
+      const id = { field, classId: text(attrs.class), size: text(attrs.size), role: text(attrs.role), a: value as string, b: otherValue, reference: referenceValue ?? undefined };
+      const key = JSON.stringify([field, id.classId ?? null, id.size ?? null, id.role ?? null, id.a, id.b, referenceValue]);
+      const cell = cells.get(key) ?? { _id: id, count: 0, weight: 0, mismatch: 0 };
+      cell.count += 1;
+      cell.weight += weight;
+      if (differs) cell.mismatch += 1;
+      cells.set(key, cell);
+    }
+  }
+  return [...cells.values()];
+}
+
+/** Compare two judges. The result is cached per pair; access is resolved again on every request. */
+export async function compareJudgePair(a: string, b: string, userId?: string) {
+  const pair = await resolveJudgePair(a, b, userId);
+  const { suite, referenceRunId, referenceEvaluationId, cacheKey } = pair;
   const cached = await JudgePair.findOne(cacheKey).lean();
   if (cached) return { ...cached.results, ...(referenceEvaluationId ? { referenceEvaluationId } : {}) };
   if (referenceRunId && await sampleDigest(referenceRunId) !== suite.protocol.reference!.samplesDigest) throw new ConflictError('Reference samples do not match the suite digest');
+  const samples = suite.protocol.samples!;
 
-  const attrMismatch = suite.protocol.samples.attrs.map(attr => ({ $ne: [
-    { $ifNull: [getField(attr.key, '$attrs'), null] },
-    { $ifNull: [getField(attr.key, '$other.attrs'), null] }
-  ] }));
-  const referenceMismatch = suite.protocol.samples.attrs.map(attr => ({ $ne: [
-    { $ifNull: [getField(attr.key, '$attrs'), null] },
-    { $ifNull: [getField(attr.key, '$reference.attrs'), null] }
-  ] }));
-  // The reference's value of the same field, for each field that says which values accept; `$getField` needs a
-  // constant name, so the field is chosen by a switch over the protocol's own keys.
-  const judged = suite.protocol.samples.fields.filter(field => field.accept);
-  const referenceValue = referenceRunId && judged.length
-    ? { $switch: { branches: judged.map(field => ({ case: { $eq: ['$entries.k', field.key] }, then: { $ifNull: [getField(field.key, '$reference.fields'), null] } })), default: null } }
-    : null;
-  const lookup = (trainingId: string, as: string) => ({ $lookup: {
-    from: RunSample.collection.name,
-    let: { sample: '$sampleId' },
-    pipeline: [{ $match: { trainingId, $expr: { $eq: ['$sampleId', '$$sample'] } } }, { $project: { fields: 1, attrs: 1 } }],
-    as
-  } });
-  const stages: Record<string, unknown>[] = [
-    { $match: { trainingId: runA._id.toString() } },
-    lookup(runB._id.toString(), 'otherRows'),
-    { $unwind: '$otherRows' },
-    { $set: { other: '$otherRows', entries: { $objectToArray: '$fields' } } },
-    ...(referenceRunId ? [lookup(referenceRunId, 'referenceRows'), { $set: { reference: { $arrayElemAt: ['$referenceRows', 0] } } }] : []),
-    { $unwind: '$entries' },
-    { $match: { 'entries.k': { $in: suite.protocol.samples.fields.map(field => field.key) } } },
-    { $set: {
-      otherValue: { $getField: { field: '$entries.k', input: '$other.fields' } },
-      attrsDiffer: { $or: [
-        ...(attrMismatch.length ? attrMismatch : [false]),
-        ...(referenceRunId ? [{ $and: [{ $ne: [{ $ifNull: ['$reference', null] }, null] }, { $or: referenceMismatch.length ? referenceMismatch : [false] }] }] : [])
-      ] },
-      sampleWeight: suite.protocol.samples.weight ? { $ifNull: [getField(suite.protocol.samples.weight, '$attrs'), 0] } : 1
-    } },
-    { $match: { otherValue: { $type: 'string' } } },
-    { $group: {
-      _id: { field: '$entries.k', classId: '$attrs.class', size: '$attrs.size', role: '$attrs.role', a: '$entries.v', b: '$otherValue', reference: referenceValue },
-      count: { $sum: 1 }, weight: { $sum: '$sampleWeight' }, mismatch: { $sum: { $cond: ['$attrsDiffer', 1, 0] } }
-    } }
-  ];
-  const cells = await RunSample.aggregate<Cell>(stages as unknown as PipelineStage[]).allowDiskUse(true);
+  const cells = await pairCells(pair);
+
   if (cells.some(cell => cell.mismatch)) throw new BadRequestError('Matching sample ids have different attributes');
-  const fields = suite.protocol.samples.fields.map(field => {
+  const fields = samples.fields.map(field => {
     const byScope = new Map<string, { transitions: Map<string, Transition>; reference: { total: number; errorA: number; errorB: number; flips: number; correctA: number; correctB: number; keepUnlessBothDeleteErrors: number; reviewedErrors: number } }>();
     for (const cell of cells.filter(row => row._id.field === field.key)) {
       const scopes: [string, string | undefined][] = [['overall', undefined], ['class', cell._id.classId], ['size', cell._id.size], ['role', cell._id.role]];
@@ -166,7 +190,62 @@ export async function compareJudgePair(a: string, b: string, userId?: string) {
     return { field: field.key, groups };
   });
   const results = { evaluationA: a, evaluationB: b, suite: { slug: suite.slug, version: suite.version, digest: suite.digest }, fields };
-  try { await JudgePair.create({ ...cacheKey, referenceEvaluationId, results }); }
-  catch (error) { if ((error as { code?: number }).code !== 11000) throw error; }
+  // Two first comparisons of a pair may finish together: an upsert keeps one, and MongoDB retries the loser itself.
+  await JudgePair.updateOne(cacheKey, { $setOnInsert: { ...cacheKey, ...(referenceEvaluationId ? { referenceEvaluationId } : {}), results } }, { upsert: true });
   return { ...results, ...(referenceEvaluationId ? { referenceEvaluationId } : {}) };
+}
+
+const BUILD_BATCH = 1000;
+
+/**
+ * Store every disagreement of the pair, one row per sample and field on which both judges gave a value and the values
+ * differ, in one ordered pass. Rows already there are skipped, so a rebuild after an interruption, or two at once,
+ * converge on the same set. Marks the pair ready only when the pass finished.
+ */
+export async function buildJudgeDisagreements(pair: ResolvedPair, pairId: string): Promise<void> {
+  const declared = pair.suite.protocol.samples!.fields.map(field => field.key);
+  let batch: Record<string, unknown>[] = [];
+  const flush = async () => {
+    if (!batch.length) return;
+    try {
+      await JudgeDisagreement.insertMany(batch, { ordered: false });
+    } catch (error) {
+      const failure = error as { code?: number; writeErrors?: { code?: number; err?: { code?: number } }[] };
+      const codes = failure.writeErrors?.map(item => item.code ?? item.err?.code) ?? [failure.code];
+      if (codes.some(code => code !== 11000)) throw error;
+    }
+    batch = [];
+  };
+  for await (const { row, others: [other, reference] } of joinRuns(pair.runA, [pair.runB, pair.referenceRunId])) {
+    if (!other) continue;
+    const attrs = recordOf(row.attrs);
+    const fields = recordOf(row.fields);
+    const otherFields = recordOf(other.fields);
+    const referenceFields = reference ? recordOf(reference.fields) : undefined;
+    let sample: Record<string, unknown> | undefined;
+    for (const field of declared) {
+      const a = fields[field];
+      const b = otherFields[field];
+      if (a === undefined || a === null || b === undefined || b === null || a === b) continue;
+      sample ??= {
+        id: row.sampleId,
+        attrs,
+        a: { fields, ...(row.raw !== undefined ? { raw: row.raw } : {}) },
+        b: { fields: otherFields, ...(other.raw !== undefined ? { raw: other.raw } : {}) },
+        ...(referenceFields ? { reference: { fields: referenceFields } } : {})
+      };
+      batch.push({
+        pair: pairId, field, sampleId: row.sampleId,
+        ...(text(attrs.class) ? { class: text(attrs.class) } : {}),
+        ...(text(attrs.size) ? { size: text(attrs.size) } : {}),
+        ...(text(attrs.role) ? { role: text(attrs.role) } : {}),
+        a: String(a), b: String(b),
+        ...(referenceFields && typeof referenceFields[field] === 'string' ? { reference: referenceFields[field] } : {}),
+        sample
+      });
+      if (batch.length >= BUILD_BATCH) await flush();
+    }
+  }
+  await flush();
+  await JudgePair.updateOne({ _id: pairId }, { $set: { disagreementsReady: true } });
 }

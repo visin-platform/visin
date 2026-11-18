@@ -21,6 +21,8 @@ import { recordTest } from '../fixtures/recordedTest';
 import Training from '../../models/Training';
 import RunSample from '../../models/RunSample';
 import JudgePair from '../../models/JudgePair';
+import JudgeDisagreement from '../../models/JudgeDisagreement';
+import { compareSampleIds, joinRuns } from '../../services/sampleJoin';
 import { sampleDigest } from '../../services/sampleDigest';
 import evaluationRoutes from '../../routes/evaluationRoutes';
 import suiteRoutes from '../../routes/suiteRoutes';
@@ -287,9 +289,26 @@ describe('evaluations with in-memory MongoDB', () => {
       expect((await call(`${disagreementPath}?field=typo`)).status).toBe(400);
       expect((await call(`${disagreementPath}?a=typo`)).status).toBe(400);
       expect((await call(`${disagreementPath}?reference=typo`)).status).toBe(400);
+      // Listing a pair never compared before compares it first, then stores its disagreements.
+      const unseen = await call(`/evaluations/${second.body.data._id}/disagreements/${model.body.data._id}?field=outcome`);
+      expect(unseen.status).toBe(200);
+      expect(unseen.body.data.pagination.total).toBe(2);
+      expect(await JudgePair.findOne({ evaluationA: second.body.data._id }).lean()).toMatchObject({ disagreementsReady: true });
+      await JudgePair.deleteOne({ evaluationA: second.body.data._id });
+      await JudgeDisagreement.deleteMany({ pair: { $nin: [String((await JudgePair.findOne({ evaluationA: model.body.data._id }).lean())!._id)] } });
+      // Stored once, on the first view, and paged from what is stored: a later page writes nothing.
+      expect(await JudgePair.findOne({ evaluationA: model.body.data._id }).lean()).toMatchObject({ disagreementsReady: true });
+      const stored = await JudgeDisagreement.countDocuments();
+      expect(stored).toBeGreaterThan(0);
       const secondPage = await call(`${disagreementPath}?limit=1&page=2`);
       expect(secondPage.body.data.pagination).toMatchObject({ total: 2, page: 2, pages: 2 });
       expect(secondPage.body.data.samples[0].id).toBe('2');
+      expect(await JudgeDisagreement.countDocuments()).toBe(stored);
+      // An interrupted build is finished by the next view, without duplicating what it had written.
+      await JudgePair.updateOne({ evaluationA: model.body.data._id }, { $set: { disagreementsReady: false } });
+      await JudgeDisagreement.deleteOne({ sampleId: '2' });
+      expect((await call(`${disagreementPath}?limit=1&page=2`)).body.data.samples[0].id).toBe('2');
+      expect(await JudgeDisagreement.countDocuments()).toBe(stored);
       expect((await call(`/evaluations/not-an-id/compare/${second.body.data._id}`)).status).toBe(404);
       const ordinary = await call('/evaluations', { method: 'POST', body: { projectId: id, results: {} } });
       expect((await call(`/evaluations/${ordinary.body.data._id}/compare/${second.body.data._id}`)).status).toBe(400);
@@ -327,6 +346,7 @@ describe('evaluations with in-memory MongoDB', () => {
       expect((await record(id, { source: { trainingUuid: 'model-run' }, evidence: evidenceFor(proto) })).status).toBe(409);
       await purgeTrainings([String(modelId)]);
       expect(await JudgePair.countDocuments()).toBe(0);
+      expect(await JudgeDisagreement.countDocuments()).toBe(0);
     });
 
     it('compares partial sample suites without a reference and leaves undefined kappa unset', async () => {
@@ -1710,5 +1730,24 @@ describe('evaluations with in-memory MongoDB', () => {
       expect((await call('/suites/road-test/1/leaderboard', { user: STRANGER })).status).toBe(404);
       expect((await call('/suites/nope/1/leaderboard')).status).toBe(404);
     });
+  });
+
+  it('joins runs by sample id in one ordered pass, in the order MongoDB sorts ids, with gaps on either side', async () => {
+    const attrs = { size: 'small', class: 'a' };
+    const rows = (trainingId: string, ids: string[]) => RunSample.insertMany(ids.map(sampleId => ({ trainingId, projectId: 'p', sampleId, attrs, fields: { outcome: sampleId } })));
+    // 'é' sorts after 'z' by UTF-8 bytes, as MongoDB orders it; '𝑥' (outside the BMP) after 'ｚ' only by bytes.
+    await rows('join-a', ['1', '2', 'z', 'é', 'ｚ', '𝑥']);
+    await rows('join-b', ['0', '2', 'é', 'ｚ', '𝑥', '9z']);
+    await rows('join-r', ['2', '𝑥']);
+    const joined: [string, string | undefined, string | undefined][] = [];
+    for await (const { row, others: [b, r] } of joinRuns('join-a', ['join-b', 'join-r'])) joined.push([row.sampleId, b?.sampleId, r?.sampleId]);
+    expect(joined).toEqual([['1', undefined, undefined], ['2', '2', '2'], ['z', undefined, undefined], ['é', 'é', undefined], ['ｚ', 'ｚ', undefined], ['𝑥', '𝑥', '𝑥']]);
+    const [bmp, astral] = ['ｚ', '𝑥'];
+    expect(compareSampleIds(bmp, astral)).toBeLessThan(0);
+    // JavaScript's own order disagrees for these two, which is why the join does not use it.
+    expect(bmp < astral).toBe(false);
+    const none: string[] = [];
+    for await (const { others } of joinRuns('join-a', [undefined])) none.push(String(others[0]));
+    expect(none.every(value => value === 'undefined')).toBe(true);
   });
 });

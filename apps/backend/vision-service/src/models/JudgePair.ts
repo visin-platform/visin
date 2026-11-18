@@ -6,6 +6,8 @@ interface IJudgePair {
   suiteId: string;
   referenceEvaluationId?: string;
   results: Record<string, unknown>;
+  /** every disagreement of the pair is stored (JudgeDisagreement) */
+  disagreementsReady?: boolean;
 }
 
 const schema = new Schema<IJudgePair>({
@@ -13,7 +15,8 @@ const schema = new Schema<IJudgePair>({
   evaluationB: { type: String, required: true },
   suiteId: { type: String, required: true },
   referenceEvaluationId: { type: String },
-  results: { type: Schema.Types.Mixed, required: true }
+  results: { type: Schema.Types.Mixed, required: true },
+  disagreementsReady: Boolean
 }, { timestamps: true });
 schema.index({ evaluationA: 1, evaluationB: 1, suiteId: 1 }, { unique: true });
 
