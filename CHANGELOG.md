@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.19.0](https://github.com/visin-platform/visin/compare/v2.18.0...v2.19.0) (2026-11-18)
+
+### Features
+
+* inference projects show their samples and only the tabs they can fill ([d21aee1](https://github.com/visin-platform/visin/commit/d21aee1191af3a39a3cb363c064b8c3904c35599))
+
 ## [2.18.0](https://github.com/visin-platform/visin/compare/v2.17.0...v2.18.0) (2026-11-18)
 
 ### Features
