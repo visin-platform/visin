@@ -7,8 +7,9 @@ import { getEditableProjectIds, projectFilter, resolveProject } from './projectA
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { tokenProjectId } from '../middleware/projectTokenContext';
-import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Training, { ITraining } from '../models/Training';
+import RunSampleBatch from '../models/RunSampleBatch';
 import Epoch from '../models/Epoch';
 import { restoreRunEvaluations, trashRunEvaluations } from './runEvaluations';
 import Comparison from '../models/Comparison';
@@ -19,11 +20,15 @@ import type { PaginationOptions } from './trainingTypes';
 import { getTrainings } from './trainingList';
 import { getTrainingStats } from './trainingStats';
 import { compareTrainings } from './trainingCompare';
+import { readableSuite } from './suiteService';
 
 export type { TrainingWithMetrics } from './trainingList';
 
 interface CreateTrainingData {
   name: string;
+  kind?: ITraining['kind'];
+  suite?: { slug: string; version: number };
+  progress?: ITraining['progress'];
   description?: string;
   notes?: string;
   datasetId?: string;
@@ -41,6 +46,7 @@ interface CreateTrainingData {
 
 interface UpdateTrainingData {
   name?: string;
+  progress?: ITraining['progress'];
   description?: string;
   notes?: string;
   datasetId?: string;
@@ -208,6 +214,14 @@ export const trainingService = {
 
     await requireProjectConfig(configId, resolvedProjectId);
 
+    if (data.kind !== 'inference' && (data.suite || data.progress)) throw new BadRequestError('Suite and progress require an inference run');
+    let suite: ITraining['suite'];
+    if (data.suite) {
+      const found = await readableSuite(data.suite.slug, data.suite.version, userId);
+      if (found.archivedAt || !found.protocol.samples) throw new BadRequestError('Inference runs require an active sample suite');
+      suite = { slug: found.slug, version: found.version, digest: found.digest };
+    }
+
     // Generate UUID if not provided
     const uuid = data.uuid || uuidv4();
 
@@ -223,6 +237,9 @@ export const trainingService = {
       ownerId,
       uuid,
       name: name.trim(),
+      kind: data.kind ?? 'training',
+      suite,
+      progress: data.progress,
       description: description?.trim(),
       notes: data.notes?.trim() || undefined,
       dataset,
@@ -268,6 +285,9 @@ export const trainingService = {
 
     await requireProjectConfig(configId, training.projectId);
 
+    if (data.progress && training.kind !== 'inference') throw new BadRequestError('Progress requires an inference run');
+    if (data.progress) training.progress = data.progress;
+
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
     // An emptied note is a removed one.
@@ -287,7 +307,20 @@ export const trainingService = {
     if (configId !== undefined) training.configId = configId;
     if (data.provenance !== undefined) training.provenance = data.provenance;
     const statusBefore = training.status;
-    if (status !== undefined) {
+    if (status !== undefined && training.kind === 'inference') {
+      if (training.status === 'completed' && status !== 'completed') throw new ConflictError('A completed inference run cannot be reopened');
+      const result = await Training.updateOne(
+        { _id: training._id, deletedAt: null, status: { $ne: 'completed' }, ...(status === 'completed' ? { 'pendingSampleBatches.0': { $exists: false } } : {}) },
+        { $set: { status } },
+        { runValidators: true }
+      );
+      if (!result.matchedCount && !(training.status === 'completed' && status === 'completed')) {
+        throw new ConflictError('The inference run is complete or sample writes are still in progress');
+      }
+      training.status = status as ITraining['status'];
+      training.$ignore('status');
+      if (status === 'running') training.lastSeenAt = new Date();
+    } else if (status !== undefined) {
       training.status = status as ITraining['status'];
       if (status === 'running') training.lastSeenAt = new Date();
     }
@@ -297,6 +330,10 @@ export const trainingService = {
     if (metadata !== undefined) training.metadata = metadata;
 
     const updatedTraining = await training.save();
+    if (training.kind === 'inference' && status === 'completed') {
+      // Once sealed, the permanent samples are the source of truth and batch payloads are redundant.
+      await RunSampleBatch.deleteMany({ trainingId: String(training._id) });
+    }
     // A run that has just finished, or failed, tells its owner. Only the change counts: saving the same status again,
     // or a rename of a finished run, must not buzz anyone.
     if (

@@ -23,6 +23,8 @@ describe('registerTools', () => {
 
     expect(registered).toContain('list_trainings');
     expect(registered).toContain('get_training_curve');
+    expect(registered).toContain('compare_judges');
+    expect(registered).toContain('list_disagreements');
     expect(registered).not.toContain('update_training');
     expect(registered).not.toContain('create_project');
     expect(registered).not.toContain('list_datasets');

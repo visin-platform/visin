@@ -68,6 +68,7 @@ describe('checkpoints', () => {
     expect(checkpointKey(hub)).toBe(`hf:acme/clft@${COMMIT}:best.pt`);
     expect(checkpointKey({ ...hub, repo: 'acme/CLFT', path: undefined })).toBe(`hf:acme/clft@${COMMIT}:`);
     expect(checkpointKey(local)).toBe(`sha256:${'a'.repeat(64)}`);
+    expect(checkpointKey({ kind: 'human', label: 'annotator' })).toBe('human:annotator');
     expect(hubCheckpointKey(hub)).toBe(checkpointKey(hub));
   });
 
@@ -75,6 +76,7 @@ describe('checkpoints', () => {
     expect(publicCheckpoint(hub)).toEqual({ kind: 'hf', repo: 'Acme/Clft', commit: COMMIT, path: 'best.pt' });
     expect(publicCheckpoint({ ...hub, path: undefined })).toEqual({ kind: 'hf', repo: 'Acme/Clft', commit: COMMIT });
     expect(publicCheckpoint(local)).toEqual({ kind: 'local', label: 'epoch 40', sha256: 'a'.repeat(64) });
+    expect(publicCheckpoint({ kind: 'human', label: 'annotator' })).toEqual({ kind: 'human', label: 'annotator' });
     expect(publicCheckpoint(undefined)).toBeUndefined();
   });
 

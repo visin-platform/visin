@@ -130,6 +130,19 @@ components:
           type: string
         name:
           type: string
+        kind: { type: string, enum: [training, inference] }
+        suite:
+          type: object
+          properties:
+            slug: { type: string }
+            version: { type: integer }
+            digest: { type: string }
+        progress:
+          type: object
+          properties:
+            done: { type: integer }
+            total: { type: integer }
+            unit: { type: string, const: frame }
         description:
           type: string
         datasetId:
@@ -267,6 +280,11 @@ components:
         Which bytes were scored. A Hub checkpoint is its repo, a full commit and optionally a file; a local one is
         the SHA-256 of the weights that were loaded, never a path.
       oneOf:
+        - type: object
+          required: [kind, label]
+          properties:
+            kind: { type: string, const: human }
+            label: { type: string }
         - type: object
           required: [kind, repo, commit]
           properties:
@@ -415,6 +433,7 @@ components:
             digest: { type: string }
         status: { type: string, enum: [completed, failed] }
         sampleCounts: { type: object, additionalProperties: { type: integer } }
+        samplesDigest: { type: string, description: SHA-256 of the canonical sample rows for a sample-scored evaluation. }
         evidence: { $ref: '#/components/schemas/EvaluationEvidence' }
         executedAt: { type: string, format: date-time, description: When the writer says it ran. }
         receivedAt: { type: string, format: date-time, description: When the server stored it; this orders attempts. }
@@ -518,6 +537,11 @@ components:
 
     PublicCheckpoint:
       oneOf:
+        - type: object
+          required: [kind, label]
+          properties:
+            kind: { type: string, const: human }
+            label: { type: string }
         - type: object
           required: [kind, repo, commit]
           properties:
@@ -713,6 +737,10 @@ components:
         What decides a score: the data, the conditions with their sample counts, the metrics and which way is
         better, and how the overall figure is formed. It is hashed into the suite's `digest`, so changing any
         field is a new version. The request form is `#/SuiteProtocol` in `generated/request-schemas.json`.
+        For a sample-derived metric, `filter` optionally maps categorical attribute keys to declared values;
+        only matching samples contribute to that metric. `sampleCounts` still counts all rows in each condition.
+        False-accept and false-reject metrics may specify `missingValue` to treat absent predictions as an
+        explicitly declared non-abstaining field value; without it, absent predictions are excluded.
       additionalProperties: true
 
     Suite:
@@ -1839,6 +1867,47 @@ paths:
           $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/Error'
+
+  /trainings/{id}/samples:
+    get:
+      tags: [Trainings]
+      summary: List samples from an inference run
+      operationId: listRunSamples
+      description: Filter attributes and fields using JSON objects containing exact values.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { $ref: ./generated/request-schemas.json#/ListRunSamplesQuery/properties/page } }
+        - { name: limit, in: query, schema: { $ref: ./generated/request-schemas.json#/ListRunSamplesQuery/properties/limit } }
+        - { name: attrs, in: query, schema: { $ref: ./generated/request-schemas.json#/ListRunSamplesQuery/properties/attrs } }
+        - { name: fields, in: query, schema: { $ref: ./generated/request-schemas.json#/ListRunSamplesQuery/properties/fields } }
+      responses:
+        '200': { description: A page of samples }
+        '4XX': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Trainings]
+      summary: Record a batch of inference samples
+      operationId: postRunSamples
+      description: |
+        Up to 5,000 samples. Retries with the same content are accepted; conflicting content or a completed run
+        returns 409. Each sample is checked against the pinned suite before it is stored, and must carry the
+        attributes scoring groups by: `class` (one of the suite's classes) and `size` (one of its conditions).
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: ./generated/request-schemas.json#/RunSampleBatch }
+      responses:
+        '200': { description: The accepted sample count }
+        '4XX': { $ref: '#/components/responses/Error' }
 
   /trainings/best:
     get:
@@ -5254,6 +5323,10 @@ paths:
         change.
 
         A Hub checkpoint needs a project whose storage is Hugging Face. Needs `contribute` on the project.
+
+        For a sample suite, `source.trainingUuid` must name a completed inference run pinned to the suite. The server
+        computes results and counts from its samples and ignores any supplied results and counts. Human reference rows
+        must match the suite's reference digest; the reference evaluation is never ranked.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -6544,6 +6617,54 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Error' }
+
+  /evaluations/{id}/disagreements/{otherId}:
+    get:
+      tags: [Evaluations]
+      summary: List samples where two judges disagree
+      operationId: listJudgeDisagreements
+      description: |
+        Returns a page of matching sample IDs, attributes, both decisions and raw replies, and the reference
+        fields when available. The caller must be allowed to read both evaluations, both runs and the reference.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: otherId, in: path, required: true, schema: { type: string } }
+        - { name: field, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/field } }
+        - { name: class, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/class } }
+        - { name: size, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/size } }
+        - { name: role, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/role } }
+        - { name: a, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/a } }
+        - { name: b, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/b } }
+        - { name: reference, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/reference } }
+        - { name: page, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/page } }
+        - { name: limit, in: query, schema: { $ref: ./generated/request-schemas.json#/JudgeDisagreementsQuery/properties/limit } }
+      responses:
+        '200': { description: A page of disagreements }
+        '4XX': { $ref: '#/components/responses/Error' }
+
+  /evaluations/{id}/compare/{otherId}:
+    get:
+      tags: [Evaluations]
+      summary: Compare two sample-scored evaluations
+      operationId: compareJudgePair
+      description: |
+        Compare matching samples on one suite. Returns categorical transition counts, agreement, kappa and
+        weighted divergence by class, size and role. Where the suite has a human reference, outcome groups also
+        include reference error and flip counts. Both evaluations, their runs and the reference must be readable.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: otherId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Cached comparison of the two evaluations }
+        '4XX': { $ref: '#/components/responses/Error' }
 
   /evaluations/{id}:
     get:

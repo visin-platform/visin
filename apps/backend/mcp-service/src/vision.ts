@@ -12,6 +12,8 @@ import {
   projectSchema,
   projectsResponseSchema,
   evaluationSchema,
+  judgePairSchema,
+  judgeDisagreementsSchema,
   leaderboardSchema,
   suiteSchema,
   suitesResponseSchema,
@@ -25,6 +27,8 @@ import {
   type ComparisonEntry,
   type DashboardStats,
   type EvaluationRecord,
+  type JudgePair,
+  type JudgeDisagreements,
   type Epoch,
   type Leaderboard,
   type Suite,
@@ -62,8 +66,9 @@ const get = async <T>(
   schema: Parameters<typeof parseResponse<T>>[0],
   apiKey: string,
   path: string,
-  query?: Query
-): Promise<T> => parseResponse(schema, path, await callService(base(), apiKey, 'GET', path, undefined, query));
+  query?: Query,
+  timeoutMs?: number
+): Promise<T> => parseResponse(schema, path, await callService(base(), apiKey, 'GET', path, undefined, query, timeoutMs));
 
 const post = async <T>(
   schema: Parameters<typeof parseResponse<T>>[0],
@@ -129,6 +134,12 @@ export const vision = {
 
   getEvaluation: (apiKey: string, id: string): Promise<EvaluationRecord> =>
     get(evaluationSchema, apiKey, `/evaluations/${encodeURIComponent(id)}`),
+
+  compareJudges: (apiKey: string, a: string, b: string): Promise<JudgePair> =>
+    get(judgePairSchema, apiKey, `/evaluations/${encodeURIComponent(a)}/compare/${encodeURIComponent(b)}`, undefined, 60_000),
+
+  judgeDisagreements: (apiKey: string, a: string, b: string, query: Query): Promise<JudgeDisagreements> =>
+    get(judgeDisagreementsSchema, apiKey, `/evaluations/${encodeURIComponent(a)}/disagreements/${encodeURIComponent(b)}`, query, 60_000),
 
   getTraining: (apiKey: string, id: string): Promise<Training> =>
     get(trainingSchema, apiKey, `/trainings/${encodeURIComponent(id)}`),

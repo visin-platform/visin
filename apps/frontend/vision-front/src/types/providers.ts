@@ -21,14 +21,14 @@ export const MODEL_LINK_PROVIDERS = [HUB, VISIN] as const;
 export type ModelLinkProvider = (typeof MODEL_LINK_PROVIDERS)[number];
 
 /** What a checkpoint an evaluation scored can be. */
-export const CHECKPOINT_KINDS = [HUB, 'local'] as const;
+export const CHECKPOINT_KINDS = [HUB, 'local', 'human'] as const;
 
 /** What the data a suite pins, or an evaluator reports having read, can be. */
 export const SUITE_DATA_KINDS = ['visin', HUB, 'external'] as const;
 export type SuiteDataKind = (typeof SUITE_DATA_KINDS)[number];
 
 /** A checkpoint an evaluation scored: held on a store, or outside Visin and named by the digest of its weights. */
-export type Checkpoint = HubCheckpoint | { kind: 'local'; sha256: string; label: string };
+export type Checkpoint = HubCheckpoint | { kind: 'local'; sha256: string; label: string } | { kind: 'human'; label: string };
 
 /** What a Visin suite pins. */
 export type SuiteData =

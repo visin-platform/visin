@@ -93,11 +93,14 @@ interface Judged {
  * Resolve the suite and judge the result against it. A suite the caller cannot read, or that does not exist, is
  * a not-found; an archived suite refuses new results (the old ones stay), as a protocol that is retired.
  */
-export async function judge(body: EvaluationBody, userId: string, attested = false): Promise<Judged> {
+export async function judge(body: EvaluationBody, userId: string, attested = false, serverScored = false): Promise<Judged> {
   const key = body.checkpoint ? checkpointKey(body.checkpoint) : undefined;
   if (!body.suite) return { report: exploratoryReport(), key };
   const suite = await readableSuite(body.suite.slug, body.suite.version, userId);
   if (suite.archivedAt) throw new ConflictError(`Suite ${suite.slug}@${suite.version} is archived and takes no new results`);
+  // Sample suites must be scored by the server; accepting caller-provided aggregates would make their
+  // evidence and leaderboard entries claim more than the service has verified.
+  if (suite.protocol.samples && !serverScored) throw new ConflictError('Sample-scored evaluations require server scoring');
   const report = validateEvaluation(suite.protocol, suite.digest, {
     status: body.status,
     results: body.results,
@@ -145,6 +148,11 @@ export async function resolveSource(body: EvaluationBody, projectId: string): Pr
  */
 export async function projectRefOf(body: EvaluationBody): Promise<string> {
   if (body.projectId) return body.projectId;
+  if (body.source?.trainingUuid) {
+    const training = await Training.findOne({ uuid: body.source.trainingUuid, deletedAt: null });
+    if (!training?.projectId) throw new NotFoundError('Project not found');
+    return training.projectId;
+  }
   const epoch = body.source?.epochUuid ? await Epoch.findOne({ epoch_uuid: body.source.epochUuid, deletedAt: null }) : null;
   const training = epoch && isValidObjectId(epoch.trainingId) ? await Training.findOne({ _id: epoch.trainingId, deletedAt: null }) : null;
   // An epoch that is not known, one with no project, and one in a project the caller cannot read all read the same

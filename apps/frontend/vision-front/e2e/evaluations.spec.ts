@@ -312,6 +312,43 @@ const PAGES: { path: string; heading: string | RegExp; name: string }[] = [
 test.describe('evaluation pages', () => {
   test.beforeEach(async ({ page }) => mockApi(page));
 
+  test('compares judge transitions and annotator results on a phone', async ({ page }) => {
+    const judged = { ...SUITE, protocol: { ...PROTOCOL, samples: { attrs: [], fields: [{ key: 'outcome', values: ['keep', 'delete'], accept: ['keep'] }] } } };
+    const modelA = { ...E1, samplesDigest: 'a'.repeat(64), checkpointKey: 'model-a' };
+    const modelB = { ...E3, samplesDigest: 'b'.repeat(64), checkpointKey: 'model-b' };
+    const comparison = { evaluationA: 'e1', evaluationB: 'e3', referenceEvaluationId: 'h1', suite: { slug: SUITE.slug, version: 1, digest: SUITE.digest }, fields: [{ field: 'outcome', groups: [
+      { groupBy: 'overall', count: 3, agreement: 1 / 3, divergence: 2 / 3, kappa: -0.5, binaryKappa: -0.5, weightedDivergence: null,
+        matrix: [{ a: 'keep', b: 'delete', count: 1, weight: 1 }],
+        reference: { total: 3, errorA: 2, errorB: 0, flips: 2, correctA: 0, correctB: 2, keepUnlessBothDeleteErrors: 1, reviewedErrors: 0, errorRateA: 2 / 3, errorRateB: 0, keepUnlessBothDeleteErrorRate: 1 / 3, reviewedErrorRate: 0 } },
+      { groupBy: 'class', value: 'sample', count: 3, agreement: 1 / 3, divergence: 2 / 3, kappa: -0.5, weightedDivergence: null, matrix: [] },
+      { groupBy: 'size', value: 'snow', count: 3, agreement: 1 / 3, divergence: 2 / 3, kappa: -0.5, weightedDivergence: null, matrix: [] }
+    ] }] };
+    const disagreement = { field: 'outcome', pagination: { page: 1, limit: 10, total: 1, pages: 1 }, samples: [{ id: 'frame_1/m1', attrs: { frame: 'frame_1', bbox: [0, 0, 1, 1] }, a: { fields: { outcome: 'keep' }, raw: 'first reply' }, b: { fields: { outcome: 'delete' }, raw: 'second reply' }, reference: { fields: { outcome: 'keep' } } }] };
+    const imageDataset = { _id: 'd1', name: 'Frames', groups: [{ name: 'camera', images: 1 }], license: { id: 'cc-by-sa-4.0', name: 'CC BY-SA 4.0' }, credit: 'Zenseact AB' };
+    await page.route('**/mock/frame.png', route => route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lm1sAAAAASUVORK5CYII=', 'base64') }));
+    await page.route('**/api/**', async route => {
+      const path = new URL(route.request().url()).pathname;
+      const data = path === '/api/suites/zod-weather/1' ? judged : path === '/api/evaluations' ? page_('evaluations', [modelA, modelB]) : path === '/api/evaluations/e1' ? modelA : path === '/api/evaluations/e3' ? modelB : path === '/api/evaluations/e1/compare/e3' ? comparison : path === '/api/evaluations/e1/disagreements/e3' ? disagreement : path === '/api/datasets' ? page_('datasets', [imageDataset]) : path === '/api/datasets/d1/items' ? page_('items', [{ _id: 'image1', group: 'camera', path: 'camera/frame_1.png', stem: 'frame_1', kind: 'image', size: 1, url: 'http://localhost:5010/mock/frame.png' }]) : undefined;
+      if (!data) return route.fallback();
+      return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': route.request().headers().origin ?? 'http://localhost:3012', 'access-control-allow-credentials': 'true' }, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/suites/zod-weather/1/judges?a=e1&b=e3');
+    await expect(page.getByRole('table', { name: 'outcome transitions' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Divergence by size' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'outcome annotator comparison' })).toContainText('66.7% (2)');
+    await expect(page.getByText('first reply')).toBeVisible();
+    await page.getByRole('combobox', { name: 'Image dataset' }).click();
+    await page.getByRole('option', { name: 'Frames' }).click();
+    await page.getByRole('combobox', { name: 'Image group' }).click();
+    await page.getByRole('option', { name: 'camera (1)' }).click();
+    await expect(page.getByRole('img', { name: 'Crop for frame_1/m1' })).toHaveAttribute('width', '1');
+    await expect(page.getByText(/Zenseact AB/)).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const scan = await new AxeBuilder({ page }).analyze();
+    expect(scan.violations.filter(violation => violation.impact === 'serious' || violation.impact === 'critical').map(violation => violation.id)).toEqual([]);
+  });
+
   test('recorded leaderboard filters verified and migrated unverified results', async ({ page }) => {
     await page.goto('/leaderboards');
     const table = page.getByRole('table', { name: 'Recorded result leaderboard' });

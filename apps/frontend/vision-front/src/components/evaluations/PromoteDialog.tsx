@@ -161,7 +161,7 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
             onChange={(_event, next) => next && setKind(next)}
             aria-label="Where the checkpoint is"
           >
-            {Object.entries(checkpointForms).map(([value, form]) => (
+            {Object.entries(checkpointForms).filter(([value]) => value !== 'human').map(([value, form]) => (
               <ToggleButton key={value} value={value}>
                 {form.choice}
               </ToggleButton>

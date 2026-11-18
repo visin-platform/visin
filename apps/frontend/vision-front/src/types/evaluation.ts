@@ -56,6 +56,7 @@ export interface Evaluation {
   suite?: { id: string; slug: string; version: number; digest: string };
   status: 'completed' | 'failed';
   sampleCounts?: Record<string, number>;
+  samplesDigest?: string;
   evidence?: EvaluationEvidence;
   executedAt?: string;
   receivedAt: string;
@@ -79,6 +80,7 @@ export interface Evaluation {
 export interface EvaluationQuery {
   projectId?: string;
   suite?: string;
+  checkpointKey?: string;
   state?: ValidationState;
   page?: number;
   limit?: number;
@@ -110,6 +112,62 @@ export interface SuiteProtocol {
   aggregation: 'equal-mean-of-conditions' | 'sample-weighted-mean' | 'pooled';
   input: { sensors?: string[]; resolution?: string; preprocessing?: string; postprocessing?: string; calibration?: string };
   evaluator: { package: string; minVersion?: string };
+  samples?: {
+    attrs: { key: string; values?: string[] }[];
+    fields: { key: string; values: string[]; abstain?: string; accept?: string[]; required?: boolean }[];
+    weight?: string;
+  };
+}
+
+export interface JudgePairGroup {
+  groupBy: 'overall' | 'class' | 'size' | 'role';
+  value?: string;
+  count: number;
+  agreement: number;
+  divergence: number;
+  kappa: number | null;
+  binaryKappa?: number | null;
+  weightedDivergence: number | null;
+  matrix: { a: string; b: string; count: number; weight: number }[];
+  reference?: {
+    total: number; errorA: number; errorB: number; flips: number; correctA: number; correctB: number;
+    keepUnlessBothDeleteErrors: number; reviewedErrors: number;
+    errorRateA: number; errorRateB: number; keepUnlessBothDeleteErrorRate: number; reviewedErrorRate: number;
+  };
+}
+
+export interface JudgePair {
+  evaluationA: string;
+  evaluationB: string;
+  suite: { slug: string; version: number; digest: string };
+  referenceEvaluationId?: string;
+  fields: { field: string; groups: JudgePairGroup[] }[];
+}
+
+export interface JudgeDisagreement {
+  id: string;
+  attrs: Record<string, unknown>;
+  a: { fields: Record<string, string>; raw?: string };
+  b: { fields: Record<string, string>; raw?: string };
+  reference?: { fields?: Record<string, string> };
+}
+
+export interface JudgeDisagreementPage {
+  field: string;
+  samples: JudgeDisagreement[];
+  pagination: { page: number; limit: number; total: number; pages: number };
+}
+
+export interface JudgeDisagreementQuery {
+  field: string;
+  class?: string;
+  size?: string;
+  role?: string;
+  a?: string;
+  b?: string;
+  reference?: string;
+  page?: number;
+  limit?: number;
 }
 
 export type SubmissionPolicy = 'open' | 'members' | 'approval';

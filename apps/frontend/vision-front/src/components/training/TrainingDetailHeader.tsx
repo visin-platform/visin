@@ -5,6 +5,7 @@ import { Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon, Code as
 import { Training } from '../../types';
 import { StatusChip } from '../trainings/TrainingStatusChip';
 import { secondsPerEpoch } from '../../utils/liveRuns';
+import { isInferenceRun } from '../../utils/inferenceRun';
 
 interface TrainingDetailHeaderProps {
   training: Training;
@@ -54,7 +55,7 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
             {training.name}
           </Typography>
           <StatusChip training={training} />
-          {training.status === 'running' && secondsPerEpoch(training) !== null && (
+          {training.status === 'running' && !isInferenceRun(training) && secondsPerEpoch(training) !== null && (
             <Typography variant="caption" color="text.secondary">
               about {Math.round(secondsPerEpoch(training)!)} s per epoch
             </Typography>

@@ -22,6 +22,17 @@ describe('StatusChip', () => {
     expect(screen.getByTestId('live-dot')).toBeInTheDocument();
   });
 
+  it('counts an inference run in frames, never in epochs', () => {
+    render(<StatusChip training={run({ status: 'running', kind: 'inference', metrics: metrics(17), progress: { done: 40, total: 4110, unit: 'frame' } })} />);
+    expect(screen.getByText(`running · 40 / ${(4110).toLocaleString()} frames`)).toBeInTheDocument();
+    expect(screen.queryByText(/epoch/)).not.toBeInTheDocument();
+  });
+
+  it('says only "running" for an inference run that has not reported progress', () => {
+    render(<StatusChip training={run({ status: 'running', kind: 'inference', metrics: metrics(3) })} />);
+    expect(screen.getByText('running')).toBeInTheDocument();
+  });
+
   it('says only "running" before the first epoch, and still shows it is live', () => {
     render(<StatusChip training={run({ status: 'running', metrics: metrics(0) })} />);
     expect(screen.getByText('running')).toBeInTheDocument();

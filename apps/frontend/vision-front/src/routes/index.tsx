@@ -25,6 +25,7 @@ const EvaluationDetailPage = lazy(() => import('../pages/EvaluationDetailPage'))
 const SuitesPage = lazy(() => import('../pages/SuitesPage'));
 const SuitePage = lazy(() => import('../pages/SuitePage'));
 const SuiteComparePage = lazy(() => import('../pages/SuiteComparePage'));
+const JudgeComparePage = lazy(() => import('../pages/JudgeComparePage'));
 const PublicLeaderboardsPage = lazy(() => import('../pages/PublicLeaderboardsPage'));
 const PublicLeaderboardPage = lazy(() => import('../pages/PublicLeaderboardPage'));
 const PublicEvaluationPage = lazy(() => import('../pages/PublicEvaluationPage'));
@@ -68,6 +69,7 @@ function AppRoutes() {
         <Route path="/suites" element={<SuitesPage />} />
         <Route path="/suites/:slug/:version" element={<SuitePage />} />
         <Route path="/suites/:slug/:version/compare" element={<SuiteComparePage />} />
+        <Route path="/suites/:slug/:version/judges" element={<JudgeComparePage />} />
         <Route path="/leaderboards" element={<PublicLeaderboardsPage />} />
         <Route path="/leaderboards/:slug/:version" element={<PublicLeaderboardPage />} />
         <Route path="/leaderboards/:slug/:version/:id" element={<PublicEvaluationPage />} />

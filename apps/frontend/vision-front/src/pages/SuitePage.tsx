@@ -255,9 +255,14 @@ const SuitePage: React.FC = () => {
       />
       <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 3 }}>
         <section aria-labelledby="ranking-heading">
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
             <Typography id="ranking-heading" variant="h6" gutterBottom>Ranking</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {suite.data.protocol.samples && (
+                <Button size="small" component={RouterLink} to={`/suites/${slug}/${version}/judges${picked.length === 2 ? `?a=${encodeURIComponent(picked[0])}&b=${encodeURIComponent(picked[1])}` : ''}`}>
+                  Compare judges
+                </Button>
+              )}
               <Button size="small" disabled={picked.length !== 2} onClick={() => navigate(`/suites/${slug}/${version}/compare?a=${picked[0]}&b=${picked[1]}`)}>
                 Compare{picked.length > 0 ? ` (${picked.length} of 2)` : ''}
               </Button>

@@ -325,6 +325,12 @@ describe('trainingSchemas', () => {
     expect(updateTrainingBodySchema.parse({ startTime: '2026-01-01' }).startTime).toBeInstanceOf(Date);
   });
 
+  it('validates inference progress and defaults the run kind', () => {
+    expect(createTrainingBodySchema.parse({ name: 'T' }).kind).toBe('training');
+    expect(createTrainingBodySchema.safeParse({ name: 'T', kind: 'inference', progress: { done: 2, total: 1, unit: 'frame' } }).success).toBe(false);
+    expect(updateTrainingBodySchema.safeParse({ progress: { done: 1, total: 2, unit: 'frame' } }).success).toBe(true);
+  });
+
   it('compareTrainingsBodySchema bounds ids to 1..30', () => {
     expect(compareTrainingsBodySchema.safeParse({ trainingIds: [] }).success).toBe(false);
     expect(compareTrainingsBodySchema.safeParse({ trainingIds: Array(31).fill('x') }).success).toBe(false);

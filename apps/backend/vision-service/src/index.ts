@@ -1,5 +1,6 @@
 import { stallSilentTrainings } from './services/trainingHeartbeatService';
 import { verifyPendingModels } from './services/modelVerificationService';
+import { recoverSampleBatches } from './services/runSampleService';
 import express from 'express';
 import { jsonBody } from './middleware/bodyLimit';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
@@ -57,7 +58,8 @@ connectDb({ serviceName: 'vision-service' })
     const runSweeper = startSweeper({ name: 'vision-stalled-runs', everyMs: 60_000, run: async () => void (await stallSilentTrainings()) });
     // Reads the stored models whose verification never finished (a restart, a worker that died holding a lease).
     const modelSweeper = startSweeper({ name: 'vision-model-verify', everyMs: 60_000, run: async () => void (await verifyPendingModels()) });
-    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: async () => { await trashSweeper.stop(); await runSweeper.stop(); await modelSweeper.stop(); } });
+    const sampleSweeper = startSweeper({ name: 'vision-sample-recovery', everyMs: 60_000, run: recoverSampleBatches });
+    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: async () => { await trashSweeper.stop(); await runSweeper.stop(); await modelSweeper.stop(); await sampleSweeper.stop(); } });
   })
   .catch((err: Error) => {
     logger.error('Failed to start vision-service', { error: err.message, stack: err.stack });

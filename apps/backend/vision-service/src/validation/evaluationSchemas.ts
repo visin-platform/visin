@@ -25,7 +25,8 @@ const suiteRef = z
 /** One variant per kind of checkpoint (`CHECKPOINT_KINDS`): held on a store, or outside Visin and named by its digest. */
 export const checkpointSchema = z.discriminatedUnion('kind', [
   hubCheckpointSchema,
-  z.strictObject({ kind: z.literal('local'), sha256, label: text(200) })
+  z.strictObject({ kind: z.literal('local'), sha256, label: text(200) }),
+  z.strictObject({ kind: z.literal('human'), label: text(200) })
 ]);
 
 /**
@@ -145,11 +146,24 @@ export const evaluationBodySchema = z.object({
   executedAt: z.coerce.date().optional(),
   /** the evaluation this one replaces, in the same project */
   supersedesId: z.string().regex(OBJECT_ID).optional()
-}).refine(body => body.projectId !== undefined || body.source?.epochUuid !== undefined, {
-  message: 'Say which project, or the epoch (source.epochUuid) whose project it is',
+}).refine(body => body.projectId !== undefined || body.source?.epochUuid !== undefined || body.source?.trainingUuid !== undefined, {
+  message: 'Say which project, or the source run or epoch whose project it is',
   path: ['projectId']
 });
 export type EvaluationBody = z.infer<typeof evaluationBodySchema>;
+
+export const judgeDisagreementsQuerySchema = z.object({
+  field: text(100).default('outcome'),
+  class: text(200).optional(),
+  size: text(200).optional(),
+  role: text(200).optional(),
+  a: text(200).optional(),
+  b: text(200).optional(),
+  reference: text(200).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20)
+});
+export type JudgeDisagreementsQuery = z.infer<typeof judgeDisagreementsQuerySchema>;
 
 /** Copy a result recorded without a suite onto one: the two things it never carried are supplied here. */
 export const promoteEvaluationBodySchema = z.object({

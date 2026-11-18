@@ -183,7 +183,9 @@ export function validateEvaluation(protocol: SuiteProtocol, suiteDigest: string,
     else if (counted !== condition.sampleCount) incompatible.push({ code: 'sample-count-mismatch', detail: condition.name });
   }
 
-  const submitted = isRecord(results.overall) ? results.overall : {};
+  const submitted = isRecord(results.overall)
+    ? protocol.samples && isRecord(results.overall.overall) ? results.overall.overall : results.overall
+    : {};
   const overall: Scores['overall'] = {};
   for (const metric of protocol.metrics) {
     const values = protocol.conditions.map(condition => conditions[condition.name]?.[metric.key]);

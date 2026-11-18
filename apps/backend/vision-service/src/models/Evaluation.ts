@@ -38,6 +38,7 @@ export interface IEvaluation extends Document {
   /** condition → class → metric, as the pipeline sent it; open, only the suite's metrics are read for ranking */
   results: Record<string, unknown>;
   sampleCounts?: Record<string, number>;
+  samplesDigest?: string;
   /** what the evaluator reported observing (`kind: 'observed'`), or the claim of the manager who promoted it */
   evidence?: ({ kind: 'observed' } & Evidence) | Attestation;
   /** submitter-reported: evaluator, config, environment, seeds. Schema checks cannot prove it. */
@@ -85,6 +86,7 @@ const EvaluationSchema = new Schema<IEvaluation>(
     status: { type: String, enum: ['completed', 'failed'], required: true, immutable: true },
     results: { type: Schema.Types.Mixed, required: true, immutable: true },
     sampleCounts: { type: Schema.Types.Mixed, immutable: true },
+    samplesDigest: { type: String, immutable: true },
     evidence: { type: Schema.Types.Mixed, immutable: true },
     provenance: { type: Schema.Types.Mixed, immutable: true },
     executedAt: { type: Date, immutable: true },
@@ -116,6 +118,7 @@ EvaluationSchema.index({ checkpointKey: 1, projectId: 1 });
 // What a run's checkpoints scored, and what an epoch's did: the run and epoch pages read these.
 EvaluationSchema.index({ 'source.trainingId': 1, deletedAt: 1, receivedAt: -1 });
 EvaluationSchema.index({ 'source.epochUuid': 1 });
+EvaluationSchema.index({ 'suite.id': 1, projectId: 1, samplesDigest: 1 });
 // The public views read only what was published; only those rows are in the index.
 EvaluationSchema.index({ publishedAt: 1, 'suite.id': 1 }, { partialFilterExpression: { publishedAt: { $exists: true } } });
 // One live promotion of a test result per suite: two simultaneous promotes cannot both insert. A trashed copy does

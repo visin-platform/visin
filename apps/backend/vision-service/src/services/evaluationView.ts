@@ -13,6 +13,7 @@ export interface EvaluationView {
   suite?: IEvaluation['suite'];
   status: IEvaluation['status'];
   sampleCounts?: IEvaluation['sampleCounts'];
+  samplesDigest?: string;
   /** what the evaluator observed, or the manager's attestation for a promoted result */
   evidence?: IEvaluation['evidence'];
   executedAt?: Date;
@@ -62,6 +63,7 @@ export const toView = (evaluation: IEvaluation, full: boolean, reader: Reader = 
   ...(evaluation.suite ? { suite: evaluation.suite } : {}),
   status: evaluation.status,
   ...(evaluation.sampleCounts ? { sampleCounts: evaluation.sampleCounts } : {}),
+  ...(evaluation.samplesDigest ? { samplesDigest: evaluation.samplesDigest } : {}),
   ...(evaluation.evidence ? { evidence: reader === 'member' ? evaluation.evidence : publicEvidence(evaluation.evidence) } : {}),
   ...(evaluation.executedAt ? { executedAt: evaluation.executedAt } : {}),
   receivedAt: evaluation.receivedAt,

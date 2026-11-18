@@ -3,6 +3,7 @@ import { assertResourceWrite } from '../../services/writeAccessService';
 import { notifyRunFinished } from '../../clients/chatNotifier';
 vi.mock('../../clients/chatNotifier', () => ({ notifyRunFinished: vi.fn() }));
 import { ForbiddenError } from '@visin/backend-core';
+vi.mock('../../services/suiteService', () => ({ readableSuite: vi.fn() }));
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
 vi.mock('../../services/writeAccessService', async () => {
@@ -98,6 +99,7 @@ vi.mock('../../services/projectAccessService', async () => {
 });
 
 import { trainingService } from '../../services/trainingService';
+import { readableSuite } from '../../services/suiteService';
 import type { TrainingWithMetrics } from '../../services/trainingService';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
@@ -531,6 +533,18 @@ describe('createTraining', () => {
     expect(ctorArg.tags).toEqual(['a', 'b']);
   });
 
+  it('pins a sample suite and progress to an inference run', async () => {
+    vi.mocked(readableSuite).mockResolvedValueOnce({ slug: 'judges', version: 1, digest: 'a'.repeat(64), protocol: { samples: {} } } as never);
+    await trainingService.createTraining('u1', { name: 'Judge', projectId: 'slug', kind: 'inference', suite: { slug: 'judges', version: 1 }, progress: { done: 0, total: 10, unit: 'frame' } });
+    expect(mockedTraining.mock.calls[0][0]).toMatchObject({ kind: 'inference', suite: { slug: 'judges', version: 1, digest: 'a'.repeat(64) }, progress: { done: 0, total: 10, unit: 'frame' } });
+  });
+
+  it('rejects progress on a training run and suites without samples', async () => {
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'slug', progress: { done: 0, total: 1, unit: 'frame' } })).rejects.toThrow('require an inference run');
+    vi.mocked(readableSuite).mockResolvedValueOnce({ protocol: {} } as never);
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'slug', kind: 'inference', suite: { slug: 'x', version: 1 } })).rejects.toThrow('active sample suite');
+  });
+
   it('reads a project the caller cannot see as not found, naming it', async () => {
     mockedProject.findOne.mockResolvedValue({ _id: 'p1' });
     mockedCheckAccess.mockResolvedValue(false);
@@ -598,6 +612,16 @@ describe('updateTraining', () => {
     expect((doc as Record<string, unknown>).metadata).toEqual({ k: 1 });
     expect(doc.description).toBe('old');
     expect(doc.save).toHaveBeenCalled();
+  });
+
+  it('updates progress only for inference runs', async () => {
+    const doc = trainingDoc('t1', { kind: 'inference' });
+    mockedTraining.findOne.mockResolvedValue(doc);
+    const progress = { done: 2, total: 10, unit: 'frame' as const };
+    await trainingService.updateTraining(VALID_ID, 'u1', { progress });
+    expect(doc.progress).toEqual(progress);
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1', { kind: 'training' }));
+    await expect(trainingService.updateTraining(VALID_ID, 'u1', { progress })).rejects.toThrow('Progress requires an inference run');
   });
 });
 

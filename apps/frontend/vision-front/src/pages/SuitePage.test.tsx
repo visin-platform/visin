@@ -121,6 +121,14 @@ describe('SuitePage', () => {
     service.leaderboard.mockResolvedValue(board());
   });
 
+  it('offers judge comparison for a sample suite even before two rows are selected', async () => {
+    const sampleSuite = suite();
+    sampleSuite.protocol.samples = { attrs: [], fields: [{ key: 'outcome', values: ['keep', 'delete'] }] };
+    service.get.mockResolvedValue(sampleSuite);
+    renderSuite();
+    expect(await screen.findByRole('link', { name: 'Compare judges' })).toHaveAttribute('href', '/suites/road-test/1/judges');
+  });
+
   it('says the data’s licence is not stated when the publisher has not said, rather than leaving it out', async () => {
     renderSuite();
     expect(await screen.findByLabelText('Terms of the evaluated data')).toHaveTextContent('Data licenceLicence not stated');

@@ -10,6 +10,7 @@ import { TrainingsTableProps } from './trainings/trainingsTableTypes';
 import { RunSection, groupRuns } from './trainings/trainingRuns';
 import { StatusChip } from './trainings/TrainingStatusChip';
 import { TrainingList } from './trainings/TrainingList';
+import { isInferenceRun, progressText } from '../utils/inferenceRun';
 
 interface SortableTableCellProps {
   children: React.ReactNode;
@@ -348,7 +349,12 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                               fontWeight: 500
                             }}
                           >
-                            {training.metrics ? training.metrics.epochCount || 0 : 0}
+                            {/* An inference run's progress points are not epochs: say how many frames it has judged. */}
+                            {isInferenceRun(training) && training.progress
+                              ? progressText(training)
+                              : training.metrics
+                                ? training.metrics.epochCount || 0
+                                : 0}
                           </Typography>
                         </TableCell>
                         <TableCell align="center">

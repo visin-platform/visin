@@ -28,6 +28,7 @@ import MetricName from './common/MetricName';
 import { useTaxonomy } from '../taxonomy/useTaxonomy';
 import type { Training } from '../types/training';
 import { describeEmpty } from '../utils/trainingStatus';
+import { isInferenceRun } from '../utils/inferenceRun';
 
 interface TrainingEpochsTabProps {
   epochs: Epoch[];
@@ -48,7 +49,7 @@ interface TrainingEpochsTabProps {
   onSetUploadResultsOpen: (open: boolean) => void;
   isAuthenticated: boolean;
   /** the run these belong to, so an empty tab can say why */
-  run?: Pick<Training, 'status' | 'lastSeenAt'>;
+  run?: Pick<Training, 'status' | 'lastSeenAt' | 'kind'>;
 }
 
 const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
@@ -68,6 +69,8 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
   isAuthenticated,
   run
 }) => {
+  // An inference run's points are numbered by frames done; calling them epochs would misread them.
+  const inference = isInferenceRun(run);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
   const taxonomy = useTaxonomy();
@@ -102,7 +105,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
         <Typography variant="h6" sx={{
           fontWeight: "bold"
         }}>
-          Epochs Management
+          {inference ? 'Progress points' : 'Epochs Management'}
         </Typography>
         <Box>
           <input
@@ -194,7 +197,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
             <Table sx={{ minWidth: 650 }}>
               <TableHead sx={{ bgcolor: tint(livePalette(theme).primary.main, 0.04) }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Epoch</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{inference ? 'Frames done' : 'Epoch'}</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Train Loss" description={taxonomy.metric('train_loss').description} /></TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Val Loss" description={taxonomy.metric('val_loss').description} /></TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Train mIoU" description={taxonomy.metric('miou').description} /></TableCell>

@@ -19,9 +19,12 @@ import Project from '../../models/Project';
 import Suite from '../../models/Suite';
 import { recordTest } from '../fixtures/recordedTest';
 import Training from '../../models/Training';
+import RunSample from '../../models/RunSample';
+import JudgePair from '../../models/JudgePair';
+import { sampleDigest } from '../../services/sampleDigest';
 import evaluationRoutes from '../../routes/evaluationRoutes';
 import suiteRoutes from '../../routes/suiteRoutes';
-import { purgeExpiredTrash } from '../../services/purgeService';
+import { purgeExpiredTrash, purgeTrainings } from '../../services/purgeService';
 import { protocolDigest } from '../../services/suiteProtocol';
 import { suiteProtocolSchema } from '../../validation/suiteSchemas';
 import { fixtureEvidence } from '../fixtures/fixtureEvidence';
@@ -95,7 +98,7 @@ describe('evaluations with in-memory MongoDB', () => {
     process.env.JWT_SECRET = secret;
     mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
-    await Promise.all([Suite.init(), Evaluation.init()]);
+    await Promise.all([Suite.init(), Evaluation.init(), JudgePair.init()]);
     const app = express();
     app.use(express.json({ limit: '5mb' }), identityContextMiddleware);
     app.use('/suites', suiteRoutes);
@@ -198,6 +201,198 @@ describe('evaluations with in-memory MongoDB', () => {
     });
 
   describe('recording', () => {
+    it('keeps a human reference out of both ranked and unranked leaderboard rows', async () => {
+      const id = await project();
+      await publishSuite(id);
+      expect((await record(id, { checkpoint: { kind: 'human', label: 'annotator_1' } })).status).toBe(201);
+      const board = (await call('/suites/road-test/1/leaderboard')).body.data;
+      expect(board.entries).toEqual([]);
+      expect(board.unranked).toEqual([]);
+      expect(board.scope.candidates).toBe(0);
+    });
+    it('refuses writer-supplied scores for sample suites without a completed inference run', async () => {
+      const id = await project();
+      const protocol = suiteProtocol({ samples: { attrs: [{ key: 'class' }, { key: 'size' }], fields: [{ key: 'verdict', values: ['valid', 'invalid'] }] } });
+      expect((await publishSuite(id, {}, protocol)).status).toBe(201);
+      const result = await record(id, { evidence: evidenceFor(protocol) });
+      expect(result.status).toBe(400);
+      expect(result.body.message).toContain('completed inference run');
+      expect(await Evaluation.countDocuments()).toBe(0);
+    });
+
+    it('computes sample scores from a completed run and a digest-pinned human reference', async () => {
+      const id = await project();
+      const referenceId = new mongoose.Types.ObjectId();
+      const modelId = new mongoose.Types.ObjectId();
+      for (const [sampleId, human, model] of [['1', 'delete', 'keep'], ['2', 'keep', 'delete'], ['3', 'keep', 'keep']] as const) {
+        const attrs = { size: 'small', class: 'a', role: 'classify', pixels: Number(sampleId) * 100 };
+        await RunSample.create({ trainingId: String(referenceId), projectId: id, sampleId, attrs, fields: { outcome: human } });
+        await RunSample.create({ trainingId: String(modelId), projectId: id, sampleId, attrs, fields: { outcome: model }, raw: `first ${sampleId}` });
+      }
+      const referenceDigest = await sampleDigest(String(referenceId));
+      const proto = suiteProtocol({
+        conditions: [{ name: 'small', sampleCount: 3 }], classes: [{ id: 'a' }],
+        samples: { attrs: [{ key: 'size' }, { key: 'class' }, { key: 'role' }, { key: 'pixels' }], fields: [{ key: 'outcome', values: ['keep', 'delete'], accept: ['keep'] }], weight: 'pixels' },
+        reference: { samplesDigest: referenceDigest },
+        metrics: [{ key: 'reject', direction: 'min', headline: true, derivation: 'share:outcome=delete' }, { key: 'error', direction: 'min', derivation: 'error:outcome' }]
+      });
+      const suite = (await publishSuite(id, {}, proto)).body.data;
+      const pinned = { slug: suite.slug, version: suite.version, digest: suite.digest };
+      await Training.create({ _id: referenceId, uuid: 'human-run', name: 'Human', ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+      await Training.create({ _id: modelId, uuid: 'model-run', name: 'Model', ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+      await Training.updateOne({ _id: modelId }, { $set: { status: 'running' } });
+      expect((await record(id, { source: { trainingUuid: 'model-run' }, evidence: evidenceFor(proto) })).status).toBe(400);
+      await Training.updateOne({ _id: modelId }, { $set: { status: 'completed' } });
+      expect((await record(id, { source: { trainingUuid: 'model-run' }, evidence: evidenceFor(proto) })).status).toBe(409);
+      expect((await record(id, { source: { trainingUuid: 'model-run' }, checkpoint: { kind: 'human', label: 'wrong' }, evidence: evidenceFor(proto) })).status).toBe(409);
+      const human = await record(id, { source: { trainingUuid: 'human-run' }, checkpoint: { kind: 'human', label: 'annotator' }, evidence: evidenceFor(proto) });
+      expect(human.status).toBe(201);
+      expect(human.body.data.samplesDigest).toBe(referenceDigest);
+      const model = await record(id, { source: { trainingUuid: 'model-run' }, evidence: evidenceFor(proto), results: { forged: 123 }, sampleCounts: { small: 999 } });
+      expect(model.status).toBe(201);
+      expect(model.body.data.results.small.overall).toEqual({ reject: 1 / 3, error: 2 / 3 });
+      expect(model.body.data.sampleCounts).toEqual({ small: 3 });
+      expect(model.body.data.validation.state).toBe('eligible');
+      expect(model.body.data.validation.evidence).toBe('observed');
+      expect((await call('/suites/road-test/1/leaderboard')).body.data.entries).toHaveLength(1);
+      const secondId = new mongoose.Types.ObjectId();
+      for (const [sampleId, outcome] of [['1', 'delete'], ['2', 'keep'], ['3', 'keep']] as const) {
+        await RunSample.create({ trainingId: String(secondId), projectId: id, sampleId, attrs: { size: 'small', class: 'a', role: 'classify', pixels: Number(sampleId) * 100 }, fields: { outcome }, raw: `second ${sampleId}` });
+      }
+      await Training.create({ _id: secondId, uuid: 'second-run', name: 'Second', ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+      const second = await record(id, { source: { trainingUuid: 'second-run' }, checkpoint: local('B'), evidence: evidenceFor(proto) });
+      expect(second.status).toBe(201);
+      const pairPath = `/evaluations/${model.body.data._id}/compare/${second.body.data._id}`;
+      await RunSample.updateOne({ trainingId: String(secondId), sampleId: '1' }, { $set: { 'attrs.pixels': 999 } });
+      expect((await call(pairPath)).status).toBe(400);
+      await RunSample.updateOne({ trainingId: String(secondId), sampleId: '1' }, { $set: { 'attrs.pixels': 100 } });
+      const pair = await call(pairPath);
+      expect(pair.status).toBe(200);
+      const overall = pair.body.data.fields.find((field: { field: string }) => field.field === 'outcome').groups.find((group: { groupBy: string }) => group.groupBy === 'overall');
+      expect(overall.count).toBe(3);
+      expect(overall.divergence).toBeCloseTo(2 / 3);
+      expect(overall.kappa).toBeCloseTo(-0.5);
+      expect(overall.binaryKappa).toBeCloseTo(-0.5);
+      expect(overall.weightedDivergence).toBeCloseTo(0.5);
+      expect(overall.reference).toMatchObject({ total: 3, errorA: 2, errorB: 0, flips: 2, correctA: 0, correctB: 2, keepUnlessBothDeleteErrors: 1, reviewedErrors: 0 });
+      expect((await call(pairPath)).body.data).toEqual(pair.body.data);
+      expect(await JudgePair.countDocuments()).toBe(1);
+      expect((await call(pairPath, { user: STRANGER })).status).toBe(404);
+      const disagreementPath = `/evaluations/${model.body.data._id}/disagreements/${second.body.data._id}`;
+      const disagreements = await call(`${disagreementPath}?field=outcome&class=a&size=small&role=classify&a=keep&b=delete&reference=delete&limit=1`);
+      expect(disagreements.status).toBe(200);
+      expect(disagreements.body.data.pagination.total).toBe(1);
+      expect(disagreements.body.data.samples[0]).toMatchObject({ id: '1', a: { fields: { outcome: 'keep' }, raw: 'first 1' }, b: { fields: { outcome: 'delete' }, raw: 'second 1' }, reference: { fields: { outcome: 'delete' } } });
+      expect((await call(disagreementPath, { user: STRANGER })).status).toBe(404);
+      expect((await call(`${disagreementPath}?field=typo`)).status).toBe(400);
+      expect((await call(`${disagreementPath}?a=typo`)).status).toBe(400);
+      expect((await call(`${disagreementPath}?reference=typo`)).status).toBe(400);
+      const secondPage = await call(`${disagreementPath}?limit=1&page=2`);
+      expect(secondPage.body.data.pagination).toMatchObject({ total: 2, page: 2, pages: 2 });
+      expect(secondPage.body.data.samples[0].id).toBe('2');
+      expect((await call(`/evaluations/not-an-id/compare/${second.body.data._id}`)).status).toBe(404);
+      const ordinary = await call('/evaluations', { method: 'POST', body: { projectId: id, results: {} } });
+      expect((await call(`/evaluations/${ordinary.body.data._id}/compare/${second.body.data._id}`)).status).toBe(400);
+      await Training.updateOne({ _id: modelId }, { $set: { deletedAt: new Date() } });
+      expect((await call(pairPath)).status).toBe(404);
+      await Training.updateOne({ _id: modelId }, { $unset: { deletedAt: 1 } });
+      await Evaluation.updateOne({ _id: human.body.data._id }, { $set: { deletedAt: new Date() } });
+      expect((await call(pairPath)).status).toBe(409);
+      await Evaluation.updateOne({ _id: human.body.data._id }, { $unset: { deletedAt: 1 } });
+      await Training.updateOne({ _id: referenceId }, { $set: { deletedAt: new Date() } });
+      expect((await call(pairPath)).status).toBe(404);
+      await Training.updateOne({ _id: referenceId }, { $unset: { deletedAt: 1 } });
+      await RunSample.updateOne({ trainingId: String(referenceId), sampleId: '1' }, { $set: { raw: 'tampered' } });
+      expect((await call(`/evaluations/${second.body.data._id}/compare/${model.body.data._id}`)).status).toBe(409);
+      await RunSample.updateOne({ trainingId: String(referenceId), sampleId: '1' }, { $unset: { raw: 1 } });
+      const noise = await call(`/evaluations/${model.body.data._id}/compare/${model.body.data._id}`);
+      expect(noise.status).toBe(200);
+      expect(noise.body.data.fields[0].groups.find((group: { groupBy: string }) => group.groupBy === 'overall').divergence).toBe(0);
+      const partialId = new mongoose.Types.ObjectId();
+      await RunSample.create({ trainingId: String(partialId), projectId: id, sampleId: '3', attrs: { size: 'small', class: 'a', role: 'classify', pixels: 300 }, fields: { outcome: 'keep' } });
+      await Training.create({ _id: partialId, uuid: 'partial-run', name: 'Partial', ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+      const partial = await record(id, { source: { trainingUuid: 'partial-run' }, checkpoint: local('C'), evidence: evidenceFor(proto) });
+      const partialPair = await call(`/evaluations/${model.body.data._id}/compare/${partial.body.data._id}`);
+      expect(partialPair.status).toBe(200);
+      const partialGroup = partialPair.body.data.fields[0].groups.find((group: { groupBy: string }) => group.groupBy === 'overall');
+      expect(partialGroup).toMatchObject({ count: 1, agreement: 1, kappa: null });
+      const fromRun = await call('/evaluations', { method: 'POST', body: { uuid: 'from-run', suite: 'road-test@1', source: { trainingUuid: 'model-run' }, checkpoint: local('A'), evidence: evidenceFor(proto) } });
+      expect(fromRun.status).toBe(201);
+      expect(fromRun.body.data.projectId).toBe(id);
+      expect((await call('/evaluations', { method: 'POST', body: { suite: 'road-test@1', source: { trainingUuid: 'missing' }, checkpoint: local('A') } })).status).toBe(404);
+      await Training.updateOne({ _id: referenceId }, { $set: { deletedAt: new Date() } });
+      expect((await record(id, { source: { trainingUuid: 'model-run' }, evidence: evidenceFor(proto) })).status).toBe(409);
+      await Training.updateOne({ _id: referenceId }, { $unset: { deletedAt: 1 } });
+      await RunSample.updateOne({ trainingId: String(referenceId), sampleId: '1' }, { $set: { raw: 'tampered' } });
+      expect((await record(id, { source: { trainingUuid: 'model-run' }, evidence: evidenceFor(proto) })).status).toBe(409);
+      await purgeTrainings([String(modelId)]);
+      expect(await JudgePair.countDocuments()).toBe(0);
+    });
+
+    it('compares partial sample suites without a reference and leaves undefined kappa unset', async () => {
+      const id = await project();
+      const proto = suiteProtocol({
+        conditions: [{ name: 'small', sampleCount: 1 }], classes: [{ id: 'a' }],
+        samples: { attrs: [{ key: 'size' }, { key: 'class' }], fields: [{ key: 'outcome', values: ['keep', 'delete'] }] },
+        metrics: [{ key: 'reject', direction: 'min', headline: true, derivation: 'share:outcome=delete' }]
+      });
+      const suite = (await publishSuite(id, {}, proto)).body.data;
+      const pinned = { slug: suite.slug, version: suite.version, digest: suite.digest };
+      const ids: string[] = [];
+      for (const tag of ['x', 'y']) {
+        const run = await Training.create({ uuid: `plain-${tag}`, name: tag, ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+        await RunSample.create({ trainingId: String(run._id), projectId: id, sampleId: '1', attrs: { size: 'small', class: 'a' }, fields: { outcome: tag === 'x' ? 'keep' : 'delete' } });
+        const evaluation = await record(id, { source: { trainingUuid: `plain-${tag}` }, checkpoint: local(tag), evidence: evidenceFor(proto) });
+        expect(evaluation.status).toBe(201);
+        ids.push(evaluation.body.data._id);
+      }
+      const result = await call(`/evaluations/${ids[0]}/compare/${ids[1]}`);
+      expect(result.status).toBe(200);
+      const overall = result.body.data.fields[0].groups.find((group: { groupBy: string }) => group.groupBy === 'overall');
+      expect(overall).toMatchObject({ count: 1, kappa: 0, divergence: 1 });
+      expect(overall.reference).toBeUndefined();
+      expect(overall.binaryKappa).toBeUndefined();
+      const disagreements = await call(`/evaluations/${ids[0]}/disagreements/${ids[1]}`);
+      expect(disagreements.status).toBe(200);
+      expect(disagreements.body.data.samples).toHaveLength(1);
+      expect((await call(`/evaluations/${ids[0]}/disagreements/${ids[1]}?reference=keep`)).status).toBe(400);
+    });
+
+    it('compares every field that declares acceptance values with the reference value of that same field', async () => {
+      const id = await project();
+      const referenceRun = { _id: new mongoose.Types.ObjectId() };
+      const rows = [['1', 'yes', 'no', 'yes'], ['2', 'no', 'no', 'no'], ['3', 'yes', 'yes', 'no']] as const;
+      for (const [sampleId, human] of rows) {
+        await RunSample.create({ trainingId: String(referenceRun._id), projectId: id, sampleId, attrs: { size: 'small', class: 'a' }, fields: { label: human } });
+      }
+      const proto = suiteProtocol({
+        conditions: [{ name: 'small', sampleCount: 3 }], classes: [{ id: 'a' }],
+        samples: { attrs: [{ key: 'size' }, { key: 'class' }], fields: [{ key: 'label', values: ['yes', 'no'], accept: ['yes'] }] },
+        reference: { samplesDigest: await sampleDigest(String(referenceRun._id)) },
+        metrics: [{ key: 'error', direction: 'min', headline: true, derivation: 'error:label' }]
+      });
+      const suite = (await publishSuite(id, {}, proto)).body.data;
+      const pinned = { slug: suite.slug, version: suite.version, digest: suite.digest };
+      await Training.create({ _id: referenceRun._id, uuid: 'labels', name: 'Labels', ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+      expect((await record(id, { source: { trainingUuid: 'labels' }, checkpoint: { kind: 'human', label: 'annotator_1' }, evidence: evidenceFor(proto) })).status).toBe(201);
+      const ids: string[] = [];
+      for (const [index, tag] of (['x', 'y'] as const).entries()) {
+        const run = await Training.create({ uuid: `label-${tag}`, name: tag, ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+        for (const row of rows) {
+          await RunSample.create({ trainingId: String(run._id), projectId: id, sampleId: row[0], attrs: { size: 'small', class: 'a' }, fields: { label: row[index + 2] } });
+        }
+        const evaluation = await record(id, { source: { trainingUuid: `label-${tag}` }, checkpoint: local(tag), evidence: evidenceFor(proto) });
+        expect(evaluation.status).toBe(201);
+        ids.push(evaluation.body.data._id);
+      }
+      const result = await call(`/evaluations/${ids[0]}/compare/${ids[1]}`);
+      expect(result.status).toBe(200);
+      const overall = result.body.data.fields[0].groups.find((group: { groupBy: string }) => group.groupBy === 'overall');
+      // Sample 1: x wrong, y right. Sample 2: both right. Sample 3: x right, y wrong.
+      expect(overall.reference).toMatchObject({ total: 3, errorA: 1, errorB: 1, flips: 2, correctA: 1, correctB: 1 });
+      const filtered = await call(`/evaluations/${ids[0]}/disagreements/${ids[1]}?field=label&a=no&reference=yes`);
+      expect(filtered.body.data.samples.map((sample: { id: string }) => sample.id)).toEqual(['1']);
+    });
     it('keeps a result with no suite as exploratory, and never ranks it', async () => {
       const id = await project();
       const created = await call('/evaluations', {

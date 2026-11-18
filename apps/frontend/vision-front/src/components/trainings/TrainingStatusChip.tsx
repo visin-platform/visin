@@ -1,4 +1,5 @@
 import { trainingStatusLabel } from '../../utils/trainingStatus';
+import { isInferenceRun, progressText } from '../../utils/inferenceRun';
 import React from 'react';
 import { Box, useTheme } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
@@ -30,7 +31,7 @@ const LiveDot: React.FC<{ color: string }> = ({ color }) => (
   />
 );
 
-export const StatusChip: React.FC<{ training: Pick<Training, 'status' | 'lastSeenAt' | 'metrics'> }> = ({ training }) => {
+export const StatusChip: React.FC<{ training: Pick<Training, 'status' | 'lastSeenAt' | 'metrics' | 'kind' | 'progress'> }> = ({ training }) => {
   const { status } = training;
   const theme = useTheme();
 
@@ -39,7 +40,9 @@ export const StatusChip: React.FC<{ training: Pick<Training, 'status' | 'lastSee
   let icon = <PendingIcon style={{ fontSize: 16 }} />;
   const epochs = training.metrics?.epochCount ?? 0;
   // A run in progress says how far it has got, which is what someone watching it wants to know.
-  const label = status === 'running' && epochs > 0 ? `running · epoch ${epochs}` : trainingStatusLabel(training);
+  const frames = isInferenceRun(training) ? progressText(training) : null;
+  const label =
+    status === 'running' && frames ? `running · ${frames}` : status === 'running' && epochs > 0 && !isInferenceRun(training) ? `running · epoch ${epochs}` : trainingStatusLabel(training);
 
   switch (status) {
     case 'completed':

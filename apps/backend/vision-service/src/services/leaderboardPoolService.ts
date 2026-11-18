@@ -40,7 +40,7 @@ export interface PoolOptions {
  */
 export async function leaderboardPool(filter: QueryFilter<IEvaluation>, { publishedOnly = false }: PoolOptions = {}): Promise<PoolRow[]> {
   return Evaluation.aggregate<PoolRow>([
-    { $match: filter },
+    { $match: { $and: [filter, { 'checkpoint.kind': { $ne: 'human' } }] } },
     {
       $project: {
         uuid: 1,
@@ -115,6 +115,7 @@ export async function selectedAttemptId(projectId: string, suiteId: string, chec
     projectId,
     'suite.id': suiteId,
     checkpointKey,
+    'checkpoint.kind': { $ne: 'human' },
     deletedAt: null,
     status: 'completed',
     'validation.state': 'eligible',

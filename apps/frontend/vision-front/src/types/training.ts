@@ -42,6 +42,12 @@ export interface Training {
   uuid: string;
   training_uuid?: string; // Alternative UUID field name
   name: string;
+  /** `inference`: a model's pass over a fixed set of frames, scored sample by sample on a suite; absent on older runs */
+  kind?: 'training' | 'inference';
+  /** the sample suite an inference run is pinned to */
+  suite?: { slug: string; version: number; digest: string };
+  /** how far an inference run has got; its progress points are logged as epochs numbered by frames done */
+  progress?: { done: number; total: number; unit: 'frame' };
   description?: string;
   datasetId?: string;
   dataset?: DatasetReference;

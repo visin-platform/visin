@@ -8,6 +8,7 @@ import { useFormatCost } from '../../costing/useCosting';
 import { TrainingsTableProps } from './trainingsTableTypes';
 import { RunSection } from './trainingRuns';
 import { StatusChip } from './TrainingStatusChip';
+import { isInferenceRun, progressText } from '../../utils/inferenceRun';
 
 type SortColumn = TrainingsTableProps['sortBy'];
 
@@ -110,7 +111,7 @@ export const TrainingList: React.FC<
           {section.runs.map((training) => {
             const metrics = training.metrics;
             const details = [
-              metrics ? `${metrics.epochCount || 0} epochs` : null,
+              isInferenceRun(training) ? progressText(training) : metrics ? `${metrics.epochCount || 0} epochs` : null,
               metrics ? formatDuration(metrics.totalTime) : null,
               metrics ? formatCost((metrics.cpuCost || 0) + (metrics.gpuCost || 0), metrics.currency) : null
             ].filter((part) => part && part !== '-');

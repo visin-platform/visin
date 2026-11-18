@@ -43,6 +43,7 @@ describe('checkpointLabel', () => {
     expect(checkpointLabel({ kind: 'hf', repo: 'acme/clft', commit: COMMIT })).toBe('acme/clft @ 3f2a1c9');
     expect(checkpointLabel({ kind: 'hf', repo: 'acme/clft', commit: COMMIT, path: 'best.pt' })).toBe('acme/clft @ 3f2a1c9 · best.pt');
     expect(checkpointLabel({ kind: 'local', sha256: 'a'.repeat(64), label: 'epoch 40' })).toBe('epoch 40');
+    expect(checkpointLabel({ kind: 'human', label: 'annotator' })).toBe('annotator');
     expect(checkpointLabel(undefined)).toBe('Unknown checkpoint');
   });
 });

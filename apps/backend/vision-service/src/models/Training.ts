@@ -26,6 +26,11 @@ export interface ITraining extends Document {
   _id: Types.ObjectId;
   uuid: string;
   name: string;
+  kind: 'training' | 'inference';
+  suite?: { slug: string; version: number; digest: string };
+  progress?: { done: number; total: number; unit: 'frame' };
+  /** Content-addressed sample batches awaiting durable insertion. */
+  pendingSampleBatches?: string[];
   description?: string;
   /** the researcher's own commentary on the run, apart from what the run is */
   notes?: string;
@@ -62,6 +67,10 @@ const TrainingSchema: Schema = new Schema(
       trim: true,
       maxlength: 200
     },
+    kind: { type: String, enum: ['training', 'inference'], default: 'training', immutable: true },
+    suite: { type: new Schema({ slug: { type: String, required: true }, version: { type: Number, required: true }, digest: { type: String, required: true } }, { _id: false }), immutable: true },
+    progress: { type: new Schema({ done: { type: Number, required: true }, total: { type: Number, required: true }, unit: { type: String, enum: ['frame'], required: true } }, { _id: false }) },
+    pendingSampleBatches: { type: [String], default: undefined, select: false },
     description: {
       type: String,
       trim: true,

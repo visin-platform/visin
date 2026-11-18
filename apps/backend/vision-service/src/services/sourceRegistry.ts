@@ -54,7 +54,7 @@ export const MODEL_LINK_PROVIDERS = [HUB, VISIN] as const;
 export type ModelLinkProvider = (typeof MODEL_LINK_PROVIDERS)[number];
 
 /** What a checkpoint an evaluation scored can be. */
-export const CHECKPOINT_KINDS = [HUB, 'local'] as const;
+export const CHECKPOINT_KINDS = [HUB, 'local', 'human'] as const;
 export type CheckpointKind = (typeof CHECKPOINT_KINDS)[number];
 
 /** What the data a suite pins, or an evaluator reports having read, can be. */
@@ -101,9 +101,10 @@ export interface LocalCheckpoint {
   label: string;
 }
 /** A checkpoint an evaluation scored: held on a store, or outside Visin and named by the digest of its weights. */
-export type Checkpoint = HubCheckpoint | LocalCheckpoint;
+export interface HumanCheckpoint { kind: 'human'; label: string }
+export type Checkpoint = HubCheckpoint | LocalCheckpoint | HumanCheckpoint;
 
-export type PublicCheckpoint = PublicHubCheckpoint | { kind: 'local'; label: string; sha256: string };
+export type PublicCheckpoint = PublicHubCheckpoint | { kind: 'local'; label: string; sha256: string } | HumanCheckpoint;
 
 export interface CheckpointSource<C extends Checkpoint> {
   /** what makes two evaluations the same model */
@@ -120,6 +121,10 @@ export const checkpointSources: { [K in CheckpointKind]: CheckpointSource<Extrac
   local: {
     key: (checkpoint) => `sha256:${checkpoint.sha256}`,
     publicView: (checkpoint) => ({ kind: 'local', label: checkpoint.label, sha256: checkpoint.sha256 })
+  },
+  human: {
+    key: checkpoint => `human:${checkpoint.label}`,
+    publicView: checkpoint => ({ kind: 'human', label: checkpoint.label })
   }
 };
 

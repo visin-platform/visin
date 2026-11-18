@@ -2,6 +2,9 @@ import { logger } from '@visin/backend-core';
 import { isValidObjectId } from 'mongoose';
 import Project, { type IProject } from '../models/Project';
 import Training from '../models/Training';
+import RunSample from '../models/RunSample';
+import RunSampleBatch from '../models/RunSampleBatch';
+import JudgePair from '../models/JudgePair';
 import Epoch from '../models/Epoch';
 import Evaluation from '../models/Evaluation';
 import Suite from '../models/Suite';
@@ -36,15 +39,20 @@ export async function purgeTrainings(trainingIds: string[]): Promise<void> {
   const visualizations = await EpochVisualization.find({ epoch_uuid: { $in: epochUuids } }).select('fileId');
   // The model files a run kept on this deployment go with it; a pointer to a Hub repo has none.
   const kept = await Training.find({ _id: { $in: trainingIds } }).select('models').lean();
+  const linkedEvaluations = await Evaluation.find({ 'source.trainingId': { $in: trainingIds } }).select('_id').lean();
+  const linkedIds = linkedEvaluations.map(evaluation => String(evaluation._id));
   const modelFiles = kept.flatMap(training =>
     (training.models ?? []).flatMap(model => (model.provider === 'visin' && model.fileId ? [model.fileId] : []))
   );
   await deleteFiles([...visualizations.map(visualization => visualization.fileId), ...modelFiles]);
 
   await EpochVisualization.deleteMany({ epoch_uuid: { $in: epochUuids } });
+  await JudgePair.deleteMany({ $or: [{ evaluationA: { $in: linkedIds } }, { evaluationB: { $in: linkedIds } }, { referenceEvaluationId: { $in: linkedIds } }] });
   await purgeRunEvaluations({ trainingIds, epochUuids });
   await Benchmark.deleteMany({ training_id: { $in: trainingIds } });
   await Epoch.deleteMany({ trainingId: { $in: trainingIds } });
+  await RunSample.deleteMany({ trainingId: { $in: trainingIds } });
+  await RunSampleBatch.deleteMany({ trainingId: { $in: trainingIds } });
   await Comparison.updateMany({ itemIds: { $in: trainingIds } }, { $pull: { itemIds: { $in: trainingIds } } });
   await Training.deleteMany({ _id: { $in: trainingIds } });
 }
@@ -81,6 +89,8 @@ export async function purgeProject(project: IProject): Promise<void> {
   const trainings = await Training.find({ projectId }).select('_id');
   await purgeTrainings(trainings.map(training => training._id.toString()));
   const judgedOn = (await Evaluation.distinct('suite.id', { projectId })).filter((id): id is string => isValidObjectId(id));
+  const evaluationIds = (await Evaluation.find({ projectId }).select('_id').lean()).map(evaluation => String(evaluation._id));
+  await JudgePair.deleteMany({ $or: [{ evaluationA: { $in: evaluationIds } }, { evaluationB: { $in: evaluationIds } }, { referenceEvaluationId: { $in: evaluationIds } }] });
   await Evaluation.deleteMany({ projectId });
   await deleteSuitesNoOneNeeds(projectId, judgedOn);
   await Comparison.deleteMany({ projectId });
@@ -115,6 +125,8 @@ export async function purgeExpiredTrash(now = new Date()): Promise<{ projects: n
   await purgeTrainings(trainings.map(training => training._id.toString()));
 
   // An evaluation in the trash is purged on the same schedule as a run, with its (possibly large) results.
+  const expiredEvaluations = (await Evaluation.find({ deletedAt: { $lte: cutoff } }).select('_id').lean()).map(evaluation => String(evaluation._id));
+  await JudgePair.deleteMany({ $or: [{ evaluationA: { $in: expiredEvaluations } }, { evaluationB: { $in: expiredEvaluations } }, { referenceEvaluationId: { $in: expiredEvaluations } }] });
   const evaluations = (await Evaluation.deleteMany({ deletedAt: { $lte: cutoff } })).deletedCount ?? 0;
   if (evaluations > 0) invalidatePublic();
 

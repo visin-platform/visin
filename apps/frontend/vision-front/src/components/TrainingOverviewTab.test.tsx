@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import TrainingOverviewTab from './TrainingOverviewTab';
 import { Training, Epoch } from '../types';
 
@@ -37,6 +38,18 @@ const makeEpoch = (epoch: number, overrides: Partial<Epoch> = {}): Epoch => ({
 });
 
 describe('TrainingOverviewTab', () => {
+  it('shows an inference run its progress instead of the training charts', () => {
+    render(
+      <MemoryRouter>
+        <TrainingOverviewTab training={{ ...training, kind: 'inference', notes: 'third backend', progress: { done: 3, total: 10, unit: 'frame' } }} epochs={[makeEpoch(3)]} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Progress')).toBeInTheDocument();
+    expect(screen.getByText('third backend')).toBeInTheDocument();
+    expect(screen.queryByTestId('training-overview-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('class-iou-chart')).not.toBeInTheDocument();
+  });
+
   it('lets a writer add a note, which is saved through the page', async () => {
     const onSaveNotes = vi.fn().mockResolvedValue(undefined);
     render(<TrainingOverviewTab training={training} epochs={[makeEpoch(1)]} canEdit onSaveNotes={onSaveNotes} />);

@@ -6,6 +6,9 @@ import type {
   Evaluation,
   EvaluationPage,
   EvaluationQuery,
+  JudgePair,
+  JudgeDisagreementPage,
+  JudgeDisagreementQuery,
   Leaderboard,
   LeaderboardPageQuery,
   PublicLeaderboardListPage,
@@ -39,6 +42,16 @@ export const evaluationService = {
   async get(id: string): Promise<Evaluation> {
     const response = await visionApi.get(`/evaluations/${id}`);
     return (response.data as ApiResponse<Evaluation>).data;
+  },
+
+  async compareJudges(a: string, b: string): Promise<JudgePair> {
+    const response = await visionApi.get(`/evaluations/${encodeURIComponent(a)}/compare/${encodeURIComponent(b)}`);
+    return (response.data as ApiResponse<JudgePair>).data;
+  },
+
+  async judgeDisagreements(a: string, b: string, params: JudgeDisagreementQuery): Promise<JudgeDisagreementPage> {
+    const response = await visionApi.get(`/evaluations/${encodeURIComponent(a)}/disagreements/${encodeURIComponent(b)}`, { params: { ...params } });
+    return (response.data as ApiResponse<JudgeDisagreementPage>).data;
   },
 
   async trash(id: string): Promise<Evaluation> {

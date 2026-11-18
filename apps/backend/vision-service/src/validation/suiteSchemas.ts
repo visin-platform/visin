@@ -54,6 +54,12 @@ const conditionSchema = z.strictObject({
 
 const classSchema = z.strictObject({ id: text(100), name: text(200).optional() });
 
+/** The only calculations a sample-scored suite can request. Names and values refer to its declared fields. */
+const derivationSchema = z.string().max(500).regex(
+  /^(?:share:[^:=]+=[^=]+|(?:error|fa|fr):[^:=]+|latency:mean)$/,
+  'Expected share:<field>=<value>, error:<field>, fa:<field>, fr:<field> or latency:mean'
+);
+
 const metricSchema = z.strictObject({
   /** a key in a condition's `overall` block, and in the top-level one */
   key: text(100),
@@ -65,7 +71,12 @@ const metricSchema = z.strictObject({
     .strictObject({ min: z.number().finite(), max: z.number().finite() })
     .refine(range => range.min <= range.max, 'min must not exceed max')
     .optional(),
-  headline: z.boolean().optional()
+  headline: z.boolean().optional(),
+  derivation: derivationSchema.optional(),
+  /** Explicitly treat absent predictions as a declared value for a false-accept/reject metric. */
+  missingValue: text(200).optional(),
+  /** Restrict a sample metric to declared attribute values, such as role=classify. */
+  filter: z.record(text(100), text(200)).refine(value => Object.keys(value).length > 0 && Object.keys(value).length <= 20, 'Give 1–20 attribute filters').optional()
 });
 
 /**
@@ -86,6 +97,43 @@ const inputSchema = z.strictObject({
 const uniqueBy = <T>(items: T[], key: (item: T) => string) => new Set(items.map(key)).size === items.length;
 
 /**
+ * The sample attributes scoring groups by: `class` names one of the protocol's classes and `size` one of its
+ * conditions. Every sample must carry both, or the run it belongs to could never be scored.
+ */
+export const SAMPLE_SCORING_ATTRS: readonly (readonly ['class' | 'size', (protocol: { classes: { id: string }[]; conditions: { name: string }[] }) => string[]])[] = [
+  ['class', protocol => protocol.classes.map(item => item.id)],
+  ['size', protocol => protocol.conditions.map(item => item.name)]
+];
+
+const sampleAttributeSchema = z.strictObject({
+  key: text(100),
+  values: z.array(text(200)).min(1).max(500).refine(values => uniqueBy(values, value => value), 'Values must be unique').optional()
+});
+const sampleFieldSchema = sampleAttributeSchema.extend({
+  values: z.array(text(200)).min(1).max(500).refine(values => uniqueBy(values, value => value), 'Values must be unique'),
+  abstain: text(200).optional(),
+  /** Fields such as raw verdicts may be absent for geometry-only decisions. */
+  required: z.boolean().optional(),
+  /** Values considered an acceptance when calculating false accepts and false rejects. */
+  accept: z.array(text(200)).min(1).max(500).optional()
+}).refine(
+  field => field.abstain === undefined || field.values.includes(field.abstain),
+  { message: 'Abstain must be an allowed value', path: ['abstain'] }
+).refine(
+  field => !field.accept || (uniqueBy(field.accept, value => value) && field.accept.every(value => field.values.includes(value) && value !== field.abstain) && field.values.some(value => value !== field.abstain && !field.accept!.includes(value))),
+  { message: 'Acceptance values must be unique allowed, non-abstaining values and leave at least one other value', path: ['accept'] }
+);
+const samplesSchema = z.strictObject({
+  attrs: z.array(sampleAttributeSchema).max(100).refine(items => uniqueBy(items, item => item.key), 'Attribute keys must be unique'),
+  fields: z.array(sampleFieldSchema).min(1).max(100).refine(items => uniqueBy(items, item => item.key), 'Field keys must be unique'),
+  weight: text(100).optional()
+}).refine(samples => samples.weight === undefined || samples.attrs.some(attr => attr.key === samples.weight), {
+  message: 'Weight must name an attribute', path: ['weight']
+}).refine(samples => samples.weight === undefined || !samples.attrs.find(attr => attr.key === samples.weight)?.values, {
+  message: 'Weight must be a numeric attribute without a vocabulary', path: ['weight']
+});
+
+/**
  * The scoring protocol: everything that decides what a score means. It is hashed, so a field added here is a
  * field that changes a suite's identity, and the object is strict so nothing unhashed can ride along.
  */
@@ -102,7 +150,10 @@ export const suiteProtocolSchema = z
     metrics: z.array(metricSchema).min(1).max(30),
     aggregation: z.enum(AGGREGATIONS),
     input: inputSchema.default({}),
-    evaluator: z.strictObject({ package: text(100), minVersion: text(50).optional() })
+    evaluator: z.strictObject({ package: text(100), minVersion: text(50).optional() }),
+    samples: samplesSchema.optional(),
+    reference: z.strictObject({ samplesDigest: sha256 }).optional(),
+    settings: z.record(z.string(), z.unknown()).optional()
   })
   .refine(protocol => uniqueBy(protocol.conditions, condition => condition.name), {
     message: 'Condition names must be unique',
@@ -120,6 +171,50 @@ export const suiteProtocolSchema = z
   .refine(protocol => protocol.conditions.every(condition => condition.name !== 'overall'), {
     message: '"overall" is the whole-test key and cannot be a condition',
     path: ['conditions']
+  })
+  .superRefine((protocol, ctx) => {
+    if (protocol.samples && protocol.classes.some(item => item.id === 'overall')) {
+      ctx.addIssue({ code: 'custom', path: ['classes'], message: '"overall" is reserved for aggregate scores' });
+    }
+    // Scoring groups samples by these two attributes, so a suite without them could never score a run.
+    if (protocol.samples) {
+      for (const [key, allowed] of SAMPLE_SCORING_ATTRS) {
+        const attr = protocol.samples.attrs.find(item => item.key === key);
+        const names = allowed(protocol);
+        if (!attr) ctx.addIssue({ code: 'custom', path: ['samples', 'attrs'], message: `A sample suite needs a "${key}" attribute: samples are scored by it` });
+        else if (attr.values?.some(value => !names.includes(value))) {
+          ctx.addIssue({ code: 'custom', path: ['samples', 'attrs'], message: `Every "${key}" value must be one of the protocol's ${key === 'class' ? 'classes' : 'conditions'}` });
+        }
+      }
+    }
+    for (const [index, metric] of protocol.metrics.entries()) {
+      if (metric.missingValue && (!metric.derivation || !/^(?:fa|fr):/.test(metric.derivation))) {
+        ctx.addIssue({ code: 'custom', path: ['metrics', index, 'missingValue'], message: 'Missing values require a false-accept or false-reject derivation' });
+      }
+      if (metric.filter) {
+        if (!protocol.samples || !metric.derivation) {
+          ctx.addIssue({ code: 'custom', path: ['metrics', index, 'filter'], message: 'Metric filters require a sample derivation' });
+        } else for (const [key, value] of Object.entries(metric.filter)) {
+          const attr = protocol.samples.attrs.find(item => item.key === key);
+          if (!attr?.values?.includes(value)) ctx.addIssue({ code: 'custom', path: ['metrics', index, 'filter', key], message: 'Filter must name an allowed value of a declared categorical attribute' });
+        }
+      }
+      if (!metric.derivation) continue;
+      const path = ['metrics', index, 'derivation'];
+      if (!protocol.samples) {
+        ctx.addIssue({ code: 'custom', path, message: 'A derivation requires a sample protocol' });
+        continue;
+      }
+      if (metric.derivation === 'latency:mean') continue;
+      const [kind, expression] = metric.derivation.split(':');
+      const [fieldKey, value] = expression.split('=');
+      const field = protocol.samples.fields.find(item => item.key === fieldKey);
+      if (!field) ctx.addIssue({ code: 'custom', path, message: 'Derivation must name a declared field' });
+      else if (metric.missingValue && (!field.values.includes(metric.missingValue) || metric.missingValue === field.abstain)) ctx.addIssue({ code: 'custom', path: ['metrics', index, 'missingValue'], message: 'Missing value must be an allowed, non-abstaining field value' });
+      else if (kind === 'share' && !field.values.includes(value)) ctx.addIssue({ code: 'custom', path, message: 'Share value must be allowed for the field' });
+      else if ((kind === 'fa' || kind === 'fr') && !field.accept) ctx.addIssue({ code: 'custom', path, message: 'False accept and reject require acceptance values on the field' });
+      if (kind !== 'share' && !protocol.reference) ctx.addIssue({ code: 'custom', path, message: 'This derivation requires a reference digest' });
+    }
   });
 export type SuiteProtocol = z.infer<typeof suiteProtocolSchema>;
 export type SuiteProtocolInput = z.input<typeof suiteProtocolSchema>;

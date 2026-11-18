@@ -1,7 +1,7 @@
 import { vi, type Mock } from 'vitest';
 vi.mock('../../vision', async () => {
   const module = await (() => ({
-    vision: { listSuites: vi.fn(), getSuite: vi.fn(), getLeaderboard: vi.fn(), getEvaluation: vi.fn() }
+    vision: { listSuites: vi.fn(), getSuite: vi.fn(), getLeaderboard: vi.fn(), getEvaluation: vi.fn(), compareJudges: vi.fn(), judgeDisagreements: vi.fn() }
   }))();
   return Object.assign({ default: module }, module);
 });
@@ -79,6 +79,71 @@ const board = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('judge comparisons', () => {
+  const pair = {
+    evaluationA: 'e1', evaluationB: 'e2', suite: { slug: 'road-test', version: 1, digest: 'digest' },
+    fields: [{ field: 'outcome', groups: [
+      { groupBy: 'overall', count: 3, agreement: 1 / 3, divergence: 2 / 3, kappa: -0.5, binaryKappa: -0.5, weightedDivergence: 0.5,
+        reference: { total: 3, errorA: 2, errorB: 0, flips: 2, correctA: 0, correctB: 2, errorRateA: 2 / 3, errorRateB: 0, keepUnlessBothDeleteErrorRate: 1 / 3, reviewedErrorRate: 0 } },
+      { groupBy: 'class', value: 'a', count: 3, agreement: 1 / 3, divergence: 2 / 3, kappa: -0.5, weightedDivergence: 0.5 }
+    ] }]
+  };
+  beforeEach(() => {
+    mocked.getSuite.mockResolvedValue({ ...suite(), digest: 'digest', protocol: { ...suite().protocol, samples: { weight: 'pixels' } } });
+    mocked.compareJudges.mockResolvedValue(pair);
+  });
+
+  it('reports compact agreement and human reference statistics, scoped by class', async () => {
+    const result = await call('compare_judges', { suite: 'road-test@1', a: 'e1', b: 'e2' });
+    expect(result.isError).toBe(false);
+    expect(result.text).toContain('divergence 66.7%, κ -0.500, binary κ -0.500, weighted divergence 50.0%');
+    expect(result.text).toContain('error 66.7% / 0.0%');
+    const filtered = await call('compare_judges', { suite: 'road-test@1', a: 'e1', b: 'e2', class: 'a' });
+    expect(filtered.text).toContain('class a');
+    expect(filtered.text).toContain('3 paired');
+    expect((await call('compare_judges', { suite: 'road-test@1', a: 'e1', b: 'e2', class: 'a', size: 'small' })).isError).toBe(true);
+  });
+
+  it('quotes raw replies, includes the reference and does not invent crop IDs', async () => {
+    mocked.judgeDisagreements.mockResolvedValue({ field: 'outcome', pagination: { page: 1, limit: 5, total: 1, pages: 1 }, samples: [{
+      id: 'frame/m1', attrs: { class: 'a', frame: 'frame', bbox: [1, 2, 3, 4] },
+      a: { fields: { outcome: 'keep' }, raw: 'first reply' }, b: { fields: { outcome: 'delete' }, raw: 'second reply' }, reference: { fields: { outcome: 'keep' } }
+    }] });
+    const result = await call('list_disagreements', { suite: 'road-test', a: 'e1', b: 'e2', class: 'a', first_value: 'keep' });
+    expect(result.text).toContain('frame/m1');
+    expect(result.text).toContain('raw reply: "first reply"');
+    expect(result.text).toContain('Reference: {"outcome":"keep"}');
+    expect(result.text).toContain('Frame identifiers are not visualization IDs');
+    expect(mocked.judgeDisagreements).toHaveBeenCalledWith('k', 'e1', 'e2', expect.objectContaining({ class: 'a', a: 'keep', limit: 5 }));
+  });
+
+  it('rejects invalid suites and comparisons from a different suite', async () => {
+    expect((await call('compare_judges', { suite: 'Bad Name', a: 'e1', b: 'e2' })).isError).toBe(true);
+    mocked.compareJudges.mockResolvedValue({ ...pair, suite: { ...pair.suite, version: 2 } });
+    expect((await call('list_disagreements', { suite: 'road-test@1', a: 'e1', b: 'e2' })).isError).toBe(true);
+    expect(mocked.judgeDisagreements).not.toHaveBeenCalled();
+  });
+
+  it('reports missing groups, undefined kappa and service failures', async () => {
+    mocked.compareJudges.mockResolvedValue({ ...pair, fields: [{ field: 'outcome', groups: [{ ...pair.fields[0].groups[0], kappa: null, binaryKappa: null, weightedDivergence: null }] }, { field: 'verdict', groups: [] }] });
+    const result = await call('compare_judges', { suite: 'road-test@1', a: 'e1', b: 'e2' });
+    expect(result.text).toContain('κ undefined, binary κ undefined');
+    expect(result.text).toContain('verdict: no matched decisions');
+    mocked.compareJudges.mockRejectedValue(new VisinError('No access', 403));
+    expect((await call('compare_judges', { suite: 'road-test@1', a: 'e1', b: 'e2' })).isError).toBe(true);
+    expect((await call('list_disagreements', { suite: 'road-test@1', a: 'e1', b: 'e2' })).isError).toBe(true);
+  });
+
+  it('handles empty pages and only suggests view_visualizations for an explicit ID', async () => {
+    mocked.judgeDisagreements.mockResolvedValueOnce({ field: 'outcome', pagination: { page: 1, limit: 5, total: 0, pages: 0 }, samples: [] });
+    expect((await call('list_disagreements', { suite: 'road-test@1', a: 'e1', b: 'e2' })).text).toContain('No disagreements on this page.');
+    mocked.judgeDisagreements.mockResolvedValueOnce({ field: 'outcome', pagination: { page: 1, limit: 5, total: 1, pages: 1 }, samples: [{ id: '1', attrs: { visualizationId: 'v1' }, a: { fields: { outcome: 'keep' } }, b: { fields: { outcome: 'delete' } } }] });
+    const result = await call('list_disagreements', { suite: 'road-test@1', a: 'e1', b: 'e2' });
+    expect(result.text).toContain('Visualization ID: v1');
+    expect(result.text).toContain('raw reply: not recorded');
+  });
+});
 
 describe('list_suites', () => {
   it('describes each suite by what it measures, its direction and its conditions', async () => {

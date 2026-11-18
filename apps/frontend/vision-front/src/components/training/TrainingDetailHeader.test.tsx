@@ -79,6 +79,12 @@ describe('TrainingDetailHeader', () => {
       expect(screen.getByText('about 34 s per epoch')).toBeInTheDocument();
     });
 
+    it('gives an inference run no time per epoch: its pace is in frames, on the overview', () => {
+      render(<TrainingDetailHeader {...baseProps} training={withStatus({ status: 'running', kind: 'inference', metrics: metrics(10, 340), progress: { done: 10, total: 100, unit: 'frame' } })} />);
+      expect(screen.getByText('running · 10 / 100 frames')).toBeInTheDocument();
+      expect(screen.queryByText(/per epoch/)).not.toBeInTheDocument();
+    });
+
     it('gives no time per epoch before one has finished', () => {
       render(<TrainingDetailHeader {...baseProps} training={withStatus({ status: 'running', metrics: metrics(0, 0) })} />);
       expect(screen.getByText('running')).toBeInTheDocument();

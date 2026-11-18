@@ -141,9 +141,15 @@ export const getTrainingWithEpochsQuerySchema = z.object({
 });
 export type GetTrainingWithEpochsQuery = z.infer<typeof getTrainingWithEpochsQuerySchema>;
 
+const progressSchema = z.strictObject({ done: z.number().int().min(0), total: z.number().int().positive(), unit: z.literal('frame') })
+  .refine(value => value.done <= value.total, 'done must not exceed total');
+
 export const createTrainingBodySchema = z.object({
   uuid: z.string().optional(),
   name: z.string().trim().min(1, 'Training name is required'),
+  kind: z.enum(['training', 'inference']).default('training'),
+  suite: z.strictObject({ slug: z.string().trim().min(1), version: z.number().int().positive() }).optional(),
+  progress: progressSchema.optional(),
   description: z.string().trim().optional(),
   datasetId: z.string().optional(),
   dataset: datasetReferenceSchema.optional(),
@@ -160,6 +166,7 @@ export const createTrainingBodySchema = z.object({
 
 export const updateTrainingBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
+  progress: progressSchema.optional(),
   description: z.string().trim().optional(),
   datasetId: z.string().optional(),
   dataset: datasetReferenceSchema.optional(),

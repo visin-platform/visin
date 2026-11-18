@@ -25,6 +25,7 @@ vi.mock('../pages/EvaluationsPage', () => ({ default: () => <div>EvaluationsPage
 vi.mock('../pages/EvaluationDetailPage', () => ({ default: () => <div>EvaluationDetailPage</div> }));
 vi.mock('../pages/SuitesPage', () => ({ default: () => <div>SuitesPage</div> }));
 vi.mock('../pages/SuitePage', () => ({ default: () => <div>SuitePage</div> }));
+vi.mock('../pages/JudgeComparePage', () => ({ default: () => <div>JudgeComparePage</div> }));
 vi.mock('../pages/PublicLeaderboardsPage', () => ({ default: () => <div>PublicLeaderboardsPage</div> }));
 vi.mock('../pages/PublicLeaderboardPage', () => ({ default: () => <div>PublicLeaderboardPage</div> }));
 vi.mock('../pages/PublicEvaluationPage', () => ({ default: () => <div>PublicEvaluationPage</div> }));
@@ -74,6 +75,7 @@ describe('AppRoutes', () => {
     ['/evaluations/e1', 'EvaluationDetailPage'],
     ['/suites', 'SuitesPage'],
     ['/suites/road-test/1', 'SuitePage'],
+    ['/suites/road-test/1/judges', 'JudgeComparePage'],
     ['/leaderboards', 'PublicLeaderboardsPage'],
     ['/leaderboards/road-test/1', 'PublicLeaderboardPage'],
     ['/leaderboards/road-test/1/e1', 'PublicEvaluationPage'],

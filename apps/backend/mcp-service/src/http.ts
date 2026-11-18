@@ -56,7 +56,8 @@ export async function callService<T>(
   method: string,
   path: string,
   body?: unknown,
-  query?: Query
+  query?: Query,
+  timeoutMs?: number
 ): Promise<T> {
   const url = new URL(`${baseUrl}/api${path}`);
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -66,6 +67,7 @@ export async function callService<T>(
   const response = await fetchWithTimeout(url, {
     method,
     serviceName: baseUrl,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       ...(body ? { 'Content-Type': 'application/json' } : {})

@@ -188,6 +188,42 @@
           "name": {
             "type": "string"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "training",
+              "inference"
+            ]
+          },
+          "suite": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "digest": {
+                "type": "string"
+              }
+            }
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "unit": {
+                "type": "string",
+                "const": "frame"
+              }
+            }
+          },
           "description": {
             "type": "string"
           },
@@ -388,6 +424,22 @@
       "Checkpoint": {
         "description": "Which bytes were scored. A Hub checkpoint is its repo, a full commit and optionally a file; a local one is\nthe SHA-256 of the weights that were loaded, never a path.\n",
         "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "label"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "human"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
           {
             "type": "object",
             "required": [
@@ -753,6 +805,10 @@
               "type": "integer"
             }
           },
+          "samplesDigest": {
+            "type": "string",
+            "description": "SHA-256 of the canonical sample rows for a sample-scored evaluation."
+          },
           "evidence": {
             "$ref": "#/components/schemas/EvaluationEvidence"
           },
@@ -970,6 +1026,22 @@
       },
       "PublicCheckpoint": {
         "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "label"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "human"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
           {
             "type": "object",
             "required": [
@@ -1461,7 +1533,7 @@
       },
       "SuiteProtocol": {
         "type": "object",
-        "description": "What decides a score: the data, the conditions with their sample counts, the metrics and which way is\nbetter, and how the overall figure is formed. It is hashed into the suite's `digest`, so changing any\nfield is a new version. The request form is `#/SuiteProtocol` in `generated/request-schemas.json`.\n",
+        "description": "What decides a score: the data, the conditions with their sample counts, the metrics and which way is\nbetter, and how the overall figure is formed. It is hashed into the suite's `digest`, so changing any\nfield is a new version. The request form is `#/SuiteProtocol` in `generated/request-schemas.json`.\nFor a sample-derived metric, `filter` optionally maps categorical attribute keys to declared values;\nonly matching samples contribute to that metric. `sampleCounts` still counts all rows in each condition.\nFalse-accept and false-reject metrics may specify `missingValue` to treat absent predictions as an\nexplicitly declared non-abstaining field value; without it, absent predictions are excluded.\n",
         "additionalProperties": true
       },
       "Suite": {
@@ -2796,6 +2868,55 @@
             "type": "string",
             "minLength": 1
           },
+          "kind": {
+            "default": "training",
+            "type": "string",
+            "enum": [
+              "training",
+              "inference"
+            ]
+          },
+          "suite": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "slug",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "const": "frame"
+              }
+            },
+            "required": [
+              "done",
+              "total",
+              "unit"
+            ],
+            "additionalProperties": false
+          },
           "description": {
             "type": "string"
           },
@@ -2941,6 +3062,90 @@
           "name"
         ]
       },
+      "RunSampleBatch": {
+        "type": "object",
+        "properties": {
+          "samples": {
+            "minItems": 1,
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "attrs": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "fields": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "abstained": {
+                  "type": "boolean"
+                },
+                "parseFailed": {
+                  "type": "boolean"
+                },
+                "raw": {
+                  "type": "string"
+                },
+                "latencyMs": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "attrs",
+                "fields"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "samples"
+        ],
+        "additionalProperties": false
+      },
       "CompareTrainingsBody": {
         "type": "object",
         "properties": {
@@ -2963,6 +3168,29 @@
           "name": {
             "type": "string",
             "minLength": 1
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "const": "frame"
+              }
+            },
+            "required": [
+              "done",
+              "total",
+              "unit"
+            ],
+            "additionalProperties": false
           },
           "description": {
             "type": "string"
@@ -4465,6 +4693,25 @@
                   "label"
                 ],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "human"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "kind",
+                  "label"
+                ],
+                "additionalProperties": false
               }
             ]
           },
@@ -4592,6 +4839,25 @@
                 "required": [
                   "kind",
                   "sha256",
+                  "label"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "human"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "kind",
                   "label"
                 ],
                 "additionalProperties": false
@@ -4935,6 +5201,29 @@
                     },
                     "headline": {
                       "type": "boolean"
+                    },
+                    "derivation": {
+                      "type": "string",
+                      "maxLength": 500,
+                      "pattern": "^(?:share:[^:=]+=[^=]+|(?:error|fa|fr):[^:=]+|latency:mean)$"
+                    },
+                    "missingValue": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "filter": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
                     }
                   },
                   "required": [
@@ -5006,6 +5295,116 @@
                   "package"
                 ],
                 "additionalProperties": false
+              },
+              "samples": {
+                "type": "object",
+                "properties": {
+                  "attrs": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "values": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "fields": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "values": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        },
+                        "abstain": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "required": {
+                          "type": "boolean"
+                        },
+                        "accept": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "weight": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "attrs",
+                  "fields"
+                ],
+                "additionalProperties": false
+              },
+              "reference": {
+                "type": "object",
+                "properties": {
+                  "samplesDigest": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "samplesDigest"
+                ],
+                "additionalProperties": false
+              },
+              "settings": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               }
             },
             "required": [
@@ -5221,6 +5620,29 @@
                     },
                     "headline": {
                       "type": "boolean"
+                    },
+                    "derivation": {
+                      "type": "string",
+                      "maxLength": 500,
+                      "pattern": "^(?:share:[^:=]+=[^=]+|(?:error|fa|fr):[^:=]+|latency:mean)$"
+                    },
+                    "missingValue": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "filter": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
                     }
                   },
                   "required": [
@@ -5292,6 +5714,116 @@
                   "package"
                 ],
                 "additionalProperties": false
+              },
+              "samples": {
+                "type": "object",
+                "properties": {
+                  "attrs": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "values": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "fields": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "values": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        },
+                        "abstain": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "required": {
+                          "type": "boolean"
+                        },
+                        "accept": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "weight": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "attrs",
+                  "fields"
+                ],
+                "additionalProperties": false
+              },
+              "reference": {
+                "type": "object",
+                "properties": {
+                  "samplesDigest": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "samplesDigest"
+                ],
+                "additionalProperties": false
+              },
+              "settings": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               }
             },
             "required": [
@@ -6193,6 +6725,122 @@
             "$ref": "#/components/responses/Conflict"
           },
           "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/{id}/samples": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "List samples from an inference run",
+        "operationId": "listRunSamples",
+        "description": "Filter attributes and fields using JSON objects containing exact values.",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "attrs",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of samples"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Record a batch of inference samples",
+        "operationId": "postRunSamples",
+        "description": "Up to 5,000 samples. Retries with the same content are accepted; conflicting content or a completed run\nreturns 409. Each sample is checked against the pinned suite before it is stored, and must carry the\nattributes scoring groups by: `class` (one of the suite's classes) and `size` (one of its conditions).\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSampleBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The accepted sample count"
+          },
+          "4XX": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -12190,7 +12838,7 @@
         ],
         "summary": "Record an evaluation",
         "operationId": "createEvaluation",
-        "description": "Record one checkpoint's results, optionally against a suite version. Name the project, or leave it out and name\nthe epoch the result came from (`source.epochUuid`): a run's pipeline knows its epoch, and the epoch's project is\nthe run's. A result recorded without a suite (a test a run reports) is stored and shown but not ranked. The\nserver judges the result and stores\nthe verdict in `validation`: a well-formed result that cannot be ranked is kept, with the reasons, rather than\nrefused. A malformed body, a credential in `provenance`, an unknown suite or an archived one is refused.\n\nSend your own `uuid`. The same result again answers `200` with the stored evaluation, so a retry after a lost\nresponse is safe; a different result under that uuid is `409`. To correct a result, send a new one with\n`supersedesId`, of the same suite and the same checkpoint: the corrected result is then replaced by the\ncorrection and leaves the ranking even when the correction cannot be ranked. One live correction at a time can\nreplace a result (`409` otherwise); trashing the correction gives the original its place back. Results never\nchange.\n\nA Hub checkpoint needs a project whose storage is Hugging Face. Needs `contribute` on the project.\n",
+        "description": "Record one checkpoint's results, optionally against a suite version. Name the project, or leave it out and name\nthe epoch the result came from (`source.epochUuid`): a run's pipeline knows its epoch, and the epoch's project is\nthe run's. A result recorded without a suite (a test a run reports) is stored and shown but not ranked. The\nserver judges the result and stores\nthe verdict in `validation`: a well-formed result that cannot be ranked is kept, with the reasons, rather than\nrefused. A malformed body, a credential in `provenance`, an unknown suite or an archived one is refused.\n\nSend your own `uuid`. The same result again answers `200` with the stored evaluation, so a retry after a lost\nresponse is safe; a different result under that uuid is `409`. To correct a result, send a new one with\n`supersedesId`, of the same suite and the same checkpoint: the corrected result is then replaced by the\ncorrection and leaves the ranking even when the correction cannot be ranked. One live correction at a time can\nreplace a result (`409` otherwise); trashing the correction gives the original its place back. Results never\nchange.\n\nA Hub checkpoint needs a project whose storage is Hugging Face. Needs `contribute` on the project.\n\nFor a sample suite, `source.trainingUuid` must name a completed inference run pinned to the suite. The server\ncomputes results and counts from its samples and ignores any supplied results and counts. Human reference rows\nmust match the suite's reference digest; the reference evaluation is never ranked.\n",
         "security": [
           {
             "BearerCredential": []
@@ -13911,6 +14559,179 @@
             "$ref": "#/components/responses/NotFound"
           },
           "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/disagreements/{otherId}": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "List samples where two judges disagree",
+        "operationId": "listJudgeDisagreements",
+        "description": "Returns a page of matching sample IDs, attributes, both decisions and raw replies, and the reference\nfields when available. The caller must be allowed to read both evaluations, both runs and the reference.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "otherId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "field",
+            "in": "query",
+            "schema": {
+              "default": "outcome",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "class",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "a",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "b",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of disagreements"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/compare/{otherId}": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Compare two sample-scored evaluations",
+        "operationId": "compareJudgePair",
+        "description": "Compare matching samples on one suite. Returns categorical transition counts, agreement, kappa and\nweighted divergence by class, size and role. Where the suite has a human reference, outcome groups also\ninclude reference error and flip counts. Both evaluations, their runs and the reference must be readable.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "otherId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cached comparison of the two evaluations"
+          },
+          "4XX": {
             "$ref": "#/components/responses/Error"
           }
         }

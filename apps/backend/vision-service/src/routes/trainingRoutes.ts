@@ -28,6 +28,8 @@ import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddle
 import { validateRequest } from '@visin/backend-core';
 import { bestRunQuerySchema } from '../validation/bestRunSchemas';
 import { modelCardQuerySchema, modelDemoBodySchema, modelLinkSchema, modelUploadBodySchema } from '../validation/artifactSchemas';
+import { listRunSamplesQuerySchema, runSampleBatchSchema } from '../validation/runSampleSchemas';
+import { getRunSamples, postRunSamples } from '../controllers/runSampleController';
 import {
   getDeletedTrainingsQuerySchema,
   getTrainingsQuerySchema,
@@ -39,6 +41,9 @@ import {
 } from '../validation/trainingSchemas';
 
 const router = express.Router();
+
+router.get('/:id/samples', optionalAuthMiddleware, validateRequest({ query: listRunSamplesQuerySchema }), getRunSamples);
+router.post('/:id/samples', authMiddleware, validateRequest({ body: runSampleBatchSchema }), postRunSamples);
 
 // Reads are public + private (optional auth); writes require a logged-in owner.
 router.get('/uuid/:uuid', optionalAuthMiddleware, getTrainingByUuid);

@@ -20,6 +20,13 @@ describe('TrainingDetailTabs', () => {
     expect(screen.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('calls the progress points of an inference run Progress, never Epochs', () => {
+    render(<TrainingDetailTabs value="epochs" onChange={vi.fn()} inference />);
+
+    expect(screen.getByRole('tab', { name: 'Progress' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'Epochs' })).not.toBeInTheDocument();
+  });
+
   it('calls onChange with the clicked tab name', () => {
     const onChange = vi.fn();
     render(<TrainingDetailTabs value="overview" onChange={onChange} />);

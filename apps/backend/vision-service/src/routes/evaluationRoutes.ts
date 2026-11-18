@@ -2,6 +2,8 @@ import express from 'express';
 import { validateRequest } from '@visin/backend-core';
 import {
   approveEvaluation,
+  compareJudges,
+  getJudgeDisagreements,
   verifyEvaluation,
   checkEvaluation,
   createEvaluation,
@@ -20,6 +22,7 @@ import {
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import {
   evaluationBodySchema,
+  judgeDisagreementsQuerySchema,
   verifyEvaluationBodySchema,
   recordedLeaderboardQuerySchema,
   evaluationUuidQuerySchema,
@@ -38,6 +41,8 @@ router.get('/uuid/:uuid', optionalAuthMiddleware, validateRequest({ query: evalu
 router.post('/check', authMiddleware, validateRequest({ body: evaluationBodySchema }), checkEvaluation);
 router.post('/promote', authMiddleware, validateRequest({ body: promoteEvaluationBodySchema }), promoteEvaluation);
 router.post('/', authMiddleware, validateRequest({ body: evaluationBodySchema }), createEvaluation);
+router.get('/:id/compare/:otherId', optionalAuthMiddleware, compareJudges);
+router.get('/:id/disagreements/:otherId', optionalAuthMiddleware, validateRequest({ query: judgeDisagreementsQuerySchema }), getJudgeDisagreements);
 router.get('/:id', optionalAuthMiddleware, getEvaluation);
 router.delete('/:id', authMiddleware, trashEvaluation);
 router.post('/:id/restore', authMiddleware, restoreEvaluation);

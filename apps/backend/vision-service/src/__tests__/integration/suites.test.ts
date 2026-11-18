@@ -15,7 +15,15 @@ import { identityContextMiddleware } from '../../middleware/requestIdentityConte
 import Project from '../../models/Project';
 import Suite from '../../models/Suite';
 import SuiteSlug from '../../models/SuiteSlug';
+import Training from '../../models/Training';
+import RunSample from '../../models/RunSample';
+import RunSampleBatch from '../../models/RunSampleBatch';
+import { recoverSampleBatches } from '../../services/runSampleService';
+import { scoreSampleRun } from '../../services/sampleScoring';
+import { sampleDigest } from '../../services/sampleDigest';
+import { suiteProtocolSchema } from '../../validation/suiteSchemas';
 import suiteRoutes from '../../routes/suiteRoutes';
+import trainingRoutes from '../../routes/trainingRoutes';
 import { purgeExpiredTrash, purgeProject } from '../../services/purgeService';
 
 vi.mock('../../clients/projectGroupsClient', async () => {
@@ -76,9 +84,11 @@ describe('suites with in-memory MongoDB', () => {
     await mongoose.connect(mongo.getUri());
     await Suite.init();
     await SuiteSlug.init();
+    await RunSample.init();
     const app = express();
     app.use(express.json(), identityContextMiddleware);
     app.use('/suites', suiteRoutes);
+    app.use('/trainings', trainingRoutes);
     app.use(errorHandler);
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -163,6 +173,219 @@ describe('suites with in-memory MongoDB', () => {
       user,
       body: { slug: 'road-test', version: 1, name: 'Road test', projectId, protocol: protocol(), ...overrides }
     });
+
+  it('accepts idempotent sample batches, scopes reads and prevents writes after completion', async () => {
+    const projectId = await project({ visibility: 'private' });
+    const created = await publish(projectId, { protocol: protocol({ task: 'vlm-judge', classes: [{ id: 'pedestrian' }], samples: { attrs: [{ key: 'class', values: ['pedestrian'] }, { key: 'size' }, { key: 'pixels' }], fields: [{ key: 'verdict', values: ['valid', 'invalid'] }], weight: 'pixels' } }) });
+    const suite = created.body.data;
+    const run = await Training.create({ uuid: 'judge-1', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference', status: 'running', suite: { slug: suite.slug, version: suite.version, digest: suite.digest } });
+    const path = `/trainings/${run._id}/samples`;
+    const sample = { id: 'frame_1/m1', attrs: { class: 'pedestrian', size: 'day', pixels: 212 }, fields: { verdict: 'valid' } };
+    await Training.updateOne({ _id: run._id }, { $set: { status: 'stalled' }, $unset: { lastSeenAt: 1 } });
+    expect((await call(path, { method: 'POST', body: { samples: [sample] } })).status).toBe(200);
+    // A sample write is a sign of life, and a sealed batch leaves no second copy of its rows behind.
+    const touched = await Training.findById(run._id);
+    expect(touched?.lastSeenAt).toBeInstanceOf(Date);
+    expect(touched?.status).toBe('running');
+    expect(await RunSampleBatch.countDocuments({ trainingId: String(run._id) })).toBe(0);
+    expect((await call(path, { method: 'POST', body: { samples: [sample] } })).status).toBe(200);
+    expect(await RunSampleBatch.countDocuments({ trainingId: String(run._id) })).toBe(0);
+    expect((await call(path, { method: 'POST', body: { samples: [{ ...sample, fields: { verdict: 'invalid' } }] } })).status).toBe(409);
+    expect((await call(path, { method: 'POST', body: { samples: [{ ...sample, fields: { verdict: 'typo' } }] } })).status).toBe(400);
+    const race = await Promise.all(['valid', 'invalid'].map(verdict => call(path, { method: 'POST', body: { samples: [{ ...sample, id: 'frame_1/m2', fields: { verdict } }] } })));
+    expect(race.map(result => result.status).sort()).toEqual([200, 409]);
+    expect((await call(path, { user: STRANGER })).status).toBe(404);
+    expect((await call('/trainings/not-an-id/samples')).status).toBe(404);
+    expect((await call(`${path}?attrs=not-json`)).status).toBe(400);
+    expect((await call(`${path}?fields=${encodeURIComponent(JSON.stringify({ '$where': 'bad' }))}`)).status).toBe(400);
+    expect((await call(`${path}?attrs=${encodeURIComponent('[]')}`)).status).toBe(400);
+    expect((await call(`${path}?fields=${encodeURIComponent(JSON.stringify({ verdict: 'invalid' }))}`)).status).toBe(200);
+    const filtered = await call(`${path}?attrs=${encodeURIComponent(JSON.stringify({ class: 'pedestrian' }))}`);
+    expect(filtered.body.data.pagination.total).toBe(2);
+    expect(filtered.body.data.samples[0].id).toBe('frame_1/m1');
+    await Training.updateOne({ _id: run._id }, { $set: { pendingSampleBatches: ['pending'] } });
+    expect((await call(`/trainings/${run._id}`, { method: 'PUT', body: { status: 'completed' } })).status).toBe(409);
+    await Training.updateOne({ _id: run._id }, { $unset: { pendingSampleBatches: 1 } });
+    expect((await call(`/trainings/${run._id}`, { method: 'PUT', body: { status: 'completed' } })).status).toBe(200);
+    expect((await call(path, { method: 'POST', body: { samples: [sample] } })).status).toBe(409);
+    expect((await call(`/trainings/${run._id}`, { method: 'PUT', body: { status: 'running' } })).status).toBe(409);
+  });
+
+  it('refuses a sample without a known class and condition before the run can be sealed', async () => {
+    const projectId = await project();
+    const created = await publish(projectId, { protocol: protocol({ classes: [{ id: 'a' }], samples: { attrs: [{ key: 'class' }, { key: 'size' }], fields: [{ key: 'verdict', values: ['valid'] }] } }) });
+    expect(created.status).toBe(201);
+    const suite = created.body.data;
+    const run = await Training.create({ uuid: 'unscorable', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference', status: 'running', suite: { slug: suite.slug, version: suite.version, digest: suite.digest } });
+    const path = `/trainings/${run._id}/samples`;
+    const missing = await call(path, { method: 'POST', body: { samples: [{ id: 'one', attrs: { class: 'a' }, fields: { verdict: 'valid' } }] } });
+    expect(missing.status).toBe(400);
+    expect(missing.body.message).toContain('Missing attribute: size');
+    const unknown = await call(path, { method: 'POST', body: { samples: [{ id: 'one', attrs: { class: 'b', size: 'day' }, fields: { verdict: 'valid' } }] } });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.message).toContain('Attribute class');
+    expect(await RunSample.countDocuments({ trainingId: String(run._id) })).toBe(0);
+    const unscorable = await publish(projectId, { version: 2, protocol: protocol({ samples: { attrs: [], fields: [{ key: 'verdict', values: ['valid'] }] } }) });
+    expect(unscorable.status).toBe(400);
+  });
+
+  it('refuses sample writes on a run without a pinned sample suite', async () => {
+    const projectId = await project();
+    const run = await Training.create({ uuid: 'ordinary', name: 'Training', projectId, ownerId: OWNER });
+    const sample = { id: 'one', attrs: {}, fields: { verdict: 'valid' } };
+    expect((await call(`/trainings/${run._id}/samples`, { method: 'POST', body: { samples: [sample] } })).status).toBe(400);
+    const broken = await Training.create({ uuid: 'broken', name: 'Broken', projectId, ownerId: OWNER, kind: 'inference', suite: { slug: 'missing', version: 1, digest: 'a'.repeat(64) } });
+    expect((await call(`/trainings/${broken._id}/samples`, { method: 'POST', body: { samples: [sample] } })).status).toBe(400);
+  });
+
+  it('recovers a batch left reserved by an interrupted service', async () => {
+    const projectId = await project();
+    const run = await Training.create({ uuid: 'recover', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference', pendingSampleBatches: ['batch'] });
+    const row = { id: 'frame/m1', attrs: { pixels: 3 }, fields: { verdict: 'valid' } };
+    await RunSampleBatch.create({ _id: 'batch', trainingId: String(run._id), projectId, samples: [row] });
+    await recoverSampleBatches();
+    expect(await RunSample.countDocuments({ trainingId: String(run._id), sampleId: row.id })).toBe(1);
+    const recovered = await Training.findById(run._id).select('+pendingSampleBatches');
+    expect(recovered?.pendingSampleBatches).toEqual([]);
+    await recoverSampleBatches();
+    expect(await RunSample.countDocuments({ trainingId: String(run._id) })).toBe(1);
+  });
+
+  it('replays the actual reserved batch after an interrupted insert', async () => {
+    const projectId = await project();
+    const created = await publish(projectId, { protocol: protocol({ classes: [{ id: 'a' }], samples: { attrs: [{ key: 'class' }, { key: 'size' }], fields: [{ key: 'verdict', values: ['valid'] }] } }) });
+    const suite = created.body.data;
+    const run = await Training.create({ uuid: 'interrupt', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference', suite: { slug: suite.slug, version: suite.version, digest: suite.digest } });
+    const insert = vi.spyOn(RunSample, 'bulkWrite').mockRejectedValueOnce(new Error('injected write failure'));
+    const row = { id: 'one', attrs: { class: 'a', size: 'day' }, fields: { verdict: 'valid' } };
+    expect((await call(`/trainings/${run._id}/samples`, { method: 'POST', body: { samples: [row] } })).status).toBe(500);
+    insert.mockRestore();
+    expect((await Training.findById(run._id).select('+pendingSampleBatches'))?.pendingSampleBatches).toHaveLength(1);
+    await recoverSampleBatches();
+    expect(await RunSample.countDocuments({ trainingId: String(run._id) })).toBe(1);
+    expect((await call(`/trainings/${run._id}`, { method: 'PUT', body: { status: 'completed' } })).status).toBe(200);
+    expect(await RunSampleBatch.countDocuments({ trainingId: String(run._id) })).toBe(0);
+  });
+
+  it('does not reserve a batch when durable payload storage fails', async () => {
+    const projectId = await project();
+    const created = await publish(projectId, { protocol: protocol({ classes: [{ id: 'a' }], samples: { attrs: [{ key: 'class' }, { key: 'size' }], fields: [{ key: 'verdict', values: ['valid'] }] } }) });
+    const suite = created.body.data;
+    const run = await Training.create({ uuid: 'batch-store-failure', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference', suite: { slug: suite.slug, version: suite.version, digest: suite.digest } });
+    const save = vi.spyOn(RunSampleBatch, 'updateOne').mockRejectedValueOnce(new Error('storage failed'));
+    expect((await call(`/trainings/${run._id}/samples`, { method: 'POST', body: { samples: [{ id: 'one', attrs: { class: 'a', size: 'day' }, fields: { verdict: 'valid' } }] } })).status).toBe(500);
+    save.mockRestore();
+    expect((await Training.findById(run._id).select('+pendingSampleBatches'))?.pendingSampleBatches ?? []).toHaveLength(0);
+  });
+
+  it('releases a reservation whose payload was already sealed, and keeps a temporarily failing one', async () => {
+    const projectId = await project();
+    const run = await Training.create({ uuid: 'missing-batch', name: 'Judge', projectId, ownerId: OWNER, kind: 'inference', pendingSampleBatches: ['missing'] });
+    // Payloads are deleted only once every row is stored, so a reservation without one would otherwise block completion.
+    await recoverSampleBatches();
+    expect((await Training.findById(run._id).select('+pendingSampleBatches'))?.pendingSampleBatches).toEqual([]);
+    // A payload that names another run is never written to this one, and stays reserved for someone to look at.
+    await Training.updateOne({ _id: run._id }, { $set: { pendingSampleBatches: ['foreign'] } });
+    await RunSampleBatch.create({ _id: 'foreign', trainingId: 'another-run', projectId, samples: [{ id: 'one', attrs: {}, fields: {} }] });
+    await recoverSampleBatches();
+    expect((await Training.findById(run._id).select('+pendingSampleBatches'))?.pendingSampleBatches).toEqual(['foreign']);
+    expect(await RunSample.countDocuments({ trainingId: String(run._id) })).toBe(0);
+    await Training.updateOne({ _id: run._id }, { $set: { pendingSampleBatches: ['missing'] } });
+    await RunSampleBatch.create({ _id: 'missing', trainingId: String(run._id), projectId, samples: [{ id: 'one', attrs: {}, fields: {} }] });
+    const insert = vi.spyOn(RunSample, 'bulkWrite').mockRejectedValueOnce(new Error('temporary failure'));
+    await recoverSampleBatches();
+    insert.mockRestore();
+    expect((await Training.findById(run._id).select('+pendingSampleBatches'))?.pendingSampleBatches).toEqual(['missing']);
+  });
+
+  it('scores grouped sample shares and reference errors using their proper denominators', async () => {
+    const projectId = await project();
+    const proto = suiteProtocolSchema.parse(protocol({
+      conditions: [{ name: 'small', sampleCount: 3 }], classes: [{ id: 'a' }, { id: 'b' }],
+      samples: { attrs: [{ key: 'size' }, { key: 'class' }], fields: [{ key: 'outcome', values: ['keep', 'delete'], accept: ['keep'] }] },
+      reference: { samplesDigest: 'a'.repeat(64) },
+      metrics: [
+        { key: 'reject', direction: 'min', headline: true, derivation: 'share:outcome=delete' },
+        { key: 'error', direction: 'min', derivation: 'error:outcome' },
+        { key: 'fa', direction: 'min', derivation: 'fa:outcome' },
+        { key: 'fr', direction: 'min', derivation: 'fr:outcome' },
+        { key: 'latency', direction: 'min', derivation: 'latency:mean' }
+      ]
+    }));
+    for (const [sampleId, classId, actual, reference, latencyMs] of [
+      ['1', 'a', 'keep', 'delete', 10], ['2', 'a', 'delete', 'keep', 20], ['3', 'b', 'keep', 'keep', 30]
+    ] as const) {
+      const attrs = { size: 'small', class: classId };
+      await RunSample.create({ trainingId: 'model', projectId, sampleId, attrs, fields: { outcome: actual }, latencyMs });
+      await RunSample.create({ trainingId: 'reference', projectId, sampleId, attrs, fields: { outcome: reference } });
+    }
+    const scored = await scoreSampleRun('model', proto, 'reference');
+    expect(scored.sampleCounts).toEqual({ small: 3 });
+    expect(scored.results.small.overall).toEqual({ reject: 1 / 3, error: 2 / 3, fa: 1, fr: 0.5, latency: 20 });
+    expect(scored.results.small.a).toEqual({ reject: 0.5, error: 1, fa: 1, fr: 1, latency: 15 });
+    expect(scored.results.small.b).toEqual({ reject: 0, error: 0, fr: 0, latency: 30 });
+    const digest = await sampleDigest('model');
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    await RunSample.updateOne({ trainingId: 'model', sampleId: '1' }, { $set: { raw: 'changed' } });
+    expect(await sampleDigest('model')).not.toBe(digest);
+    const percent = suiteProtocolSchema.parse({ ...proto, metrics: [{ key: 'reject', direction: 'min', headline: true, derivation: 'share:outcome=delete', unit: '%' }] });
+    expect((await scoreSampleRun('model', percent)).results.small.overall.reject).toBeCloseTo(100 / 3);
+    await RunSample.updateOne({ trainingId: 'reference', sampleId: '1' }, { $set: { 'attrs.class': 'b' } });
+    await expect(scoreSampleRun('model', proto, 'reference')).rejects.toThrow('Reference and run attributes differ');
+    await expect(scoreSampleRun('model', proto)).rejects.toThrow('reference run is required');
+    const incomplete = suiteProtocolSchema.parse(protocol({ metrics: [{ key: 'm', direction: 'max', headline: true }], samples: { attrs: [{ key: 'size' }, { key: 'class' }], fields: [{ key: 'outcome', values: ['keep'] }] } }));
+    await expect(scoreSampleRun('model', incomplete)).rejects.toThrow('Every sample-suite metric');
+    await RunSample.create({ trainingId: 'bad-model', projectId, sampleId: 'bad', attrs: {}, fields: { outcome: 'keep' } });
+    await expect(scoreSampleRun('bad-model', proto, 'reference')).rejects.toThrow('Sample class or condition');
+    const literal = suiteProtocolSchema.parse({ ...proto, samples: { ...proto.samples, fields: [{ key: 'outcome', values: ['$keep', 'delete'], accept: ['$keep'] }] }, metrics: [{ key: 'share', direction: 'max', headline: true, derivation: 'share:outcome=$keep' }] });
+    await RunSample.create({ trainingId: 'literal', projectId, sampleId: '1', attrs: { size: 'small', class: 'a' }, fields: { outcome: '$keep' } });
+    expect((await scoreSampleRun('literal', literal)).results.small.overall.share).toBe(1);
+  });
+
+  it('keeps filtered sample metric populations separate without changing total counts', async () => {
+    const projectId = await project();
+    const proto = suiteProtocolSchema.parse(protocol({
+      conditions: [{ name: 'small', sampleCount: 3 }], classes: [{ id: 'a' }],
+      samples: { attrs: [{ key: 'size' }, { key: 'class' }, { key: 'role', values: ['classify', 'confirm'] }], fields: [{ key: 'outcome', values: ['keep', 'delete'], accept: ['keep'] }] },
+      reference: { samplesDigest: 'a'.repeat(64) },
+      metrics: [
+        { key: 'mask_reject', direction: 'min', headline: true, derivation: 'share:outcome=delete', filter: { role: 'classify' } },
+        { key: 'candidate_reject', direction: 'min', derivation: 'share:outcome=delete', filter: { role: 'confirm' } },
+        { key: 'mask_error', direction: 'min', derivation: 'error:outcome', filter: { role: 'classify' } },
+        { key: 'mask_latency', direction: 'min', derivation: 'latency:mean', filter: { role: 'classify' } }
+      ]
+    }));
+    for (const [sampleId, role, actual, reference, latencyMs] of [
+      ['1', 'classify', 'keep', 'delete', 10], ['2', 'classify', 'delete', 'delete', 20], ['3', 'confirm', 'delete', 'keep', 90]
+    ] as const) {
+      const attrs = { size: 'small', class: 'a', role };
+      await RunSample.create({ trainingId: 'filtered', projectId, sampleId, attrs, fields: { outcome: actual }, latencyMs });
+      await RunSample.create({ trainingId: 'filtered-ref', projectId, sampleId, attrs, fields: { outcome: reference } });
+    }
+    const result = await scoreSampleRun('filtered', proto, 'filtered-ref');
+    expect(result.sampleCounts).toEqual({ small: 3 });
+    expect(result.results.small.overall).toEqual({ mask_reject: 0.5, candidate_reject: 1, mask_error: 0.5, mask_latency: 15 });
+  });
+
+  it('counts missing predictions only when a metric explicitly gives them a value', async () => {
+    const projectId = await project();
+    const proto = suiteProtocolSchema.parse(protocol({
+      conditions: [{ name: 'small', sampleCount: 2 }], classes: [{ id: 'a' }],
+      samples: { attrs: [{ key: 'size' }, { key: 'class' }], fields: [{ key: 'verdict', values: ['valid', 'invalid'], accept: ['valid'] }] },
+      reference: { samplesDigest: 'a'.repeat(64) },
+      metrics: [
+        { key: 'fr_default', direction: 'min', headline: true, derivation: 'fr:verdict', missingValue: 'invalid' },
+        { key: 'fr_observed', direction: 'min', derivation: 'fr:verdict' }
+      ]
+    }));
+    for (const [sampleId, fields] of [['1', {}], ['2', { verdict: 'valid' }]] as const) {
+      const attrs = { size: 'small', class: 'a' };
+      await RunSample.create({ trainingId: 'missing-pred', projectId, sampleId, attrs, fields });
+      await RunSample.create({ trainingId: 'missing-ref', projectId, sampleId, attrs, fields: { verdict: 'valid' } });
+    }
+    const result = await scoreSampleRun('missing-pred', proto, 'missing-ref');
+    expect(result.results.small.overall).toEqual({ fr_default: 0.5, fr_observed: 0 });
+  });
 
   describe('publishing', () => {
     it('stores the protocol with its digest and reads it back by number and as latest', async () => {

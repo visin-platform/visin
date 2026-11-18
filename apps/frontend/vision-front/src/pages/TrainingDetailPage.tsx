@@ -183,7 +183,7 @@ const TrainingDetailPage: React.FC = () => {
       />
       {useOpen && <UseThisDialog title="Use this run" snippets={runSnippets(training)} onClose={() => setUseOpen(false)} />}
       <AnalyzeButton projectId={training.projectId} trainingIds={[training._id]} title={`Analyze ${training.name}`} />
-      <TrainingDetailTabs value={detailTab} onChange={(_event, tab) => showTab(tab)} showModels={hasStoredModels} />
+      <TrainingDetailTabs value={detailTab} onChange={(_event, tab) => showTab(tab)} showModels={hasStoredModels} inference={training.kind === 'inference'} />
       <SampleTour
         onDeleteSample={() => {
           setReturnToProject(true);

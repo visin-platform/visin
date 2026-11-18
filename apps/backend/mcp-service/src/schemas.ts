@@ -630,6 +630,7 @@ export const suiteSchema = z
         task: z.string().optional(),
         split: z.string().optional(),
         aggregation: z.string().optional(),
+        samples: z.object({ weight: z.string().optional() }).loose().optional(),
         conditions: z.array(z.object({ name: z.string(), sampleCount: z.number().optional() }).loose()).catch([]),
         metrics: z
           .array(
@@ -713,6 +714,33 @@ export const evaluationSchema = z
       .loose()
   })
   .loose();
+
+const judgeReferenceSchema = z.object({
+  total: z.number(), errorA: z.number(), errorB: z.number(), flips: z.number(), correctA: z.number(), correctB: z.number(),
+  errorRateA: z.number(), errorRateB: z.number(), keepUnlessBothDeleteErrorRate: z.number(), reviewedErrorRate: z.number()
+}).loose();
+export const judgePairSchema = z.object({
+  evaluationA: z.string(), evaluationB: z.string(),
+  suite: z.object({ slug: z.string(), version: z.number(), digest: z.string() }).loose(),
+  fields: z.array(z.object({
+    field: z.string(), groups: z.array(z.object({
+      groupBy: z.enum(['overall', 'class', 'size', 'role']), value: z.string().optional(), count: z.number(),
+      agreement: z.number(), divergence: z.number(), kappa: z.number().nullable(), binaryKappa: z.number().nullable().optional(),
+      weightedDivergence: z.number().nullable(), reference: judgeReferenceSchema.optional()
+    }).loose())
+  }).loose())
+}).loose();
+const sampleSideSchema = z.object({ fields: z.record(z.string(), z.string()), raw: z.string().optional() }).loose();
+export const judgeDisagreementsSchema = z.object({
+  field: z.string(),
+  samples: z.array(z.object({
+    id: z.string(), attrs: z.record(z.string(), z.unknown()), a: sampleSideSchema, b: sampleSideSchema,
+    reference: z.object({ fields: z.record(z.string(), z.string()).optional() }).loose().optional()
+  }).loose()),
+  pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), pages: z.number() }).loose()
+}).loose();
+export type JudgePair = z.infer<typeof judgePairSchema>;
+export type JudgeDisagreements = z.infer<typeof judgeDisagreementsSchema>;
 
 export type Suite = z.infer<typeof suiteSchema>;
 export type Leaderboard = z.infer<typeof leaderboardSchema>;

@@ -37,6 +37,11 @@ export const checkpointForms: { [K in Checkpoint['kind']]: CheckpointForm } = {
     ],
     build: values => ({ kind: 'local', sha256: text(values, 'sha256'), label: text(values, 'label') })
   },
+  human: {
+    choice: 'Human reference',
+    fields: [{ key: 'label', label: 'Reference label', required: true }],
+    build: values => ({ kind: 'human', label: text(values, 'label') })
+  },
   [HUB]: hubCheckpointForm
 };
 

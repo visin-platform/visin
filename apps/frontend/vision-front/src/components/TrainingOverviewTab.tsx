@@ -18,6 +18,8 @@ import ClassRecallChart from '../components/ClassRecallChart';
 import ClassF1Chart from '../components/ClassF1Chart';
 import PerClassMetricsTable from '../components/PerClassMetricsTable';
 import { TableChart as TableChartIcon } from '@mui/icons-material';
+import InferenceRunOverview from '../components/training/InferenceRunOverview';
+import { isInferenceRun } from '../utils/inferenceRun';
 
 interface TrainingOverviewTabProps {
   training: Training;
@@ -46,6 +48,19 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   const epochNumbers = epochs.map(e => e.epoch);
   const trainStandardIoU = epochs.map(e => (e.results?.train_standard as EpochConditionResults | undefined)?.mean_iou ?? null);
   const valStandardIoU = epochs.map(e => (e.results?.val_standard as EpochConditionResults | undefined)?.mean_iou ?? null);
+
+  if (isInferenceRun(training)) {
+    // A model judging frames has no epochs, classes or IoU to chart: its own progress and running rates instead.
+    return (
+      <Box>
+        <Stack spacing={3}>
+          <RunNotes notes={training.notes} canEdit={canEdit && Boolean(onSaveNotes)} onSave={onSaveNotes ?? (async () => undefined)} />
+          {training.provenance && <ProvenanceCard provenance={training.provenance} />}
+          <InferenceRunOverview training={training} epochs={epochs} />
+        </Stack>
+      </Box>
+    );
+  }
 
   return (
     <Box>

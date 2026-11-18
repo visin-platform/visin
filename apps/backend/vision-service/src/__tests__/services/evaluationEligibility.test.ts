@@ -42,6 +42,13 @@ describe('validateEvaluation', () => {
     expect(wild.reasons).toEqual([{ code: 'metric-out-of-range', detail: 'overall/m' }]);
   });
 
+  it('reads the nested pooled overall produced by sample scoring', () => {
+    const pooled = suiteProtocolSchema.parse({ ...build('pooled'), samples: { attrs: [{ key: 'class' }, { key: 'size' }], fields: [{ key: 'outcome', values: ['keep'] }] } });
+    const results = { day: { overall: { m: 0.5 } }, night: { overall: { m: 0.9 } }, overall: { overall: { m: 0.55 }, vehicle: { m: 0.7 } } };
+    expect(validateEvaluation(pooled, 'd', input({ results })).scores?.overall.m).toBe(0.55);
+    expect(validateEvaluation(build('pooled'), 'd', input({ results })).reasons).toContainEqual({ code: 'missing-overall', detail: 'm' });
+  });
+
   it('does not take a missing metric for a zero or a string for a number', () => {
     const report = validateEvaluation(build('equal-mean-of-conditions'), 'd', input({ results: { day: { overall: { m: 'n/a' } }, night: { overall: {} } } }));
     expect(report.state).toBe('incomplete');

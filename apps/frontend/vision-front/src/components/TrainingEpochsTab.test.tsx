@@ -56,6 +56,13 @@ describe('TrainingEpochsTab', () => {
     expect(screen.getByText('0.6000')).toBeInTheDocument();
   });
 
+  it('calls the points of an inference run progress points, numbered by frames done', () => {
+    render(<TrainingEpochsTab {...baseProps} epochs={[makeEpoch(25)]} run={{ status: 'running', kind: 'inference' }} />);
+    expect(screen.getByText('Progress points')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Frames done' })).toBeInTheDocument();
+    expect(screen.queryByText('Epochs Management')).not.toBeInTheDocument();
+  });
+
   it('shows "-" for missing numeric metrics', () => {
     const epochs = [makeEpoch(1, { results: {}, learning_rate: undefined, epoch_time: undefined })];
     render(<TrainingEpochsTab {...baseProps} epochs={epochs} />);

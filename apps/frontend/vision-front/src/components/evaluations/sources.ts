@@ -27,7 +27,8 @@ export const checkpointSources: { [K in AnyCheckpoint['kind']]: CheckpointSource
     label: checkpoint => checkpoint.label,
     detail: checkpoint => `sha256 ${checkpoint.sha256}`,
     note: 'Held outside Visin'
-  }
+  },
+  human: { label: checkpoint => checkpoint.label, note: 'Human reference' }
 };
 
 export const checkpointSource = (checkpoint: AnyCheckpoint): CheckpointSourceView<AnyCheckpoint> =>

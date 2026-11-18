@@ -275,6 +275,8 @@ describe('the protocol', () => {
       openWorldHint: false
     });
     expect(annotations.get('view_visualizations')).toMatchObject({ readOnlyHint: true });
+    expect(annotations.get('compare_judges')).toMatchObject({ readOnlyHint: true });
+    expect(annotations.get('list_disagreements')).toMatchObject({ readOnlyHint: true });
     expect(annotations.get('update_training')).toMatchObject({ readOnlyHint: false });
     // Additive writes say so for themselves; renaming a run does not, because
     // it overwrites what was there.

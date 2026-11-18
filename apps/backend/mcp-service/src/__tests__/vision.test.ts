@@ -325,6 +325,20 @@ describe('suites and rankings', () => {
     called.mockResolvedValue({ ...board, entries: [{ evaluationId: 'e1' }] });
     await expect(vision.getLeaderboard('k', 'road-test', 1, {})).rejects.toBeInstanceOf(ShapeError);
   });
+
+  it('validates and forwards judge pair and disagreement queries with a longer computation deadline', async () => {
+    called.mockResolvedValue({ evaluationA: 'e1', evaluationB: 'e2', suite: { slug: 'road-test', version: 1, digest: 'd' }, fields: [] });
+    expect((await vision.compareJudges('k', 'e1', 'e2')).evaluationA).toBe('e1');
+    expect(lastCall().path).toBe('/evaluations/e1/compare/e2');
+    expect(called.mock.calls[0][6]).toBe(60_000);
+    called.mockClear();
+    called.mockResolvedValue({ field: 'outcome', samples: [], pagination: { page: 1, limit: 5, total: 0, pages: 0 } });
+    await vision.judgeDisagreements('k', 'e1', 'e2', { class: 'a', limit: 5 });
+    expect(lastCall()).toMatchObject({ path: '/evaluations/e1/disagreements/e2', query: { class: 'a', limit: 5 } });
+    expect(called.mock.calls[0][6]).toBe(60_000);
+    called.mockResolvedValue({ field: 'outcome', samples: [{}] });
+    await expect(vision.judgeDisagreements('k', 'e1', 'e2', {})).rejects.toBeInstanceOf(ShapeError);
+  });
 });
 
 describe('parsing at the boundary', () => {

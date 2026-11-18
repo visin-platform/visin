@@ -10,16 +10,20 @@ interface TrainingDetailTabsProps {
   onChange: (event: React.SyntheticEvent, newValue: TrainingTab) => void;
   /** whether the run keeps a model on Visin; the Models tab is left out when it keeps none */
   showModels?: boolean;
+  /** an inference run, whose epochs are progress points */
+  inference?: boolean;
 }
 
 /** How many tabs a phone shows; the rest are one tap further, in a menu. Nine in a sideways scroller hid six. */
 const PHONE_TABS = 3;
 const MORE = 'more';
 
-const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange, showModels = false }) => {
+const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange, showModels = false, inference = false }) => {
   const compact = useCompactLayout();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const tabs = TRAINING_TABS.filter(([name]) => showModels || name !== 'models');
+  const tabs = TRAINING_TABS.filter(([name]) => showModels || name !== 'models').map(
+    ([name, label]) => [name, inference && name === 'epochs' ? 'Progress' : label] as const
+  );
   const shown = compact ? tabs.slice(0, PHONE_TABS) : tabs;
   const hidden = compact ? tabs.slice(PHONE_TABS) : [];
   // When the page is on a tab behind the menu, the menu's own tab carries its name, so the bar still says where it is.

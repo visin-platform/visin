@@ -17,6 +17,7 @@ import { touchProjectActivity } from './projectActivity';
 import { selectedAttemptId } from './leaderboardPoolService';
 import { MAX_PAGE_SIZE } from '../validation/common';
 import { EvaluationView, Reader, toView } from './evaluationView';
+import { prepareSampleEvaluation } from './sampleEvaluation';
 import { requireActor, recordVisibility, withdrawSuperseded, writableProject, judge, touchRun, resolveSource, projectRefOf, claimCorrection, sameResult } from './evaluationWriteSupport';
 
 // The service's public surface stays here, whichever file a piece now lives in.
@@ -39,9 +40,10 @@ export interface EvaluationCheck {
  */
 export async function checkEvaluation(userId: string | undefined, body: EvaluationBody): Promise<EvaluationCheck> {
   const actor = requireActor(userId);
-  const { project } = await writableProject(await projectRefOf(body), actor);
+  const { project, projectId } = await writableProject(await projectRefOf(body), actor);
   requireCheckpointStorage(project, body.checkpoint);
-  const { suite, report, key } = await judge(body, actor);
+  const prepared = await prepareSampleEvaluation(body, actor, projectId);
+  const { suite, report, key } = await judge(prepared.body, actor, false, Boolean(prepared.samplesDigest));
   return {
     validation: report,
     ...(key ? { checkpointKey: key } : {}),
@@ -61,6 +63,9 @@ export async function createEvaluation(
   const { project, projectId } = await writableProject(await projectRefOf(body), actor);
   requireCheckpointStorage(project, body.checkpoint);
 
+  const prepared = await prepareSampleEvaluation(body, actor, projectId);
+  body = prepared.body;
+
   const uuid = body.uuid ?? randomUUID();
   const contentHash = contentHashOf(body);
   const existing = await Evaluation.findOne({ projectId, uuid });
@@ -73,7 +78,7 @@ export async function createEvaluation(
     return { evaluation: toView(sameResult(existing, contentHash), true), created: false };
   }
 
-  const { suite, report, key } = await judge(body, actor);
+  const { suite, report, key } = await judge(body, actor, false, Boolean(prepared.samplesDigest));
   const source = await resolveSource(body, projectId);
   const id = new Types.ObjectId();
   const corrected = body.supersedesId ? await claimCorrection(body.supersedesId, projectId, id.toString(), suite?._id.toString(), key) : undefined;
@@ -90,6 +95,7 @@ export async function createEvaluation(
       status: body.status,
       results: body.results,
       ...(body.sampleCounts ? { sampleCounts: body.sampleCounts } : {}),
+      ...(prepared.samplesDigest ? { samplesDigest: prepared.samplesDigest } : {}),
       ...(body.evidence ? { evidence: { kind: 'observed', ...body.evidence } } : {}),
       ...(body.provenance ? { provenance: body.provenance } : {}),
       ...(body.executedAt ? { executedAt: body.executedAt } : {}),

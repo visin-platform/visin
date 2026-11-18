@@ -49,6 +49,18 @@ describe('evaluationService', () => {
     expect(api.post).toHaveBeenCalledWith('/evaluations/e1/restore');
   });
 
+  it('requests a judge comparison through the shared API', async () => {
+    api.get.mockResolvedValue(reply({ fields: [] }));
+    expect(await evaluationService.compareJudges('a', 'b')).toEqual({ fields: [] });
+    expect(api.get).toHaveBeenCalledWith('/evaluations/a/compare/b');
+  });
+
+  it('requests a filtered page of judge disagreements', async () => {
+    api.get.mockResolvedValue(reply({ field: 'outcome', samples: [], pagination: { page: 1, total: 0 } }));
+    await evaluationService.judgeDisagreements('a', 'b', { field: 'outcome', class: 'a', reference: 'keep', page: 1 });
+    expect(api.get).toHaveBeenCalledWith('/evaluations/a/disagreements/b', { params: { field: 'outcome', class: 'a', reference: 'keep', page: 1 } });
+  });
+
   it('promotes a test result with the checkpoint and counts it was given', async () => {
     api.post.mockResolvedValue(reply({ _id: 'e2' }));
     const body = {
