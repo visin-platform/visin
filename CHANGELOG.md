@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.18.0](https://github.com/visin-platform/visin/compare/v2.17.0...v2.18.0) (2026-11-18)
+
+### Features
+
+* inference runs scored sample by sample, with judge comparison ([d97c885](https://github.com/visin-platform/visin/commit/d97c885290bb5a88b426c29aad4cce5f02c8e6d3))
+
 ## [2.17.0](https://github.com/visin-platform/visin/compare/v2.16.0...v2.17.0) (2026-11-17)
 
 ### Features
