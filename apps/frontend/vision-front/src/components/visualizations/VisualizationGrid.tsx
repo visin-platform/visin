@@ -37,6 +37,8 @@ interface VisualizationGridProps {
   isAuthenticated: boolean;
   /** the classes a mask's indices stand for */
   classes?: OutputClass[];
+  /** what a point is called on each image's label: an epoch, or the frames done */
+  pointLabel?: string;
 }
 
 const VisualizationGrid: React.FC<VisualizationGridProps> = ({
@@ -46,7 +48,8 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
   handleImageClick,
   handleDelete,
   isAuthenticated,
-  classes
+  classes,
+  pointLabel = 'Epoch'
 }) => {
   const theme = useTheme();
   const [visualizationToDelete, setVisualizationToDelete] = useState<string | null>(null);
@@ -61,6 +64,23 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
     return acc;
   }, {} as Record<string, { type: string; epoch?: number; items: Visualization[] }>);
 
+  // Where every epoch of a type holds a single image (a frame per point, say), a heading per image would stack them
+  // one to a row: such a type is laid out as one grid, each image carrying its own point.
+  const singles = new Set(
+    Object.values(groupedVisualizations)
+      .map((group) => group.type)
+      .filter((type) => Object.values(groupedVisualizations).every((group) => group.type !== type || group.items.length === 1))
+  );
+  const groups = [
+    ...Object.values(groupedVisualizations).filter((group) => !singles.has(group.type)),
+    ...[...singles].map((type) => ({
+      type,
+      epoch: undefined as number | undefined,
+      perImage: true,
+      items: Object.values(groupedVisualizations).filter((group) => group.type === type).flatMap((group) => group.items)
+    }))
+  ] as { type: string; epoch?: number; perImage?: boolean; items: Visualization[] }[];
+
   const onDeleteClick = (uuid: string) => {
     setVisualizationToDelete(uuid);
   };
@@ -73,7 +93,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
 
   return (
     <Box>
-      {Object.values(groupedVisualizations).map((group, groupIdx) => (
+      {groups.map((group, groupIdx) => (
         <Box key={groupIdx} sx={{
           mb: 4
         }}>
@@ -92,7 +112,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
               {group.type}
             </Typography>
             {group.epoch !== undefined && (
-              <Chip label={`Epoch ${group.epoch}`} size="small" color="primary" variant="outlined" />
+              <Chip label={`${pointLabel} ${group.epoch}`} size="small" color="primary" variant="outlined" />
             )}
           </Box>
           
@@ -170,6 +190,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
                         color: "text.secondary",
                         display: "block"
                       }}>
+                      {group.perImage && viz.epoch !== undefined ? `${pointLabel} ${viz.epoch.toLocaleString()} · ` : ''}
                       {formatDateTime(viz.uploadedAt)}
                     </Typography>
                   </CardContent>

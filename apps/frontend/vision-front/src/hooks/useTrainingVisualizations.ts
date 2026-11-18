@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { visualizationService } from '../services/visualizationService';
 import { Visualization, VisualizationsPaginatedResponse } from '../types';
+
+/** Images a page: four rows of a desktop grid. */
+const PAGE_SIZE = 24;
 
 interface UseTrainingVisualizationsProps {
   training_uuid: string;
@@ -12,6 +15,16 @@ export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualiz
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedEpochFilter, setSelectedEpochFilter] = useState<string>('all');
   const [selectedImageName, setSelectedImageName] = useState<string>('');
+  const [page, setPage] = useState(1);
+  // What is typed is searched once typing pauses, not on every key.
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(selectedImageName.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [selectedImageName]);
+  // A new filter starts from its first page.
+  useEffect(() => setPage(1), [selectedType, selectedEpochFilter, search]);
+  const epoch = selectedEpochFilter !== 'all' && selectedEpochFilter.trim() !== '' ? Number(selectedEpochFilter) : undefined;
 
   const queryClient = useQueryClient();
 
@@ -25,12 +38,17 @@ export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualiz
     isLoading: loadingVisualizations,
     refetch: loadVisualizations
   } = useQuery({
-    queryKey: ['visualizations', training_uuid, selectedType],
+    // Filtered and paged by the server: a run may hold thousands of images, and a search must reach all of them.
+    queryKey: ['visualizations', training_uuid, selectedType, epoch, search, page],
     queryFn: () =>
       visualizationService.getVisualizationsByTraining(training_uuid, {
         type: selectedType !== 'all' ? selectedType : undefined,
-        limit: 100
-      }) as Promise<VisualizationsPaginatedResponse>
+        ...(epoch !== undefined && Number.isInteger(epoch) && epoch >= 0 ? { epoch } : {}),
+        ...(search ? { search } : {}),
+        page,
+        limit: PAGE_SIZE
+      }) as Promise<VisualizationsPaginatedResponse>,
+    placeholderData: (previous) => previous
   });
 
   const { data: typesData } = useQuery({
@@ -38,22 +56,9 @@ export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualiz
     queryFn: () => visualizationService.getVisualizationTypes({ training_uuid })
   });
 
-  const visualizations = useMemo(() => {
-    let result = visualizationsData?.data.visualizations || [];
-
-    // Apply client-side filters
-    if (selectedEpochFilter !== 'all') {
-      const epochNum = parseInt(selectedEpochFilter);
-      result = result.filter((viz: Visualization) => viz.epoch === epochNum);
-    }
-
-    if (selectedImageName.trim()) {
-      const searchTerm = selectedImageName.toLowerCase().trim();
-      result = result.filter((viz: Visualization) => viz.filename.toLowerCase().includes(searchTerm));
-    }
-
-    return result;
-  }, [visualizationsData, selectedEpochFilter, selectedImageName]);
+  const visualizations: Visualization[] = visualizationsData?.data.visualizations || [];
+  const pages = visualizationsData?.data.pagination?.pages ?? 0;
+  const total = visualizationsData?.data.pagination?.total ?? visualizations.length;
 
   const types = typesData?.data.types || [];
 
@@ -113,6 +118,10 @@ export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualiz
     selectedImageName,
     setSelectedImageName,
     types,
+    page,
+    setPage,
+    pages,
+    total,
     uploading: uploadMutation.isPending,
     handleUpload,
     handleDelete,

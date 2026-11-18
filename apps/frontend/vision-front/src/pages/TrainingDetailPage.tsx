@@ -22,7 +22,9 @@ import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
 import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
 import { TRAINING_TABS, type TrainingTab } from '../components/training/trainingTabs';
 import RunSamplesTab from '../components/training/RunSamplesTab';
+import RunAuditTab from '../components/training/RunAuditTab';
 import TrainingModelsTab from '../components/training/TrainingModelsTab';
+import { benchmarkService } from '../services/benchmarkService';
 import SampleTour from '../components/guide/SampleTour';
 import UseThisDialog from '../components/common/UseThisDialog';
 import { runSnippets } from '../utils/useSnippets';
@@ -68,6 +70,22 @@ const TrainingDetailPage: React.FC = () => {
   });
 
   const project = projectResponse?.data;
+
+  // An inference run fills System Info and Benchmarks only when its pipeline sends them; with nothing there the tabs
+  // are left out rather than shown empty with advice about training uploads. One benchmark is enough to know.
+  const inference = training?.kind === 'inference';
+  const { data: benchmarkProbe } = useQuery({
+    queryKey: ['benchmarks', { training_uuid: training?.uuid, limit: 1 }],
+    queryFn: () => benchmarkService.getBenchmarks({ training_uuid: training!.uuid, limit: 1 }),
+    enabled: Boolean(inference && training?.uuid)
+  });
+  const hiddenTabs: TrainingTab[] = inference
+    ? [
+        ...(epochs.some((epoch) => epoch.results?.system_info) ? [] : (['system-info'] as const)),
+        // Hidden only on a clear zero: an unexpected or failed answer keeps the tab, which explains itself.
+        ...(benchmarkProbe?.data?.pagination?.total === 0 ? (['benchmarks'] as const) : [])
+      ]
+    : [];
   usePageChatContext(
     training?.projectId
       ? { projectId: training.projectId, trainingIds: [training._id], title: training.name, projectName: project?.name }
@@ -132,7 +150,10 @@ const TrainingDetailPage: React.FC = () => {
   const hasStoredModels = Boolean(training?.models?.some(isStoredModel));
   const requestedTab = TRAINING_TABS.find(([name]) => name === searchParams.get('tab'))?.[0];
   const detailTab: TrainingTab =
-    requestedTab && (requestedTab !== 'models' || hasStoredModels) && (requestedTab !== 'samples' || training?.kind === 'inference')
+    requestedTab &&
+    (requestedTab !== 'models' || hasStoredModels) &&
+    ((requestedTab !== 'samples' && requestedTab !== 'audit') || training?.kind === 'inference') &&
+    !hiddenTabs.includes(requestedTab)
       ? requestedTab
       : 'overview';
   const showTab = (tab: TrainingTab, model?: string) => {
@@ -187,7 +208,7 @@ const TrainingDetailPage: React.FC = () => {
       />
       {useOpen && <UseThisDialog title="Use this run" snippets={runSnippets(training)} onClose={() => setUseOpen(false)} />}
       <AnalyzeButton projectId={training.projectId} trainingIds={[training._id]} title={`Analyze ${training.name}`} />
-      <TrainingDetailTabs value={detailTab} onChange={(_event, tab) => showTab(tab)} showModels={hasStoredModels} inference={training.kind === 'inference'} />
+      <TrainingDetailTabs value={detailTab} onChange={(_event, tab) => showTab(tab)} showModels={hasStoredModels} inference={training.kind === 'inference'} omit={hiddenTabs} />
       <SampleTour
         onDeleteSample={() => {
           setReturnToProject(true);
@@ -208,6 +229,8 @@ const TrainingDetailPage: React.FC = () => {
       )}
       {/* Samples Tab: an inference run's decisions, one by one */}
       {detailTab === 'samples' && <RunSamplesTab training={training} />}
+      {/* Audit Tab: the run's decisions against the annotator's */}
+      {detailTab === 'audit' && <RunAuditTab training={training} />}
       {/* Epochs Tab */}
       {detailTab === 'epochs' && (
         <TrainingEpochsTab

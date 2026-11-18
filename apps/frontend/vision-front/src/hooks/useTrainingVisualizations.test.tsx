@@ -42,28 +42,29 @@ describe('useTrainingVisualizations', () => {
     expect(result.current.types).toEqual(['chart', 'plot']);
   });
 
-  it('filters visualizations client-side by epoch', async () => {
+  it('asks the server for one epoch, from the first page, so every page of a large run is reachable', async () => {
     const { result } = renderHook(() => useTrainingVisualizations({ training_uuid: 't1' }), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => {
-      result.current.setSelectedEpochFilter('1');
-    });
+    act(() => result.current.setPage(3));
+    await waitFor(() => expect(mockedService.getVisualizationsByTraining).toHaveBeenLastCalledWith('t1', expect.objectContaining({ page: 3 })));
+    act(() => result.current.setSelectedEpochFilter('1'));
 
-    expect(result.current.visualizations).toHaveLength(1);
-    expect(result.current.visualizations[0]._id).toBe('v1');
+    await waitFor(() =>
+      expect(mockedService.getVisualizationsByTraining).toHaveBeenLastCalledWith('t1', expect.objectContaining({ epoch: 1, page: 1, limit: 24 }))
+    );
   });
 
-  it('filters visualizations client-side by filename substring', async () => {
+  it('searches file names on the server once typing pauses, not in the page already loaded', async () => {
     const { result } = renderHook(() => useTrainingVisualizations({ training_uuid: 't1' }), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => {
-      result.current.setSelectedImageName('imgb');
-    });
+    act(() => result.current.setSelectedImageName('  frame_000012 '));
 
-    expect(result.current.visualizations).toHaveLength(1);
-    expect(result.current.visualizations[0]._id).toBe('v2');
+    await waitFor(() =>
+      expect(mockedService.getVisualizationsByTraining).toHaveBeenLastCalledWith('t1', expect.objectContaining({ search: 'frame_000012', page: 1 }))
+    );
+    expect(mockedService.getVisualizationsByTraining).not.toHaveBeenCalledWith('t1', expect.objectContaining({ search: 'f' }));
   });
 
   it('handleUpload uploads the file and invalidates queries on success', async () => {

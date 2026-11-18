@@ -6,6 +6,7 @@ import { looksLikeApiKey } from './crypto';
 import { verifyApiKey } from './service';
 import { looksLikeAccessToken, verifyAccessToken } from '../oauth/tokens';
 import { readScope, writeScope, type ApiKeyDomain, type ApiKeyScope } from './types';
+import { activityIsStale, recordActivity } from '../activity/lastActive';
 
 /**
  * Request-scoped facts about the key a request arrived on.
@@ -189,7 +190,7 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
           .collection('users')
           .findOne(
             { _id: new mongoose.Types.ObjectId(verification.userId) },
-            { projection: { status: 1, credentialsRevokedAt: 1 }, readPreference: 'primary', maxTimeMS: 3000 }
+            { projection: { status: 1, credentialsRevokedAt: 1, lastActiveAt: 1 }, readPreference: 'primary', maxTimeMS: 3000 }
           );
       } catch (error) {
         logger.error('Account state lookup failed', { error: (error as Error).message });
@@ -210,6 +211,8 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
         next(new UnauthorizedError('Account credentials are not active'));
         return;
       }
+      // A key or connector token used on the account's behalf is its activity too.
+      if (activityIsStale(account.lastActiveAt)) recordActivity(new mongoose.Types.ObjectId(verification.userId));
     }
 
     // Its scopes already keep a limited key out of other domains; saying so

@@ -96,7 +96,8 @@ const RunEvaluationCard: React.FC<RunEvaluationCardProps> = ({
           )}
         </Stack>
       </Box>
-      <ResultBreakdown results={evaluation.test_results} />
+      {/* A whole-run result reports its own metrics (reject rate, errors, latency): read them, rather than expect IoU. */}
+      <ResultBreakdown results={evaluation.test_results} classMetrics={evaluation.wholeRun ? 'discover' : undefined} />
     </Paper>
   );
 };

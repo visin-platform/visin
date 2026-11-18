@@ -2686,6 +2686,11 @@
       "epoch": {
         "type": "integer",
         "minimum": 0
+      },
+      "search": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
       }
     }
   },

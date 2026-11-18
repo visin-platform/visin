@@ -81,6 +81,32 @@ describe('platform user administration', () => {
     expect(result.data.total).toBe(2);
     expect(JSON.stringify(result)).not.toContain('secret-hash');
   });
+  it('shows when each account was last active and signed in, and sorts by activity', async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000);
+    const dayAgo = new Date(Date.now() - 86_400_000);
+    await User.updateOne({ _id: userId }, { $set: { lastActiveAt: dayAgo, lastLoginAt: dayAgo } });
+    await User.updateOne({ _id: adminId }, { $set: { lastActiveAt: new Date() } });
+    // A session the web app renewed more recently than the account was stamped still counts.
+    await Session.updateMany({ userId: new mongoose.Types.ObjectId(userId) }, { $set: { lastSeenAt: hourAgo } });
+    type Row = { _id: string; lastActiveAt?: string; lastSignInAt?: string };
+    const row = async () => ((await (await request('/users')).json()).data.users as Row[]).find((item) => item._id === userId)!;
+    const withSession = await row();
+    expect(new Date(withSession.lastActiveAt!).getTime()).toBe(hourAgo.getTime());
+    const started = (await Session.findOne({ userId }).lean())!.createdAt;
+    expect(new Date(withSession.lastSignInAt!).getTime()).toBe(started.getTime());
+    // Sessions expire and are removed: the account's own record is what is left.
+    await Session.deleteMany({ userId });
+    const withoutSession = await row();
+    expect(new Date(withoutSession.lastActiveAt!).getTime()).toBe(dayAgo.getTime());
+    expect(new Date(withoutSession.lastSignInAt!).getTime()).toBe(dayAgo.getTime());
+    // An account never used and never signed in says so by leaving both out.
+    await User.updateOne({ _id: userId }, { $unset: { lastActiveAt: 1, lastLoginAt: 1 } });
+    const never = await row();
+    expect(never).not.toHaveProperty('lastActiveAt');
+    expect(never).not.toHaveProperty('lastSignInAt');
+    const active = (await (await request('/users?sort=active')).json()).data.users as { _id: string }[];
+    expect(active[0]._id).toBe(adminId);
+  });
   it('looks up names for a batch of ids, without credentials, and ignores unknown ids', async () => {
     await User.updateOne({ _id: userId }, { $set: { firstName: 'Ada', lastName: 'Lovelace' } });
     const unknown = '999999999999999999999999';

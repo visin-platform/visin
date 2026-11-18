@@ -90,6 +90,8 @@ export const visualizationService = {
       perTraining?: number;
       /** With a training: only this epoch's images. */
       epoch?: number;
+      /** With a training: only images whose file name contains this, searched across every page. */
+      search?: string;
     }
   ): Promise<VisualizationsPaginatedResponse | ApiResponse<VisualizationsGroupedResponse>> {
     const endpoint = training_uuid && training_uuid.trim() !== ''

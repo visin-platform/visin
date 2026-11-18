@@ -117,7 +117,8 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
       if (session !== null && decoded.tokenVersion != null) {
         const dbUser = await User.findOneAndUpdate(
           { _id: decoded.id, kind: { $ne: 'assistant' }, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
-          { $set: { lastLoginAt: new Date() } },
+          // A request is activity, not a sign-in: `lastLoginAt` is stamped where someone signs in.
+          { $set: { lastActiveAt: new Date() } },
           { returnDocument: 'after', upsert: false }
         );
         if (dbUser && dbUser.status !== 'suspended' && dbUser.status !== 'deleted') {

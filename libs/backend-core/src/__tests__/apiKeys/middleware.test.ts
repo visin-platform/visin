@@ -427,7 +427,7 @@ describe('account suspension', () => {
     await apiKeyAuth('vision')(req, makeRes(), next);
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(req.user).toBeUndefined();
-    expect(findOne.mock.calls[0][1].projection).toEqual({ status: 1, credentialsRevokedAt: 1 });
+    expect(findOne.mock.calls[0][1].projection).toEqual({ status: 1, credentialsRevokedAt: 1, lastActiveAt: 1 });
   });
   it('fails closed when account state cannot be read', async () => {
     verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011' });
@@ -469,6 +469,20 @@ describe('account suspension', () => {
     verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date(now - 2000) });
     await apiKeyAuth('vision')(makeReq(), makeRes(), next);
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+  });
+  it('counts a key used for an account as its activity, at most once an interval', async () => {
+    verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date() });
+    vi.spyOn(mongoose.connection, 'readyState', 'get').mockReturnValue(1);
+    const updateOne = vi.fn().mockResolvedValue({ modifiedCount: 1 });
+    const findOne = vi.fn().mockResolvedValue({ status: 'active', lastActiveAt: new Date(Date.now() - 60 * 60_000) });
+    vi.spyOn(mongoose.connection, 'collection').mockReturnValue({ findOne, updateOne } as never);
+    await apiKeyAuth('vision')(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith();
+    expect(updateOne).toHaveBeenCalledTimes(1);
+    expect(updateOne.mock.calls[0][0]._id).toEqual(new mongoose.Types.ObjectId('507f1f77bcf86cd799439011'));
+    findOne.mockResolvedValue({ status: 'active', lastActiveAt: new Date() });
+    await apiKeyAuth('vision')(makeReq(), makeRes(), next);
+    expect(updateOne).toHaveBeenCalledTimes(1);
   });
   it('fails closed with a 503 when the account lookup errors', async () => {
     verify.mockResolvedValue({ ...VALID, userId: '507f1f77bcf86cd799439011', createdAt: new Date() });

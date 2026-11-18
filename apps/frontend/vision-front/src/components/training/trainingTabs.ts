@@ -3,6 +3,8 @@ export const TRAINING_TABS = [
   ['overview', 'Overview'],
   // An inference run's recorded decisions; a training run has none and does not show the tab.
   ['samples', 'Samples'],
+  // An inference run's decisions against the human audit of them.
+  ['audit', 'Audit'],
   ['epochs', 'Epochs'],
   ['evaluations', 'Evaluations'],
   ['visualizations', 'Visualizations'],

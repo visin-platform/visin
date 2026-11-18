@@ -203,7 +203,7 @@ describe('first-run setup with in-memory MongoDB', () => {
       expect(Boolean(req.user)).toBe(accepted);
     }
     expect(await User.countDocuments()).toBe(1);
-    expect((await User.findById(user._id))!.lastLoginAt).toBeInstanceOf(Date);
+    expect((await User.findById(user._id))!.lastActiveAt).toBeInstanceOf(Date);
   });
 
   it('recovers a legacy administrator idempotently while preserving identity and credentials', async () => {

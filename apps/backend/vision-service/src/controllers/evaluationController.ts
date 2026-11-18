@@ -2,13 +2,17 @@ import { Response } from 'express';
 import * as evaluationService from '../services/evaluationService';
 import * as moderation from '../services/moderationService';
 import * as recorded from '../services/recordedLeaderboardService';
-import { compareJudgePair } from '../services/judgePairService';
+import { compareJudgePair, referenceEvaluation } from '../services/judgePairService';
 import { listJudgeDisagreements } from '../services/judgeDisagreementService';
 import { AuthRequest } from '../middleware/authMiddleware';
 import type { VerifyEvaluationBody, RecordedLeaderboardQuery, EvaluationBody, HideEvaluationBody, ListEvaluationsQuery, PromoteEvaluationBody, JudgeDisagreementsQuery } from '../validation/evaluationSchemas';
 
 export const compareJudges = async (req: AuthRequest, res: Response): Promise<void> => {
   res.json({ success: true, data: await compareJudgePair(req.params.id as string, req.params.otherId as string, req.user?.id) });
+};
+
+export const getReferenceEvaluation = async (req: AuthRequest, res: Response): Promise<void> => {
+  res.json({ success: true, data: await referenceEvaluation(req.params.id as string, req.user?.id) });
 };
 
 export const getJudgeDisagreements = async (req: AuthRequest, res: Response): Promise<void> => {

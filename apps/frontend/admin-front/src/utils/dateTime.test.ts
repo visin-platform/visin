@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { formatDateTime } from './dateTime';
+import { formatAgo, formatDateTime } from './dateTime';
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -29,4 +29,17 @@ it('shows nothing for a missing or unreadable moment', () => {
   expect(formatDateTime(null)).toBe('');
   expect(formatDateTime('')).toBe('');
   expect(formatDateTime('not a date')).toBe('');
+});
+
+it('says how long ago something was as a person would, and the date once it is weeks old', () => {
+  const now = Date.UTC(2026, 10, 18, 12, 0);
+  expect(formatAgo(now - 20_000, now)).toBe('just now');
+  expect(formatAgo(now - 5 * 60_000, now)).toBe('5 minutes ago');
+  expect(formatAgo(now - 3 * 3_600_000, now)).toBe('3 hours ago');
+  expect(formatAgo(now - 30 * 3_600_000, now)).toBe('yesterday');
+  expect(formatAgo(now - 3 * 86_400_000, now)).toBe('3 days ago');
+  expect(formatAgo(now - 15 * 86_400_000, now)).toBe('2 weeks ago');
+  expect(formatAgo(now - 60 * 86_400_000, now)).toBe(formatDateTime(now - 60 * 86_400_000));
+  expect(formatAgo(undefined, now)).toBe('');
+  expect(formatAgo('not a date', now)).toBe('');
 });

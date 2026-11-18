@@ -16,7 +16,29 @@ import { Session } from '../models/Session';
 import { hashPassword } from '../services/passwordService';
 import { escapeRegex } from '../utils/escapeRegex';
 
-const fields = '_id email firstName lastName handle kind roles status adminRevision createdAt lastLoginAt';
+const fields = '_id email firstName lastName handle kind roles status adminRevision createdAt lastLoginAt lastActiveAt';
+
+/**
+ * Each account's last activity and last sign-in. Activity is stamped on the account by every service; an account not
+ * stamped since that began falls back to its sessions, whose `lastSeenAt` the web app renews. A sign-in is the start
+ * of a session; with none left (they expire), the sign-in recorded on the account.
+ */
+async function withActivity<T extends { _id: unknown; lastActiveAt?: Date; lastLoginAt?: Date }>(users: T[]) {
+  const rows = await Session.aggregate<{ _id: unknown; lastSeenAt: Date; lastSignInAt: Date }>([
+    { $match: { userId: { $in: users.map((user) => user._id) } } },
+    { $group: { _id: '$userId', lastSeenAt: { $max: '$lastSeenAt' }, lastSignInAt: { $max: '$createdAt' } } }
+  ]);
+  const sessions = new Map(rows.map((row) => [String(row._id), row]));
+  const latest = (...dates: (Date | undefined)[]) =>
+    dates.filter((date): date is Date => date instanceof Date).sort((a, b) => b.getTime() - a.getTime())[0];
+  return users.map((user) => {
+    const session = sessions.get(String(user._id));
+    const lastActiveAt = latest(user.lastActiveAt, session?.lastSeenAt);
+    const lastSignInAt = latest(session?.lastSignInAt) ?? user.lastLoginAt;
+    return { ...user, ...(lastActiveAt ? { lastActiveAt } : {}), ...(lastSignInAt ? { lastSignInAt } : {}) };
+  });
+}
+
 export function objectId(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-f\d]{24}$/i.test(value)) throw new BadRequestError('Invalid identifier');
   return value;
@@ -112,16 +134,18 @@ export function createAdminRoutes() {
         ? { $or: ['email', 'firstName', 'lastName', 'handle'].map((k) => ({ [k]: new RegExp(escapeRegex(q), 'i') })) }
         : {})
     };
+    // Newest accounts first, or the most recently active (`sort=active`).
+    const sort: Record<string, 1 | -1> = req.query.sort === 'active' ? { lastActiveAt: -1, _id: -1 } : { createdAt: -1, _id: -1 };
     const [users, total] = await Promise.all([
       User.find(filter)
         .select(fields)
-        .sort({ createdAt: -1, _id: -1 })
+        .sort(sort)
         .skip((page - 1) * 30)
         .limit(30)
         .lean(),
       User.countDocuments(filter)
     ]);
-    res.json({ success: true, data: { users, total, page, pageSize: 30 } });
+    res.json({ success: true, data: { users: await withActivity(users), total, page, pageSize: 30 } });
   });
   router.post('/users', async (req, res) => {
     const email = text(req.body.email, 254).toLowerCase();

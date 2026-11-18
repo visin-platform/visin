@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import type { UserPayload } from '../types/auth';
 import { ServiceUnavailableError } from '../errors/HttpError';
+import { activityIsStale, recordActivity } from '../activity/lastActive';
 
 /**
  * One document per signed-in browser, owned and written by auth-service; every
@@ -50,12 +51,15 @@ export async function isCurrentSession(claims: unknown): Promise<boolean> {
   const [account, session] = await Promise.all([
     mongoose.connection.collection('users').findOne(
       { _id: userId, kind: { $ne: 'assistant' }, status: { $nin: ['suspended', 'deleted'] }, email: user.email.toLowerCase(), tokenVersion: user.tokenVersion },
-      options
+      // `lastActiveAt` rides along, so recording activity costs no read of its own.
+      { ...options, projection: { _id: 1, lastActiveAt: 1 } }
     ),
     mongoose.connection.collection(USER_SESSIONS_COLLECTION).findOne(
       { _id: new mongoose.Types.ObjectId(user.sid), userId, expiresAt: { $gt: new Date() } },
       options
     )
   ]);
-  return account !== null && session !== null;
+  const current = account !== null && session !== null;
+  if (current && activityIsStale(account.lastActiveAt)) recordActivity(userId);
+  return current;
 }

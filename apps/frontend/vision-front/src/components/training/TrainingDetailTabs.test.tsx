@@ -20,12 +20,20 @@ describe('TrainingDetailTabs', () => {
     expect(screen.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('offers Samples, right after Overview, on an inference run only', () => {
+  it('offers Samples and Audit, right after Overview, on an inference run only', () => {
     const { unmount } = render(<TrainingDetailTabs value="overview" onChange={vi.fn()} inference />);
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent).slice(0, 3)).toEqual(['Overview', 'Samples', 'Progress']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent).slice(0, 4)).toEqual(['Overview', 'Samples', 'Audit', 'Progress']);
     unmount();
     render(<TrainingDetailTabs value="overview" onChange={vi.fn()} />);
     expect(screen.queryByRole('tab', { name: 'Samples' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Audit' })).not.toBeInTheDocument();
+  });
+
+  it('leaves out the tabs a run has nothing for', () => {
+    render(<TrainingDetailTabs value="overview" onChange={vi.fn()} inference omit={['system-info', 'benchmarks']} />);
+    expect(screen.queryByRole('tab', { name: 'System Info' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Benchmarks' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Config' })).toBeInTheDocument();
   });
 
   it('calls the progress points of an inference run Progress, never Epochs', () => {

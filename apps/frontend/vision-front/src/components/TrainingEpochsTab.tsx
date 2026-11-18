@@ -29,6 +29,7 @@ import { useTaxonomy } from '../taxonomy/useTaxonomy';
 import type { Training } from '../types/training';
 import { describeEmpty } from '../utils/trainingStatus';
 import { isInferenceRun } from '../utils/inferenceRun';
+import InferenceProgressTable from './training/InferenceProgressTable';
 
 interface TrainingEpochsTabProps {
   epochs: Epoch[];
@@ -85,6 +86,18 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
     if (!files || files.length === 0) return;
     await onFileUpload(files);
   };
+
+  // An inference run's points are frames with the values it reported; they come from the pipeline, a page at a time.
+  if (inference) {
+    return (
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 3 }}>
+          Progress points
+        </Typography>
+        <InferenceProgressTable epochs={epochs} />
+      </Box>
+    );
+  }
 
   const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {

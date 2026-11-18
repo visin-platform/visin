@@ -11,7 +11,19 @@ export interface JudgeTransition { field: string; a: string; b: string }
 const otherFields = (values: Record<string, string> | undefined, selected: string) =>
   Object.entries(values ?? {}).filter(([key]) => key !== selected).map(([key, value]) => `${key}: ${value}`).join(' · ');
 
-const JudgeDisagreements: React.FC<{ first: string; second: string; suite: Suite; pair: JudgePair; transition?: JudgeTransition }> = ({ first, second, suite, pair, transition }) => {
+interface JudgeDisagreementsProps {
+  first: string;
+  second: string;
+  suite: Suite;
+  pair: JudgePair;
+  transition?: JudgeTransition;
+  /** what to call the two sides; the second is the annotator when a model is audited against it */
+  labels?: { first: string; second: string };
+  /** the second side is the reference itself, so it is not shown or filtered a second time */
+  secondIsReference?: boolean;
+}
+
+const JudgeDisagreements: React.FC<JudgeDisagreementsProps> = ({ first, second, suite, pair, transition, labels = { first: 'First', second: 'Second' }, secondIsReference = false }) => {
   const fields = suite.protocol.samples?.fields ?? [];
   const [field, setField] = React.useState(fields.find(item => item.key === 'outcome')?.key ?? fields[0]?.key ?? '');
   const [className, setClassName] = React.useState('');
@@ -43,12 +55,12 @@ const JudgeDisagreements: React.FC<{ first: string; second: string; suite: Suite
       <TextField select size="small" label="Decision field" value={field} onChange={event => { setField(event.target.value); setFirstValue(''); setSecondValue(''); setReference(''); setPage(1); }} sx={{ minWidth: 150 }}>
         {fields.map(item => <MenuItem key={item.key} value={item.key}>{item.key}</MenuItem>)}
       </TextField>
-      {select('First value', firstValue, fieldValues, setFirstValue)}
-      {select('Second value', secondValue, fieldValues, setSecondValue)}
+      {select(`${labels.first} value`, firstValue, fieldValues, setFirstValue)}
+      {select(`${labels.second} value`, secondValue, fieldValues, setSecondValue)}
       {select('Class', className, suite.protocol.classes.map(item => item.id), setClassName)}
       {select('Size', size, suite.protocol.conditions.map(item => item.name), setSize)}
       {select('Role', role, roles, setRole)}
-      {select('Annotator value', reference, fieldValues, setReference, !pair.referenceEvaluationId)}
+      {!secondIsReference && select('Annotator value', reference, fieldValues, setReference, !pair.referenceEvaluationId)}
     </Box>
     <CropSourcePicker value={source} onChange={setSource} />
     {rows.isLoading ? <CircularProgress /> : rows.isError ? <Alert severity="error">{rows.error instanceof Error ? rows.error.message : 'Could not load disagreements.'}</Alert> : !rows.data?.samples.length ? <Alert severity="info">No disagreements match these filters.</Alert> : <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 1 }}>
@@ -59,14 +71,15 @@ const JudgeDisagreements: React.FC<{ first: string; second: string; suite: Suite
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(180px, 1fr) 2fr' }, gap: 2, mt: 1 }}>
           <JudgeCrop sample={sample} datasetId={source.datasetId} group={source.group} />
           <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-            <Typography variant="body2"><strong>First:</strong> {sample.a.fields[field] ?? 'Not recorded'}</Typography>
+            <Typography variant="body2"><strong>{labels.first}:</strong> {sample.a.fields[field] ?? 'Not recorded'}</Typography>
             {otherFields(sample.a.fields, field) && <Typography variant="body2" color="text.secondary">{otherFields(sample.a.fields, field)}</Typography>}
             <Typography variant="body2" color="text.secondary">{sample.a.raw ?? 'Raw reply not recorded'}</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}><strong>Second:</strong> {sample.b.fields[field] ?? 'Not recorded'}</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}><strong>{labels.second}:</strong> {sample.b.fields[field] ?? 'Not recorded'}</Typography>
             {otherFields(sample.b.fields, field) && <Typography variant="body2" color="text.secondary">{otherFields(sample.b.fields, field)}</Typography>}
-            <Typography variant="body2" color="text.secondary">{sample.b.raw ?? 'Raw reply not recorded'}</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}><strong>Annotator:</strong> {sample.reference?.fields?.[field] ?? 'Not recorded'}</Typography>
-            {otherFields(sample.reference?.fields, field) && <Typography variant="body2" color="text.secondary">{otherFields(sample.reference?.fields, field)}</Typography>}
+            {/* A person's decision has no raw reply, and when the second side is the reference it is not repeated. */}
+            {!secondIsReference && <Typography variant="body2" color="text.secondary">{sample.b.raw ?? 'Raw reply not recorded'}</Typography>}
+            {!secondIsReference && <Typography variant="body2" sx={{ mt: 1 }}><strong>Annotator:</strong> {sample.reference?.fields?.[field] ?? 'Not recorded'}</Typography>}
+            {!secondIsReference && otherFields(sample.reference?.fields, field) && <Typography variant="body2" color="text.secondary">{otherFields(sample.reference?.fields, field)}</Typography>}
           </Box>
         </Box>
       </Paper>)}

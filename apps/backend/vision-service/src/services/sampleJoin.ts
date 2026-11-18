@@ -63,3 +63,47 @@ export async function* joinRuns(primary: string, others: (string | undefined)[])
     await Promise.all(runs.map((run) => run?.close()));
   }
 }
+
+const LOOKUP_BATCH = 1000;
+
+/** These samples of one run, by id, through the `{ trainingId, sampleId }` index. */
+export async function lookupSamples(trainingId: string, ids: string[]): Promise<Map<string, JoinedRow>> {
+  const rows = await RunSample.find({ trainingId, sampleId: { $in: ids } })
+    .select('sampleId attrs fields abstained parseFailed raw latencyMs')
+    .lean<JoinedRow[]>();
+  return new Map(rows.map((row) => [row.sampleId, row]));
+}
+
+/**
+ * The samples two runs share, each with the same sample of `extra` where it has one. Driven by the smaller run, whose
+ * rows are read once while the other's matching rows are fetched a batch at a time through the index: a model of
+ * 145,000 samples against an audit of 36,000 reads the 36,000 and their matches, not all 145,000. `extra` may be
+ * either run (a reference that is one of the two), and is then not read again. Order is the driver's; callers that
+ * only count or store do not depend on it.
+ */
+export async function* joinPair(a: string, b: string, extra?: string): AsyncGenerator<{ a: JoinedRow; b: JoinedRow; extra?: JoinedRow }> {
+  const [sizeA, sizeB] = await Promise.all([RunSample.countDocuments({ trainingId: a }), RunSample.countDocuments({ trainingId: b })]);
+  const driverIsA = sizeA <= sizeB;
+  const [driver, other] = driverIsA ? [a, b] : [b, a];
+  const separateExtra = extra !== undefined && extra !== a && extra !== b ? extra : undefined;
+  let batch: JoinedRow[] = [];
+  const emit = async function* (rows: JoinedRow[]) {
+    const ids = rows.map((row) => row.sampleId);
+    const [matches, extras] = await Promise.all([lookupSamples(other, ids), separateExtra ? lookupSamples(separateExtra, ids) : undefined]);
+    for (const row of rows) {
+      const match = matches.get(row.sampleId);
+      if (!match) continue;
+      const pair = driverIsA ? { a: row, b: match } : { a: match, b: row };
+      const third = extra === undefined ? undefined : extra === a ? pair.a : extra === b ? pair.b : extras!.get(row.sampleId);
+      yield { ...pair, ...(third ? { extra: third } : {}) };
+    }
+  };
+  for await (const row of runCursor(driver)) {
+    batch.push(row);
+    if (batch.length >= LOOKUP_BATCH) {
+      yield* emit(batch);
+      batch = [];
+    }
+  }
+  if (batch.length) yield* emit(batch);
+}

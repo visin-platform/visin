@@ -3308,6 +3308,10 @@ paths:
           in: query
           description: Only this epoch's visualizations.
           schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/epoch }
+        - name: search
+          in: query
+          description: Only visualizations whose file name contains this text, ignoring case.
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/search }
       responses:
         '200':
           description: Successful response
@@ -3408,6 +3412,10 @@ paths:
           in: query
           description: Applies to one training's listing only; ignored here.
           schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/epoch }
+        - name: search
+          in: query
+          description: Only visualizations whose file name contains this text, ignoring case.
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/search }
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -6667,6 +6675,25 @@ paths:
         - { name: otherId, in: path, required: true, schema: { type: string } }
       responses:
         '200': { description: Cached comparison of the two evaluations }
+        '4XX': { $ref: '#/components/responses/Error' }
+
+  /evaluations/{id}/reference:
+    get:
+      tags: [Evaluations]
+      summary: The human reference of a sample evaluation
+      operationId: getReferenceEvaluation
+      description: |
+        The suite's reference evaluation (a human checkpoint whose samples match the suite's reference digest) that
+        this sample-scored evaluation is measured against. `404` when the suite has none, or the caller cannot read it.
+      x-internal: true
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: The reference evaluation }
         '4XX': { $ref: '#/components/responses/Error' }
 
   /evaluations/{id}:

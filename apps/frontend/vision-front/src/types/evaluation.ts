@@ -82,6 +82,9 @@ export interface EvaluationQuery {
   suite?: string;
   checkpointKey?: string;
   state?: ValidationState;
+  /** only what came from this run (by id) */
+  trainingId?: string;
+  status?: 'completed' | 'failed';
   page?: number;
   limit?: number;
 }

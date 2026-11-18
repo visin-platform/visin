@@ -41,7 +41,9 @@ export const getVisualizationsByTrainingQuerySchema = z.object({
    */
   perTraining: z.coerce.number().int().positive().max(24).optional(),
   /** With a training: only this epoch's images, so a page of them is not spent on newer epochs. */
-  epoch: z.coerce.number().int().min(0).optional()
+  epoch: z.coerce.number().int().min(0).optional(),
+  /** With a training: only images whose file name contains this, ignoring case (a frame, say), across every page. */
+  search: z.string().trim().min(1).max(200).optional()
 });
 export type GetVisualizationsByTrainingQuery = z.infer<typeof getVisualizationsByTrainingQuerySchema>;
 

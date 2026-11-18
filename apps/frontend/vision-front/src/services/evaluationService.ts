@@ -44,6 +44,12 @@ export const evaluationService = {
     return (response.data as ApiResponse<Evaluation>).data;
   },
 
+  /** The human reference a sample evaluation is measured against; rejects (404) where the suite has none. */
+  async reference(id: string): Promise<Evaluation> {
+    const response = await visionApi.get(`/evaluations/${encodeURIComponent(id)}/reference`);
+    return (response.data as ApiResponse<Evaluation>).data;
+  },
+
   async compareJudges(a: string, b: string): Promise<JudgePair> {
     const response = await visionApi.get(`/evaluations/${encodeURIComponent(a)}/compare/${encodeURIComponent(b)}`);
     return (response.data as ApiResponse<JudgePair>).data;

@@ -22,6 +22,8 @@ const version = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,39}$/i);
 /** Mirrors vision-front's TRAINING_TABS; a test in shell-front keeps the two together. */
 export const TRAINING_TABS = [
   'overview',
+  'samples',
+  'audit',
   'epochs',
   'evaluations',
   'visualizations',

@@ -4,6 +4,7 @@ import {
   approveEvaluation,
   compareJudges,
   getJudgeDisagreements,
+  getReferenceEvaluation,
   verifyEvaluation,
   checkEvaluation,
   createEvaluation,
@@ -42,6 +43,7 @@ router.post('/check', authMiddleware, validateRequest({ body: evaluationBodySche
 router.post('/promote', authMiddleware, validateRequest({ body: promoteEvaluationBodySchema }), promoteEvaluation);
 router.post('/', authMiddleware, validateRequest({ body: evaluationBodySchema }), createEvaluation);
 router.get('/:id/compare/:otherId', optionalAuthMiddleware, compareJudges);
+router.get('/:id/reference', optionalAuthMiddleware, getReferenceEvaluation);
 router.get('/:id/disagreements/:otherId', optionalAuthMiddleware, validateRequest({ query: judgeDisagreementsQuerySchema }), getJudgeDisagreements);
 router.get('/:id', optionalAuthMiddleware, getEvaluation);
 router.delete('/:id', authMiddleware, trashEvaluation);

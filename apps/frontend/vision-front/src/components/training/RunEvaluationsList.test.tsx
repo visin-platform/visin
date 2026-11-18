@@ -93,4 +93,26 @@ describe('RunEvaluationsList', () => {
 
     expect(onDeleteEvaluation).not.toHaveBeenCalled();
   });
+
+  it('names a whole-run result as such and lays it out by the metrics it reports, with its pooled totals', () => {
+    const judged = {
+      _id: 'w',
+      test_uuid: 'uuid-w',
+      epoch: 0,
+      wholeRun: true,
+      test_results: {
+        small: { overall: { reject_rate: 0.2 }, sign: { reject_rate: 0.25 } },
+        overall: { overall: { reject_rate: 0.21 }, sign: { reject_rate: 0.26 } },
+      },
+    } as unknown as RunEvaluation;
+    render(<RunEvaluationsList {...baseProps} allEvaluations={[judged]} availableEpochs={[0]} />);
+
+    expect(screen.getByText('Whole run')).toBeInTheDocument();
+    expect(screen.queryByText('Epoch 0')).not.toBeInTheDocument();
+    // Its own metric, not IoU; and the pooled row reads the nested overall block.
+    expect(screen.queryByText(/^IoU$/i)).not.toBeInTheDocument();
+    const all = screen.getByText('All').closest('tr')!;
+    expect(all).toHaveTextContent('0.2600');
+    expect(all).toHaveTextContent('0.2100');
+  });
 });

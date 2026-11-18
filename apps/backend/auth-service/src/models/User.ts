@@ -53,6 +53,8 @@ export interface IUser extends Document {
   /** Internal singleton marker; only first-run setup may assign it. */
   bootstrapSlot?: 'initial-admin';
   lastLoginAt?: Date;
+  /** the last request the account made, signed in or through a key or connector; stamped at most every few minutes */
+  lastActiveAt?: Date;
   status?: 'active' | 'suspended' | 'deleted';
   adminRevision?: number;
   adminHistory?: { actorId: string; at: Date; reason: string; changes: unknown }[];
@@ -86,6 +88,7 @@ const UserSchema = new Schema<IUser>(
     showActivity: { type: Boolean, default: true },
     bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },
     lastLoginAt: { type: Date },
+    lastActiveAt: { type: Date },
     status: { type: String, enum: ['active', 'suspended', 'deleted'], default: 'active' },
     adminRevision: { type: Number, default: 0 },
     adminHistory: {

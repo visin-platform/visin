@@ -65,6 +65,10 @@ const ResultBreakdown: React.FC<ResultBreakdownProps> = ({ results: resultData, 
   const overallMetrics = taxonomy.overallMetrics;
 
   const overallBlock = evaluation.test_results?.overall;
+  // Sample scoring pools every condition into an `overall` laid out like one (class → metrics, its own `overall`
+  // beside them); a plain result's `overall` holds the metrics directly.
+  const pooled = isRecord(overallBlock) && isRecord(overallBlock.overall);
+  const pooledOverall = pooled ? (overallBlock as Record<string, unknown>).overall : overallBlock;
 
   /** Confusion-matrix axis labels, from the payload where it supplies them. */
   const matrixLabels = (labels: unknown): string[] | undefined =>
@@ -176,18 +180,33 @@ const ResultBreakdown: React.FC<ResultBreakdownProps> = ({ results: resultData, 
                 <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${livePalette(theme).divider}` }}>
                   All
                 </TableCell>
-                {perClassColumns > 0 && (
-                  <TableCell
-                    colSpan={perClassColumns}
-                    align="center"
-                    sx={{ borderRight: `1px solid ${livePalette(theme).divider}`, fontStyle: 'italic' }}
-                  >
-                    -
-                  </TableCell>
-                )}
+                {pooled
+                  ? shownMetrics.map((metric) =>
+                      classes.map((className, index) => (
+                        <TableCell
+                          key={`${metric}-${className.key}`}
+                          align="center"
+                          sx={{
+                            fontFamily: 'monospace',
+                            ...(index === classes.length - 1 ? { borderRight: `1px solid ${livePalette(theme).divider}` } : {})
+                          }}
+                        >
+                          {formatNumber(readMetric((overallBlock as Record<string, unknown>)[className.key], metric))}
+                        </TableCell>
+                      ))
+                    )
+                  : perClassColumns > 0 && (
+                      <TableCell
+                        colSpan={perClassColumns}
+                        align="center"
+                        sx={{ borderRight: `1px solid ${livePalette(theme).divider}`, fontStyle: 'italic' }}
+                      >
+                        -
+                      </TableCell>
+                    )}
                 {overallMetrics.map((metric) => (
                   <TableCell key={metric.key} align="center" sx={{ fontFamily: 'monospace' }}>
-                    {formatNumber(readMetric(overallBlock, metric.key), metric.decimals)}
+                    {formatNumber(readMetric(pooledOverall, metric.key), metric.decimals)}
                   </TableCell>
                 ))}
               </TableRow>

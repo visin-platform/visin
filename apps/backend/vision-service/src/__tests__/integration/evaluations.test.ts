@@ -309,9 +309,23 @@ describe('evaluations with in-memory MongoDB', () => {
       await JudgeDisagreement.deleteOne({ sampleId: '2' });
       expect((await call(`${disagreementPath}?limit=1&page=2`)).body.data.samples[0].id).toBe('2');
       expect(await JudgeDisagreement.countDocuments()).toBe(stored);
+      // A pair stored in an older shape (2.19 kept a copy of each sample per field) is cleared and built again.
+      const pairId = String((await JudgePair.findOne({ evaluationA: model.body.data._id }).lean())!._id);
+      await JudgeDisagreement.collection.insertOne({ pair: pairId, field: 'outcome', sampleId: 'old-shape', a: 'keep', b: 'delete', sample: {} });
+      await JudgePair.updateOne({ _id: pairId }, { $unset: { disagreementsVersion: 1 } });
+      expect((await call(`${disagreementPath}?limit=1&page=2`)).body.data.pagination.total).toBe(2);
+      expect(await JudgeDisagreement.countDocuments({ sampleId: 'old-shape' })).toBe(0);
+      expect(await JudgeDisagreement.countDocuments()).toBe(stored);
       expect((await call(`/evaluations/not-an-id/compare/${second.body.data._id}`)).status).toBe(404);
+      // A model run's page finds the annotator it is measured against; a stranger finds nothing.
+      const reference = await call(`/evaluations/${model.body.data._id}/reference`);
+      expect(reference.status).toBe(200);
+      expect(reference.body.data._id).toBe(human.body.data._id);
+      expect((await call(`/evaluations/${model.body.data._id}/reference`, { user: STRANGER })).status).toBe(404);
+      expect((await call('/evaluations/not-an-id/reference')).status).toBe(404);
       const ordinary = await call('/evaluations', { method: 'POST', body: { projectId: id, results: {} } });
       expect((await call(`/evaluations/${ordinary.body.data._id}/compare/${second.body.data._id}`)).status).toBe(400);
+      expect((await call(`/evaluations/${ordinary.body.data._id}/reference`)).status).toBe(404);
       await Training.updateOne({ _id: modelId }, { $set: { deletedAt: new Date() } });
       expect((await call(pairPath)).status).toBe(404);
       await Training.updateOne({ _id: modelId }, { $unset: { deletedAt: 1 } });
@@ -349,6 +363,42 @@ describe('evaluations with in-memory MongoDB', () => {
       expect(await JudgeDisagreement.countDocuments()).toBe(0);
     });
 
+    it('compares and stores runs of thousands of samples in batches, driven by the smaller run, and cleans up a failed write', async () => {
+      const id = await project();
+      const proto = suiteProtocol({
+        conditions: [{ name: 'small', sampleCount: 1 }], classes: [{ id: 'a' }],
+        samples: { attrs: [{ key: 'size' }, { key: 'class' }, { key: 'bbox' }], fields: [{ key: 'outcome', values: ['keep', 'delete'] }] },
+        metrics: [{ key: 'reject', direction: 'min', headline: true, derivation: 'share:outcome=delete' }]
+      });
+      const suite = (await publishSuite(id, {}, proto)).body.data;
+      const pinned = { slug: suite.slug, version: suite.version, digest: suite.digest };
+      const ids: string[] = [];
+      // The first run is the larger, so the join is driven by the second; both pass a batch of 1,000.
+      for (const [tag, size, outcome] of [['big', 1_100, 'keep'], ['small', 1_050, 'delete']] as const) {
+        const run = await Training.create({ uuid: `bulk-${tag}`, name: tag, ownerId: OWNER, projectId: id, status: 'completed', kind: 'inference', suite: pinned });
+        await RunSample.insertMany(Array.from({ length: size }, (_, index) => ({
+          trainingId: String(run._id), projectId: id, sampleId: `s${String(index).padStart(5, '0')}`,
+          attrs: { size: 'small', class: 'a', bbox: [index, 2, index + 10, 20] }, fields: { outcome }
+        })));
+        const evaluation = await record(id, { source: { trainingUuid: `bulk-${tag}` }, checkpoint: local(tag), evidence: evidenceFor(proto) });
+        expect(evaluation.status).toBe(201);
+        ids.push(evaluation.body.data._id);
+      }
+      const pair = await call(`/evaluations/${ids[0]}/compare/${ids[1]}`);
+      expect(pair.status).toBe(200);
+      expect(pair.body.data.fields[0].groups.find((group: { groupBy: string }) => group.groupBy === 'overall')).toMatchObject({ count: 1_050, divergence: 1 });
+      const listed = await call(`/evaluations/${ids[0]}/disagreements/${ids[1]}?field=outcome&limit=5&page=210`);
+      expect(listed.body.data.pagination.total).toBe(1_050);
+      expect(listed.body.data.samples.map((sample: { id: string }) => sample.id)).toEqual(['s01045', 's01046', 's01047', 's01048', 's01049']);
+      // A write that fails part-way leaves neither the comparison nor any of its rows behind.
+      const before = await JudgeDisagreement.countDocuments();
+      const failing = vi.spyOn(JudgeDisagreement, 'insertMany').mockRejectedValueOnce(new Error('disk full'));
+      expect((await call(`/evaluations/${ids[1]}/compare/${ids[0]}`)).status).toBe(500);
+      failing.mockRestore();
+      expect(await JudgeDisagreement.countDocuments()).toBe(before);
+      expect(await JudgePair.countDocuments({ evaluationA: ids[1] })).toBe(0);
+    });
+
     it('compares partial sample suites without a reference and leaves undefined kappa unset', async () => {
       const id = await project();
       const proto = suiteProtocol({
@@ -368,6 +418,8 @@ describe('evaluations with in-memory MongoDB', () => {
       }
       const result = await call(`/evaluations/${ids[0]}/compare/${ids[1]}`);
       expect(result.status).toBe(200);
+      // A suite without a reference has no annotator to measure against.
+      expect((await call(`/evaluations/${ids[0]}/reference`)).status).toBe(404);
       const overall = result.body.data.fields[0].groups.find((group: { groupBy: string }) => group.groupBy === 'overall');
       expect(overall).toMatchObject({ count: 1, kappa: 0, divergence: 1 });
       expect(overall.reference).toBeUndefined();

@@ -117,7 +117,8 @@ const RunEvaluationsList: React.FC<RunEvaluationsListProps> = ({
                   fontWeight: "bold",
                   mb: 2
                 }}>
-                Epoch {epoch}
+                {/* A result that scored the whole run (an inference run's samples) has no epoch to name. */}
+                {epochEvaluations.every((item) => item.wholeRun) ? 'Whole run' : `Epoch ${epoch}`}
               </Typography>
               <Stack spacing={3}>
                 {epochEvaluations.map((evaluation) => (

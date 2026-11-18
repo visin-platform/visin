@@ -349,6 +349,17 @@ describe('getVisualizationsByTraining', () => {
     expect(mockedEpoch.find).toHaveBeenCalledWith({ trainingId: 't1', deletedAt: null, epoch: 4 });
   });
 
+  it('searches file names in the database, literally and ignoring case, so a frame on any page is found', async () => {
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p1' });
+    mockEpochSelect([epochDoc('e1')]);
+    mockedViz.countDocuments.mockResolvedValue(1);
+    mockVizFindChain([vizDoc('v1')]);
+
+    await getVisualizationsByTraining('uuid-t1', { ...filters, search: 'frame_000012.jpg' }, 'u1');
+
+    expect(mockedViz.countDocuments).toHaveBeenCalledWith(expect.objectContaining({ filename: { $regex: 'frame_000012\\.jpg', $options: 'i' } }));
+  });
+
   it('403s when the training project is not visible', async () => {
     mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p-private' });
     mockedCheckAccess.mockResolvedValue(false);

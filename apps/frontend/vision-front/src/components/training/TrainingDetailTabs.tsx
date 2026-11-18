@@ -12,16 +12,20 @@ interface TrainingDetailTabsProps {
   showModels?: boolean;
   /** an inference run, whose epochs are progress points */
   inference?: boolean;
+  /** tabs this run has nothing for and does not show */
+  omit?: readonly TrainingTab[];
 }
 
 /** How many tabs a phone shows; the rest are one tap further, in a menu. Nine in a sideways scroller hid six. */
 const PHONE_TABS = 3;
 const MORE = 'more';
 
-const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange, showModels = false, inference = false }) => {
+const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange, showModels = false, inference = false, omit = [] }) => {
   const compact = useCompactLayout();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const tabs = TRAINING_TABS.filter(([name]) => (showModels || name !== 'models') && (inference || name !== 'samples')).map(
+  const tabs = TRAINING_TABS.filter(
+    ([name]) => (showModels || name !== 'models') && (inference || (name !== 'samples' && name !== 'audit')) && !omit.includes(name)
+  ).map(
     ([name, label]) => [name, inference && name === 'epochs' ? 'Progress' : label] as const
   );
   const shown = compact ? tabs.slice(0, PHONE_TABS) : tabs;

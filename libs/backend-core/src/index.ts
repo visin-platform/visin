@@ -113,6 +113,7 @@ export {
 } from './apiKeys/service';
 export type { CreateApiKeyInput, CreatedApiKey } from './apiKeys/service';
 export { apiKeyAuth } from './apiKeys/middleware';
+export { ACTIVITY_STALE_MS, activityIsStale, recordActivity } from './activity/lastActive';
 export type { ApiKeyContext, ApiKeyAuthOptions } from './apiKeys/middleware';
 export { API_KEY_SCOPES, PROJECT_KEY_SCOPES, isApiKeyScope, isProjectKeyScope, readScope, writeScope } from './apiKeys/types';
 export type {

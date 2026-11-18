@@ -21,7 +21,7 @@ const claims = {
   iat,
   exp: iat + 90 * 86400
 };
-const users = { findOne: vi.fn() };
+const users = { findOne: vi.fn(), updateOne: vi.fn() };
 const sessions = { findOne: vi.fn() };
 const options = { projection: { _id: 1 }, readPreference: 'primary', maxTimeMS: 3000 };
 beforeEach(() => {
@@ -30,15 +30,16 @@ beforeEach(() => {
     return (name === 'users' ? users : sessions) as unknown as mongoose.Collection;
   });
   users.findOne.mockReset().mockResolvedValue({ _id: new mongoose.Types.ObjectId(claims.id) });
+  users.updateOne.mockReset().mockResolvedValue({ modifiedCount: 1 });
   sessions.findOne.mockReset().mockResolvedValue({ _id: new mongoose.Types.ObjectId(sid) });
 });
 afterEach(() => vi.restoreAllMocks());
 
-it('checks the account identity/version and the unexpired session on the primary, reading ids only', async () => {
+it('checks the account identity/version and the unexpired session on the primary, reading ids (and last activity) only', async () => {
   expect(await isCurrentSession(claims)).toBe(true);
   expect(users.findOne).toHaveBeenCalledWith(
     { _id: new mongoose.Types.ObjectId(claims.id), email: 'user@example.test', kind: { $ne: 'assistant' }, status: { $nin: ['suspended', 'deleted'] }, tokenVersion: 3 },
-    options
+    { ...options, projection: { _id: 1, lastActiveAt: 1 } }
   );
   expect(mongoose.connection.collection).toHaveBeenCalledWith(USER_SESSIONS_COLLECTION);
   expect(sessions.findOne).toHaveBeenCalledWith(
@@ -104,4 +105,28 @@ it('never reuses a previous successful check', async () => {
 it('propagates database failures to the fail-closed middleware', async () => {
   sessions.findOne.mockRejectedValue(new Error('database unavailable'));
   await expect(isCurrentSession(claims)).rejects.toThrow('database unavailable');
+});
+
+it('stamps the account active when its last activity is stale, and only then', async () => {
+  users.findOne.mockResolvedValue({ _id: new mongoose.Types.ObjectId(claims.id), lastActiveAt: new Date(Date.now() - 60 * 60_000) });
+  expect(await isCurrentSession(claims)).toBe(true);
+  expect(users.updateOne).toHaveBeenCalledTimes(1);
+  const [filter, update] = users.updateOne.mock.calls[0];
+  expect(filter._id).toEqual(new mongoose.Types.ObjectId(claims.id));
+  expect(update).toEqual({ $set: { lastActiveAt: expect.any(Date) } });
+  users.updateOne.mockClear();
+  users.findOne.mockResolvedValue({ _id: new mongoose.Types.ObjectId(claims.id), lastActiveAt: new Date() });
+  expect(await isCurrentSession(claims)).toBe(true);
+  expect(users.updateOne).not.toHaveBeenCalled();
+});
+
+it('never lets recording activity fail the check, whether the write rejects or throws', async () => {
+  users.updateOne.mockRejectedValueOnce(new Error('write failed'));
+  expect(await isCurrentSession(claims)).toBe(true);
+  users.updateOne.mockImplementationOnce(() => { throw new Error('driver threw'); });
+  expect(await isCurrentSession(claims)).toBe(true);
+  sessions.findOne.mockResolvedValue(null);
+  users.updateOne.mockClear();
+  expect(await isCurrentSession(claims)).toBe(false);
+  expect(users.updateOne).not.toHaveBeenCalled();
 });

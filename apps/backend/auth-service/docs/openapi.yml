@@ -1571,20 +1571,45 @@ paths:
     get:
       tags: [Admin]
       summary: List users
+      description: |
+        Thirty accounts a page, newest first or most recently active first (`sort=active`), with when each was last
+        active and last signed in. Activity is any request the account made, signed in or through an API key or
+        connector, stamped at most every five minutes.
       operationId: listUsers
       x-internal: true
       security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: q, in: query, description: 'Part of a name, email or handle.', schema: { type: string, maxLength: 120 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 10000, default: 1 } }
+        - { name: sort, in: query, schema: { type: string, enum: [active] } }
       responses:
         '200':
-          description: The newest 200 users
+          description: A page of users
           content:
             application/json:
               schema:
                 type: object
-                required: [success, users]
+                required: [success, data]
                 properties:
                   success: { type: boolean, enum: [true] }
-                  users: { type: array, items: { $ref: '#/components/schemas/User' } }
+                  data:
+                    type: object
+                    required: [users, total, page, pageSize]
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '#/components/schemas/User'
+                            - type: object
+                              properties:
+                                lastActiveAt: { type: string, format: date-time, description: The account's last request. }
+                                lastSignInAt: { type: string, format: date-time, description: When it last signed in. }
+                      total: { type: integer }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

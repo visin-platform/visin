@@ -25,7 +25,12 @@ interface VisualizationFiltersProps {
   setSelectedImageName: (name: string) => void;
   selectedForCompare: Visualization[];
   setSelectedForCompare: (viz: Visualization[]) => void;
+  /** what a point is called: an epoch, or for an inference run the frames done */
+  pointLabel?: string;
 }
+
+/** Past this many points a list to choose from is no help; the number is typed instead. */
+const MAX_LISTED_POINTS = 100;
 
 const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
   selectedType,
@@ -37,7 +42,8 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
   selectedImageName,
   setSelectedImageName,
   selectedForCompare,
-  setSelectedForCompare
+  setSelectedForCompare,
+  pointLabel = 'Epoch'
 }) => {
   return (
     <Paper 
@@ -67,8 +73,9 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
         </Box>
         
         <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 180 } }}>
-          <InputLabel>Type</InputLabel>
+          <InputLabel id="visualization-type-label">Type</InputLabel>
           <Select
+            labelId="visualization-type-label"
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
             label="Type"
@@ -80,21 +87,35 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
-          <InputLabel>Epoch</InputLabel>
-          <Select
-            value={selectedEpochFilter}
-            onChange={(e) => setSelectedEpochFilter(e.target.value)}
-            label="Epoch"
-          >
-            <MenuItem value="all">All Epochs</MenuItem>
-            {epochs.map(epoch => (
-              <MenuItem key={epoch.epoch_uuid} value={epoch.epoch.toString()}>
-                Epoch {epoch.epoch}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        {epochs.length > MAX_LISTED_POINTS ? (
+          <TextField
+            size="small"
+            type="number"
+            label={pointLabel}
+            placeholder="Any"
+            value={selectedEpochFilter === 'all' ? '' : selectedEpochFilter}
+            onChange={(e) => setSelectedEpochFilter(e.target.value === '' ? 'all' : e.target.value)}
+            slotProps={{ htmlInput: { min: 0 } }}
+            sx={{ minWidth: { xs: '100%', sm: 150 } }}
+          />
+        ) : (
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
+            <InputLabel id="visualization-point-label">{pointLabel}</InputLabel>
+            <Select
+              labelId="visualization-point-label"
+              value={selectedEpochFilter}
+              onChange={(e) => setSelectedEpochFilter(e.target.value)}
+              label={pointLabel}
+            >
+              <MenuItem value="all">Any</MenuItem>
+              {epochs.map(epoch => (
+                <MenuItem key={epoch.epoch_uuid} value={epoch.epoch.toString()}>
+                  {pointLabel} {epoch.epoch}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
 
         <TextField
           size="small"

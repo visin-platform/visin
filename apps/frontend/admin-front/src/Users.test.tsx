@@ -123,3 +123,24 @@ it('shows roles and status as chips, and which page of how many', async () => {
   expect(screen.getByText('active')).toBeInTheDocument();
   expect(screen.getByText(/45 users · showing 1–30/)).toBeInTheDocument();
 });
+
+it('shows when each account was last active, with its last sign-in, and orders by activity on request', async () => {
+  const mock = admin as unknown as import('vitest').Mock;
+  mock.mockReset().mockImplementation(async (path: string) => ({
+    users: [
+      { _id: '1', email: 'busy@example.test', roles: [], status: 'active', lastActiveAt: new Date(Date.now() - 5 * 60_000).toISOString(), lastSignInAt: '2026-10-05T17:43:00Z' },
+      { _id: '2', email: 'never@example.test', roles: [], status: 'active' }
+    ],
+    total: 2,
+    pageSize: 30,
+    path
+  }));
+  renderPage(<Users />);
+  expect(await screen.findByText('5 minutes ago')).toBeInTheDocument();
+  expect(screen.getByText(/Signed in 5 Oct 2026/)).toBeInTheDocument();
+  expect(screen.getByText('Not yet')).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Last active' })).toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Order' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Recently active' }));
+  await waitFor(() => expect(mock).toHaveBeenCalledWith('/users?page=1&sort=active'));
+});

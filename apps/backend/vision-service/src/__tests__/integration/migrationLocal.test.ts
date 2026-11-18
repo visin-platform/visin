@@ -123,6 +123,16 @@ finally:
       expect(later.body.data.pagination.total).toBe(27_285);
       expect(later.ms).toBeLessThan(1_000);
       console.log('Disagreements:', { firstMs: first.ms, laterMs: later.ms, filteredMs: filtered.ms, filteredTotal: filtered.body.data.pagination.total });
+      // A model against the annotator (a run's Audit tab): the reference is the other side, and much the smaller run.
+      const audit = async (query: string) => {
+        const started = Date.now();
+        const response = await fetch(`${url}/api/evaluations/${output.evaluations.llava_34b}/disagreements/${output.evaluations.annotator_1}?${query}`, { headers: { Authorization: `Bearer ${token}` } });
+        return { body: (await response.json()) as { data: { pagination: { total: number } } }, ms: Date.now() - started };
+      };
+      const auditFirst = await audit('field=outcome&limit=10');
+      const auditLater = await audit('field=outcome&limit=10&page=3');
+      expect(auditLater.body.data.pagination.total).toBe(auditFirst.body.data.pagination.total);
+      console.log('Audit disagreements:', { firstMs: auditFirst.ms, laterMs: auditLater.ms, total: auditFirst.body.data.pagination.total });
       console.log('Local migration comparisons:', JSON.stringify(fields.map(({ field, groups }) => ({ field, mask: groups.find(item => item.groupBy === 'role' && item.value === 'classify') }))));
     } finally {
       if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));

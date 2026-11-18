@@ -7,7 +7,8 @@ import {
   CircularProgress,
   Alert,
   Stack,
-  Paper
+  Paper,
+  Pagination
 } from '@mui/material';
 import {
   Upload as UploadIcon,
@@ -31,7 +32,7 @@ interface TrainingVisualizationsTabProps {
   epochs: Epoch[];
   isAuthenticated: boolean;
   /** the run these belong to, so an empty tab can say why */
-  run?: Pick<Training, 'status' | 'lastSeenAt'>;
+  run?: Pick<Training, 'status' | 'lastSeenAt' | 'kind'>;
   /** the run's models, whose weights name the classes its masks index */
   models?: ModelReference[];
 }
@@ -44,6 +45,8 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   models
 }) => {
   const classes = useMemo(() => outputClassesOf(models), [models]);
+  // An inference run's points are numbered by the frames done.
+  const pointLabel = run?.kind === 'inference' ? 'Frames done' : 'Epoch';
   const {
     visualizations,
     loading,
@@ -56,6 +59,10 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
     selectedImageName,
     setSelectedImageName,
     types,
+    page,
+    setPage,
+    pages,
+    total,
     uploading,
     handleUpload,
     handleDelete
@@ -185,6 +192,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
         setSelectedImageName={setSelectedImageName}
         selectedForCompare={selectedForCompare}
         setSelectedForCompare={setSelectedForCompare}
+        pointLabel={pointLabel}
       />
       {/* Error Alert */}
       {error && (
@@ -249,7 +257,16 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           handleDelete={handleDelete}
           isAuthenticated={isAuthenticated}
           classes={classes}
+          pointLabel={pointLabel}
         />
+      )}
+      {!loading && pages > 1 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mt: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {total.toLocaleString()} images
+          </Typography>
+          <Pagination count={pages} page={page} onChange={(_event, next) => setPage(next)} aria-label="Visualization pages" />
+        </Box>
       )}
       {/* Upload Dialog */}
       <UploadVisualizationDialog

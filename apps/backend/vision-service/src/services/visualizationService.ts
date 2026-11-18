@@ -258,7 +258,7 @@ export const getVisualizationsByTraining = async (
   filters: GetVisualizationsByTrainingQuery,
   userId: string | undefined
 ): Promise<VisualizationsByTrainingResult> => {
-  const { type, limit, page, projectId, includeUrls, perTraining, epoch: epochNumber } = filters;
+  const { type, limit, page, projectId, includeUrls, perTraining, epoch: epochNumber, search } = filters;
   const shouldIncludeUrls = includeUrls === 'true';
 
   // If specific training_uuid is provided, return flat list for that training
@@ -281,6 +281,8 @@ export const getVisualizationsByTraining = async (
     }
 
     const query: QueryFilter<IEpochVisualization> = { epoch_uuid: { $in: epochUuids } };
+    // Searched in the database, so a name on any page is found, not only on the one loaded. Matched literally.
+    if (search) query.filename = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
     if (type) {
       query.type = type;
     }

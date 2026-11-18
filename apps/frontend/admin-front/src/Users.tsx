@@ -23,6 +23,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
@@ -30,7 +31,7 @@ import { PersonAdd, People, Search } from '@mui/icons-material';
 import { ConfirmDialog, EmptyState, Panel } from '@visin/frontend-core';
 import StatusChip from './components/StatusChip';
 import { useUserNames } from './hooks/useUserNames';
-import { formatDateTime } from './utils/dateTime';
+import { formatAgo, formatDateTime } from './utils/dateTime';
 import { admin } from './services/admin';
 interface User {
   _id: string;
@@ -41,6 +42,10 @@ interface User {
   status?: string;
   adminRevision?: number;
   lastLoginAt?: string;
+  /** the account's last request, signed in or through a key or connector */
+  lastActiveAt?: string;
+  /** when it last signed in */
+  lastSignInAt?: string;
   history?: { actorId: string; at: string; reason: string }[];
 }
 interface Credential {
@@ -56,6 +61,8 @@ export default function Users() {
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  // Newest accounts first, or whoever used Visin most recently.
+  const [sort, setSort] = useState<'new' | 'active'>('new');
   const [selected, setSelected] = useState<User | null>(null);
   const [create, setCreate] = useState(false);
   // `?open=<id>` opens one person, from a name anywhere else in Administration (a run, a change in the history).
@@ -71,10 +78,10 @@ export default function Users() {
     if (linked.data && !selected) setSelected(linked.data);
   }, [linked.data, selected]);
   const query = useQuery({
-    queryKey: ['admin-users', q, page],
+    queryKey: ['admin-users', q, page, sort],
     queryFn: () =>
       admin<{ users: User[]; total: number; pageSize: number }>(
-        `/users?page=${page}${q ? `&q=${encodeURIComponent(q)}` : ''}`
+        `/users?page=${page}${q ? `&q=${encodeURIComponent(q)}` : ''}${sort === 'active' ? '&sort=active' : ''}`
       )
   });
   return (
@@ -102,6 +109,20 @@ export default function Users() {
         <Button type="submit" variant="outlined">
           Search
         </Button>
+        <TextField
+          select
+          size="small"
+          label="Order"
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value as 'new' | 'active');
+            setPage(1);
+          }}
+          sx={{ minWidth: 180 }}
+        >
+          <MenuItem value="new">Newest accounts</MenuItem>
+          <MenuItem value="active">Recently active</MenuItem>
+        </TextField>
         <Box sx={{ flex: 1, display: { xs: 'none', sm: 'block' } }} />
         <Button variant="contained" startIcon={<PersonAdd />} onClick={() => setCreate(true)}>
           Create user
@@ -139,7 +160,8 @@ export default function Users() {
               <Table size="medium">
                 <TableHead>
                   <TableRow>
-                    {['User', 'Roles', 'Status', 'Last sign-in', ''].map((label) => (
+                    {/* "Account" is the account's state (active, suspended); "Last active" is when it was used. */}
+                    {['User', 'Roles', 'Account', 'Last active', ''].map((label) => (
                       <TableCell key={label} sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                         {label}
                       </TableCell>
@@ -172,7 +194,20 @@ export default function Users() {
                         <StatusChip state={user.status || 'active'} />
                       </TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                        {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Unknown'}
+                        {user.lastActiveAt ? (
+                          <Tooltip title={formatDateTime(user.lastActiveAt)}>
+                            <Typography component="span">{formatAgo(user.lastActiveAt)}</Typography>
+                          </Tooltip>
+                        ) : (
+                          <Typography component="span" color="text.secondary">
+                            Not yet
+                          </Typography>
+                        )}
+                        {(user.lastSignInAt ?? user.lastLoginAt) && (
+                          <Typography variant="body2" color="text.secondary">
+                            Signed in {formatDateTime(user.lastSignInAt ?? user.lastLoginAt)}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Button size="small" variant="outlined" onClick={() => setSelected(user)}>

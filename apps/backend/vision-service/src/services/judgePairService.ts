@@ -1,16 +1,16 @@
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
-import { isValidObjectId } from 'mongoose';
+import { isValidObjectId, Types } from 'mongoose';
 import Evaluation from '../models/Evaluation';
 import Training from '../models/Training';
 import JudgePair from '../models/JudgePair';
-import JudgeDisagreement from '../models/JudgeDisagreement';
+import JudgeDisagreement, { DISAGREEMENTS_VERSION, type DisagreementValue, type IJudgeDisagreement } from '../models/JudgeDisagreement';
 import { getEvaluation } from './evaluationService';
 import { checkProjectAccess } from './projectAccessService';
 import { readableSuite } from './suiteService';
 import { sampleDigest } from './sampleDigest';
 import { evaluationScope, readerVisible } from './evaluationScope';
 import { canonicalJson } from './suiteProtocol';
-import { joinRuns } from './sampleJoin';
+import { joinPair } from './sampleJoin';
 import type { EvaluationView } from './evaluationView';
 
 interface Cell {
@@ -86,32 +86,75 @@ export async function resolveJudgePair(a: string, b: string, userId?: string): P
   };
 }
 
+/**
+ * The human reference a sample evaluation is measured against: the suite's reference evaluation, as the caller may
+ * read it. Not found for an evaluation on a suite without one, or one the caller cannot see.
+ */
+export async function referenceEvaluation(id: string, userId?: string): Promise<EvaluationView> {
+  if (!isValidObjectId(id)) throw new NotFoundError('Evaluation not found');
+  const evaluation = await getEvaluation(id, userId);
+  if (!evaluation.suite || !evaluation.samplesDigest) throw new NotFoundError('This evaluation has no sample reference');
+  const suite = await readableSuite(evaluation.suite.slug, evaluation.suite.version, userId);
+  if (!suite.protocol.reference) throw new NotFoundError('This suite has no reference');
+  const scope = await evaluationScope(userId);
+  const reference = await Evaluation.findOne({
+    'suite.id': evaluation.suite.id, 'checkpoint.kind': 'human', samplesDigest: suite.protocol.reference.samplesDigest, status: 'completed', deletedAt: null,
+    $or: [{ projectId: { $in: scope.full } }, { projectId: { $in: scope.published }, ...readerVisible }]
+  }).select('_id');
+  if (!reference) throw new NotFoundError('The suite reference evaluation is unavailable');
+  return getEvaluation(reference._id.toString(), userId);
+}
+
 const recordOf = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-const sameValue = (x: unknown, y: unknown) => canonicalJson(x ?? null) === canonicalJson(y ?? null);
+/** Equal as the stored attributes compare: a missing value equals another missing one; only lists need serialising. */
+const sameValue = (x: unknown, y: unknown) => {
+  if (x === y || ((x === undefined || x === null) && (y === undefined || y === null))) return true;
+  if (typeof x !== 'object' || typeof y !== 'object' || x === null || y === null) return false;
+  return canonicalJson(x) === canonicalJson(y);
+};
 const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
 
+/** Rows written per insert while a pair is analysed. */
+const BUILD_BATCH = 1000;
+
+/** Insert a batch of disagreement rows; rows already stored (a resumed or concurrent build) are skipped. */
+async function insertDisagreements(rows: IJudgeDisagreement[]): Promise<void> {
+  if (!rows.length) return;
+  try {
+    await JudgeDisagreement.insertMany(rows, { ordered: false });
+  } catch (error) {
+    const failure = error as { code?: number; writeErrors?: { code?: number; err?: { code?: number } }[] };
+    const codes = failure.writeErrors?.map(item => item.code ?? item.err?.code) ?? [failure.code];
+    if (codes.some(code => code !== 11000)) throw error;
+  }
+}
+
 /**
- * The pair's transition counts by field, class, size and role (and the reference's value, for fields that say which
- * values accept), from one ordered pass over both runs and the reference. Samples one run lacks, and fields the other
- * left without a value, do not count. Any matched sample whose attributes differ between the runs is refused.
+ * One pass over the samples the two runs share (see `joinPair`): the pair's transition counts by field, class, size
+ * and role (and the reference's value, for fields that say which values accept), and, given the pair's id, its
+ * disagreement rows, written as the pass goes. Fields the other run left without a value do not count. Any matched
+ * sample whose attributes differ between the runs is refused.
  */
-async function pairCells(pair: ResolvedPair): Promise<Cell[]> {
+async function analysePair(pair: ResolvedPair, pairId?: string): Promise<Cell[]> {
   const samples = pair.suite.protocol.samples!;
-  const declared = new Set(samples.fields.map(field => field.key));
+  const declaredKeys = samples.fields.map(field => field.key);
+  const declared = new Set(declaredKeys);
   const judged = new Set(samples.fields.filter(field => field.accept).map(field => field.key));
   const cells = new Map<string, Cell>();
-  for await (const { row, others: [other, reference] } of joinRuns(pair.runA, [pair.runB, pair.referenceRunId])) {
-    if (!other) continue;
+  let batch: IJudgeDisagreement[] = [];
+  for await (const { a: row, b: other, extra: reference } of joinPair(pair.runA, pair.runB, pair.referenceRunId)) {
     const attrs = recordOf(row.attrs);
     const otherAttrs = recordOf(other.attrs);
-    const referenceAttrs = reference ? recordOf(reference.attrs) : undefined;
+    // A reference that is one of the two runs was compared already.
+    const referenceAttrs = reference && reference !== row && reference !== other ? recordOf(reference.attrs) : undefined;
     const differs = samples.attrs.some(attr => !sameValue(attrs[attr.key], otherAttrs[attr.key]))
       || Boolean(referenceAttrs && samples.attrs.some(attr => !sameValue(attrs[attr.key], referenceAttrs[attr.key])));
     const weight = samples.weight ? Number(attrs[samples.weight] ?? 0) : 1;
+    const fields = recordOf(row.fields);
     const otherFields = recordOf(other.fields);
     const referenceFields = reference ? recordOf(reference.fields) : {};
-    for (const [field, value] of Object.entries(recordOf(row.fields))) {
+    for (const [field, value] of Object.entries(fields)) {
       const otherValue = otherFields[field];
       if (!declared.has(field) || typeof otherValue !== 'string') continue;
       const referenceValue = pair.referenceRunId && judged.has(field) ? (referenceFields[field] ?? null) as string | null : null;
@@ -123,7 +166,27 @@ async function pairCells(pair: ResolvedPair): Promise<Cell[]> {
       if (differs) cell.mismatch += 1;
       cells.set(key, cell);
     }
+    if (pairId === undefined) continue;
+    const values: DisagreementValue[] = [];
+    for (const field of declaredKeys) {
+      const a = fields[field];
+      const b = otherFields[field];
+      if (a === undefined || a === null || b === undefined || b === null || a === b) continue;
+      values.push({ field, a: String(a), b: String(b), ...(reference && typeof referenceFields[field] === 'string' ? { reference: referenceFields[field] as string } : {}) });
+    }
+    if (!values.length) continue;
+    batch.push({
+      pair: pairId, sampleId: row.sampleId, values,
+      ...(text(attrs.class) ? { class: text(attrs.class) } : {}),
+      ...(text(attrs.size) ? { size: text(attrs.size) } : {}),
+      ...(text(attrs.role) ? { role: text(attrs.role) } : {})
+    });
+    if (batch.length >= BUILD_BATCH) {
+      await insertDisagreements(batch);
+      batch = [];
+    }
   }
+  if (pairId !== undefined) await insertDisagreements(batch);
   return [...cells.values()];
 }
 
@@ -136,7 +199,15 @@ export async function compareJudgePair(a: string, b: string, userId?: string) {
   if (referenceRunId && await sampleDigest(referenceRunId) !== suite.protocol.reference!.samplesDigest) throw new ConflictError('Reference samples do not match the suite digest');
   const samples = suite.protocol.samples!;
 
-  const cells = await pairCells(pair);
+  // The pair's id is chosen first, so its disagreements are stored in the same pass that counts them.
+  const pairId = new Types.ObjectId();
+  let cells: Cell[];
+  try {
+    cells = await analysePair(pair, String(pairId));
+  } catch (error) {
+    await JudgeDisagreement.deleteMany({ pair: String(pairId) });
+    throw error;
+  }
 
   if (cells.some(cell => cell.mismatch)) throw new BadRequestError('Matching sample ids have different attributes');
   const fields = samples.fields.map(field => {
@@ -190,12 +261,31 @@ export async function compareJudgePair(a: string, b: string, userId?: string) {
     return { field: field.key, groups };
   });
   const results = { evaluationA: a, evaluationB: b, suite: { slug: suite.slug, version: suite.version, digest: suite.digest }, fields };
-  // Two first comparisons of a pair may finish together: an upsert keeps one, and MongoDB retries the loser itself.
-  await JudgePair.updateOne(cacheKey, { $setOnInsert: { ...cacheKey, ...(referenceEvaluationId ? { referenceEvaluationId } : {}), results } }, { upsert: true });
+  // Two first comparisons of a pair may finish together: an upsert keeps one (MongoDB retries the loser itself), and
+  // the loser's rows are removed, as the stored pair's own stand.
+  const stored = await JudgePair.updateOne(cacheKey, {
+    $setOnInsert: {
+      _id: pairId, ...cacheKey, ...(referenceEvaluationId ? { referenceEvaluationId } : {}), results,
+      disagreementsReady: true, disagreementsVersion: DISAGREEMENTS_VERSION
+    }
+  }, { upsert: true });
+  if (!stored.upsertedCount) await JudgeDisagreement.deleteMany({ pair: String(pairId) });
   return { ...results, ...(referenceEvaluationId ? { referenceEvaluationId } : {}) };
 }
 
-const BUILD_BATCH = 1000;
+
+/** Builds in progress on this instance, so a second request for the same pair waits for the first instead of repeating it. */
+const building = new Map<string, Promise<void>>();
+
+/** Store the pair's disagreements unless a build of them is already running here; resolves when they are stored. */
+export function ensureJudgeDisagreements(pair: ResolvedPair, pairId: string): Promise<void> {
+  let job = building.get(pairId);
+  if (!job) {
+    job = buildJudgeDisagreements(pair, pairId).finally(() => building.delete(pairId));
+    building.set(pairId, job);
+  }
+  return job;
+}
 
 /**
  * Store every disagreement of the pair, one row per sample and field on which both judges gave a value and the values
@@ -203,49 +293,12 @@ const BUILD_BATCH = 1000;
  * converge on the same set. Marks the pair ready only when the pass finished.
  */
 export async function buildJudgeDisagreements(pair: ResolvedPair, pairId: string): Promise<void> {
-  const declared = pair.suite.protocol.samples!.fields.map(field => field.key);
-  let batch: Record<string, unknown>[] = [];
-  const flush = async () => {
-    if (!batch.length) return;
-    try {
-      await JudgeDisagreement.insertMany(batch, { ordered: false });
-    } catch (error) {
-      const failure = error as { code?: number; writeErrors?: { code?: number; err?: { code?: number } }[] };
-      const codes = failure.writeErrors?.map(item => item.code ?? item.err?.code) ?? [failure.code];
-      if (codes.some(code => code !== 11000)) throw error;
-    }
-    batch = [];
-  };
-  for await (const { row, others: [other, reference] } of joinRuns(pair.runA, [pair.runB, pair.referenceRunId])) {
-    if (!other) continue;
-    const attrs = recordOf(row.attrs);
-    const fields = recordOf(row.fields);
-    const otherFields = recordOf(other.fields);
-    const referenceFields = reference ? recordOf(reference.fields) : undefined;
-    let sample: Record<string, unknown> | undefined;
-    for (const field of declared) {
-      const a = fields[field];
-      const b = otherFields[field];
-      if (a === undefined || a === null || b === undefined || b === null || a === b) continue;
-      sample ??= {
-        id: row.sampleId,
-        attrs,
-        a: { fields, ...(row.raw !== undefined ? { raw: row.raw } : {}) },
-        b: { fields: otherFields, ...(other.raw !== undefined ? { raw: other.raw } : {}) },
-        ...(referenceFields ? { reference: { fields: referenceFields } } : {})
-      };
-      batch.push({
-        pair: pairId, field, sampleId: row.sampleId,
-        ...(text(attrs.class) ? { class: text(attrs.class) } : {}),
-        ...(text(attrs.size) ? { size: text(attrs.size) } : {}),
-        ...(text(attrs.role) ? { role: text(attrs.role) } : {}),
-        a: String(a), b: String(b),
-        ...(referenceFields && typeof referenceFields[field] === 'string' ? { reference: referenceFields[field] } : {}),
-        sample
-      });
-      if (batch.length >= BUILD_BATCH) await flush();
-    }
+  // Rows of an older shape, or of an interrupted build of one, are cleared first; a build of this shape resumes.
+  const stored = await JudgePair.findById(pairId).select('disagreementsVersion').lean();
+  if (stored?.disagreementsVersion !== DISAGREEMENTS_VERSION) {
+    await JudgeDisagreement.deleteMany({ pair: pairId });
+    await JudgePair.updateOne({ _id: pairId }, { $set: { disagreementsVersion: DISAGREEMENTS_VERSION, disagreementsReady: false } });
   }
-  await flush();
+  await analysePair(pair, pairId);
   await JudgePair.updateOne({ _id: pairId }, { $set: { disagreementsReady: true } });
 }

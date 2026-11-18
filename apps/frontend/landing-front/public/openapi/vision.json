@@ -9277,6 +9277,16 @@
               "type": "integer",
               "minimum": 0
             }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Only visualizations whose file name contains this text, ignoring case.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "responses": {
@@ -9467,6 +9477,16 @@
             "schema": {
               "type": "integer",
               "minimum": 0
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Only visualizations whose file name contains this text, ignoring case.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
