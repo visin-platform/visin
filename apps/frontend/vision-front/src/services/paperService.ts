@@ -51,6 +51,17 @@ export const paperService = {
     return (response.data as ApiResponse<PaperDocumentState>).data;
   },
 
+  /** The owner's own PDF file, kept as the paper's PDF in place of an address. */
+  async uploadPdf(id: string, file: File): Promise<PaperDocumentState> {
+    const response = await visionApi.putFile(`/papers/${encodeURIComponent(id)}/pdf`, file, 'application/pdf');
+    return (response.data as ApiResponse<PaperDocumentState>).data;
+  },
+
+  /** Takes the uploaded file away; the paper goes back to its PDF address, if it has one. */
+  async removeUploadedPdf(id: string): Promise<void> {
+    await visionApi.delete(`/papers/${encodeURIComponent(id)}/pdf`);
+  },
+
   async create(body: CreatePaperInput): Promise<Paper> {
     const response = await visionApi.post('/papers', body);
     return (response.data as ApiResponse<Paper>).data;

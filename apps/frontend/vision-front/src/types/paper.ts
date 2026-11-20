@@ -130,6 +130,8 @@ export interface PaperDocumentState {
   viewable: boolean;
   pageCount?: number;
   truncated?: boolean;
+  /** the PDF is a file its owner uploaded, not one read from an address */
+  uploaded?: boolean;
   /** a short reason a read failed */
   error?: string;
 }

@@ -13,6 +13,8 @@ export interface IPaperDocument extends Document {
   paperId: string;
   /** the address the PDF was read from, so a changed address is noticed */
   sourceUrl: string;
+  /** the owner uploaded the file: `sourceUrl` is then `upload:` and a digest, and no address replaces it */
+  uploaded?: boolean;
   status: PaperDocumentStatus;
   /** a short reason, safe to show: never the server's own error */
   error?: string;
@@ -31,6 +33,7 @@ const PaperDocumentSchema = new Schema<IPaperDocument>(
   {
     paperId: { type: String, required: true, unique: true },
     sourceUrl: { type: String, required: true, maxlength: 600 },
+    uploaded: { type: Boolean },
     status: { type: String, enum: PAPER_DOCUMENT_STATUSES, required: true },
     error: { type: String, maxlength: 300 },
     fileId: { type: String },

@@ -75,6 +75,7 @@ components:
         viewable: { type: boolean, description: 'The PDF can be shown from storage' }
         pageCount: { type: integer }
         truncated: { type: boolean, description: 'The text was cut at the limits, so later pages are missing' }
+        uploaded: { type: boolean, description: 'The PDF is a file its owner uploaded, not one read from an address' }
         error: { type: string, description: A short reason a read failed }
     Error:
       type: object
@@ -5637,8 +5638,8 @@ paths:
       x-internal: true
       description: |
         It belongs to you, or with `owner` to a group you are in. Authors may be linked to Visin accounts with `userId`;
-        a link to anyone but yourself waits for that person to confirm it. A public paper needs an arXiv id, a DOI or a
-        link to the paper, and must cite at least one result that is public on Visin.
+        a link to anyone but yourself waits for that person to confirm it. A public paper needs an arXiv id, a DOI, a
+        link to the paper or an uploaded PDF (`PUT /papers/{id}/pdf`), and must cite at least one result that is public on Visin.
       security:
         - { SessionCookie: [] }
       requestBody:
@@ -5866,6 +5867,75 @@ paths:
           content:
             application/pdf:
               schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Papers]
+      summary: Upload a paper's PDF
+      operationId: uploadPaperPdf
+      x-internal: true
+      description: |
+        For the paper's managers: the PDF file itself as the request body (`application/pdf`, up to 30 MB), in place of
+        an address to read it from. It is read at once, so a file that is not a readable PDF is refused and the paper keeps
+        what it had. An uploaded file counts as a way to the paper for a public one, and no PDF address replaces it until
+        it is removed.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema: { type: string, format: binary }
+      responses:
+        '201':
+          description: The PDF is stored and searchable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data: { $ref: '#/components/schemas/PaperDocumentState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Papers]
+      summary: Remove a paper's uploaded PDF
+      operationId: deletePaperPdf
+      x-internal: true
+      description: |
+        For the paper's managers: takes the uploaded file away. The paper goes back to its PDF address, or to none. A
+        public paper that has no other way to it (an arXiv id, a DOI or a link) cannot lose its only one this way.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The uploaded PDF is removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success: { type: boolean, const: true }
+                  message: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Error' }
 

@@ -235,7 +235,7 @@ describe('papers, with in-memory MongoDB', () => {
             body: paper({ visibility: 'public', arxivId: undefined, results: [{ kind: 'project', ref: open }] })
           })
         ).body.message
-      ).toMatch(/arXiv id, a DOI or a link/);
+      ).toMatch(/arXiv id, a DOI, a link to the paper or an uploaded PDF/);
       const onlyPrivate = await call('/papers', {
         method: 'POST',
         body: paper({ visibility: 'public', results: [{ kind: 'project', ref: closed }] })

@@ -111,6 +111,10 @@
             "type": "boolean",
             "description": "The text was cut at the limits, so later pages are missing"
           },
+          "uploaded": {
+            "type": "boolean",
+            "description": "The PDF is a file its owner uploaded, not one read from an address"
+          },
           "error": {
             "type": "string",
             "description": "A short reason a read failed"

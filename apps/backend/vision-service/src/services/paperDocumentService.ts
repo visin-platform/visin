@@ -10,6 +10,8 @@ import { fetchPdf } from './paperPdfFetch';
 
 /** Far past any paper; a document longer than this (a thesis, a book) is read to the limit, and says so. */
 const MAX_PAGES = 1000;
+/** The largest PDF an owner can upload: what is read from an address is held to the same size. */
+export const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_TEXT_CHARS = 12_000_000;
 /** A read that started this long ago and never finished is treated as dead, so the paper can be read again. */
 const STALE_MS = 3 * 60_000;
@@ -40,6 +42,8 @@ export interface PaperDocumentView {
   error?: string;
   /** the PDF can be shown here, from storage */
   viewable: boolean;
+  /** the owner uploaded the file themselves, rather than giving an address to read it from */
+  uploaded?: boolean;
 }
 
 const view = (doc: IPaperDocument | null, hasSource: boolean): PaperDocumentView => {
@@ -49,6 +53,7 @@ const view = (doc: IPaperDocument | null, hasSource: boolean): PaperDocumentView
     viewable: doc.status === 'ready' && Boolean(doc.fileId),
     ...(doc.pageCount !== undefined ? { pageCount: doc.pageCount } : {}),
     ...(doc.truncated ? { truncated: true } : {}),
+    ...(doc.uploaded ? { uploaded: true } : {}),
     ...(doc.error ? { error: doc.error } : {})
   };
 };
@@ -74,11 +79,13 @@ const tidy = (text: string) =>
 export async function indexPaper(paper: IPaper, { force = false }: { force?: boolean } = {}): Promise<void> {
   const source = pdfSourceOf(paper);
   const paperId = String(paper._id);
+  const existing = await PaperDocument.findOne({ paperId });
+  // A file the owner uploaded is the paper's PDF: no address replaces it, and there is nothing to read again.
+  if (existing?.uploaded) return;
   if (!source) {
     await forgetPaperDocument(paperId);
     return;
   }
-  const existing = await PaperDocument.findOne({ paperId });
   if (existing && !force && existing.sourceUrl === source) {
     if (existing.status === 'ready') return;
     if (existing.status === 'pending' && existing.startedAt && Date.now() - existing.startedAt.getTime() < STALE_MS)
@@ -103,42 +110,115 @@ export async function indexPaper(paper: IPaper, { force = false }: { force?: boo
   }
   try {
     const { bytes } = await fetchPdf(source);
-    const pdf = await getDocumentProxy(new Uint8Array(bytes));
-    const { totalPages, text } = await extractText(pdf, { mergePages: false });
-    const pages: { paperId: string; n: number; text: string }[] = [];
-    let chars = 0;
-    let truncated = false;
-    for (const [index, raw] of (text as string[]).entries()) {
-      const cleaned = tidy(raw);
-      if (pages.length >= MAX_PAGES || chars + cleaned.length > MAX_TEXT_CHARS) {
-        truncated = true;
-        break;
-      }
-      chars += cleaned.length;
-      pages.push({ paperId, n: index + 1, text: cleaned });
-    }
-    const fileId = `papers/${paperId}/${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}.pdf`;
-    await putFile(fileId, bytes, 'application/pdf');
-    const before = await PaperDocument.findOne({ paperId }).select('fileId');
-    // The old text goes only now that the new is read, so a failed second read leaves the first in place.
-    await PaperPage.deleteMany({ paperId });
-    if (pages.length) await PaperPage.insertMany(pages, { ordered: true });
-    await PaperDocument.updateOne(
-      { paperId },
-      {
-        $set: { status: 'ready', fileId, size: bytes.length, pageCount: totalPages, truncated, indexedAt: new Date() },
-        $unset: { error: 1, startedAt: 1 }
-      }
-    );
-    if (before?.fileId && before.fileId !== fileId) await deleteFile(before.fileId);
+    await storeDocument(paperId, bytes, await readPages(paperId, bytes));
   } catch (error) {
     logger.warn('Could not read a paper PDF', { paperId, error: (error as Error).message });
+    // A file the owner uploaded while this read was under way stays as it is: the failure was not about it.
     await PaperDocument.updateOne(
-      { paperId },
+      { paperId, uploaded: { $ne: true } },
       { $set: { status: 'failed', error: reasonFor(error) }, $unset: { startedAt: 1 } }
     );
   }
 }
+
+/** The text of each page, tidied, up to the limits; a longer document is read to the limit and says so. */
+async function readPages(paperId: string, bytes: Buffer) {
+  const pdf = await getDocumentProxy(new Uint8Array(bytes));
+  const { totalPages, text } = await extractText(pdf, { mergePages: false });
+  const pages: { paperId: string; n: number; text: string }[] = [];
+  let chars = 0;
+  let truncated = false;
+  for (const [index, raw] of (text as string[]).entries()) {
+    const cleaned = tidy(raw);
+    if (pages.length >= MAX_PAGES || chars + cleaned.length > MAX_TEXT_CHARS) {
+      truncated = true;
+      break;
+    }
+    chars += cleaned.length;
+    pages.push({ paperId, n: index + 1, text: cleaned });
+  }
+  return { pages, totalPages, truncated };
+}
+
+/**
+ * Keeps a read PDF as the paper's document: the file in storage, its text by page. The old text goes only once the new
+ * is read, so a failed second read leaves the first in place. `upload` is set for a file the owner uploaded, which
+ * creates the document if there is none.
+ */
+async function storeDocument(
+  paperId: string,
+  bytes: Buffer,
+  read: Awaited<ReturnType<typeof readPages>>,
+  upload?: { sourceUrl: string }
+): Promise<void> {
+  const { pages, totalPages, truncated } = read;
+  const fileId = `papers/${paperId}/${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}.pdf`;
+  const before = await PaperDocument.findOne({ paperId }).select('fileId');
+  await putFile(fileId, bytes, 'application/pdf');
+  // The document is claimed before its text is touched: a read from an address that finishes after the owner uploaded
+  // a file matches nothing here, and stops before it can replace that file's pages.
+  const claimed = await PaperDocument.updateOne(
+    upload ? { paperId } : { paperId, uploaded: { $ne: true } },
+    {
+      $set: {
+        status: 'ready',
+        fileId,
+        size: bytes.length,
+        pageCount: totalPages,
+        truncated,
+        indexedAt: new Date(),
+        ...(upload ? { sourceUrl: upload.sourceUrl, uploaded: true } : {})
+      },
+      $unset: { error: 1, startedAt: 1 }
+    },
+    { upsert: Boolean(upload) }
+  );
+  if (!upload && claimed.matchedCount === 0) {
+    // Not the uploaded file's name (that would be the same bytes), so nothing points at what was just stored.
+    if (before?.fileId !== fileId) await deleteFile(fileId);
+    return;
+  }
+  await PaperPage.deleteMany({ paperId });
+  if (pages.length) await PaperPage.insertMany(pages, { ordered: true });
+  if (before?.fileId && before.fileId !== fileId) await deleteFile(before.fileId);
+}
+
+/**
+ * The owner's own file becomes the paper's PDF, in place of any address. Unlike a read from an address this answers
+ * for itself: a file that is not a readable PDF is refused here before anything changes, so the paper keeps what it had.
+ */
+export async function uploadPaperPdf(paper: IPaper, bytes: Buffer): Promise<PaperDocumentView> {
+  const paperId = String(paper._id);
+  if (bytes.length === 0 || bytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
+    throw new BadRequestError('That file is not a PDF');
+  }
+  let read: Awaited<ReturnType<typeof readPages>>;
+  try {
+    read = await readPages(paperId, bytes);
+  } catch (error) {
+    logger.warn('Could not read an uploaded paper PDF', { paperId, error: (error as Error).message });
+    throw new BadRequestError('That PDF could not be read');
+  }
+  const sourceUrl = `upload:${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}`;
+  await storeDocument(paperId, bytes, read, { sourceUrl });
+  return documentView(paper);
+}
+
+/** Drops the uploaded file; the paper goes back to its PDF address, or to none. */
+export async function removeUploadedPdf(paper: IPaper): Promise<void> {
+  const paperId = String(paper._id);
+  const doc = await PaperDocument.findOne({ paperId });
+  if (!doc?.uploaded) throw new NotFoundError('This paper has no uploaded PDF');
+  if (paper.visibility === 'public' && !paper.arxivId && !paper.doi && !paper.url) {
+    throw new BadRequestError('A public paper needs an arXiv id, a DOI or a link once its uploaded PDF is gone');
+  }
+  await forgetPaperDocument(paperId);
+  requestIndex(paper);
+}
+
+/** Whether the paper's PDF is a file its owner uploaded. */
+export const hasUploadedPdf = async (paperId: string): Promise<boolean> =>
+  (await PaperDocument.exists({ paperId, uploaded: true, status: 'ready' })) !== null;
 
 /** Starts reading in the background, for a paper just made or changed. A failure is recorded on the document. */
 export function requestIndex(paper: IPaper): void {
@@ -150,6 +230,7 @@ export function requestIndex(paper: IPaper): void {
 export async function documentView(paper: IPaper): Promise<PaperDocumentView> {
   const doc = await PaperDocument.findOne({ paperId: String(paper._id) });
   const source = pdfSourceOf(paper);
+  if (doc?.uploaded) return view(doc, true);
   // A PDF address that was changed after the last read is not what is stored.
   if (doc && source && doc.sourceUrl !== source) return { status: 'pending', viewable: false };
   return view(doc, Boolean(source));

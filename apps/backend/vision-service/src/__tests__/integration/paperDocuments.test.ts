@@ -160,6 +160,30 @@ describe('paper documents, with in-memory MongoDB', () => {
     });
     return { status: response.status };
   };
+  const sendPdf = async (path: string, bytes: Buffer | string, { method = 'PUT', user = OWNER, type = 'application/pdf' } = {}) => {
+    const unsigned = [
+      { alg: 'HS256', typ: 'JWT' },
+      {
+        id: user,
+        email: `${user}@example.test`,
+        tokenVersion: 1,
+        sid: user,
+        typ: 'session',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60
+      }
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.');
+    const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': type },
+      ...(method === 'DELETE' ? {} : { body: new Uint8Array(Buffer.from(bytes)) })
+    });
+    const text = await response.text();
+    return { status: response.status, body: (text.startsWith('{') ? JSON.parse(text) : {}) as Body };
+  };
   const paper = (fields: Record<string, unknown> = {}) =>
     Paper.create({
       title: 'Fusion at night',
@@ -201,6 +225,113 @@ describe('paper documents, with in-memory MongoDB', () => {
     expect((await post(`/papers/${draft._id}/document/refresh`)).status).toBe(202);
     await vi.waitFor(() => expect(fetchPdf).toHaveBeenCalledTimes(3));
     expect((await post(`/papers/${draft._id}/document/refresh`, STRANGER)).status).toBe(404);
+  });
+
+  describe('an uploaded PDF', () => {
+    it('is read at once, stored, shown and searchable, and counts as a way to a public paper', async () => {
+      const draft = await paper({ pdfUrl: undefined });
+      const sent = await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      expect(sent.status).toBe(201);
+      expect(sent.body.data).toMatchObject({ status: 'ready', viewable: true, uploaded: true, pageCount: 3 });
+      expect(fetchPdf).not.toHaveBeenCalled();
+
+      const doc = await PaperDocument.findOne({ paperId: String(draft._id) });
+      expect(doc).toMatchObject({ uploaded: true, status: 'ready' });
+      expect(doc!.sourceUrl).toMatch(/^upload:/);
+      expect((await call(`/papers/${draft._id}/pdf`)).bytes.subarray(0, 5).toString()).toBe('%PDF-');
+      expect((await PaperPage.find({ paperId: String(draft._id) })).map((page) => page.n).sort()).toEqual([1, 2, 3]);
+    });
+
+    it('is the only way a public paper needs, but not before it is stored', async () => {
+      const draft = await paper({ pdfUrl: undefined, results: [] });
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES))).status).toBe(201);
+      // The rule that a public paper cites a result is a separate one: the way to the paper no longer fails it.
+      const attempt = await sendPdf(`/papers/${draft._id}`, JSON.stringify({ visibility: 'public' }), {
+        type: 'application/json'
+      });
+      expect(attempt.status).toBe(400);
+      expect(attempt.body.message).toMatch(/at least one result/);
+    });
+
+    it('wins over a PDF address, which is then not read', async () => {
+      const draft = await paper();
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      await indexPaper(draft, { force: true });
+      expect(fetchPdf).not.toHaveBeenCalled();
+      expect((await call(`/papers/${draft._id}/document`)).body.data).toMatchObject({ uploaded: true, status: 'ready' });
+    });
+
+    it('is not replaced by a read from an address that finishes later', async () => {
+      const draft = await paper();
+      let finish!: (value: { bytes: Buffer; finalUrl: string }) => void;
+      vi.mocked(fetchPdf).mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+      const reading = indexPaper(draft);
+      await vi.waitFor(() => expect(fetchPdf).toHaveBeenCalled());
+
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      finish({ bytes: pdfWithPages(['Another paper entirely.']), finalUrl: 'https://papers.example.test/a.pdf' });
+      await reading;
+
+      expect(await PaperDocument.findOne({ paperId: String(draft._id) })).toMatchObject({ uploaded: true, pageCount: 3 });
+      expect((await PaperPage.findOne({ paperId: String(draft._id), n: 1 }))!.text).toContain('camera and LiDAR');
+    });
+
+    it('is left as it is when a read from an address that was under way fails', async () => {
+      const draft = await paper();
+      let fail!: (error: Error) => void;
+      vi.mocked(fetchPdf).mockReturnValueOnce(new Promise((_, reject) => (fail = reject)));
+      const reading = indexPaper(draft);
+      await vi.waitFor(() => expect(fetchPdf).toHaveBeenCalled());
+
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      fail(new BadRequestError('That address did not return a PDF'));
+      await reading;
+
+      expect((await call(`/papers/${draft._id}/document`)).body.data).toMatchObject({ status: 'ready', uploaded: true });
+    });
+
+    it('is replaced by a newer upload, and the file it replaced is deleted', async () => {
+      const draft = await paper({ pdfUrl: undefined });
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      const first = (await PaperDocument.findOne({ paperId: String(draft._id) }))!.fileId;
+
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(['A corrected version.']));
+      expect(await PaperPage.countDocuments({ paperId: String(draft._id) })).toBe(1);
+      expect(deleteFile).toHaveBeenCalledWith(first);
+    });
+
+    it('is refused when it is not a PDF, and leaves the paper as it was', async () => {
+      const draft = await paper({ pdfUrl: undefined });
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, 'just words')).status).toBe(400);
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, '%PDF-1.7 but broken')).body.message).toBe('That PDF could not be read');
+      expect(await PaperDocument.countDocuments({ paperId: String(draft._id) })).toBe(0);
+      // Another content type is not read as a file at all.
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES), { type: 'text/plain' })).status).toBe(400);
+    });
+
+    it('is the paper’s managers’ to add and remove: a stranger finds no such paper', async () => {
+      const draft = await paper({ pdfUrl: undefined });
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES), { user: STRANGER })).status).toBe(404);
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, '', { method: 'DELETE', user: STRANGER })).status).toBe(404);
+    });
+
+    it('can be removed, and the paper goes back to its address', async () => {
+      const draft = await paper();
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, '', { method: 'DELETE' })).status).toBe(200);
+      expect(deleteFile).toHaveBeenCalled();
+      await vi.waitFor(() => expect(fetchPdf).toHaveBeenCalledTimes(1));
+      // Nothing uploaded, nothing to remove.
+      expect((await sendPdf(`/papers/${draft._id}/pdf`, '', { method: 'DELETE' })).status).toBe(404);
+    });
+
+    it('cannot be removed from a public paper when it is the only way to it', async () => {
+      const draft = await paper({ pdfUrl: undefined, visibility: 'public' });
+      await sendPdf(`/papers/${draft._id}/pdf`, pdfWithPages(PAGES));
+      const removal = await sendPdf(`/papers/${draft._id}/pdf`, '', { method: 'DELETE' });
+      expect(removal.status).toBe(400);
+      expect(await PaperDocument.countDocuments({ paperId: String(draft._id), uploaded: true })).toBe(1);
+    });
   });
 
   it('reads an arXiv paper from arXiv when the owner gave no PDF address', () => {

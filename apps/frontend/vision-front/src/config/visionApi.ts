@@ -88,6 +88,16 @@ export const visionApi = {
     return { blob: await response.blob(), filename: /filename="([^"]+)"/.exec(disposition)?.[1] ?? null };
   },
 
+  /** A file as the request body, for an endpoint that takes the bytes themselves rather than JSON. */
+  async putFile(endpoint: string, file: Blob, contentType: string): Promise<{ data: unknown }> {
+    try {
+      const data = await client.request(endpoint, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } });
+      return { data };
+    } catch (error) {
+      throw toLegacyError(error);
+    }
+  },
+
   async patch(endpoint: string, body?: unknown): Promise<{ data: unknown }> {
     try {
       const data = await client.patch(endpoint, body);

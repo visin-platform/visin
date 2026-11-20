@@ -11,7 +11,15 @@ const auth = vi.hoisted(() => ({
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
 const groups = vi.hoisted(() => ({ data: [] as { id: string; name: string; role: string }[], isLoading: false, isError: false }));
 vi.mock('../hooks/useProjectGroups', () => ({ useProjectGroups: () => groups }));
-const service = vi.hoisted(() => ({ get: vi.fn(), create: vi.fn(), update: vi.fn(), searchPeople: vi.fn() }));
+const service = vi.hoisted(() => ({
+  get: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  searchPeople: vi.fn(),
+  document: vi.fn(),
+  uploadPdf: vi.fn(),
+  removeUploadedPdf: vi.fn()
+}));
 vi.mock('../services/paperService', () => ({ paperService: service }));
 
 import PaperEditPage from './PaperEditPage';
@@ -53,6 +61,9 @@ beforeEach(() => {
   service.create.mockResolvedValue(saved());
   service.update.mockResolvedValue(saved());
   service.searchPeople.mockResolvedValue([]);
+  service.document.mockResolvedValue({ status: 'none', viewable: false });
+  service.uploadPdf.mockResolvedValue({ status: 'ready', viewable: true, uploaded: true });
+  service.removeUploadedPdf.mockResolvedValue(undefined);
 });
 
 describe('PaperEditPage', () => {
@@ -203,5 +214,99 @@ describe('PaperEditPage', () => {
     service.get.mockResolvedValue(saved({ permissions: { read: true, contribute: false, manage: false, own: false } }));
     edit();
     expect(await screen.findByText('You cannot edit this paper')).toBeInTheDocument();
+  });
+  describe('uploading the PDF instead of giving a link', () => {
+    const pdf = () => new File(['%PDF-1.7'], 'night.pdf', { type: 'application/pdf' });
+    const fillBasics = async () => {
+      await userEvent.type(await screen.findByLabelText(/Title/), 'Night segmentation');
+      await userEvent.type(screen.getByLabelText('Author 1'), 'Ann Lee');
+    };
+
+    it('saves a public paper with no link as a draft, uploads the file, then makes it public', async () => {
+      create();
+      await fillBasics();
+      await userEvent.upload(screen.getByLabelText('PDF file'), pdf());
+      expect(screen.getByText(/night\.pdf will be uploaded when you save/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('radio', { name: 'Public' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+
+      await waitFor(() => expect(service.update).toHaveBeenCalledWith('pa1', { visibility: 'public' }));
+      expect(service.create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'private' }));
+      expect(service.uploadPdf).toHaveBeenCalledWith('pa1', expect.objectContaining({ name: 'night.pdf' }));
+      expect(service.create.mock.invocationCallOrder[0]).toBeLessThan(service.uploadPdf.mock.invocationCallOrder[0]);
+      expect(service.uploadPdf.mock.invocationCallOrder[0]).toBeLessThan(service.update.mock.invocationCallOrder[0]);
+    });
+
+    it('creates a public paper straight away when it already has a link', async () => {
+      create();
+      await fillBasics();
+      await userEvent.type(screen.getByLabelText('arXiv'), '2401.01234');
+      await userEvent.upload(screen.getByLabelText('PDF file'), pdf());
+      await userEvent.click(screen.getByRole('radio', { name: 'Public' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+
+      await waitFor(() => expect(service.uploadPdf).toHaveBeenCalled());
+      expect(service.create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
+      expect(service.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a file that is not a PDF, and does not upload it', async () => {
+      create();
+      await fillBasics();
+      await userEvent.upload(screen.getByLabelText('PDF file'), new File(['x'], 'notes.txt', { type: 'text/plain' }), {
+        applyAccept: false
+      });
+      expect(await screen.findByText('Choose a PDF file.')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+      await waitFor(() => expect(service.create).toHaveBeenCalled());
+      expect(service.uploadPdf).not.toHaveBeenCalled();
+    });
+
+    it('keeps the paper when the upload fails, and a second try changes it instead of adding another', async () => {
+      service.uploadPdf.mockRejectedValueOnce(new Error('That PDF could not be read'));
+      create();
+      await fillBasics();
+      await userEvent.upload(screen.getByLabelText('PDF file'), pdf());
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+
+      expect(
+        await screen.findByText('The paper was saved, but its PDF was not uploaded: That PDF could not be read')
+      ).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+
+      await waitFor(() => expect(service.uploadPdf).toHaveBeenCalledTimes(2));
+      expect(service.create).toHaveBeenCalledTimes(1);
+      expect(service.update).toHaveBeenCalledWith('pa1', expect.objectContaining({ title: 'Night segmentation' }));
+    });
+
+    it('says the paper is a private draft with its PDF when it cannot then be made public, and does not resend the file', async () => {
+      service.update.mockRejectedValueOnce(new Error('A public paper must cite at least one result on Visin'));
+      create();
+      await fillBasics();
+      await userEvent.upload(screen.getByLabelText('PDF file'), pdf());
+      await userEvent.click(screen.getByRole('radio', { name: 'Public' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+
+      expect(
+        await screen.findByText(
+          'The paper and its PDF were saved as a private draft, but it could not be made public: A public paper must cite at least one result on Visin'
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/will be uploaded when you save/)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add paper' }));
+      await waitFor(() => expect(service.update).toHaveBeenLastCalledWith('pa1', expect.objectContaining({ visibility: 'public' })));
+      expect(service.uploadPdf).toHaveBeenCalledTimes(1);
+      expect(service.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows a stored upload on an edit, and removes it', async () => {
+      service.document.mockResolvedValue({ status: 'ready', viewable: true, uploaded: true, pageCount: 9 });
+      edit();
+      expect(await screen.findByText('An uploaded PDF is stored (9 pages).')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Remove it' }));
+      await waitFor(() => expect(service.removeUploadedPdf).toHaveBeenCalledWith('pa1'));
+    });
   });
 });

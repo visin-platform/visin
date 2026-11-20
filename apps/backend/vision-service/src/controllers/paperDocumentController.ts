@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
-import { NotFoundError } from '@visin/backend-core';
-import { tokenProjectId } from '../middleware/projectTokenContext';
-import { documentView, indexPaper, openPaperPdf, readPaperPages, requestIndex, searchPaperText } from '../services/paperDocumentService';
+import { BadRequestError, NotFoundError } from '@visin/backend-core';
+import { requireUserCredential, tokenProjectId } from '../middleware/projectTokenContext';
+import { documentView, indexPaper, openPaperPdf, readPaperPages, removeUploadedPdf, requestIndex, searchPaperText, uploadPaperPdf } from '../services/paperDocumentService';
 import { getPaper, listReadablePapers, readablePaper } from '../services/paperService';
 import type { PaperListQuery, PaperPagesQuery, PaperSearchQuery } from '../validation/paperSchemas';
 
@@ -34,6 +34,21 @@ export const refreshPaperDocument = async (req: Request, res: Response): Promise
   const paper = await readablePaper(String(req.params.id), req.user!.id, 'manage');
   void indexPaper(paper, { force: true }).catch(() => undefined);
   res.status(202).json({ success: true, data: { status: 'pending', viewable: false } });
+};
+
+/** The owner's own PDF file, as the request body, in place of an address to read it from. */
+export const uploadPdf = async (req: Request, res: Response): Promise<void> => {
+  requireUserCredential();
+  const paper = await readablePaper(String(req.params.id), req.user!.id, 'manage');
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new BadRequestError('Send the PDF file as the request body');
+  res.status(201).json({ success: true, data: await uploadPaperPdf(paper, req.body) });
+};
+
+/** Takes the uploaded file away; the paper goes back to its PDF address, if it has one. */
+export const deleteUploadedPdf = async (req: Request, res: Response): Promise<void> => {
+  requireUserCredential();
+  await removeUploadedPdf(await readablePaper(String(req.params.id), req.user!.id, 'manage'));
+  res.json({ success: true, message: 'Uploaded PDF removed' });
 };
 
 /**

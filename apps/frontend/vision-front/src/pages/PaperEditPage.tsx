@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, CircularProgress, Container, Divider, TextField, Typography } from '@mui/material';
-import { Article as ArticleIcon } from '@mui/icons-material';
+import { Article as ArticleIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { EmptyState, OwnerPicker, PageHeader, VisibilitySwitch, type OwnerRef } from '@visin/frontend-core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AuthorsEditor from '../components/papers/AuthorsEditor';
@@ -10,6 +10,7 @@ import ResultsEditor, { type ResultDraft } from '../components/papers/ResultsEdi
 import TagInput from '../components/TagInput';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { usePaperDocument } from '../hooks/usePaperDocument';
 import { useProjectGroups } from '../hooks/useProjectGroups';
 import { paperService } from '../services/paperService';
 import type { CreatePaperInput, Paper, PaperVisibility } from '../types/paper';
@@ -85,6 +86,15 @@ const fromPaper = (paper: Paper): FormState => ({
 });
 
 const YEAR = /^\d{4}$/;
+/** What the server accepts as an uploaded PDF (see vision-service `MAX_UPLOAD_BYTES`). */
+const MAX_PDF_BYTES = 30 * 1024 * 1024;
+
+/** Why a chosen file cannot be uploaded, or undefined when it can. */
+const pdfProblem = (file: File): string | undefined => {
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) return 'Choose a PDF file.';
+  if (file.size > MAX_PDF_BYTES) return 'The PDF is larger than 30 MB.';
+  return undefined;
+};
 
 /** What the form says, as the API wants it. Returns the problem instead when a field cannot be sent. */
 function toPayload(form: FormState): { error: string } | { fields: Omit<CreatePaperInput, 'owner'> } {
@@ -137,6 +147,12 @@ const PaperEditPage: React.FC = () => {
   const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
   const [owner, setOwner] = useState<OwnerRef | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  /** a PDF chosen to upload once the paper is saved */
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  /** the paper a first save made, when its PDF then failed to upload: a retry changes it instead of adding another */
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const savedId = id ?? createdId;
+  const storedPdf = usePaperDocument(savedId ?? '');
 
   // The form starts from the saved paper once, and is never overwritten by a refetch of what it is editing.
   useEffect(() => {
@@ -153,10 +169,16 @@ const PaperEditPage: React.FC = () => {
     mutationFn: async () => {
       const payload = toPayload(form);
       if ('error' in payload) throw new Error(payload.error);
-      if (editing) {
-        const { fields } = payload;
+      const { fields } = payload;
+      // A public paper needs a way to it, and an uploaded file only counts once it is stored: so the paper is saved
+      // private first and made public after the upload, when the file is all it has.
+      const wasPublic = existing.data?.visibility === 'public';
+      const deferPublic =
+        pdfFile !== null && fields.visibility === 'public' && !wasPublic && !fields.arxivId && !fields.doi && !fields.url;
+      let paper: Paper;
+      if (savedId) {
         // `null` clears a field the person emptied; what the update leaves out it leaves alone.
-        return paperService.update(id, {
+        paper = await paperService.update(savedId, {
           ...fields,
           abstract: fields.abstract ?? null,
           venue: fields.venue ?? null,
@@ -166,17 +188,64 @@ const PaperEditPage: React.FC = () => {
           url: fields.url ?? null,
           pdfUrl: fields.pdfUrl ?? null,
           // Only an owner may change who sees it; leaving it out keeps the paper as it is.
-          ...(existing.data?.permissions?.own ? {} : { visibility: undefined })
+          visibility: editing && !existing.data?.permissions?.own ? undefined : deferPublic ? 'private' : fields.visibility
         });
+      } else {
+        paper = await paperService.create({
+          ...fields,
+          visibility: deferPublic ? 'private' : fields.visibility,
+          owner: owner ?? { kind: 'user', id: user!.id }
+        });
+        setCreatedId(paper.id);
       }
-      return paperService.create({ ...payload.fields, owner: owner ?? { kind: 'user', id: user!.id } });
+      if (pdfFile) {
+        try {
+          await paperService.uploadPdf(paper.id, pdfFile);
+        } catch (error) {
+          throw new Error(
+            `The paper was saved, but its PDF was not uploaded: ${error instanceof Error ? error.message : 'try again'}`
+          );
+        }
+        // Stored: a second save, after a later step failed, does not send the file again.
+        setPdfFile(null);
+        if (deferPublic) {
+          try {
+            paper = await paperService.update(paper.id, { visibility: 'public' });
+          } catch (error) {
+            throw new Error(
+              `The paper and its PDF were saved as a private draft, but it could not be made public: ${
+                error instanceof Error ? error.message : 'try again'
+              }`
+            );
+          }
+        }
+      }
+      return paper;
     },
     onSuccess: async (paper) => {
       await queryClient.invalidateQueries({ queryKey: ['papers'] });
       navigate(`/papers/${paper.id}`);
     },
-    onError: (error) => setProblem(error instanceof Error ? error.message : 'Could not save the paper')
+    onError: async (error) => {
+      setProblem(error instanceof Error ? error.message : 'Could not save the paper');
+      // Part of the save may have gone through (the paper, its file): what the page shows is fetched again.
+      await queryClient.invalidateQueries({ queryKey: ['papers'] });
+    }
   });
+
+  const removePdf = useMutation({
+    mutationFn: () => paperService.removeUploadedPdf(savedId!),
+    onMutate: () => setProblem(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['papers'] }),
+    onError: (error) => setProblem(error instanceof Error ? error.message : 'Could not remove the PDF')
+  });
+
+  const choosePdf = (file: File | undefined) => {
+    if (!file) return;
+    const refusal = pdfProblem(file);
+    setProblem(refusal ?? null);
+    setPdfFile(refusal ? null : file);
+  };
 
   if (authLoading || (editing && isAuthenticated && existing.isLoading)) return <CircularProgress />;
   if (!isAuthenticated || !user) {
@@ -215,7 +284,8 @@ const PaperEditPage: React.FC = () => {
   const canShare = editing
     ? existing.data?.permissions?.own === true
     : ownerRef.kind === 'user' || groups.data?.find((group) => group.id === ownerRef.id)?.role === 'owner';
-  const busy = save.isPending;
+  const busy = save.isPending || removePdf.isPending;
+  const uploaded = storedPdf.data?.uploaded === true;
 
   return (
     <Container maxWidth="md" sx={{ pb: 4 }}>
@@ -307,6 +377,42 @@ const PaperEditPage: React.FC = () => {
               helperText="An https address of the PDF. Visin keeps a copy to show on the paper’s page and to let the analyst search it. For an arXiv paper this can stay empty."
             />
           </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Button component="label" variant="outlined" startIcon={<UploadFileIcon />} disabled={busy}>
+              {uploaded || pdfFile ? 'Choose another PDF' : 'Upload a PDF'}
+              <input
+                hidden
+                type="file"
+                accept="application/pdf,.pdf"
+                aria-label="PDF file"
+                onChange={(event) => {
+                  choosePdf(event.target.files?.[0]);
+                  event.target.value = '';
+                }}
+              />
+            </Button>
+            {pdfFile ? (
+              <>
+                <Typography variant="body2">{pdfFile.name} will be uploaded when you save.</Typography>
+                <Button size="small" disabled={busy} onClick={() => setPdfFile(null)}>
+                  Don’t upload
+                </Button>
+              </>
+            ) : uploaded ? (
+              <>
+                <Typography variant="body2">
+                  An uploaded PDF is stored{storedPdf.data?.pageCount ? ` (${storedPdf.data.pageCount} pages)` : ''}.
+                </Typography>
+                <Button size="small" color="error" disabled={busy} onClick={() => removePdf.mutate()}>
+                  Remove it
+                </Button>
+              </>
+            ) : null}
+          </Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', mt: -1 }}>
+            No link or identifier? Upload the paper’s PDF instead. It is kept by Visin, shown on the paper’s page and
+            searchable by the analyst, and replaces a PDF address while it is there.
+          </Typography>
         </Box>
 
         <TagInput
@@ -338,8 +444,8 @@ const PaperEditPage: React.FC = () => {
             disabled={busy || (editing && !canShare)}
           />
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-            A public paper needs an arXiv id, a DOI or a link to the paper, and at least one cited result that is public
-            on Visin.
+            A public paper needs an arXiv id, a DOI, a link to the paper or an uploaded PDF, and at least one cited
+            result that is public on Visin.
           </Typography>
         </Box>
 

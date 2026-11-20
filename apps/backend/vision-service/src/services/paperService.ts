@@ -9,7 +9,7 @@ import type { CreatePaperBody, MyPapersQuery, PaperListQuery, PublicPapersQuery,
 import { callerGroups, checkProjectAccess, projectPermission, resolveProject } from './projectAccessService';
 import { parseArxivId, parseDoi } from './paperIdentifiers';
 import { PaperCard, PaperView, resolveCited, splitBoard, publicName, toCards, toView } from './paperView';
-import { requestIndex } from './paperDocumentService';
+import { hasUploadedPdf, requestIndex } from './paperDocumentService';
 
 // The service's public surface stays here, whichever file a piece now lives in.
 export type { PaperAuthorView, PaperResultView, PaperPermissions, PaperCard, PaperView } from './paperView';
@@ -175,11 +175,13 @@ async function buildResults(userId: string, input: ResultInput[], existing: IPap
 }
 
 /**
- * A public paper is findable, and cites something to find: a way to the paper itself, and at least one result that
- * anyone can open right now. Otherwise the catalogue would fill with links that lead nowhere on Visin.
+ * A public paper is findable, and cites something to find: a way to the paper itself (an arXiv id, a DOI, a link or a
+ * PDF its owner uploaded), and at least one result that anyone can open right now. Otherwise the catalogue would fill with links that lead nowhere on Visin.
  */
 async function assertPublishable(paper: IPaper, checkResults: boolean): Promise<void> {
-  if (!paper.arxivId && !paper.doi && !paper.url) throw new BadRequestError('A public paper needs an arXiv id, a DOI or a link to the paper');
+  if (!paper.arxivId && !paper.doi && !paper.url && !(await hasUploadedPdf(String(paper._id)))) {
+    throw new BadRequestError('A public paper needs an arXiv id, a DOI, a link to the paper or an uploaded PDF');
+  }
   if (paper.results.length === 0) throw new BadRequestError('A public paper must cite at least one result on Visin');
   if (!checkResults) return;
   const found = await resolveCited([paper]);
