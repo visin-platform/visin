@@ -273,6 +273,8 @@ export const suiteUpdateParamsSchema = z.object({
 export const listSuitesQuerySchema = z.object({
   ...paginationSchema,
   slug: z.string().trim().min(1).optional(),
+  /** Words to find in a suite's name, slug, description or task: a substring, not a pattern. */
+  search: z.string().trim().min(1).max(200).optional(),
   projectId: z.string().min(1).optional(),
   includeArchived: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
   order: sortOrderSchema('desc')

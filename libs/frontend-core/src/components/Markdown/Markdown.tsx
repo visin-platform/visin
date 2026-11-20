@@ -1,6 +1,8 @@
 import { Fragment, useMemo, type ReactNode } from 'react';
 import { Box, Link, Typography } from '@mui/material';
 import { CodeBlock } from './CodeBlock';
+import { TableBlock } from './TableBlock';
+import { tableText } from './tableText';
 import { parseBlocks, type Align, type Block, type Inline } from './parse';
 
 /** More than a readme needs: the rest is not shown, so one cannot make every visitor's browser work on a book. */
@@ -96,7 +98,7 @@ function renderBlock(block: Block, index: number): ReactNode {
       );
     case 'table':
       return (
-        <Box key={index} sx={{ my: 1.5, overflowX: 'auto' }}>
+        <TableBlock key={index} text={tableText(block.head, block.rows)}>
           <Box component="table" sx={{ borderCollapse: 'collapse', minWidth: '50%', '& th, & td': { border: 1, borderColor: 'divider', px: 1.5, py: 0.75 }, '& th': { bgcolor: 'action.hover', fontWeight: 700 } }}>
             <thead>
               <tr>
@@ -119,7 +121,7 @@ function renderBlock(block: Block, index: number): ReactNode {
               ))}
             </tbody>
           </Box>
-        </Box>
+        </TableBlock>
       );
   }
 }

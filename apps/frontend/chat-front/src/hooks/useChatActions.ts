@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type RefObject } from 'react';
 import { chatService } from '../services/chatService';
 
-import type { AttachmentRef, Conversation, MessageContext, OpenRequest, PageContext } from '../types/chat';
+import type { AttachmentRef, Conversation, Message, MessageContext, OpenRequest, PageContext } from '../types/chat';
 import { analysisOf } from '../utils/chatContext';
 import { mergeMessages } from '../utils/messages';
 import { screenContext } from '../utils/screen';
@@ -40,6 +40,8 @@ export function useChatActions({
   const [deleting, setDeleting] = useState<Conversation>();
   /** The chat just put away, offered back for a moment. */
   const [justHidden, setJustHidden] = useState<Conversation>();
+  /** The question being reworded: its text is in the box, and sending asks again instead of adding a message. */
+  const [editing, setEditing] = useState<Message>();
 
   const screenFor = () => {
     const screen = screenContext(panel, aboutRef?.current?.page, hidePageRef?.current);
@@ -66,6 +68,8 @@ export function useChatActions({
         clientId: string;
         conversation: string;
         replyTo?: string;
+        /** the question being edited, so a retry of an edit is not taken for a retry of a new question */
+        edits?: string;
         screen?: ReturnType<typeof screenContext>;
       }
     | undefined
@@ -132,8 +136,12 @@ export function useChatActions({
       if (!c || (!text && !attachments.length)) return;
       const attachmentsKey = JSON.stringify(attachments);
       const replyTo = fromDraft ? replyTarget?._id : requestedReply;
-      const context = c.kind === 'assistant' ? (asked ? idsOf(asked) : aboutNow()) : undefined;
+      const edits = fromDraft && c.kind === 'assistant' ? editing?._id : undefined;
+      // A reworded question is still about what it was first asked about, wherever the person is now.
+      const context =
+        c.kind === 'assistant' ? (asked ? idsOf(asked) : edits ? idsOf(editing?.context) : aboutNow()) : undefined;
       if (
+        retry.current?.edits !== edits ||
         retry.current?.body !== text ||
         JSON.stringify(retry.current.context) !== JSON.stringify(context) ||
         retry.current.conversation !== c._id ||
@@ -146,21 +154,25 @@ export function useChatActions({
           attachmentsKey,
           clientId: crypto.randomUUID(),
           conversation: c._id,
+          edits,
           screen:
             c.kind === 'assistant' ? screenContext(panel, aboutRef?.current?.page, hidePageRef?.current) : undefined,
           replyTo
         };
       setSending(true);
       try {
-        await chatService.send(c._id, {
+        const message = {
           body: text,
           clientId: retry.current.clientId,
           ...(attachments.length ? { attachments } : {}),
           ...(replyTo ? { replyTo } : {}),
           ...(retry.current.context ? { context: retry.current.context } : {}),
           ...(retry.current.screen ? { screen: retry.current.screen } : {})
-        });
+        };
+        if (edits) await chatService.edit(c._id, edits, message);
+        else await chatService.send(c._id, message);
         delivered = true;
+        if (edits) setEditing(undefined);
         const current = latestNavigation.current;
         const sameThread = current.accountId === navigation.accountId && current.c?._id === c._id;
         if (fromDraft && sameThread && current.draft === draft) {
@@ -209,6 +221,19 @@ export function useChatActions({
   const send = (attachments: AttachmentRef[] = []) =>
     c ? post(draft, true, undefined, attachments) : pending ? start(pending, draft) : undefined;
 
+  /** Puts a question back in the box to be reworded; what it was about and its answer stay until it is sent. */
+  const beginEdit = (message: Message) => {
+    setEditing(message);
+    setReplyTarget(undefined);
+    setDraft(message.body);
+    composerInput.current?.focus();
+  };
+  const cancelEdit = () => {
+    setEditing(undefined);
+    setDraft('');
+  };
+  /** Stops editing without touching the box: the question is gone, or another chat was opened. */
+  const dropEdit = useCallback(() => setEditing(undefined), []);
   const ask = (text: string) => {
     setDraft(text);
     composerInput.current?.focus();
@@ -270,6 +295,10 @@ export function useChatActions({
     post,
     send,
     ask,
+    editing,
+    beginEdit,
+    cancelEdit,
+    dropEdit,
     latestRun,
     failedQuestion,
     membership,

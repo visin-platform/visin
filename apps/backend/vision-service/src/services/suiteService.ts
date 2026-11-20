@@ -110,6 +110,11 @@ async function readableFilter(userId: string | undefined): Promise<QueryFilter<I
 export async function listSuites(userId: string | undefined, query: ListSuitesQuery) {
   const clauses: QueryFilter<ISuite>[] = [await readableFilter(userId)];
   if (query.slug) clauses.push({ slug: query.slug });
+  if (query.search) {
+    // A substring, case-insensitive: what the person typed is text, never a pattern.
+    const found = { $regex: query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    clauses.push({ $or: [{ name: found }, { slug: found }, { description: found }, { 'protocol.task': found }] });
+  }
   if (query.projectId) {
     const project = await resolveProject(query.projectId);
     clauses.push({ projectId: project ? project._id.toString() : '' });

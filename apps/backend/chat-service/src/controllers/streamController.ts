@@ -162,7 +162,7 @@ export function createStreamController(): RequestHandler {
             revision: { $gt: 0 },
             ...historyFilter(conversation, userId)
           })
-            .select('_id revision unsentAt reactions')
+            .select('_id revision unsentAt supersededAt reactions')
             .lean();
           const changed = mutations.filter((row) => sentRevisions.get(String(row._id)) !== row.revision);
           if (changed.length && !stopped) {

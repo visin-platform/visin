@@ -2645,6 +2645,73 @@
         }
       }
     },
+    "/conversations/{id}/messages/{messageId}/edit": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "editChatQuestion",
+        "summary": "Ask your assistant again with other words",
+        "description": "Only your latest question in your private chat with an assistant, and only a text one. The edited text is sent as a new question (the body is the same as sending one, with a new clientId); the old question and its answer are retired: hidden from the thread and from what the assistant is told, and kept in the run's history. A repeated request with the same clientId finishes what the first did not reach and changes nothing else.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Not your latest question, a question with files, already taken back, or a clientId already used"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Not your question"
+          },
+          "404": {
+            "description": "Conversation or resource unavailable"
+          },
+          "429": {
+            "description": "Rate limit reached"
+          },
+          "503": {
+            "description": "An authorization dependency is unavailable"
+          },
+          "200": {
+            "description": "A repeat of an edit already made: the new question it made"
+          },
+          "201": {
+            "description": "The new question"
+          }
+        }
+      }
+    },
     "/conversations/{id}/messages/{messageId}/unsend": {
       "post": {
         "tags": [

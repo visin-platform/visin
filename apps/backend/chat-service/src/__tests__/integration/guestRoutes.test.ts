@@ -14,6 +14,7 @@ import { resetAssistantSettingsCache } from '../../services/settings';
 import { defaultPolicy } from '../../services/adminPolicy';
 import { clearPublicCatalogue } from '../../services/guestCatalogue';
 import { GUEST_REQUEST_BYTES } from '../../services/guestContext';
+import { GUEST_TOOLS, guestRequestBytes } from '../../services/guestTools';
 describe('anonymous public project questions', () => {
   let mongo: MongoMemoryServer;
   let server: Server;
@@ -21,7 +22,12 @@ describe('anonymous public project questions', () => {
   let cookie: string;
   const realFetch = globalThis.fetch;
   const project = '111111111111111111111111';
+  const paper = '222222222222222222222222';
+  const training = '333333333333333333333333';
   let publicVisible = true;
+  let paperPublic = true;
+  let lookupsDown = false;
+  let readme = '';
   let visionDown = false;
   let turnstileBroken = false;
   beforeAll(async () => {
@@ -54,6 +60,9 @@ describe('anonymous public project questions', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
     publicVisible = true;
+    paperPublic = true;
+    lookupsDown = false;
+    readme = '';
     visionDown = false;
     turnstileBroken = false;
     clearPublicCatalogue();
@@ -91,7 +100,47 @@ describe('anonymous public project questions', () => {
           return new Response('<html>oops</html>', { status: 500 });
         if (String(url).startsWith('https://challenges.cloudflare.com/'))
           return new Response(JSON.stringify({ success: true, hostname: 'app.example.test', action: 'vivi-guest' }));
-        if (String(url).startsWith('http://vision.invalid/api/public/projects')) {
+        // A visitor's lookups carry no credential of any kind, only correlation headers.
+        const bare = () => {
+          const headers = new Headers(init?.headers);
+          expect([...headers.keys()].filter((name) => !['x-request-id', 'traceparent'].includes(name))).toEqual([]);
+        };
+        if (String(url).startsWith('http://vision.invalid/api/public/papers?')) {
+          bare();
+          if (lookupsDown) return new Response('<html>Bad gateway</html>', { status: 502 });
+          return new Response(
+            JSON.stringify({
+              data: {
+                papers: [
+                  {
+                    id: paper,
+                    title: 'LiDAR fusion at night',
+                    authors: [{ name: 'A. Author' }, { name: 'B. Author' }],
+                    year: 2026,
+                    abstract: 'Camera and LiDAR fusion for driving in the dark.',
+                    visibility: 'public'
+                  },
+                  { id: 'a'.repeat(24), title: 'A private one', visibility: 'private' },
+                  { title: 'No id', visibility: 'public' }
+                ]
+              }
+            })
+          );
+        }
+        if (/^http:\/\/vision\.invalid\/api\/public\/papers\/[a-f\d]{24}$/.test(String(url))) {
+          bare();
+          return new Response(JSON.stringify({ data: { visibility: paperPublic ? 'public' : 'private', title: 'LiDAR fusion', abstract: 'Research on fusion.' } }));
+        }
+        if (String(url).startsWith('http://vision.invalid/api/public/trainings?')) {
+          bare();
+          return new Response(JSON.stringify({ data: { trainings: [{ _id: training, projectId: project, name: 'Fusion run', status: 'completed' }] } }));
+        }
+        if (String(url).includes(`/api/public/trainings/${training}/summary`)) {
+          bare();
+          if (!publicVisible) return new Response('', { status: 404 });
+          return new Response(JSON.stringify({ data: { training: { projectId: project, name: 'Fusion run' }, metrics: [] } }));
+        }
+        if (String(url).startsWith('http://vision.invalid/api/public/projects?')) {
           // Like vision's text search: whole words only.
           const search = new URL(String(url)).searchParams.get('search');
           const cards = [
@@ -110,7 +159,8 @@ describe('anonymous public project questions', () => {
                 _id: project,
                 visibility: publicVisible ? 'public' : 'private',
                 name: 'Public research',
-                description: 'Recorded public project context'
+                description: 'Recorded public project context',
+                ...(readme ? { readme } : {})
               }
             })
           );
@@ -193,6 +243,12 @@ describe('anonymous public project questions', () => {
   it('refuses private project context before provider execution', async () => {
     publicVisible = false;
     expect((await request('/questions', 'POST', question())).status).toBe(403);
+    expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
+  });
+  it('refuses a private run supplied by the page before provider execution', async () => {
+    publicVisible = false;
+    const { projectId: _projectId, ...input } = question();
+    expect((await request('/questions', 'POST', { ...input, trainingId: training })).status).toBe(403);
     expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
   });
   it('stops new questions immediately when guest access is disabled', async () => {
@@ -286,9 +342,13 @@ describe('anonymous public project questions', () => {
     expect(ADAPTERS.anthropic.send).not.toHaveBeenCalled();
     await Pricing.updateOne(
       { _id: 'pricing' },
-      { $push: { entries: { provider: 'anthropic', model: 'small-model', inputPerMillion: 0.1, outputPerMillion: 0.2 } } }
+      {
+        $push: { entries: { provider: 'anthropic', model: 'small-model', inputPerMillion: 0.1, outputPerMillion: 0.2 } }
+      }
     );
-    const result = (await (await request('/questions', 'POST', question(), cookie, visitor)).json()) as { data: { runId: string } };
+    const result = (await (await request('/questions', 'POST', question(), cookie, visitor)).json()) as {
+      data: { runId: string };
+    };
     await finished(result.data.runId);
     expect(vi.mocked(ADAPTERS.anthropic.send).mock.calls.at(-1)![0]).toMatchObject({ model: 'small-model' });
     expect((await ProviderUsage.findOne({ runId: result.data.runId }))?.model).toBe('small-model');
@@ -311,6 +371,7 @@ describe('anonymous public project questions', () => {
   });
 
   it('fits the longest multi-byte question, and a follow-up to it, within the bytes it reserved', async () => {
+    await AdminPolicy.updateOne({ _id: 'global' }, { $set: { 'settings.guestToolRounds': 0 } });
     // Its own address: the route's per-address limiter counts across this whole file.
     const visitor = '203.0.113.77';
     const within = () => {
@@ -405,5 +466,273 @@ describe('anonymous public project questions', () => {
     });
     const result = (await (await request('/questions', 'POST', question())).json()) as { data: { runId: string } };
     expect((await finished(result.data.runId))?.state).toBe('failed');
+  });
+
+  describe('lookups in the public catalogue', () => {
+    // Its own address each time: the limit per address counts across this whole file.
+    let visitors = 0;
+    const ask = async (key = 'idempotency-key-0001', visitor = `203.0.114.${++visitors}`) => {
+      const result = (await (await request('/questions', 'POST', question(key), cookie, visitor)).json()) as {
+        data: { runId: string };
+      };
+      return finished(result.data.runId);
+    };
+    const lookups = (rounds: number, resultBytes = 3000) =>
+      AdminPolicy.updateOne(
+        { _id: 'global' },
+        { $set: { 'settings.guestToolRounds': rounds, 'settings.guestToolResultBytes': resultBytes } }
+      );
+    const call = (id: string, name: string, input: Record<string, unknown>) => ({ id, name, input });
+    const wants = (calls: ReturnType<typeof call>[]) => ({
+      text: '',
+      calls,
+      inputTokens: 100,
+      outputTokens: 20,
+      stop: 'done' as const,
+      assistant: {
+        role: 'assistant',
+        content: calls.map((c) => ({ type: 'tool_use', id: c.id, name: c.name, input: c.input }))
+      }
+    });
+    const answered = (text: string) => ({
+      text,
+      calls: [],
+      inputTokens: 100,
+      outputTokens: 20,
+      stop: 'done' as const,
+      assistant: {}
+    });
+    /** What the model was told by the lookups of the first round: the content of each tool result sent back. */
+    const told = () => {
+      const second = vi.mocked(ADAPTERS.anthropic.send).mock.calls[1][0].messages as { content: unknown }[];
+      return (second.at(-1)!.content as { content: string }[]).map((block) => block.content);
+    };
+
+    it('offers no lookups when disabled: one request, no tools, the usual ceiling', async () => {
+      await lookups(0);
+      await ask();
+      expect(ADAPTERS.anthropic.send).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(ADAPTERS.anthropic.send).mock.calls[0][0]).toMatchObject({
+        tools: [],
+        maxRequestBytes: GUEST_REQUEST_BYTES
+      });
+    });
+
+    it('lets the answer look things up, with no credential, and answers from what came back', async () => {
+      await lookups(2);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(
+          wants([
+            call('t1', 'search_public_papers', { query: 'lidar' }),
+            call('t2', 'read_public_project', { link: '/projects/public-research' })
+          ])
+        )
+        .mockResolvedValueOnce(answered('There is a paper on LiDAR fusion.'));
+      const run = await ask();
+
+      expect(run).toMatchObject({ state: 'completed', answer: 'There is a paper on LiDAR fusion.' });
+      expect(ADAPTERS.anthropic.send).toHaveBeenCalledTimes(2);
+      const first = vi.mocked(ADAPTERS.anthropic.send).mock.calls[0][0];
+      expect(first.tools?.map((tool) => tool.name)).toEqual(GUEST_TOOLS.map((tool) => tool.name));
+      expect(first.maxRequestBytes).toBeGreaterThan(GUEST_REQUEST_BYTES);
+      const results = told();
+      expect(results[0]).toContain('LiDAR fusion at night');
+      expect(results[0]).toContain(`/papers/${paper}`);
+      // A private paper and one without an id are not offered; an author list is short.
+      expect(results[0]).not.toContain('A private one');
+      expect(results[1]).toContain('Public research');
+      // Each request is metered, and what the answer drew on is kept to be rechecked.
+      expect(await ProviderUsage.countDocuments({ state: 'completed', kind: 'guest' })).toBe(2);
+      expect(run.paperIds).toEqual([paper]);
+      expect(run.projectIds).toContain(project);
+      expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => String(url).includes('/api/public/papers?'))).toBe(
+        true
+      );
+    });
+
+    it('stops showing an answer once a paper it drew on is no longer public', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'search_public_papers', { query: 'lidar' })]))
+        .mockResolvedValueOnce(answered('There is a paper on LiDAR fusion.'));
+      const run = await ask();
+      expect((await request(`/runs/${run.id}`)).status).toBe(200);
+      paperPublic = false;
+      expect((await request(`/runs/${run.id}`)).status).toBe(403);
+    });
+
+    it('does not reuse a previous answer after a cited paper becomes private', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'search_public_papers', { query: 'lidar' })]))
+        .mockResolvedValueOnce(answered('Previous paper answer.'));
+      expect((await ask())?.state).toBe('completed');
+      paperPublic = false;
+      await ask('idempotency-key-0002');
+      const next = vi.mocked(ADAPTERS.anthropic.send).mock.calls.at(-1)![0];
+      expect(JSON.stringify(next.messages)).not.toContain('Previous paper answer.');
+    });
+
+    it('does not publish an answer if a paper it looked up becomes private while it is written', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'search_public_papers', { query: 'lidar' })]))
+        .mockImplementationOnce(async () => {
+          paperPublic = false;
+          return answered('Do not publish');
+        });
+      const run = await ask();
+      expect(run.state).toBe('failed');
+      expect(run.answer).toBeUndefined();
+    });
+
+    it('allows only the rounds it was given, and makes the last one an answer: no lookups are offered', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'search_public_papers', { query: 'lidar' })]))
+        .mockResolvedValueOnce(answered('Answered after one round.'));
+      await ask();
+      const sent = vi.mocked(ADAPTERS.anthropic.send).mock.calls;
+      expect(sent).toHaveLength(2);
+      expect(sent[0][0].tools).toHaveLength(GUEST_TOOLS.length);
+      expect(sent[1][0].tools).toEqual([]);
+    });
+
+    it('searches and reads public runs and papers without a credential', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([
+          call('t1', 'search_public_runs', { query: 'fusion' }),
+          call('t2', 'read_public_run', { link: `/trainings/${training}` }),
+          call('t3', 'read_public_paper', { link: `/papers/${paper}` })
+        ]))
+        .mockResolvedValueOnce(answered('Public research.'));
+      const run = await ask();
+      expect(run.state).toBe('completed');
+      expect(told()[0]).toContain(`/trainings/${training}`);
+      expect(told()[1]).toContain('Fusion run');
+      expect(told()[2]).toContain('Research on fusion.');
+      expect(run.projectIds).toContain(project);
+      expect(run.paperIds).toContain(paper);
+    });
+
+    it('finds public projects by topic and returns links', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'search_public_projects', { query: 'public' })]))
+        .mockResolvedValueOnce(answered('Public research.'));
+      const run = await ask();
+      expect(told()[0]).toContain('/projects/public-research');
+      expect(run?.projectIds).toContain(project);
+    });
+
+    it('rejects malformed run and paper links and empty run searches', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([
+          call('t1', 'read_public_run', { link: '/trainings/not-an-id' }),
+          call('t2', 'read_public_paper', { link: '/papers/not-an-id' }),
+          call('t3', 'search_public_runs', { query: '' })
+        ]))
+        .mockResolvedValueOnce(answered('No results.'));
+      await ask();
+      expect(told()).toEqual(['Give a public run link.', 'Give a public paper link.', 'Give some words to search for.']);
+    });
+
+    it('runs at most three lookups in a round, and still answers the rest so the provider accepts the turn', async () => {
+      await lookups(2);
+      const many = ['a', 'b', 'c', 'd', 'e'].map((q, i) => call(`t${i}`, 'search_public_papers', { query: q }));
+      vi.mocked(ADAPTERS.anthropic.send).mockResolvedValueOnce(wants(many)).mockResolvedValueOnce(answered('Done.'));
+      await ask();
+      const searched = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.filter(([url]) => String(url).includes('/api/public/papers?'));
+      expect(searched).toHaveLength(3);
+      const results = told();
+      expect(results).toHaveLength(5);
+      expect(results.slice(3).every((text) => text.includes('Too many lookups'))).toBe(true);
+    });
+
+    it('cuts a result to the size set, as the request carries it', async () => {
+      await lookups(1, 500);
+      readme = 'a long readme with "quotes" and\nnewlines '.repeat(200);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'read_public_project', { link: '/projects/public-research' })]))
+        .mockResolvedValueOnce(answered('Read it.'));
+      await ask();
+      const [text] = told();
+      expect(text).toContain('[CUT');
+      expect(Buffer.byteLength(JSON.stringify(text)) - 2).toBeLessThanOrEqual(500);
+    });
+
+    it('reserves what the rounds can cost: more than a question with no lookups, from the same ceiling', async () => {
+      const day = new Date().toISOString().slice(8, 10);
+      const reserved = async () =>
+        Number(
+          (
+            await mongoose.connection
+              .collection('chat_guest_budgets')
+              .findOne({ _id: new Date().toISOString().slice(0, 7) as never })
+          )?.days?.[day]?.reservedMicros ?? 0
+        );
+      await lookups(0);
+      await ask('idempotency-key-0001', '203.0.113.90');
+      const plain = await reserved();
+      await mongoose.connection.collection('chat_guest_budgets').deleteMany({});
+      await lookups(3, 3000);
+      await ask('idempotency-key-0002', '203.0.113.91');
+      const withLookups = await reserved();
+      // Four requests, each allowed to carry the tools, the earlier rounds' results and a full answer.
+      expect(withLookups).toBeGreaterThan(plain * 4);
+      expect(guestRequestBytes({ rounds: 3, resultBytes: 3000 }, 1140)).toBeGreaterThan(GUEST_REQUEST_BYTES * 2);
+    });
+
+    it('says only that a lookup is unavailable when vision is down, and never why', async () => {
+      await lookups(1);
+      lookupsDown = true;
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'search_public_papers', { query: 'lidar' })]))
+        .mockResolvedValueOnce(answered('I could not look that up.'));
+      const run = await ask();
+      expect(run.state).toBe('completed');
+      expect(told()).toEqual(['That lookup is unavailable right now.']);
+    });
+
+    it('treats a bad link, an unknown lookup and an empty search as the model\u2019s mistake, not a failure', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(
+          wants([
+            call('t1', 'read_public_project', { link: '/trainings/abc' }),
+            call('t2', 'read_private_thing', {}),
+            call('t3', 'search_public_papers', { query: '  ' })
+          ])
+        )
+        .mockResolvedValueOnce(answered('Fine.'));
+      expect((await ask()).state).toBe('completed');
+      expect(told()).toEqual([
+        'That is not a project link. Use a link a search returned.',
+        'That lookup does not exist.',
+        'Give some words to search for.'
+      ]);
+    });
+
+    it('reads a project made private since as not found, without saying it was there', async () => {
+      await lookups(1);
+      vi.mocked(ADAPTERS.anthropic.send)
+        .mockResolvedValueOnce(wants([call('t1', 'read_public_project', { link: '/projects/public-research' })]))
+        .mockImplementationOnce(async () => answered('Nothing found.'));
+      // The page's own project is public when the question starts, and private by the time the lookup reads it.
+      let reads = 0;
+      const inner = vi.mocked(globalThis.fetch).getMockImplementation()!;
+      vi.mocked(globalThis.fetch).mockImplementation(async (url, init) => {
+        if (String(url).includes('/api/public/projects/public-research') && ++reads > 0) publicVisible = false;
+        return inner(url, init);
+      });
+      const run = await ask();
+      expect(told()).toEqual(['Not among the public ones.']);
+      // The answer drew on a project that is no longer public, so it is not published.
+      expect(run.state).toBe('failed');
+    });
   });
 });

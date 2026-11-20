@@ -602,7 +602,7 @@ describe('models kept on this deployment', () => {
       await publish(trainingId, weights(1));
       const model = await settled(trainingId);
       expect((await raw(url(trainingId, model._id), {}, { user: MEMBER })).status).toBe(200);
-      expect((await raw(url(trainingId, model._id), {}, { user: STRANGER })).status).toBe(403);
+      expect((await raw(url(trainingId, model._id), {}, { user: STRANGER })).status).toBe(404);
       expect((await raw(url(trainingId, model._id), {}, { user: '' })).status).toBeGreaterThanOrEqual(401);
     });
 
@@ -1066,7 +1066,7 @@ describe('models kept on this deployment', () => {
         { _id: trainingId, 'models._id': model._id },
         { $set: { 'models.$.license': { id: 'cc-by-4.0' } } }
       );
-      expect((await call(outputs(trainingId, model._id), { user: STRANGER })).status).toBe(403);
+      expect((await call(outputs(trainingId, model._id), { user: STRANGER })).status).toBe(404);
       expect((await call(outputs(trainingId, model._id), { user: MEMBER })).status).toBe(200);
 
       await Training.updateOne({ _id: trainingId, 'models._id': model._id }, { $set: { 'models.$.epoch': 500 } });

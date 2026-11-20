@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Refresh } from '@mui/icons-material';
 import {
   Alert,
@@ -77,7 +77,7 @@ export function MessageList() {
     scroller,
     atBottom,
     hasOlder,
-    messages,
+    messages: everything,
     perform,
     c,
     setHasOlder,
@@ -95,8 +95,14 @@ export function MessageList() {
     composerInput,
     runs,
     drafts,
-    user
+    user,
+    editing,
+    beginEdit,
+    dropEdit
   } = useChatWorkspaceContext();
+  // A question edited into a new one, and its answer, are out of the thread. They are kept in the list, so a slow
+  // fetch cannot bring them back, and in the history, where the run keeps them.
+  const messages = useMemo(() => everything.filter((message) => !message.supersededAt), [everything]);
   // Keeps the end in view for someone reading at the end, and leaves alone anyone who scrolled up.
   const followEnd = useCallback(() => {
     const box = scroller.current;
@@ -111,6 +117,10 @@ export function MessageList() {
       setReplyTarget(undefined);
   }, [messages, replyTarget, setReplyTarget]);
   useEffect(() => {
+    // The question being reworded was taken back or edited elsewhere: there is nothing left to edit.
+    if (editing && !messages.some((message) => message._id === editing._id && !message.unsentAt)) dropEdit();
+  }, [messages, editing, dropEdit]);
+  useEffect(() => {
     if (manualCopy && messages.some((message) => message._id === manualCopy.messageId && message.unsentAt))
       setManualCopy(undefined);
   }, [messages, manualCopy]);
@@ -121,7 +131,14 @@ export function MessageList() {
   const ownRun = (run: (typeof runs)[number]) => c.kind === 'assistant' || run.userId === user?.id;
   // The answer being written, shown until it is a message. Only in the asker's own analyst thread, which is all the
   // server sends drafts for.
-  const writing = c.kind === 'assistant' ? visibleDrafts(drafts, messages) : [];
+  const writing = c.kind === 'assistant' ? visibleDrafts(drafts, everything) : [];
+  // Only the latest question can be reworded, and only a text one, which is also the last thing the person said.
+  const editable =
+    c.kind === 'assistant' && enabled && !sending
+      ? messages.findLast((message) => message.kind === 'person' && !message.unsentAt)
+      : undefined;
+  const canEdit = (message: (typeof messages)[number]) =>
+    message._id === editable?._id && !message.attachments?.length && Boolean(message.body);
   // One pass over the page: the question each answer replies to, and the label a question shows. In the one chat
   // with an assistant a question says what it was about, when that is not what the question before it was about.
   const byId = new Map(messages.map((message) => [message._id, message]));
@@ -210,6 +227,7 @@ export function MessageList() {
                 setMessages((rows) => applyMessageUpdates(rows, [updated]));
               })
             }
+            onEdit={canEdit(message) ? beginEdit : undefined}
             onUnsend={(target) =>
               perform(async () => {
                 const updated = await chatService.unsend(c._id, target._id);

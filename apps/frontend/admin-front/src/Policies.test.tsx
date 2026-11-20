@@ -18,15 +18,18 @@ const GLOBAL_SETTINGS = {
   guestMonthlyBudgetMicros: 0,
   guestGreeting: "I know Visin's public research.",
   guestExamples: ['Find public computer vision projects'],
-  guestAnswerWords: 80
+  guestAnswerWords: 80,
+  guestToolRounds: 0,
+  guestToolResultBytes: 3000
 };
 
 const READY = { botCheck: true, networkSecret: true, trustedProxy: true, visionService: true };
 
 /** The policy answers every policy path; the name lookup, which Policies also makes, finds nobody. */
 const answerWith = (policy: unknown) =>
-  vi.mocked(admin).mockImplementation((async (path: string) =>
-    path.startsWith('/users/lookup') ? [] : policy) as typeof admin);
+  vi
+    .mocked(admin)
+    .mockImplementation((async (path: string) => (path.startsWith('/users/lookup') ? [] : policy)) as typeof admin);
 
 it('keeps anonymous Vivi off until it is toggled and saved', async () => {
   answerWith({ id: 'global', revision: 0, settings: GLOBAL_SETTINGS, history: [] });
@@ -75,9 +78,19 @@ it('puts a discarded change back, and hides the save bar again', async () => {
 });
 
 it('confirms a saved policy with a message that outlives the form it replaced', async () => {
-  const saved = { id: 'global', revision: 1, settings: { ...GLOBAL_SETTINGS, enabled: false }, guestSetup: READY, history: [] };
+  const saved = {
+    id: 'global',
+    revision: 1,
+    settings: { ...GLOBAL_SETTINGS, enabled: false },
+    guestSetup: READY,
+    history: []
+  };
   vi.mocked(admin).mockImplementation((async (path: string, method = 'GET') =>
-    path.startsWith('/users/lookup') ? [] : method === 'PUT' ? saved : { ...saved, revision: 0, settings: GLOBAL_SETTINGS }) as typeof admin);
+    path.startsWith('/users/lookup')
+      ? []
+      : method === 'PUT'
+        ? saved
+        : { ...saved, revision: 0, settings: GLOBAL_SETTINGS }) as typeof admin);
   renderPage(<Policies />);
   fireEvent.click(await screen.findByRole('switch', { name: 'Vivi access enabled' }));
   fireEvent.change(screen.getByLabelText(/Note \(optional\)/), { target: { value: 'Pause' } });
@@ -204,7 +217,36 @@ it('ticks the spend ceilings off as they are set, then allows saving anonymous V
       '/vivi/admin/policies',
       'PUT',
       expect.objectContaining({
-        settings: expect.objectContaining({ guestEnabled: true, guestDailyBudgetMicros: 2000000, guestMonthlyBudgetMicros: 20000000 })
+        settings: expect.objectContaining({
+          guestEnabled: true,
+          guestDailyBudgetMicros: 2000000,
+          guestMonthlyBudgetMicros: 20000000
+        })
+      })
+    )
+  );
+});
+
+it('sets how many lookups a visitor\u2019s answer may make and how large each result may be, and says what it costs', async () => {
+  answerWith({ id: 'global', revision: 0, settings: GLOBAL_SETTINGS, guestSetup: READY, history: [] });
+  vi.mocked(admin).mockClear();
+  renderPage(<Policies />);
+  const rounds = await screen.findByLabelText('Guest lookups per question');
+  const size = screen.getByLabelText('Guest lookup result size (bytes)');
+  // Off: one request, so the size means nothing yet.
+  expect(rounds).toHaveValue(0);
+  expect(size).toBeDisabled();
+  expect(screen.getByText(/raises what a question reserves/)).toBeInTheDocument();
+  fireEvent.change(rounds, { target: { value: '2' } });
+  expect(size).toBeEnabled();
+  fireEvent.change(size, { target: { value: '2000' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save policy' }));
+  await waitFor(() =>
+    expect(admin).toHaveBeenCalledWith(
+      '/vivi/admin/policies',
+      'PUT',
+      expect.objectContaining({
+        settings: { ...GLOBAL_SETTINGS, guestToolRounds: 2, guestToolResultBytes: 2000 }
       })
     )
   );

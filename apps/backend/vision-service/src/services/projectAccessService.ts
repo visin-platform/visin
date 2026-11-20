@@ -1,6 +1,8 @@
 import {
   atLeast,
   createGroupServiceClient,
+  ForbiddenError,
+  NotFoundError,
   readableOwnerFilter,
   resolveAccess,
   type GroupServiceClient,
@@ -88,6 +90,13 @@ export async function projectPermission(
  */
 export const permissionIgnoringKeyLimit = (project: IProject | null, userId: string | undefined): Promise<Permission> =>
   projectTokenContext.exit(() => projectPermission(project, userId));
+
+/** Hide inaccessible private resources; a scoped key may still learn that a resource its owner can read is out of scope. */
+export async function denyProjectRead(userId: string | undefined, projectId: string | undefined | null, resource: 'Project' | 'Training'): Promise<never> {
+  const project = projectId ? await resolveProject(String(projectId)) : null;
+  if (!atLeast(await permissionIgnoringKeyLimit(project, userId), 'read')) throw new NotFoundError(`${resource} not found`);
+  throw new ForbiddenError();
+}
 
 /** The permission on a project named by id or slug; `none` for one that does not exist. */
 export async function projectPermissionById(userId: string | undefined, projectId: string | undefined | null): Promise<Permission> {

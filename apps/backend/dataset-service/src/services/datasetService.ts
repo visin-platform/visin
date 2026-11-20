@@ -34,7 +34,22 @@ export const listDatasets = async (access: DatasetAccess, query: ListDatasetsQue
       await access.filter('read'),
       ownerFilter(access, query.owner, query.user),
       query.visibility ? { visibility: query.visibility } : {},
-      query.search ? { name: { $regex: escapeRegex(query.search), $options: 'i' } } : {}
+      // By name or by what the description says: a dataset about driving is not always called that. A substring, not a
+      // text search, so typing "kit" still finds "KITTI".
+      query.search
+        ? {
+            $or: [
+              { name: { $regex: escapeRegex(query.search), $options: 'i' } },
+              { description: { $regex: escapeRegex(query.search), $options: 'i' } }
+            ]
+          }
+        : {},
+      ...(query.searchTerms
+        ? [{ $or: (JSON.parse(query.searchTerms) as string[]).flatMap((term) => [
+            { name: { $regex: escapeRegex(term.trim()), $options: 'i' } },
+            { description: { $regex: escapeRegex(term.trim()), $options: 'i' } }
+          ]) }]
+        : [])
     ]
   } as QueryFilter<IDataset>;
   const [datasets, total] = await Promise.all([

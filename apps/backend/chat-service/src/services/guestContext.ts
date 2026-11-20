@@ -87,7 +87,7 @@ const cut = (text: string, max: number) =>
 /** A project as anyone may see it. No credential of any kind is sent: vision's public API is the boundary. */
 export async function publicProject(id: string, signal: AbortSignal): Promise<PublicProjectContext> {
   const response = await fetchWithTimeout(
-    new URL(`/api/projects/${encodeURIComponent(id)}`, process.env.VISION_SERVICE_URL),
+    new URL(`/api/public/projects/${encodeURIComponent(id)}`, process.env.VISION_SERVICE_URL),
     { redirect: 'error', cache: 'no-store', signal, serviceName: 'vision-service', streamBody: true }
   );
   // Without a credential, vision answers a private or missing project as not found (or not allowed). Anything else
@@ -185,10 +185,13 @@ export async function guestContext(input: {
   // A link pasted into the question names its page as surely as being on it does.
   const linked = linkedPage(input.question);
   const trainingId = linked.trainingId ?? input.trainingId;
+  // A run supplied by the page is an access boundary, not merely an optional hint.
+  const pageRunProject = input.trainingId ? await runProjectId(input.trainingId, input.signal) : undefined;
+  if (input.trainingId && !pageRunProject) throw new ForbiddenError('This run is not publicly available');
   const projectId =
     (linked.trainingId ? await runProjectId(linked.trainingId, input.signal).catch(() => undefined) : undefined) ??
     linked.projectId ??
-    input.projectId;
+    input.projectId ?? pageRunProject;
   const before = input.previous;
   // The last answer is repeated to the model only while every project it drew on is still public and in view.
   let followUp = Boolean(before);
@@ -198,7 +201,11 @@ export async function guestContext(input: {
     projectId && projectId !== input.projectId
       ? await publicProject(projectId, input.signal).catch(() => undefined)
       : undefined;
-  if (!first && input.projectId) first = await publicProject(input.projectId, input.signal);
+  if (!first && (input.projectId || pageRunProject)) first = await publicProject(input.projectId ?? pageRunProject!, input.signal);
+  // The run on the page must belong to the project the answer is about. A link pasted into the question is the
+  // visitor naming another page, so it overrides the page: the run is then simply not part of the answer.
+  if (pageRunProject && !linked.projectId && !linked.trainingId && first?.id !== pageRunProject)
+    throw new ForbiddenError('This run is not publicly available');
   if (first) {
     projects = [first];
     found = 'page';

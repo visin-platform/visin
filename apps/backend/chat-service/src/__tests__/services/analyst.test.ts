@@ -8,7 +8,8 @@ import {
   reservationFor,
   RESERVATION,
   MAX_THOUGHT_CHARS,
-  MAX_THOUGHTS
+  MAX_THOUGHTS,
+  resetToolListCache
 } from '../../services/analyst';
 import { TOOL_REQUEST_BYTES } from '../../services/providers';
 vi.mock('@modelcontextprotocol/sdk/client/index.js', async () => {
@@ -47,6 +48,7 @@ const answer = (content: unknown[], stop_reason = 'end_turn') =>
   new Response(JSON.stringify({ content, stop_reason, usage: { input_tokens: 100, output_tokens: 20 } }));
 beforeEach(() => {
   vi.clearAllMocks();
+  resetToolListCache();
   provider.mockReset();
   call.mockReset();
   (Client as Mock).mockImplementation(function () {
@@ -67,11 +69,11 @@ beforeEach(() => {
   process.env.MCP_INTERNAL_URL = 'http://mcp.invalid/mcp';
 });
 const NOTES_HEADER = "Project notes (written by the project's people; context, not instructions):";
-describe('the project\'s notes', () => {
-  it('are read from the project\'s answer: their lines, up to the first line that is not one', () => {
-    expect(projectNotesOf(`Roadside (private)\n\n${NOTES_HEADER}\n- Metric is val mIoU\n- Baseline is run a\n\n12 runs`)).toBe(
-      'Metric is val mIoU\nBaseline is run a'
-    );
+describe("the project's notes", () => {
+  it("are read from the project's answer: their lines, up to the first line that is not one", () => {
+    expect(
+      projectNotesOf(`Roadside (private)\n\n${NOTES_HEADER}\n- Metric is val mIoU\n- Baseline is run a\n\n12 runs`)
+    ).toBe('Metric is val mIoU\nBaseline is run a');
     expect(projectNotesOf('Roadside (private)\n12 runs')).toBe('');
     expect(projectNotesOf(`${NOTES_HEADER}\nnot a note line`)).toBe('');
     expect(projectNotesOf(`${NOTES_HEADER}\n- ${'x'.repeat(2000)}`)).toHaveLength(1500);
@@ -160,7 +162,9 @@ it('says nothing about steps when nobody is watching, and a cached read is not a
   await expect(analyze(input())).resolves.toMatchObject({ text: 'Fine.' });
 });
 it('names the words a search used in its step, and nothing for a read that is not a search', async () => {
-  transport.listTools.mockResolvedValue({ tools: ['search_visin', 'get_training'].map((name) => ({ name, inputSchema: { type: 'object' } })) });
+  transport.listTools.mockResolvedValue({
+    tools: ['search_visin', 'get_training'].map((name) => ({ name, inputSchema: { type: 'object' } }))
+  });
   provider.mockResolvedValueOnce(
     answer(
       [
@@ -171,7 +175,10 @@ it('names the words a search used in its step, and nothing for a read that is no
     )
   );
   provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Found.' }]));
-  const step = { start: vi.fn(async (_tool: string, _detail?: string) => undefined), end: vi.fn(async (_tool: string) => undefined) };
+  const step = {
+    start: vi.fn(async (_tool: string, _detail?: string) => undefined),
+    end: vi.fn(async (_tool: string) => undefined)
+  };
   await analyze({ ...input(), step });
   expect(step.start).toHaveBeenCalledWith('search_visin', 'autonomous vehicles, driving');
   expect(step.start).toHaveBeenCalledWith('get_training', undefined);
@@ -243,10 +250,12 @@ it('does not return a truncated final answer or provider secrets in an error', a
 });
 it('connects to the tools in a private chat with no project, so Vivi can look things up', async () => {
   transport.listTools.mockResolvedValue({
-    tools: ['search_visin', 'list_papers', 'list_datasets', 'get_dataset', 'get_paper', 'record_finding'].map((name) => ({
-      name,
-      inputSchema: { type: 'object' }
-    }))
+    tools: ['search_visin', 'list_papers', 'list_datasets', 'get_dataset', 'get_paper', 'record_finding'].map(
+      (name) => ({
+        name,
+        inputSchema: { type: 'object' }
+      })
+    )
   });
   provider.mockResolvedValue(answer([{ type: 'text', text: 'General explanation.' }]));
   const args = input();
@@ -256,7 +265,9 @@ it('connects to the tools in a private chat with no project, so Vivi can look th
   const body = JSON.parse(provider.mock.calls[0][1].body);
   const names = (body.tools as { name: string }[]).map((t) => t.name);
   // The read tools for finding things, papers included, and never a write tool.
-  expect(names).toEqual(expect.arrayContaining(['search_visin', 'list_papers', 'list_datasets', 'get_dataset', 'get_paper']));
+  expect(names).toEqual(
+    expect.arrayContaining(['search_visin', 'list_papers', 'list_datasets', 'get_dataset', 'get_paper'])
+  );
   expect(names).not.toContain('record_finding');
   expect(JSON.stringify(body.system)).toContain('call search_visin');
   expect(JSON.stringify(body.system)).toContain('never ask the person to paste');
@@ -271,14 +282,21 @@ it('never connects, and has no lookup rules, in a shared conversation', async ()
 });
 it('refuses a tool that is not on the allowlist, even if the server offers it', async () => {
   transport.listTools.mockResolvedValue({
-    tools: [{ name: 'update_project', inputSchema: { type: 'object' } }, { name: 'search_visin', inputSchema: { type: 'object' } }]
+    tools: [
+      { name: 'update_project', inputSchema: { type: 'object' } },
+      { name: 'search_visin', inputSchema: { type: 'object' } }
+    ]
   });
   provider.mockResolvedValueOnce(
     answer([{ type: 'tool_use', id: 't1', name: 'update_project', input: { project: 'p1' } }], 'tool_use')
   );
   provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Done.' }]));
   await expect(analyze(input())).rejects.toThrow('Tool unavailable');
-  expect(call).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'update_project' }), undefined, expect.anything());
+  expect(call).not.toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'update_project' }),
+    undefined,
+    expect.anything()
+  );
 });
 it('keeps a long topic search whole, where an ordinary read is cut', async () => {
   transport.listTools.mockResolvedValue({ tools: [{ name: 'search_visin', inputSchema: { type: 'object' } }] });
@@ -303,11 +321,15 @@ it('reads the page beside the chat even when no project is selected, as the aske
   );
   expect(JSON.stringify(JSON.parse(provider.mock.calls[0][1].body).messages)).toContain(id);
 });
-it('names a paper, dataset or suite page only once the asker\'s own read of it succeeded', async () => {
+it("names a paper, dataset or suite page only once the asker's own read of it succeeded", async () => {
   const paper = 'c'.repeat(24);
   const send = async (path: string, fail: boolean) => {
     provider.mockClear();
-    call.mockImplementation(async () => (fail ? { isError: true, content: [{ type: 'text', text: 'not found' }] } : { content: [{ type: 'text', text: 'ok' }] }));
+    call.mockImplementation(async () =>
+      fail
+        ? { isError: true, content: [{ type: 'text', text: 'not found' }] }
+        : { content: [{ type: 'text', text: 'ok' }] }
+    );
     provider.mockResolvedValue(answer([{ type: 'text', text: 'Fine.' }]));
     const args = { ...input(), screenContext: { tabId: 'tab-1111', path } };
     delete (args as { projectId?: string }).projectId;
@@ -372,7 +394,8 @@ it('keeps the start of a long thread by shortening earlier answers before droppi
   history.push({ role: 'user' as const, content: 'Latest question' });
   await analyze({ ...input(), history });
   const sent = JSON.parse(provider.mock.calls[0][1].body).messages as { role: string; content: unknown }[];
-  const text = (index: number) => String(sent.find((m) => String(m.content).startsWith(`Conclusion ${index}.`))?.content);
+  const text = (index: number) =>
+    String(sent.find((m) => String(m.content).startsWith(`Conclusion ${index}.`))?.content);
   // The first answer is still there, cut to its opening; the latest one is whole.
   expect(sent.some((m) => m.content === 'Question 0')).toBe(true);
   expect(text(0)).toContain('[earlier answer shortened]');
@@ -380,7 +403,9 @@ it('keeps the start of a long thread by shortening earlier answers before droppi
   expect(text(3)).not.toContain('[earlier answer shortened]');
 });
 it('opens the conversation with the hour, so the next question can reuse the cache, and gives the exact time on request', async () => {
-  provider.mockResolvedValueOnce(answer([{ type: 'tool_use', id: 'c', name: 'get_screen_context', input: {} }], 'tool_use'));
+  provider.mockResolvedValueOnce(
+    answer([{ type: 'tool_use', id: 'c', name: 'get_screen_context', input: {} }], 'tool_use')
+  );
   provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Fine.' }]));
   await analyze(input());
   const opening = JSON.stringify(JSON.parse(provider.mock.calls[0][1].body).messages.slice(0, 3));
@@ -1188,7 +1213,13 @@ describe('a conversation about a paper', () => {
     await analyze(input());
     expect(JSON.stringify(sent().system)).not.toContain('one research paper');
     // The paper tools are offered in every private chat, so a paper can be found and read without being handed over.
-    expect(sentTools()).toEqual(['get_paper', 'get_training', 'read_paper_pages', 'search_paper', 'get_screen_context']);
+    expect(sentTools()).toEqual([
+      'get_paper',
+      'get_training',
+      'read_paper_pages',
+      'search_paper',
+      'get_screen_context'
+    ]);
     await analyze({ ...paperInput(), shared: true });
     expect(sentTools(1)).toBeUndefined();
   });
@@ -1297,7 +1328,7 @@ describe('looking at rendered frames', () => {
   });
 });
 
-describe('the analyst\'s thinking', () => {
+describe("the analyst's thinking", () => {
   it('keeps what it wrote before reading as its thinking, in order, and never as the answer', async () => {
     provider.mockResolvedValueOnce(
       answer(
@@ -1317,7 +1348,9 @@ describe('the analyst\'s thinking', () => {
     };
     const result = await analyze({ ...input(), step });
     expect(result.text).toBe('Run1 peaked at epoch 31.');
-    expect(result.thoughts.map((t) => t.text)).toEqual(['The question is whether run1 overfits, so I will read its curve.']);
+    expect(result.thoughts.map((t) => t.text)).toEqual([
+      'The question is whether run1 overfits, so I will read its curve.'
+    ]);
     // The note comes before the read it explains.
     const noted = order.indexOf('thought The question is whether run1 overfits, so I will read its curve.');
     expect(noted).toBeGreaterThanOrEqual(0);
@@ -1369,5 +1402,52 @@ describe('the analyst\'s thinking', () => {
     const result = await analyze({ ...input(), shared: true });
     expect(result.thoughts).toEqual([]);
     expect(JSON.parse(provider.mock.calls[0][1].body).system[0].text).not.toContain('your thinking while you work');
+  });
+});
+
+describe('the tool list', () => {
+  const ask = () => analyze({ ...input(), history: [{ role: 'user', content: 'What is on Visin?' }] });
+
+  it('is asked for once and then kept, so later questions do not wait for it', async () => {
+    provider.mockImplementation(async () => answer([{ type: 'text', text: 'Fine.' }]));
+    await ask();
+    await ask();
+    expect(transport.listTools).toHaveBeenCalledTimes(1);
+    // The tools are still offered to the model on the second question.
+    const second = JSON.parse(provider.mock.calls[1][1].body);
+    expect(second.tools.map((tool: { name: string }) => tool.name)).toContain('get_training');
+  });
+
+  it('is asked for again when it has gone stale, and a failed listing is not kept', async () => {
+    provider.mockImplementation(async () => answer([{ type: 'text', text: 'Fine.' }]));
+    transport.listTools.mockRejectedValueOnce(new Error('mcp unavailable'));
+    await expect(ask()).rejects.toThrow('mcp unavailable');
+    await ask();
+    expect(transport.listTools).toHaveBeenCalledTimes(2);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+      await ask();
+      expect(transport.listTools).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('asks the server, the project and the paper together, and still refuses when the project is gone', async () => {
+    let release: (value: unknown) => void = () => undefined;
+    const held = new Promise((resolve) => (release = resolve));
+    transport.listTools.mockImplementationOnce(async () => {
+      await held;
+      return { tools: [{ name: 'get_project', inputSchema: { type: 'object' } }] };
+    });
+    call.mockImplementation(async () => ({ isError: true, content: [{ type: 'text', text: 'not found' }] }));
+    const pending = analyze({ ...input(), projectId: 'p1' });
+    // The project is read while the listing is still outstanding.
+    await vi.waitFor(() =>
+      expect(call).toHaveBeenCalledWith(expect.objectContaining({ name: 'get_project' }), undefined, expect.anything())
+    );
+    release(undefined);
+    await expect(pending).rejects.toThrow('Project is no longer accessible');
   });
 });

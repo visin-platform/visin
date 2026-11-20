@@ -61,6 +61,39 @@ import {
 
 useDatasetApi();
 
+describe('finding a dataset by its words', () => {
+  it('matches the name or the description, and only among what the person may read', async () => {
+    await createDataset({ name: 'KITTI', description: 'Road scenes from a driving car', visibility: 'public' });
+    await createDataset({ name: 'Birds', description: 'Feathers', visibility: 'public' });
+    await createDataset({ name: 'Secret roads', description: 'Private driving footage' });
+    const teamId = await groupDataset('Team driving');
+
+    const found = async (search: string, user?: string) =>
+      ((await call(`/api/datasets?search=${encodeURIComponent(search)}`, { user })).body.data.datasets as { name: string }[])
+        .map((row) => row.name)
+        .sort();
+    // A word only the description has, and a part of a name.
+    expect(await found('driving', STRANGER)).toEqual(['KITTI']);
+    expect(await found('kit', STRANGER)).toEqual(['KITTI']);
+    expect(await found('feathers')).toEqual(['Birds']);
+    // Their own private one, and the group's for a member; never another person's private one.
+    expect(await found('driving', OWNER)).toEqual(['KITTI', 'Secret roads']);
+    expect(await found('driving', MEMBER)).toEqual(['KITTI', 'Team driving']);
+    // Not a pattern: a regular expression typed into the box is only text.
+    expect(await found('.*', STRANGER)).toEqual([]);
+    expect(await found('submarine', OWNER)).toEqual([]);
+    const terms = (values: unknown, user = STRANGER) =>
+      call(`/api/datasets?searchTerms=${encodeURIComponent(JSON.stringify(values))}`, { user });
+    expect((await terms(['kit', 'feathers'])).body.data.datasets.map((row: { name: string }) => row.name).sort())
+      .toEqual(['Birds', 'KITTI']);
+    expect((await terms(['driving', '.*'])).body.data.datasets.map((row: { name: string }) => row.name))
+      .toEqual(['KITTI']);
+    expect((await terms([])).status).toBe(400);
+    expect((await terms(['x', 'y', 'z', 'a', 'b', 'c', 'd'])).status).toBe(400);
+    expect(teamId).toBeTruthy();
+  });
+});
+
 describe('who can see a dataset', () => {
   it('shows a public one to everyone, a private one to its owner, and a group one to its members only', async () => {
     await createDataset();
@@ -140,6 +173,62 @@ describe('who can see a dataset', () => {
     expect((await call('/api/datasets/groups', { user: MEMBER })).body.data).toEqual([
       { id: GROUP, name: 'Team', role: 'member' }
     ]);
+  });
+});
+
+describe("an assistant's read-only key, the asker's own and not limited to a project", () => {
+  const askerKey = async (userId: string) =>
+    (
+      await createApiKey({
+        userId,
+        userEmail: `${userId}@example.test`,
+        userName: 'Asker',
+        name: 'vivi',
+        scopes: ['vision:read', 'dataset:read', 'analysis:read'],
+        project: null
+      })
+    ).token;
+  const withKey = (path: string, token: string, method = 'GET') =>
+    fetch(`${baseUrl}${path}`, { method, headers: { Authorization: `Bearer ${token}` } }).then(async (response) => ({
+      status: response.status,
+      body: (await response.json()) as Body
+    }));
+  const names = async (token: string, search = 'driving') =>
+    ((await withKey(`/api/datasets?search=${search}`, token)).body.data.datasets as { name: string }[])
+      .map((row) => row.name)
+      .sort();
+
+  it("finds the asker's own, the public and the group's datasets by their words, and never another person's private one", async () => {
+    await createDataset({ name: 'Open driving', visibility: 'public' }, STRANGER);
+    await createDataset({ name: 'My driving' }, MEMBER);
+    await createDataset({ name: 'Their driving' }, STRANGER);
+    await groupDataset('Team driving');
+
+    expect(await names(await askerKey(MEMBER))).toEqual(['My driving', 'Open driving', 'Team driving']);
+    expect(await names(await askerKey(STRANGER))).toEqual(['Open driving', 'Their driving']);
+  });
+
+  it('loses the group’s dataset the moment the asker leaves the group', async () => {
+    const id = await groupDataset('Team driving');
+    const token = await askerKey(MEMBER);
+    expect(await names(token)).toEqual(['Team driving']);
+    expect((await withKey(`/api/datasets/${id}`, token)).status).toBe(200);
+    delete roles[MEMBER];
+    expect(await names(token)).toEqual([]);
+    expect((await withKey(`/api/datasets/${id}`, token)).status).toBe(403);
+  });
+
+  it('refuses another person’s private dataset by id, without saying anything about it', async () => {
+    const id = await createDataset({ name: 'Their driving' }, STRANGER);
+    const response = await withKey(`/api/datasets/${id}`, await askerKey(MEMBER));
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(response.body)).not.toContain('Their driving');
+  });
+
+  it('cannot change a dataset it can read', async () => {
+    const id = await createDataset({ name: 'My driving' }, MEMBER);
+    expect((await withKey(`/api/datasets/${id}`, await askerKey(MEMBER), 'DELETE')).status).toBe(403);
+    expect(await Dataset.countDocuments({ _id: id })).toBe(1);
   });
 });
 

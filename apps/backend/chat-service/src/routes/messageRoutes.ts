@@ -9,6 +9,7 @@ export function createMessageRoutes(limits: ChatRateLimits) {
   router.get('/conversations/:id/messages/search', controller.searchMessages);
   router.post('/conversations/:id/messages', writeLimit, controller.sendMessage);
   router.post('/conversations/:id/messages/:messageId/reaction', writeLimit, controller.react);
+  router.post('/conversations/:id/messages/:messageId/edit', writeLimit, controller.editQuestion);
   router.post('/conversations/:id/messages/:messageId/unsend', writeLimit, controller.unsend);
   router.post('/conversations/:id/read', controller.markRead);
   return router;

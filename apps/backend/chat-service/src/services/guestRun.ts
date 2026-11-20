@@ -62,7 +62,7 @@ async function visionJson(path: string, signal: AbortSignal): Promise<Record<str
 
 /** Which project a run belongs to, for a question that links a run without saying where it lives. */
 export async function runProjectId(trainingId: string, signal: AbortSignal): Promise<string | undefined> {
-  const summary = await visionJson(`/api/trainings/${encodeURIComponent(trainingId)}/summary`, signal);
+  const summary = await visionJson(`/api/public/trainings/${encodeURIComponent(trainingId)}/summary`, signal);
   const projectId = String((summary.training as Record<string, unknown> | undefined)?.projectId ?? '');
   return /^[a-f\d]{24}$/i.test(projectId) ? projectId : undefined;
 }
@@ -105,7 +105,7 @@ export async function publicRun(input: {
   question: string;
   signal: AbortSignal;
 }): Promise<PublicRunContext> {
-  const summary = await visionJson(`/api/trainings/${encodeURIComponent(input.trainingId)}/summary`, input.signal);
+  const summary = await visionJson(`/api/public/trainings/${encodeURIComponent(input.trainingId)}/summary`, input.signal);
   const training = (summary.training ?? {}) as Record<string, unknown>;
   if (String(training.projectId) !== input.projectId) throw new ForbiddenError('This run is not publicly available');
   const uuid = text(training.uuid, 64);
@@ -114,7 +114,7 @@ export async function publicRun(input: {
   let total = 0;
   if (/^[\w-]{8,64}$/.test(uuid)) {
     const listed = await visionJson(
-      `/api/visualizations/training/${uuid}?limit=${LISTED_FRAMES * 2}`,
+      `/api/public/visualizations/training/${uuid}?limit=${LISTED_FRAMES * 2}`,
       input.signal
     ).catch(() => ({}) as Record<string, unknown>);
     total = typeof listed.total === 'number' ? listed.total : 0;

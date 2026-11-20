@@ -3,13 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { logger, requireEnv } from '@visin/backend-core';
 import { loadImageInputs, MAX_IMAGE_INPUT_BYTES, type HistoryTurn, type ImageInput } from './imageInput';
-import {
-  imageContent,
-  ADAPTERS,
-  type ProviderId,
-  type ToolOutput,
-  type ToolSpec
-} from './providers';
+import { imageContent, ADAPTERS, type ProviderId, type ToolOutput, type ToolSpec } from './providers';
 import { MAX_SCREEN_CALLS, SCREEN_TOOL, screenRequestSchema, type ScreenOutcome, type ScreenContext } from './screen';
 import { pageContext } from './screenContext';
 import { NavigationPolicy } from './navigationPolicy';
@@ -102,6 +96,20 @@ const CONTEXT_TOOL = {
     additionalProperties: false
   }
 };
+type McpTools = Awaited<ReturnType<Client['listTools']>>['tools'];
+/**
+ * The tools the MCP server offers. A private chat's key always has the same scopes, so the list is the same for every
+ * question and changes only when mcp-service is deployed: kept for ten minutes per process rather than asked for again
+ * with each question. A failed listing is never kept.
+ */
+const TOOL_LIST_MS = 10 * 60 * 1000;
+let toolList: { url: string; at: number; tools: McpTools } | undefined;
+export const resetToolListCache = () => {
+  toolList = undefined;
+};
+const cachedTools = (url: string): McpTools | undefined =>
+  toolList && toolList.url === url && Date.now() - toolList.at < TOOL_LIST_MS ? toolList.tools : undefined;
+
 const readArguments = (name: string, args: Record<string, unknown>) =>
   name === 'get_training' && args.detail !== 'identity' ? { includeConfig: false, ...args } : args;
 const stableJson = (value: unknown): string =>
@@ -184,7 +192,10 @@ export function projectNotesOf(answer: string): string {
   const at = answer.indexOf(PROJECT_NOTES_HEADER);
   if (at < 0) return '';
   const lines: string[] = [];
-  for (const line of answer.slice(at + PROJECT_NOTES_HEADER.length).split('\n').slice(1)) {
+  for (const line of answer
+    .slice(at + PROJECT_NOTES_HEADER.length)
+    .split('\n')
+    .slice(1)) {
     if (!line.startsWith('- ')) break;
     lines.push(line.slice(2));
   }
@@ -293,7 +304,8 @@ export async function analyze(input: {
       if (hit) {
         const result = await hit;
         // The model asked for what the page check already read: now it is something the answer draws on.
-        if (!quiet && quietReads.delete(key) && !result.isError) evidence.push({ tool: name, input: args, at: new Date() });
+        if (!quiet && quietReads.delete(key) && !result.isError)
+          evidence.push({ tool: name, input: args, at: new Date() });
         return result;
       }
       const call = (async () => {
@@ -321,24 +333,31 @@ export async function analyze(input: {
           requestInit: { headers: { Authorization: `Bearer ${input.token}` }, signal: input.signal }
         })
       );
-      if (input.projectId) {
-        const access = await client.callTool(
-          { name: 'get_project', arguments: { project: input.projectId } },
-          undefined,
-          { signal: input.signal, timeout: 10000 }
-        );
-        if (access.isError) throw new Error('Project is no longer accessible');
-        policy.accept(access);
-        projectNotes = projectNotesOf(toolText(access.content));
-      }
-      if (input.paperId) {
+      const mcpUrl = requireEnv('MCP_INTERNAL_URL');
+      // What this person may still read, and what the server offers, do not depend on each other: asked together.
+      const [projectAccess, paperAccess, offered] = await Promise.all([
+        input.projectId
+          ? client.callTool({ name: 'get_project', arguments: { project: input.projectId } }, undefined, {
+              signal: input.signal,
+              timeout: 10000
+            })
+          : undefined,
         // The paper must still be readable by this person; the read is also what the analyst would do first.
-        const access = await read('get_paper', { paper: input.paperId });
-        if (access.isError) throw new Error('Paper is no longer accessible');
+        input.paperId ? read('get_paper', { paper: input.paperId }) : undefined,
+        cachedTools(mcpUrl) ??
+          client.listTools({}, { signal: input.signal, timeout: 10000 }).then(({ tools: listed }) => {
+            toolList = { url: mcpUrl, at: Date.now(), tools: listed };
+            return listed;
+          })
+      ]);
+      if (projectAccess) {
+        if (projectAccess.isError) throw new Error('Project is no longer accessible');
+        policy.accept(projectAccess);
+        projectNotes = projectNotesOf(toolText(projectAccess.content));
       }
-      const listing = await client.listTools({}, { signal: input.signal, timeout: 10000 });
+      if (paperAccess?.isError) throw new Error('Paper is no longer accessible');
       tools.push(
-        ...listing.tools
+        ...offered
           // The key reads as the asker, so the paper and dataset tools are offered in every private chat. Frames are
           // the exception: looking costs images, which a turn reserves room for only when it can.
           .filter((t) => ALLOWED.has(t.name) && (!FRAME_TOOLS.has(t.name) || framesOn))
@@ -483,20 +502,22 @@ export async function analyze(input: {
         imageCount ? 'Looking at your images and preparing an answer' : 'Reading results and preparing an answer'
       );
       await input.guard?.();
-      const send = () => adapter.send({
-        apiKey,
-        model,
-        system,
-        messages,
-        tools,
-        signal: input.signal,
-        onText: input.onText,
-        maxRequestBytes: requestBytes
-      });
+      const send = () =>
+        adapter.send({
+          apiKey,
+          model,
+          system,
+          messages,
+          tools,
+          signal: input.signal,
+          onText: input.onText,
+          maxRequestBytes: requestBytes
+        });
       if (input.spent) input.spent.inFlight = true;
-      const turn = input.runId && input.usageUserId
-        ? await meteredCall({ runId: input.runId, userId: input.usageUserId, provider: input.provider, model }, send)
-        : await send();
+      const turn =
+        input.runId && input.usageUserId
+          ? await meteredCall({ runId: input.runId, userId: input.usageUserId, provider: input.provider, model }, send)
+          : await send();
       providerRequests++;
       if (input.spent) {
         input.spent.inFlight = false;
@@ -589,12 +610,7 @@ export async function analyze(input: {
           outputs.push({ id: call.id, content: outcome.text, isError: !outcome.ok });
           continue;
         }
-        if (
-          input.shared ||
-          !call.name ||
-          !ALLOWED.has(call.name) ||
-          (FRAME_TOOLS.has(call.name) && !framesOn)
-        )
+        if (input.shared || !call.name || !ALLOWED.has(call.name) || (FRAME_TOOLS.has(call.name) && !framesOn))
           throw new Error('Tool unavailable');
         await input.activity(`Reading ${call.name.replaceAll('_', ' ')}`);
         // Reads of one turn are independent of each other, so they run together; each keeps its place in `outputs`.
@@ -614,7 +630,8 @@ export async function analyze(input: {
               : '';
             const text = `${toolText(result.content)}${note}${references.length ? `\nNavigation references: ${JSON.stringify(references)}` : ''}`;
             // Counted in the log (by tool), since a cut result usually costs another round with the whole thread re-sent.
-            if (text.length > limit) logger.info('Analyst tool result truncated', { tool: call.name, chars: text.length, limit });
+            if (text.length > limit)
+              logger.info('Analyst tool result truncated', { tool: call.name, chars: text.length, limit });
             outputs[slot] = {
               id: call.id,
               content:

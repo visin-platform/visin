@@ -3,7 +3,7 @@ import { notifyRunFinished } from '../clients/chatNotifier';
 import { requireDatasetStorage } from './sourceRegistry';
 import Config from '../models/Config';
 import { assertResourceWrite, requireActor } from './writeAccessService';
-import { getEditableProjectIds, projectFilter, resolveProject } from './projectAccessService';
+import { denyProjectRead, getEditableProjectIds, projectFilter, resolveProject } from './projectAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { tokenProjectId } from '../middleware/projectTokenContext';
@@ -121,7 +121,7 @@ export const trainingService = {
     // Check project access
     const hasAccess = await checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new ForbiddenError();
+      return denyProjectRead(userId, training.projectId, 'Training');
     }
 
     return training;
@@ -137,7 +137,7 @@ export const trainingService = {
     // Check project access
     const hasAccess = await checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new ForbiddenError();
+      return denyProjectRead(userId, training.projectId, 'Training');
     }
 
     return training;
@@ -153,7 +153,7 @@ export const trainingService = {
     // Check project access
     const hasAccess = await checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new ForbiddenError();
+      return denyProjectRead(userId, training.projectId, 'Training');
     }
 
     const query = { trainingId: id, deletedAt: null };

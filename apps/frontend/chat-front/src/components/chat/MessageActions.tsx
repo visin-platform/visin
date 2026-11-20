@@ -4,6 +4,7 @@ import {
   BookmarkAdded,
   ContentCopy,
   MoreHoriz,
+  EditOutlined,
   Reply,
   SelectAll,
   Undo
@@ -41,6 +42,8 @@ export interface MessageActionProps {
   onReply: (message: Message) => void;
   onReact?: (message: Message, emoji: string | null) => Promise<void>;
   onUnsend?: (message: Message) => Promise<void>;
+  /** Offered on a person's latest question to an assistant: puts it back in the box to be asked again. */
+  onEdit?: (message: Message) => void;
   /** Offered on an analyst's answer in a project's analysis. */
   onSave?: (message: Message) => void;
   /** Opens the text where a phone can select part of it: a long press is the menu, not the browser's selection. */
@@ -64,6 +67,7 @@ export function MessageActions({
   onReply,
   onReact,
   onUnsend,
+  onEdit,
   onSave,
   onSelectText,
   menu: controlledMenu,
@@ -160,6 +164,7 @@ export function MessageActions({
         }}
       >
         {icon(`Reply to ${message.senderName}`, 'Reply', <Reply fontSize="small" />, () => onReply(message))}
+        {onEdit && icon('Edit question', 'Edit and ask again', <EditOutlined fontSize="small" />, () => onEdit(message))}
         {canReact &&
           icon('React to message', 'React', <AddReactionOutlined fontSize="small" />, setReactions, {
             'aria-haspopup': 'dialog',
@@ -190,6 +195,12 @@ export function MessageActions({
           <MenuItem onClick={close(() => onCopy(text))}>
             <ContentCopy fontSize="small" sx={{ mr: 1 }} />
             {message.body ? 'Copy text' : 'Copy file names'}
+          </MenuItem>
+        )}
+        {onEdit && (
+          <MenuItem onClick={close(() => onEdit(message))} sx={besideOnly}>
+            <EditOutlined fontSize="small" sx={{ mr: 1 }} />
+            Edit and ask again
           </MenuItem>
         )}
         {message.body && onSelectText && (

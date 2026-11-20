@@ -175,6 +175,10 @@
         "type": "string",
         "maxLength": 200
       },
+      "searchTerms": {
+        "type": "string",
+        "maxLength": 1500
+      },
       "owner": {
         "anyOf": [
           {

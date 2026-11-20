@@ -53,8 +53,8 @@ describe('search_visin', () => {
 
   it('asks every term, lists a project found by two of them once, and gives each hit an id and a link', async () => {
     v.listProjects.mockResolvedValue([project('p1', 'Urban driving', 'Lane segmentation')]);
-    d.list.mockImplementation(async (_key: string, query: { search: string }) => ({
-      datasets: ['driving', 'autonomous vehicles'].includes(query.search)
+    d.list.mockImplementation(async (_key: string, query: { searchTerms: string }) => ({
+      datasets: JSON.parse(query.searchTerms).includes('driving')
         ? [{ _id: 'd1', name: 'KITTI', description: 'Road scenes', imageCount: 14999 }]
         : []
     }));
@@ -67,8 +67,9 @@ describe('search_visin', () => {
     expect(v.listProjects).toHaveBeenCalledWith('k', 'autonomous vehicles driving');
     expect(v.listTrainings).toHaveBeenCalledTimes(1);
     expect(v.listTrainings).toHaveBeenCalledWith('k', { search: 'autonomous vehicles driving', limit: 8 });
-    // Names by substring and papers by identifier still take one term each.
-    expect(d.list).toHaveBeenCalledTimes(2);
+    // Dataset substrings are batched; papers by identifier still take one term each.
+    expect(d.list).toHaveBeenCalledTimes(1);
+    expect(d.list).toHaveBeenCalledWith('k', { searchTerms: JSON.stringify(['autonomous vehicles', 'driving']), limit: 8 });
     expect(v.listPapers).toHaveBeenCalledTimes(2);
     expect(text.match(/KITTI/g)).toHaveLength(1);
     expect(text).toContain('Searched for: “autonomous vehicles”, “driving”.');
@@ -80,17 +81,17 @@ describe('search_visin', () => {
     expect(text).toContain('never say a private item does not exist');
   });
 
-  it('matches suites on their name, slug and task, since the server cannot search them', async () => {
-    v.listSuites.mockResolvedValue({
-      suites: [
-        { slug: 'road-seg', version: 2, name: 'Road segmentation', protocol: { task: 'driving scenes' } },
-        { slug: 'birds', version: 1, name: 'Birds', protocol: {} }
-      ]
-    });
-    const { text } = await call({ terms: ['road'] });
+  it('asks the server for suites by each term, and lists one found by two of them once', async () => {
+    const road = { slug: 'road-seg', version: 2, name: 'Road segmentation', protocol: { task: 'driving scenes' } };
+    v.listSuites.mockImplementation(async (_key: string, query: { search: string }) => ({
+      suites: ['road', 'driving'].includes(query.search) ? [road] : []
+    }));
+    const { text } = await call({ terms: ['road', 'driving', 'birds'] });
+    expect(v.listSuites).toHaveBeenCalledTimes(3);
+    expect(v.listSuites).toHaveBeenCalledWith('k', { search: 'birds', limit: 8 });
     expect(text).toContain('Suites (1):');
+    expect(text.match(/Road segmentation/g)).toHaveLength(1);
     expect(text).toContain('/suites/road-seg/2');
-    expect(text).not.toContain('Birds');
   });
 
   it('says what was searched when nothing is found, and never claims the thing does not exist', async () => {

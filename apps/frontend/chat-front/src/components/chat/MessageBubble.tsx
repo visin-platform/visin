@@ -38,11 +38,13 @@ export function MessageBubble({
   onSelectText,
   userId,
   onReact,
-  onUnsend
+  onUnsend,
+  onEdit
 }: {
   userId?: string;
   onReact?: MessageActionProps['onReact'];
   onUnsend?: MessageActionProps['onUnsend'];
+  onEdit?: MessageActionProps['onEdit'];
   message: Message;
   conversationId?: string;
   own?: boolean;
@@ -193,6 +195,7 @@ export function MessageBubble({
           onReply={onReply}
           onReact={onReact}
           onUnsend={onUnsend}
+          onEdit={onEdit}
           onSave={canSave && answer ? onSave : undefined}
           onSelectText={onSelectText}
           menu={menu}

@@ -63,3 +63,26 @@ it('preserves code and reply Markdown while redacting unsent content and excludi
   expect(exportFilename('../Notes: Tallinn?')).toBe('Notes Tallinn.md');
   expect(exportFilename('???')).toBe('conversation.md');
 });
+
+it('leaves out a question that was edited and the answer it had, and keeps the unsent ones', () => {
+  const base = { conversationId: 'c1', createdAt: '2026-11-20T10:00:00Z', evidence: [] };
+  const result = conversationMarkdown('Vivi', [
+    { ...base, _id: 'q1', seq: 1, kind: 'person', senderName: 'You', body: '', unsentAt: 'now', supersededAt: 'now' },
+    {
+      ...base,
+      _id: 'a1',
+      seq: 2,
+      kind: 'assistant',
+      senderName: 'Vivi',
+      body: '',
+      unsentAt: 'now',
+      supersededAt: 'now'
+    },
+    { ...base, _id: 'q2', seq: 3, kind: 'person', senderName: 'You', body: 'The reworded question' },
+    { ...base, _id: 'q3', seq: 4, kind: 'person', senderName: 'You', body: '', unsentAt: 'now' }
+  ] as Message[]);
+  expect(result).toContain('The reworded question');
+  // Only the one the person took back is shown as unsent.
+  expect(result.match(/Message unsent/g)).toHaveLength(1);
+  expect(result).not.toContain('## Vivi');
+});

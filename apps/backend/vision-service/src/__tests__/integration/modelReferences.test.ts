@@ -944,7 +944,7 @@ describe('Hub model references with in-memory MongoDB', () => {
 
     it('needs read access to the run, and a run', async () => {
       const trainingId = await run(await project({ provider: 'hf' }));
-      expect((await summary(trainingId, STRANGER)).status).toBe(403);
+      expect((await summary(trainingId, STRANGER)).status).toBe(404);
       expect((await summary('000000000000000000000abc')).status).toBe(404);
     });
   });

@@ -34,6 +34,8 @@ export type Settings = {
   guestGreeting: string;
   guestExamples: string[];
   guestAnswerWords: number;
+  guestToolRounds: number;
+  guestToolResultBytes: number;
 };
 type UserSettings = Partial<Pick<Settings, 'enabled' | 'dailyRequestLimit' | 'dailyTokenLimit'>>;
 interface HistoryEntry {
@@ -220,6 +222,23 @@ function GlobalEditor({ policy, onSaved }: { policy: GlobalPolicy; onSaved: () =
         helperText="About how long an answer is, 30 to 300. Longer answers reserve more of the spend ceiling."
         slotProps={{ htmlInput: { min: 30, max: 300, step: 10 } }}
       />
+      <TextField
+        type="number"
+        label="Guest lookups per question"
+        value={settings.guestToolRounds}
+        onChange={(e) => set({ guestToolRounds: Math.trunc(Number(e.target.value) || 0) })}
+        helperText="How many times a visitor's answer may look something up in the public catalogue (projects and papers) before it must answer. 0 is off: one request, as before. Each lookup round is another request, so each one raises what a question reserves of the spend ceilings above."
+        slotProps={{ htmlInput: { min: 0, max: 4, step: 1 } }}
+      />
+      <TextField
+        type="number"
+        label="Guest lookup result size (bytes)"
+        value={settings.guestToolResultBytes}
+        onChange={(e) => set({ guestToolResultBytes: Math.trunc(Number(e.target.value) || 0) })}
+        helperText="The most one lookup may hand back, 500 to 6000. Larger results answer better and reserve more of the spend ceilings."
+        disabled={settings.guestToolRounds === 0}
+        slotProps={{ htmlInput: { min: 500, max: 6000, step: 100 } }}
+      />
       <SaveBar
         reason={reason}
         setReason={setReason}
@@ -296,8 +315,8 @@ function UserEditor({ policy, onSaved }: { policy: UserPolicy; onSaved: () => vo
       {limit('dailyTokenLimit', 'Tokens per UTC day')}
       <Typography variant="body2" color="text.secondary">
         In force now: {policy.effective.enabled ? 'on' : 'off'}, {policy.effective.dailyRequestLimit.toLocaleString()}{' '}
-        questions and {policy.effective.dailyTokenLimit.toLocaleString()} tokens per day. Changing a limit does not reset
-        what was already used today.
+        questions and {policy.effective.dailyTokenLimit.toLocaleString()} tokens per day. Changing a limit does not
+        reset what was already used today.
       </Typography>
       <SaveBar
         reason={reason}
@@ -314,7 +333,11 @@ function UserEditor({ policy, onSaved }: { policy: UserPolicy; onSaved: () => vo
       <History
         history={policy.history}
         restore={(before) => {
-          setSettings({ enabled: before.enabled, dailyRequestLimit: before.dailyRequestLimit, dailyTokenLimit: before.dailyTokenLimit });
+          setSettings({
+            enabled: before.enabled,
+            dailyRequestLimit: before.dailyRequestLimit,
+            dailyTokenLimit: before.dailyTokenLimit
+          });
           setReason('Restore earlier settings');
         }}
       />
@@ -384,7 +407,8 @@ function History({ history, restore }: { history: HistoryEntry[]; restore: (befo
       {[...history].reverse().map((h) => (
         <Stack key={`${h.at}:${h.actorId}`} direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <Typography>
-            {formatDateTime(h.at)} · {nameOf(h.actorId)}{h.reason ? ` · ${h.reason}` : ''}
+            {formatDateTime(h.at)} · {nameOf(h.actorId)}
+            {h.reason ? ` · ${h.reason}` : ''}
           </Typography>
           {h.before && <Button onClick={() => restore(h.before!)}>Prepare rollback</Button>}
         </Stack>
@@ -395,7 +419,11 @@ function History({ history, restore }: { history: HistoryEntry[]; restore: (befo
 
 const SETUP_ITEMS: { key: keyof GuestSetup; label: string; how: string }[] = [
   { key: 'botCheck', label: 'Bot check keys', how: 'TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY in the chat service' },
-  { key: 'networkSecret', label: 'Network secret', how: 'GUEST_NETWORK_SECRET, at least 32 characters, in the chat service' },
+  {
+    key: 'networkSecret',
+    label: 'Network secret',
+    how: 'GUEST_NETWORK_SECRET, at least 32 characters, in the chat service'
+  },
   { key: 'trustedProxy', label: 'Trusted proxy', how: 'GUEST_TRUSTED_PROXY in the chat service' },
   { key: 'visionService', label: 'Vision service address', how: 'VISION_SERVICE_URL in the chat service' }
 ];
@@ -420,7 +448,11 @@ function GuestChecklist({ setup, settings }: { setup?: GuestSetup; settings: Set
   const items = [
     ...SETUP_ITEMS.map((item) => ({ label: item.label, done: !setup || setup[item.key], how: item.how })),
     { label: 'Daily spend ceiling above zero', done: settings.guestDailyBudgetMicros > 0, how: 'Set it below, in USD' },
-    { label: 'Monthly spend ceiling above zero', done: settings.guestMonthlyBudgetMicros > 0, how: 'Set it below, in USD' }
+    {
+      label: 'Monthly spend ceiling above zero',
+      done: settings.guestMonthlyBudgetMicros > 0,
+      how: 'Set it below, in USD'
+    }
   ];
   return (
     <Alert severity={missing.length ? 'warning' : 'success'} icon={false}>

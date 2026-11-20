@@ -66,6 +66,17 @@ export type ActivityQuery = z.infer<typeof activityQuerySchema>;
 
 export const listDatasetsQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
+  /** JSON array of up to six substrings, matched against name or description. */
+  searchTerms: z.string().max(1500).refine((value) => {
+    try {
+      const terms: unknown = JSON.parse(value);
+      return Array.isArray(terms) && terms.length > 0 && terms.length <= 6 && terms.every(
+        (term) => typeof term === 'string' && term.trim().length > 0 && term.length <= 200
+      );
+    } catch {
+      return false;
+    }
+  }, 'Expected a JSON array of one to six non-empty search terms').optional(),
   /** `me`, or a group id: only datasets that owner has */
   owner: z.union([z.literal('me'), objectId]).optional(),
   /** a person's id: only the datasets that person owns, of those the caller may read (a profile's list) */

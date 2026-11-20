@@ -108,6 +108,12 @@ const messageSchema = new Schema(
     /** What the analyst wrote before each round of reading: its thinking, shown folded with the answer. */
     thoughts: { type: [{ text: { type: String, maxlength: 600 }, at: Date }], default: undefined },
     assistantCancelled: { type: Boolean, default: false, select: false },
+    // A question edited into a new one, and the answer it had: retired, not deleted, so clients hide them and the
+    // run keeps its history.
+    supersededAt: { type: Date, default: null },
+    // Who is editing this question right now, so two edits of it cannot both send a replacement. Expires, so a request
+    // that died after claiming it does not lock the question.
+    editClaim: { type: new Schema({ by: String, at: Date }, { _id: false }), select: false },
     assistantRequest: { type: assistantRequestSchema, select: false },
     // Kept outside the legacy outbox so workers without screen support cannot consume it.
     screenRequest: { type: assistantRequestSchema, select: false },

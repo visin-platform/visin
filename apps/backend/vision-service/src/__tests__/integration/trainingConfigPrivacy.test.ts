@@ -72,9 +72,9 @@ describe('training-config privacy with shared public configs', () => {
   };
 
   it.each([undefined, STRANGER])('denies private associations to %s', async userId => {
-    expect((await get(`trainings/${privateId}/configs`, userId)).status).toBe(403);
+    expect((await get(`trainings/${privateId}/configs`, userId)).status).toBe(404);
     await Training.updateOne({ _id: privateId }, { $unset: { configId: 1 } });
-    expect((await get(`trainings/${privateId}/configs`, userId)).status).toBe(403);
+    expect((await get(`trainings/${privateId}/configs`, userId)).status).toBe(404);
   });
 
   it('allows the private owner and public viewers to read the same config association', async () => {
@@ -131,7 +131,7 @@ describe('training-config privacy with shared public configs', () => {
     await Project.updateOne({ _id: training!.projectId }, { visibility: 'public' });
     expect((await get(`trainings/${privateId}/configs`)).status).toBe(200);
     await Project.updateOne({ _id: training!.projectId }, { visibility: 'private' });
-    expect((await get(`trainings/${privateId}/configs`)).status).toBe(403);
+    expect((await get(`trainings/${privateId}/configs`)).status).toBe(404);
     expect((await get(`trainings/${privateId}/configs`, OWNER)).status).toBe(200);
   });
 

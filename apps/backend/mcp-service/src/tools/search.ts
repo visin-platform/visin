@@ -14,7 +14,6 @@ import { Caller, ToolModule, count, explain, ok } from './module';
  */
 
 const MAX_TERMS = 6;
-const SUITES_SCANNED = 100;
 
 const TOPIC_NOTE =
   'A hit is a name or description that contains one of the words, not proof a project is about the topic: read the ' +
@@ -83,7 +82,6 @@ function registerSearchTools(server: McpServer, caller: Caller): void {
           0,
           MAX_TERMS
         );
-        const lowered = unique.map((term) => term.toLowerCase());
         const anyOf = textSearchOf(unique);
 
         const projects: Hits = { kind: 'Projects', lines: new Map() };
@@ -120,16 +118,15 @@ function registerSearchTools(server: McpServer, caller: Caller): void {
               );
             runs.total = found.pagination?.total;
           }),
-          // Datasets match their names by substring, which takes one term per request.
+          // Dataset names and descriptions match any of the substrings in one request.
           attempt(sets, async () => {
-            for (const found of await Promise.all(
-              unique.map((term) => datasets.list(key, { search: term, limit: each }))
-            ))
-              for (const dataset of found.datasets)
-                sets.lines.set(
-                  dataset._id,
-                  `- ${withDescription(dataset.name, dataset.description?.split('\n')[0])} (${count(dataset.imageCount)} images)  [${dataset._id}]  /datasets/${dataset._id}`
-                );
+            const found = await datasets.list(key, { searchTerms: JSON.stringify(unique), limit: each });
+            for (const dataset of found.datasets)
+              sets.lines.set(
+                dataset._id,
+                `- ${withDescription(dataset.name, dataset.description?.split('\n')[0])} (${count(dataset.imageCount)} images)  [${dataset._id}]  /datasets/${dataset._id}`
+              );
+            sets.total = found.pagination?.total;
           }),
           // Papers one term at a time: a term that is an arXiv id or a DOI finds that paper exactly, not by its words.
           attempt(papers, async () => {
@@ -140,18 +137,14 @@ function registerSearchTools(server: McpServer, caller: Caller): void {
                   `- ${paper.title}${paper.year ? ` (${paper.year})` : ''}  [${paper.id}]  /papers/${paper.id}`
                 );
           }),
-          // Suites have no server-side search, so the first page is matched here on name, slug and task.
+          // Suites by their name, slug, description or task: the server matches a substring, so one request per term.
           attempt(suites, async () => {
-            const { suites: all } = await vision.listSuites(key, { limit: SUITES_SCANNED, page: 1 });
-            for (const suite of all) {
-              const text =
-                `${suite.name} ${suite.slug} ${suite.description ?? ''} ${suite.protocol.task ?? ''}`.toLowerCase();
-              if (lowered.some((term) => text.includes(term)))
+            for (const found of await Promise.all(unique.map((term) => vision.listSuites(key, { search: term, limit: each }))))
+              for (const suite of found.suites)
                 suites.lines.set(
                   `${suite.slug}@${suite.version}`,
                   `- ${withDescription(`${suite.name} (${suite.slug}@${suite.version})`, suite.protocol.task)}  /suites/${suite.slug}/${suite.version}`
                 );
-            }
           })
         ]);
 

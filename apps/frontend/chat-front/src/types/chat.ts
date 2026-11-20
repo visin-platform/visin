@@ -86,6 +86,8 @@ export interface Message {
   /** What this question was about, in a private chat with an assistant. */
   context?: MessageContext;
   unsentAt?: string | null;
+  /** Edited into a new question (this one and its answer): hidden from the thread, not shown as unsent. */
+  supersededAt?: string | null;
   revision?: number;
   reactions?: { userId: string; emoji: string }[];
   conversationId?: string;
@@ -216,7 +218,7 @@ export interface FindingInput {
   recommendations?: string;
 }
 
-export type MessageUpdate = Pick<Message, '_id' | 'revision' | 'unsentAt' | 'reactions'>;
+export type MessageUpdate = Pick<Message, '_id' | 'revision' | 'unsentAt' | 'supersededAt' | 'reactions'>;
 
 /** What is left of today's Vivi allowance, so a limit is never a surprise. */
 export interface Allowance {

@@ -113,3 +113,18 @@ it('reacts from the menu’s quick row, and offers nothing for a notice', async 
   render(<MessageActions message={{ ...message, kind: 'system' }} onCopy={vi.fn()} onReply={vi.fn()} />);
   expect(screen.queryByRole('button')).toBeNull();
 });
+it('offers to edit and ask again only where it is given, as an icon and in the menu', () => {
+  const edit = vi.fn();
+  const view = render(<MessageActions message={message} own onCopy={vi.fn()} onReply={vi.fn()} />);
+  expect(screen.queryByRole('button', { name: 'Edit question' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Message actions' }));
+  expect(screen.queryByRole('menuitem', { name: 'Edit and ask again' })).toBeNull();
+  view.unmount();
+
+  render(<MessageActions message={message} own onCopy={vi.fn()} onReply={vi.fn()} onEdit={edit} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit question' }));
+  expect(edit).toHaveBeenCalledWith(message);
+  fireEvent.click(screen.getByRole('button', { name: 'Message actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Edit and ask again' }));
+  expect(edit).toHaveBeenCalledTimes(2);
+});

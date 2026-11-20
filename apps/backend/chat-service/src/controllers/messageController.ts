@@ -25,6 +25,10 @@ export async function markRead(req: Request, res: Response): Promise<void> {
 export async function react(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data: await service.react(req, paramId(req), req.params.messageId, req.body) });
 }
+export async function editQuestion(req: Request, res: Response): Promise<void> {
+  const result = await service.editQuestion(req, paramId(req), req.params.messageId, req.body);
+  res.status(result.created ? 201 : 200).json({ success: true, data: result.message });
+}
 export async function unsend(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data: await service.unsend(req, paramId(req), req.params.messageId) });
 }

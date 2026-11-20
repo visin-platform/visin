@@ -289,14 +289,27 @@ export async function react(req: Request, conversationId: string, messageId: unk
   return updated;
 }
 
-export async function unsend(req: Request, conversationId: string, messageId: unknown) {
-  const { conversation, message } = await visibleMessage(req, conversationId, messageId);
-  if (message.kind !== 'person' || message.senderId !== req.user!.id)
-    throw new ForbiddenError('You can only unsend your own messages');
+/**
+ * Takes a person's message back: its text and files go, a question not yet answered is cancelled, and whatever quoted
+ * it says it was unsent. `extra` is what a caller adds to the message (an edit says what replaced it).
+ */
+async function retireMessage(
+  conversation: { id: string },
+  message: { _id: unknown; id: string },
+  extra: Record<string, unknown> = {}
+) {
   await Message.updateOne(
     { _id: message._id, unsentAt: null },
     {
-      $set: { unsentAt: new Date(), body: '', reactions: [], evidence: [], thoughts: [], assistantCancelled: true },
+      $set: {
+        unsentAt: new Date(),
+        body: '',
+        reactions: [],
+        evidence: [],
+        thoughts: [],
+        assistantCancelled: true,
+        ...extra
+      },
       $unset: { attachments: 1, quote: 1, assistantRequest: 1, screenRequest: 1 },
       $inc: { revision: 1 }
     }
@@ -320,7 +333,89 @@ export async function unsend(req: Request, conversationId: string, messageId: un
       $inc: { revision: 1 }
     }
   );
+}
+
+export async function unsend(req: Request, conversationId: string, messageId: unknown) {
+  const { conversation, message } = await visibleMessage(req, conversationId, messageId);
+  if (message.kind !== 'person' || message.senderId !== req.user!.id)
+    throw new ForbiddenError('You can only unsend your own messages');
+  await retireMessage(conversation, message);
   await Conversation.updateOne({ _id: conversation._id }, { $inc: { messageVersion: 1 } });
   notify(`conv:${conversation.id}`);
   return await Message.findById(message._id);
+}
+
+/**
+ * Asks the assistant again with other words: the edited text is sent as a new question, and the old question and its
+ * answer are retired (hidden, kept in the run's history). A run belongs to one question and an answer to one run, so
+ * "replace in place" is not possible; this reads the same to the person. Only the latest question, in a private chat
+ * with an assistant, and only text: a question with files is sent again, not edited.
+ *
+ * The new question is sent first, so a refused one (the assistant off, the text too long) leaves the old question and
+ * its answer as they were. Repeating the request with the same `clientId` finishes what it did not reach.
+ */
+/** How long a claim on a question being edited holds, if its request never finishes. */
+const EDIT_CLAIM_MS = 30_000;
+
+export async function editQuestion(req: Request, conversationId: string, messageId: unknown, body: unknown) {
+  const { conversation, message } = await visibleMessage(req, conversationId, messageId);
+  const input = parsed(sendSchema, body);
+  if (conversation.kind !== 'assistant') throw new BadRequestError('Only a question to your assistant can be edited');
+  if (message.kind !== 'person' || message.senderId !== req.user!.id)
+    throw new ForbiddenError('You can only edit your own questions');
+  // The replacement, when this request is a repeat of one that got as far as storing it. An id used by this question
+  // or an earlier one is not an edit.
+  const replacement = await Message.findOne({
+    conversationId: conversation.id,
+    senderId: req.user!.id,
+    clientId: input.clientId
+  }).select('seq');
+  if (replacement && replacement.seq <= message.seq) throw new BadRequestError('Message retry identifier already used');
+  let claimed = false;
+  if (!replacement) {
+    if (message.unsentAt) throw new BadRequestError('This question was unsent');
+    if (message.attachments?.length) throw new BadRequestError('A question with files cannot be edited; send it again');
+    if (input.attachments?.length) throw new BadRequestError('An edited question is text only');
+    const latest = await Message.findOne({ conversationId: conversation.id, kind: 'person', unsentAt: null })
+      .sort({ seq: -1 })
+      .select('_id');
+    if (latest?.id !== message.id) throw new BadRequestError('Only your latest question can be edited');
+    // Claimed before anything is sent: two edits of one question (two tabs) cannot both pass the check above.
+    const taken = await Message.findOneAndUpdate(
+      {
+        _id: message._id,
+        unsentAt: null,
+        $or: [
+          { editClaim: null },
+          { 'editClaim.by': input.clientId },
+          { 'editClaim.at': { $lt: new Date(Date.now() - EDIT_CLAIM_MS) } }
+        ]
+      },
+      { $set: { editClaim: { by: input.clientId, at: new Date() } } }
+    ).select('_id');
+    if (!taken) throw new BadRequestError('This question is already being edited');
+    claimed = true;
+  }
+  let sent: Awaited<ReturnType<typeof sendMessage>>;
+  try {
+    sent = await sendMessage(req, conversationId, body);
+  } catch (error) {
+    // A refused edit leaves the question as it was, and free to be edited again.
+    if (claimed) await Message.updateOne({ _id: message._id, 'editClaim.by': input.clientId }, { $unset: { editClaim: 1 } });
+    throw error;
+  }
+  // Every step is conditional, so a repeat finishes what the first request did not reach and changes nothing else.
+  const at = new Date();
+  await retireMessage(conversation, message, { supersededAt: at });
+  // The answer it had (or has by the time this runs) goes with it, and never into a later question's history.
+  await Message.updateMany(
+    { conversationId: conversation.id, kind: 'assistant', replyTo: message.id, unsentAt: null },
+    {
+      $set: { unsentAt: at, supersededAt: at, body: '', evidence: [], thoughts: [], reactions: [] },
+      $inc: { revision: 1 }
+    }
+  );
+  await Conversation.updateOne({ _id: conversation._id }, { $inc: { messageVersion: 1 } });
+  notify(`conv:${conversation.id}`);
+  return sent;
 }

@@ -17,6 +17,8 @@ export const GuestRun = model(
       projectId: String,
       /** The public projects the answer drew from, each rechecked before the answer is shown. */
       projectIds: { type: [String], default: undefined },
+      /** The public papers a lookup showed the answer, each rechecked before the answer is shown. */
+      paperIds: { type: [String], default: undefined },
       finishedAt: Date,
       expiresAt: { type: Date, required: true }
     },

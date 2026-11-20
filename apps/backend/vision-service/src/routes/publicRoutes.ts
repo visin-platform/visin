@@ -13,6 +13,13 @@ import { getPublicFindings, getPublicProjects } from '../controllers/publicExplo
 import { publicFindingsQuerySchema, publicProjectsQuerySchema } from '../validation/exploreSchemas';
 import { activityQuerySchema } from '../validation/activitySchemas';
 import { publicPapersQuerySchema } from '../validation/paperSchemas';
+import * as projectService from '../services/projectService';
+import * as paperService from '../services/paperService';
+import { trainingService } from '../services/trainingService';
+import { getTrainingSummary } from '../services/trainingSummaryService';
+import * as visualizationService from '../services/visualizationService';
+import { getTrainingsQuerySchema, type GetTrainingsQuery } from '../validation/trainingSchemas';
+import { getVisualizationsByTrainingQuerySchema, type GetVisualizationsByTrainingQuery } from '../validation/visualizationSchemas';
 import {
   publicBadgeParamsSchema,
   publicBadgeQuerySchema,
@@ -60,8 +67,26 @@ router.get('/share/papers/:id', getPaperShare);
 router.get('/sitemap.xml', getSitemap);
 // The public project catalogue behind Explore: paged, with owners and run counts, the same for everyone.
 router.get('/projects', validateRequest({ query: publicProjectsQuerySchema }), getPublicProjects);
+router.get('/projects/:id', async (req, res) => {
+  res.json({ success: true, data: await projectService.getProjectByIdOrSlug(String(req.params.id), undefined) });
+});
+router.get('/trainings', validateRequest({ query: getTrainingsQuerySchema }), async (req, res) => {
+  const { page, limit, search, status, datasetId, dataset, projectId, access, tags, excludeTags, ids, sortBy, order } = req.query as unknown as GetTrainingsQuery;
+  const data = await trainingService.getTrainings(undefined, { search, status, datasetId: datasetId ?? dataset, projectId, access, tags, excludeTags, ids }, { page, limit, sortBy, order });
+  res.json({ success: true, data });
+});
+router.get('/trainings/:id/summary', async (req, res) => {
+  res.json({ success: true, data: await getTrainingSummary(String(req.params.id), undefined) });
+});
+router.get('/visualizations/training/:training_uuid', validateRequest({ query: getVisualizationsByTrainingQuerySchema }), async (req, res) => {
+  const data = await visualizationService.getVisualizationsByTraining(String(req.params.training_uuid), req.query as unknown as GetVisualizationsByTrainingQuery, undefined);
+  res.json({ success: true, data });
+});
 // The public papers: a search, a person's or a project's, a page. The same for everyone who asks.
 router.get('/papers', validateRequest({ query: publicPapersQuerySchema }), getPublicPapers);
+router.get('/papers/:id', async (req, res) => {
+  res.json({ success: true, data: await paperService.getPaper(String(req.params.id), undefined) });
+});
 // The latest findings in public projects, for the same page's side panel.
 router.get('/findings', validateRequest({ query: publicFindingsQuerySchema }), getPublicFindings);
 // What a person or a group has been doing in public, derived on each request (so never stale, and a project made

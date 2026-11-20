@@ -50,6 +50,9 @@ export const chatService = {
   send: (id: string, input: SendMessageInput) => api<Message>(`/conversations/${id}/messages`, input),
   react: (id: string, messageId: string, emoji: string | null) =>
     api<Message>(`/conversations/${id}/messages/${messageId}/reaction`, { emoji }),
+  /** Asks the assistant again with other words: sent as a new question, the old one and its answer are retired. */
+  edit: (id: string, messageId: string, input: SendMessageInput) =>
+    api<Message>(`/conversations/${id}/messages/${messageId}/edit`, input),
   unsend: (id: string, messageId: string) => api<Message>(`/conversations/${id}/messages/${messageId}/unsend`, {}),
   markRead: (id: string, seq: number) => api<void>(`/conversations/${id}/read`, { seq }),
   membership: (id: string, action: string) => api<void>(`/conversations/${id}/membership`, { action }),

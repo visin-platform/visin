@@ -289,7 +289,11 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     ];
     if (row.project)
       paths.push(`projects/${row.project}`, `projects/${row.project}/dashboard-stats`, `findings/${row.finding}`);
-    for (const path of paths) expect({ path, status: (await request(path)).status }).toEqual({ path, status: 403 });
+    for (const path of paths) {
+      const hiddenRead = (key === 'other' || key === 'orphan') &&
+        (path === `trainings/${row.training}` || path === `trainings/${row.training}/configs` || path === `projects/${row.project}`);
+      expect({ path, status: (await request(path)).status }).toEqual({ path, status: hiddenRead ? 404 : 403 });
+    }
     for (const [path, body] of [
       [`trainings/${row.training}`, { name: 'tampered' }],
       [`epochs/${row.epoch}`, { epoch_time: 100 }],
@@ -533,7 +537,7 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     await Project.deleteOne({ _id: a });
     expect((await request('benchmarks', 'POST', { ...benchmark, training_uuid: 'training-a' })).status).toBe(403);
     expect((await request('trainings')).body.data.trainings).toEqual([]);
-    expect((await request(`trainings/${trainingA}`)).status).toBe(403);
+    expect((await request(`trainings/${trainingA}`)).status).toBe(404);
   });
 
   it('isolates concurrent A/B token and session requests', async () => {
@@ -560,7 +564,7 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     expect((await request(`comparisons/${fixtures.b.comparison}`)).status).toBe(403);
     expect((await request(`trainings/${trainingA}`)).status).toBe(200);
     await Project.updateOne({ _id: a }, { visibility: 'public' });
-    expect((await request(`trainings/${trainingB}`, 'GET', undefined, 'invalid-token')).status).toBe(403);
+    expect((await request(`trainings/${trainingB}`, 'GET', undefined, 'invalid-token')).status).toBe(404);
   });
 
   it('checks benchmark epoch references on create, upload and update', async () => {

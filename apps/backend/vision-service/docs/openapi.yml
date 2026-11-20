@@ -2188,6 +2188,7 @@ paths:
       tags: [Trainings]
       summary: Get training by ID
       operationId: getTrainingById
+      description: A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -2386,6 +2387,7 @@ paths:
       tags: [Trainings]
       summary: Get training by UUID
       operationId: getTrainingByUuid
+      description: A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -2419,6 +2421,7 @@ paths:
       tags: [Trainings]
       summary: Get epochs for a training
       operationId: getTrainingWithEpochs
+      description: A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -4060,6 +4063,7 @@ paths:
       tags: [Projects]
       summary: Get project by ID or slug
       operationId: getProjectByIdOrSlug
+      description: A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -6332,6 +6336,150 @@ paths:
         '429': { $ref: '#/components/responses/Error' }
         default: { $ref: '#/components/responses/Error' }
 
+  /public/projects/{id}:
+    get:
+      x-internal: true
+      tags: [Public catalogue]
+      summary: Read a public project
+      operationId: getPublicProjectDetail
+      security: [{}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Public data }
+        '4XX': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/papers/{id}:
+    get:
+      x-internal: true
+      tags: [Public catalogue]
+      summary: Read a public paper
+      operationId: getPublicPaperDetail
+      security: [{}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Public data }
+        '4XX': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/trainings:
+    get:
+      x-internal: true
+      tags: [Public catalogue]
+      summary: List public training runs
+      operationId: getPublicTrainings
+      security: [{}]
+      parameters:
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/page }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/limit }
+        - name: search
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/search }
+        - name: status
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/status }
+        - name: datasetId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/datasetId }
+        - name: dataset
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/dataset }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/projectId }
+        - name: access
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/access }
+        - name: tags
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/tags }
+        - name: excludeTags
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/excludeTags }
+        - name: ids
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/ids }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/order }
+      responses:
+        '200': { description: Public data }
+        '4XX': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/trainings/{id}/summary:
+    get:
+      x-internal: true
+      tags: [Public catalogue]
+      summary: Read a public training summary
+      operationId: getPublicTrainingSummary
+      security: [{}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Public data }
+        '4XX': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/visualizations/training/{training_uuid}:
+    get:
+      x-internal: true
+      tags: [Public catalogue]
+      summary: List public training visualizations
+      operationId: getPublicTrainingVisualizations
+      security: [{}]
+      parameters:
+        - name: training_uuid
+          in: path
+          required: true
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/type }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/limit }
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/page }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/projectId }
+        - name: includeUrls
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/includeUrls }
+        - name: perTraining
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/perTraining }
+        - name: epoch
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/epoch }
+        - name: search
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/search }
+      responses:
+        '200': { description: Public data }
+        '4XX': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
   /public/findings:
     get:
       tags: [Public catalogue]
@@ -6839,6 +6987,11 @@ paths:
           required: false
           description: Only the versions of this suite.
           schema: { $ref: ./generated/request-schemas.json#/ListSuitesQuery/properties/slug }
+        - name: search
+          in: query
+          required: false
+          description: Words to find in a suite's name, slug, description or task. A substring, case-insensitive.
+          schema: { $ref: ./generated/request-schemas.json#/ListSuitesQuery/properties/search }
         - name: projectId
           in: query
           required: false
@@ -7234,6 +7387,7 @@ paths:
         (`directionFrom: taxonomy`). Any other is guessed from its name, so a loss or a latency is lower-is-better
         and the rest higher (`directionFrom: default`); check `directionFrom` before trusting a guess. At most 60
         results are listed.
+        A missing run and a private run the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable run outside its scope.
       security:
         - BearerCredential: []
         - SessionCookie: []

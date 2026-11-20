@@ -8,7 +8,7 @@ import { IProjectCosting } from '../models/costing';
 import Training from '../models/Training';
 import type { GetProjectsQuery } from '../validation/projectSchemas';
 import { requireUserCredential } from '../middleware/projectTokenContext';
-import { callerGroups, membershipOf, projectFilter, projectPermission } from './projectAccessService';
+import { callerGroups, denyProjectRead, membershipOf, projectFilter, projectPermission } from './projectAccessService';
 import { chooseCover } from './projectCoverService';
 import { invalidatePublic } from './publicCache';
 import { clearPublications } from './publications';
@@ -83,7 +83,10 @@ async function runCounts(ids: string[]): Promise<Map<string, { runs: number; run
 }
 
 export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<ProjectView> => {
-  const project = await requireProject(identifier, userId);
+  const project = await requireProject(identifier, userId).catch(async (error: unknown) => {
+    if (error instanceof ForbiddenError) return denyProjectRead(userId, identifier, 'Project');
+    throw error;
+  });
   const [view] = await withCovers([project], [await toProjectView(project, userId)], userId);
   return view;
 };

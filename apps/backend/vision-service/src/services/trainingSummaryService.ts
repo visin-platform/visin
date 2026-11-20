@@ -1,9 +1,9 @@
-import { ForbiddenError, NotFoundError } from '@visin/backend-core';
+import { NotFoundError } from '@visin/backend-core';
 import Epoch from '../models/Epoch';
 import Project from '../models/Project';
 import Training from '../models/Training';
 import { epochMetrics } from './latexExport';
-import { checkProjectAccess } from './projectAccessService';
+import { checkProjectAccess, denyProjectRead } from './projectAccessService';
 
 /** A run reports a handful of metrics; past this the rest are noise a summary should not carry. */
 const MAX_METRICS = 60;
@@ -73,7 +73,7 @@ export function directionOf(
 export async function getTrainingSummary(trainingId: string, userId: string | undefined) {
   const training = await Training.findOne({ _id: trainingId, deletedAt: null }).lean();
   if (!training) throw new NotFoundError('Training not found');
-  if (!(await checkProjectAccess(userId, training.projectId))) throw new ForbiddenError();
+  if (!(await checkProjectAccess(userId, training.projectId))) return denyProjectRead(userId, training.projectId, 'Training');
 
   const [epochs, project] = await Promise.all([
     Epoch.find({ trainingId: training._id.toString(), deletedAt: null })

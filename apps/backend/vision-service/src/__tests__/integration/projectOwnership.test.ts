@@ -190,8 +190,8 @@ describe('project ownership with in-memory MongoDB', () => {
       expect(await permissions(OWNER)).toEqual({ read: true, contribute: true, manage: true, own: true });
       expect(await permissions(ADMIN)).toEqual({ read: true, contribute: true, manage: true, own: false });
       expect(await permissions(MEMBER)).toEqual({ read: true, contribute: true, manage: false, own: false });
-      expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(403);
-      expect((await call(`/projects/${id}`, { user: '' })).status).toBe(403);
+      expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(404);
+      expect((await call(`/projects/${id}`, { user: '' })).status).toBe(404);
       expect((await call(`/projects/${id}`, { user: MEMBER })).body.data).toMatchObject({
         owner: { kind: 'group', id: GROUP, name: 'Team' },
         createdBy: MEMBER,
@@ -227,7 +227,7 @@ describe('project ownership with in-memory MongoDB', () => {
       const unowned = (await Project.collection.insertOne({ name: 'Unowned', ownerId: OWNER, isPublic: true }))
         .insertedId;
       expect(await names('/projects')).toEqual(['Mine', 'Open', 'Team project']);
-      expect((await call(`/projects/${unowned}`)).status).toBe(403);
+      expect((await call(`/projects/${unowned}`)).status).toBe(404);
     });
 
     it('needs manage for settings and own for who can see it', async () => {
@@ -292,7 +292,7 @@ describe('project ownership with in-memory MongoDB', () => {
       const id = await teamProject();
       await put(id, ADMIN, { readme });
 
-      expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(403);
+      expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(404);
       expect((await call(`/projects/${id}`, { user: MEMBER })).body.data.readme).toBe(readme);
     });
   });

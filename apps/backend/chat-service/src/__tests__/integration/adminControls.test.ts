@@ -83,6 +83,30 @@ it("saves the guest greeting, suggested questions and answer length, within thei
   ])
     expect((await request('/admin/policies', ADMIN, edit(1, { ...defaultPolicy, ...bad }), 'PUT')).status).toBe(400);
 });
+it('saves how many lookups a guest answer may make and how large each result may be, three rounds until set', async () => {
+  // On by default, within the spend ceilings, which are zero (no guest can ask) until an administrator sets them.
+  expect(await effectivePolicy()).toMatchObject({ guestToolRounds: 3, guestToolResultBytes: 3000 });
+  const saved = await request(
+    '/admin/policies',
+    ADMIN,
+    edit(0, { ...defaultPolicy, guestToolRounds: 2, guestToolResultBytes: 2000 }),
+    'PUT'
+  );
+  expect(saved.status).toBe(200);
+  expect(await effectivePolicy()).toMatchObject({ guestToolRounds: 2, guestToolResultBytes: 2000 });
+  for (const bad of [
+    { guestToolRounds: 5 },
+    { guestToolRounds: -1 },
+    { guestToolRounds: 1.5 },
+    { guestToolResultBytes: 499 },
+    { guestToolResultBytes: 6001 }
+  ])
+    expect((await request('/admin/policies', ADMIN, edit(1, { ...defaultPolicy, ...bad }), 'PUT')).status).toBe(400);
+  // A person's own override cannot set them: guest settings are platform-wide.
+  expect(
+    (await request(`/admin/policies/${'a'.repeat(24)}`, ADMIN, { revision: 0, reason: '', settings: { guestToolRounds: 3 } }, 'PUT')).status
+  ).toBe(400);
+});
 it('says exactly what is missing when anonymous access cannot be turned on', async () => {
   const saved = { ...process.env };
   try {

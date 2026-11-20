@@ -4,6 +4,7 @@ import type { Conversation } from '../../types/chat';
 import { ExportConversationDialog } from './ExportConversationDialog';
 import { SearchConversationDialog } from './SearchConversationDialog';
 import { ReplyPreview } from './ReplyPreview';
+import { EditingPreview } from './EditingPreview';
 import { AutoAwesome, MoreVert } from '@mui/icons-material';
 import {
   Alert,
@@ -62,7 +63,10 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     setReplyTarget,
     runs,
     perform,
-    selected
+    selected,
+    editing,
+    cancelEdit,
+    dropEdit
   } = useChatWorkspaceContext();
   const [exporting, setExporting] = useState<{ conversation: Conversation; title: string } | null>(null);
   const [searching, setSearching] = useState(false);
@@ -71,7 +75,8 @@ export function ConversationThread({ panel }: { panel: boolean }) {
   useEffect(() => {
     setExporting(null);
     setSearching(false);
-  }, [c?._id]);
+    dropEdit();
+  }, [c?._id, dropEdit]);
   const menuItems = useConversationMenuItems(c, () => setSettingsAnchor(null), { topic: true });
   const { data: allowance } = useAllowance(c?.kind === 'assistant' && enabled);
   if (!c) return null;
@@ -249,7 +254,8 @@ export function ConversationThread({ panel }: { panel: boolean }) {
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
       {c.kind === 'assistant' && enabled && <AllowanceNotice allowance={allowance} />}
       {c.kind === 'assistant' && <AskingAbout about={about} name={c.profile?.name} onClear={clearAbout} />}
-      {replyTarget && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}
+      {editing && <EditingPreview onCancel={cancelEdit} />}
+      {replyTarget && !editing && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}
       <MediaComposer
         key={c._id}
         voiceTarget={voiceTarget}

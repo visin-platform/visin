@@ -64,7 +64,7 @@ describe('guest context', () => {
       'fetch',
       vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
         const href = String(url);
-        if (href.startsWith('http://vision.invalid/api/public/projects')) {
+        if (href.startsWith('http://vision.invalid/api/public/projects?')) {
           // Like vision's text search: whole words only.
           const search = new URL(href).searchParams.get('search');
           const cards = [{ id: project, name: 'Public research' }];
@@ -72,7 +72,7 @@ describe('guest context', () => {
             JSON.stringify({ data: { projects: search && !['public', 'research'].includes(search) ? [] : cards } })
           );
         }
-        if (href.startsWith('http://vision.invalid/api/projects/'))
+        if (href.startsWith('http://vision.invalid/api/public/projects/'))
           return new Response(
             JSON.stringify({
               data: {
@@ -124,7 +124,7 @@ describe('guest context', () => {
   it('browses multiple public projects for the suggested discovery question', async () => {
     vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
       const href = String(url);
-      if (href.startsWith('http://vision.invalid/api/public/projects')) {
+      if (href.startsWith('http://vision.invalid/api/public/projects?')) {
         expect(new URL(href).searchParams.has('search')).toBe(false);
         return new Response(
           JSON.stringify({
@@ -180,7 +180,7 @@ describe('guest context', () => {
     const serveRun = (projectId = project) =>
       vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const href = String(url);
-        if (href.includes(`/api/trainings/${run}/summary`))
+        if (href.includes(`/api/public/trainings/${run}/summary`))
           return new Response(
             JSON.stringify({
               data: {
@@ -204,7 +204,7 @@ describe('guest context', () => {
               }
             })
           );
-        if (href.includes('/api/visualizations/training/'))
+        if (href.includes('/api/public/visualizations/training/'))
           return new Response(
             JSON.stringify({
               data: {
@@ -283,16 +283,29 @@ describe('guest context', () => {
       expect(found.images).toHaveLength(2);
     });
 
-    it("leaves out a run that is not this public project's", async () => {
+    it('answers about a project the visitor links, even from the page of a run in another one', async () => {
       serveRun('bbbbbbbbbbbbbbbbbbbbbbbb');
       const found = await guestContext({
-        question: 'What is on the images?',
-        projectId: project,
+        question: 'How does this compare with http://localhost:3010/projects/public-research?',
+        projectId: 'bbbbbbbbbbbbbbbbbbbbbbbb',
         trainingId: run,
         signal: signal()
       });
-      expect(JSON.parse(found.text).run).toBeUndefined();
-      expect(found.images).toEqual([]);
+      expect(found.projects.map((p) => p.id)).toEqual([project]);
+      // The page's run belongs to another project, so it is not part of this answer.
+      expect(JSON.parse(found.text)).not.toHaveProperty('run');
+    });
+
+    it("refuses a run that is not this public project's", async () => {
+      serveRun('bbbbbbbbbbbbbbbbbbbbbbbb');
+      await expect(
+        guestContext({
+          question: 'What is on the images?',
+          projectId: project,
+          trainingId: run,
+          signal: signal()
+        })
+      ).rejects.toThrow('This run is not publicly available');
     });
   });
 

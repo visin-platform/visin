@@ -186,7 +186,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
 
   // Every run has a project; one from before that rule is unreachable until the clean-up removes it.
   it('leaves a run without a project unreachable', async () => {
-    expect((await request(`trainings/${legacyId}`)).status).toBe(403);
+    expect((await request(`trainings/${legacyId}`)).status).toBe(404);
     expect((await request(`trainings/${legacyId}`, 'DELETE')).status).toBe(403);
     expect((await Training.findById(legacyId))?.deletedAt).toBeUndefined();
   });
@@ -416,7 +416,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect(project.status).toBe(201);
     const teamId = String(project.body.data._id);
     expect((await request(`projects/${teamId}`, 'GET', undefined, EDITOR)).status).toBe(200);
-    expect((await request(`projects/${teamId}`, 'GET', undefined, STRANGER)).status).toBe(403);
+    expect((await request(`projects/${teamId}`, 'GET', undefined, STRANGER)).status).toBe(404);
     const created = await request('trainings', 'POST', { name: 'Team run', projectId: teamId }, EDITOR);
     expect(created.status).toBe(201);
     const id = String(created.body.data._id);
@@ -461,7 +461,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`projects/${teamId}`, 'DELETE', undefined, EDITOR)).status).toBe(403);
     members.delete(EDITOR);
     expect((await request(`trainings/${id}`, 'PUT', { name: 'Removed member' }, EDITOR)).status).toBe(403);
-    expect((await request(`trainings/${id}`, 'GET', undefined, EDITOR)).status).toBe(403);
+    expect((await request(`trainings/${id}`, 'GET', undefined, EDITOR)).status).toBe(404);
     members.add(EDITOR);
     expect((await request(`trainings/${id}`, 'DELETE', undefined, EDITOR)).status).toBe(200);
   });
@@ -780,7 +780,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     await mongoose.connection
       .collection('users')
       .updateOne({ _id: new mongoose.Types.ObjectId(OWNER) }, { $inc: { tokenVersion: 1 } });
-    expect((await request(`trainings/${trainingId}`)).status).toBe(403);
+    expect((await request(`trainings/${trainingId}`)).status).toBe(404);
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Revoked write' })).status).toBe(401);
     await Project.updateOne({ _id: projectId }, { visibility: 'public' });
     expect((await request(`trainings/${trainingId}`)).status).toBe(200);

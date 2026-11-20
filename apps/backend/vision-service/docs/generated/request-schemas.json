@@ -3042,6 +3042,11 @@
         "type": "string",
         "minLength": 1
       },
+      "search": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
       "projectId": {
         "type": "string",
         "minLength": 1

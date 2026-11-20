@@ -578,6 +578,16 @@
             }
           },
           {
+            "name": "searchTerms",
+            "in": "query",
+            "required": false,
+            "description": "JSON array of one to six substrings; a dataset matches any term in its name or description.",
+            "schema": {
+              "type": "string",
+              "maxLength": 1500
+            }
+          },
+          {
             "name": "owner",
             "in": "query",
             "required": false,

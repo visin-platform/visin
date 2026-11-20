@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Markdown, MAX_MARKDOWN_LENGTH } from './Markdown';
 
 const renderMarkdown = (source: string) => render(<Markdown>{source}</Markdown>);
@@ -154,5 +154,47 @@ describe('Markdown code blocks', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
+  });
+});
+
+describe('Markdown tables', () => {
+  it('copies a table as tab-separated cells, header first, without the marks', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderMarkdown('| Model | mIoU |\n| :-- | --: |\n| **a** | 0.8 |\n| [b](https://example.test) | `0.7` |');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy table' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith('Model\tmIoU\na\t0.8\nb\t0.7');
+  });
+
+  it('gives each table its own button, and stays quiet where the browser refuses the clipboard', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    renderMarkdown('| a |\n| - |\n| 1 |\n\ntext\n\n| b |\n| - |\n| 2 |');
+    const buttons = screen.getAllByRole('button', { name: 'Copy table' });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]);
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('b\n2'));
+    expect(screen.getAllByRole('button', { name: 'Copy table' })).toHaveLength(2);
+  });
+
+  it('goes back to saying Copy table once the check mark has been shown', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+      renderMarkdown('| a |\n| - |\n| 1 |');
+      fireEvent.click(screen.getByRole('button', { name: 'Copy table' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+      expect(screen.getByRole('button', { name: 'Copy table' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('has no button on anything that is not a table', () => {
+    renderMarkdown('Just a paragraph with a | pipe.');
+    expect(screen.queryByRole('button', { name: 'Copy table' })).toBeNull();
   });
 });

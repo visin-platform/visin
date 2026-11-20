@@ -7350,6 +7350,7 @@
         ],
         "summary": "Get training by ID",
         "operationId": "getTrainingById",
+        "description": "A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.",
         "security": [
           {
             "BearerCredential": []
@@ -7684,6 +7685,7 @@
         ],
         "summary": "Get training by UUID",
         "operationId": "getTrainingByUuid",
+        "description": "A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.",
         "security": [
           {
             "BearerCredential": []
@@ -7739,6 +7741,7 @@
         ],
         "summary": "Get epochs for a training",
         "operationId": "getTrainingWithEpochs",
+        "description": "A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.",
         "security": [
           {
             "BearerCredential": []
@@ -10746,6 +10749,7 @@
         ],
         "summary": "Get project by ID or slug",
         "operationId": "getProjectByIdOrSlug",
+        "description": "A missing item and a private item the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable item outside its scope.",
         "security": [
           {
             "BearerCredential": []
@@ -14984,6 +14988,17 @@
             }
           },
           {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Words to find in a suite's name, slug, description or task. A substring, case-insensitive.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
             "name": "projectId",
             "in": "query",
             "required": false,
@@ -15717,7 +15732,7 @@
         ],
         "summary": "How a run did, in one call",
         "operationId": "getTrainingSummary",
-        "description": "The run's state, dataset, config, linked models and provenance, and for every result it reported (the\nshallowest numeric entries of an epoch's blocks, such as `val.mean_iou`, plus any top-level result, leaving out\nper-class rows, telemetry nested below the summaries and bookkeeping like `lr`) the best epoch beside the last. A run's last\nepoch is not its result, so both are given.\n\n\"Best\" follows the project's taxonomy: a metric the project marked `higher` or `lower` is read that way\n(`directionFrom: taxonomy`). Any other is guessed from its name, so a loss or a latency is lower-is-better\nand the rest higher (`directionFrom: default`); check `directionFrom` before trusting a guess. At most 60\nresults are listed.\n",
+        "description": "The run's state, dataset, config, linked models and provenance, and for every result it reported (the\nshallowest numeric entries of an epoch's blocks, such as `val.mean_iou`, plus any top-level result, leaving out\nper-class rows, telemetry nested below the summaries and bookkeeping like `lr`) the best epoch beside the last. A run's last\nepoch is not its result, so both are given.\n\n\"Best\" follows the project's taxonomy: a metric the project marked `higher` or `lower` is read that way\n(`directionFrom: taxonomy`). Any other is guessed from its name, so a loss or a latency is lower-is-better\nand the rest higher (`directionFrom: default`); check `directionFrom` before trusting a guess. At most 60\nresults are listed.\nA missing run and a private run the caller cannot read both return 404. A project-limited key can receive 403 for an otherwise readable run outside its scope.\n",
         "security": [
           {
             "BearerCredential": []

@@ -25,6 +25,8 @@ export async function exportHistory(conversationId: string, signal: AbortSignal)
 export function conversationMarkdown(title: string, messages: Message[]): string {
   const parts = [`# ${heading(title)}`, 'Attachments are listed by name; their files are not included.'];
   for (const message of messages) {
+    // A question edited into a new one, and its answer, are not in the conversation any more: not even as "unsent".
+    if (message.supersededAt) continue;
     const date = new Date(message.createdAt);
     const timestamp = Number.isNaN(date.getTime()) ? '' : date.toISOString();
     parts.push(`## ${heading(message.senderName || message.kind)}${timestamp ? ` · ${timestamp}` : ''}`);
