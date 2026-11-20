@@ -2589,6 +2589,7 @@
         "x-internal": true,
         "operationId": "reactToChatMessage",
         "summary": "Set or remove your reaction on a visible message",
+        "description": "A person's message takes reactions. An assistant's answer and a system message do not: they are refused with 400.",
         "parameters": [
           {
             "name": "id",
@@ -2693,6 +2694,31 @@
           },
           "200": {
             "description": "Updated message, including revision, unsentAt and reactions. Unsent messages contain no original text or attachment references."
+          }
+        }
+      }
+    },
+    "/usage/me": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "chatMyAllowance",
+        "summary": "What is left of today's Vivi allowance",
+        "description": "Questions and reservable tokens used and left today (a UTC day), and when they reset. Tokens held by a question still running are not counted as used. Reads the budget the worker charges and changes nothing.",
+        "responses": {
+          "200": {
+            "description": "requests, tokens, remainingShare (the smaller share left) and resetsAt"
+          },
+          "401": {
+            "description": "Sign-in required"
+          },
+          "403": {
+            "description": "Vivi is turned off for this account"
+          },
+          "4XX": {
+            "description": "Request rejected"
           }
         }
       }

@@ -46,6 +46,12 @@ export const MAX_REQUEST_BYTES = 34000;
  * dense pages per read, with the previous read still in view. Reserved against the daily limit like any other round.
  */
 export const PAPER_REQUEST_BYTES = 80000;
+/**
+ * The ceiling for a private chat, which carries the research tools. Their definitions and the rules for using them
+ * take about 22 KB of a request before a question is asked, so a lookup's results need more room than a shared chat
+ * (which has no tools) does, or the oldest are cut to fit while the answer still needs them. Reserved like any other.
+ */
+export const TOOL_REQUEST_BYTES = 44000;
 // Reasoning counts toward the limit on current models, so a small cap leaves little room for the answer.
 export const MAX_OUTPUT_TOKENS = 6000;
 

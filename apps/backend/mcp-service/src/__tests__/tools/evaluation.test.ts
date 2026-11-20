@@ -387,6 +387,24 @@ describe('get_worst_conditions', () => {
     expect(text.indexOf('3. day — 0.8')).toBeGreaterThan(text.indexOf('2. rain'));
   });
 
+  it('takes an evaluation alone, and reads the suite it names', async () => {
+    mocked.getEvaluation.mockResolvedValue(record({ suite: { slug: 'road-test', version: 3 } }));
+    mocked.getSuite.mockResolvedValue(suite({ version: 3 }));
+    const { text } = await call('get_worst_conditions', { evaluation: 'e1' });
+    expect(mocked.getSuite).toHaveBeenCalledWith('k', 'road-test', 3);
+    expect(text).toContain('1. night — 0.69');
+  });
+
+  it('says so when an evaluation is on no suite, and asks for something to look at when given nothing', async () => {
+    mocked.getEvaluation.mockResolvedValue(record({ suite: undefined }));
+    const loose = await call('get_worst_conditions', { evaluation: 'e1' });
+    expect(loose.text).toContain('clftv2-e40 was measured on no suite');
+    expect(mocked.getSuite).not.toHaveBeenCalled();
+    const empty = await call('get_worst_conditions', {});
+    expect(empty.isError).toBe(true);
+    expect(empty.text).toContain('Name a suite');
+  });
+
   it('puts the highest first when lower is better', async () => {
     mocked.getSuite.mockResolvedValue(
       suite({ protocol: { ...suite().protocol, metrics: [{ key: 'latency', direction: 'min', headline: true }] } })

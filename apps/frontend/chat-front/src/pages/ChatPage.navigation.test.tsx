@@ -15,7 +15,7 @@ it('opens a ready analysis of the run on a deliberate open, without creating any
   expect(await screen.findByText('The assistant sees: Analyze base model')).toBeInTheDocument();
   expect(screen.getByText('New chat · only you can read it')).toBeInTheDocument();
   // No ready-made questions: a line on what can be asked, and the asker writes the question.
-  expect(screen.getByText('Ask about results, validation peaks or your next experiment.')).toBeInTheDocument();
+  expect(screen.getByText('Ask about results, projects, datasets, papers or your next experiment.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Summarize this run' })).toBeNull();
   expect(api).not.toHaveBeenCalledWith('/conversations', expect.objectContaining({ kind: 'assistant' }));
 });
@@ -45,6 +45,32 @@ describe('following the page', () => {
     expect(screen.queryByText(/sees:/)).toBeNull();
     showPage({ projectId: 'p1', trainingIds: ['t3'], title: 'Third run' });
     expect(await screen.findByText('The assistant sees: Third run')).toBeInTheDocument();
+  });
+  it('names a dataset or suite beside the panel by its address, and a cleared one is not sent to be read', async () => {
+    state.enabled = true;
+    state.conversations = [dm(), analysisOf()];
+    window.history.replaceState({}, '', '/datasets/d1');
+    try {
+      render(<Chat panel />);
+      fireEvent.click(await screen.findByText('Vivi'));
+      expect(await screen.findByText('The assistant sees: This dataset')).toBeInTheDocument();
+      // The shell moves the page: the chip follows, with no project or run to say so.
+      window.history.replaceState({}, '', '/suites/road-seg/2');
+      window.dispatchEvent(new CustomEvent('visin:location', { detail: '/suites/road-seg/2' }));
+      expect(await screen.findByText('The assistant sees: Suite road-seg v2')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Ask a general question instead' }));
+      expect(screen.queryByText(/sees:/)).toBeNull();
+      fireEvent.change(await screen.findByLabelText('Ask a follow-up'), { target: { value: 'What is new?' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+      await waitFor(() =>
+        expect(api).toHaveBeenCalledWith(
+          expect.stringMatching(/\/messages$/),
+          expect.objectContaining({ body: 'What is new?', screen: expect.objectContaining({ path: '/' }) })
+        )
+      );
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
   });
   it('never switches away from a conversation with people', async () => {
     state.enabled = true;

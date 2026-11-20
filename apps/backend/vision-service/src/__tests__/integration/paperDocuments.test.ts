@@ -253,6 +253,26 @@ describe('paper documents, with in-memory MongoDB', () => {
     expect((await call(`/papers/${draft._id}/pdf`, '')).status).toBe(200);
   });
 
+  it('lists for an assistant only the papers the person may read, and finds one by its words', async () => {
+    const own = await paper({ title: 'Lidar fusion at night' });
+    const theirs = await paper({ title: 'Lidar draft by someone else', owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER });
+    const open = await paper({ title: 'Public lidar survey', owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER, visibility: 'public' });
+    const trashed = await paper({ title: 'Lidar in the trash', trashedAt: new Date() });
+
+    const ids = async (path: string, user: string | '' = OWNER) =>
+      ((await call(path, user)).body.data.papers as { id: string }[]).map((card) => card.id).sort();
+
+    // Their own and the public one; never someone else's draft, nor the trash.
+    expect(await ids('/paper-documents?search=lidar')).toEqual([String(own._id), String(open._id)].sort());
+    expect(await ids('/paper-documents')).toEqual([String(own._id), String(open._id)].sort());
+    // A stranger sees the public paper and their own draft, not the first person's.
+    expect(await ids('/paper-documents?search=lidar', STRANGER)).toEqual([String(theirs._id), String(open._id)].sort());
+    // No one signed in: public only.
+    expect(await ids('/paper-documents?search=lidar', '')).toEqual([String(open._id)]);
+    expect(await ids('/paper-documents?search=lidar')).not.toContain(String(trashed._id));
+    expect((await call('/paper-documents?limit=1')).body.data.papers).toHaveLength(1);
+  });
+
   it('has no PDF to show while it is still being read', async () => {
     const draft = await paper();
     expect((await call(`/papers/${draft._id}/pdf`)).status).toBe(404);

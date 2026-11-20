@@ -1,6 +1,7 @@
 import { Settings } from '../models/Settings';
 import { BadGatewayError, BadRequestError, isEncryptionConfigured, logger } from '@visin/backend-core';
-import { reservationFor, TOKENS_PER_ROUND, MIN_TOOL_ROUNDS, MAX_TOOL_ROUNDS } from './analysisLimits';
+import { reservationFor, TOOL_TOKENS_PER_ROUND, MIN_TOOL_ROUNDS, MAX_TOOL_ROUNDS } from './analysisLimits';
+import { TOOL_REQUEST_BYTES } from './providers';
 import { removeProviderKey, saveProviderKey } from './keys';
 import { refreshPrices } from './priceList';
 import { ADAPTERS, PROVIDERS } from './providers';
@@ -41,8 +42,9 @@ const settingsView = async () => {
     toolRounds: settings.toolRounds,
     minToolRounds: MIN_TOOL_ROUNDS,
     maxToolRounds: MAX_TOOL_ROUNDS,
-    tokensPerRound: TOKENS_PER_ROUND,
-    tokenReservation: reservationFor(true, settings.toolRounds),
+    // What a question in a private chat reserves, which carries the research tools.
+    tokensPerRound: TOOL_TOKENS_PER_ROUND,
+    tokenReservation: reservationFor(true, settings.toolRounds, 0, TOOL_REQUEST_BYTES),
     source: settings.source,
     ready,
     missing,
@@ -88,7 +90,7 @@ export async function updateSettings(userId: string, body: unknown) {
   }
   const dailyTokenLimit = input.dailyTokenLimit ?? current.dailyTokenLimit;
   const toolRounds = input.toolRounds ?? current.toolRounds;
-  const reservation = reservationFor(true, toolRounds);
+  const reservation = reservationFor(true, toolRounds, 0, TOOL_REQUEST_BYTES);
   // A question reserves its worst case up front, so a limit below one question would refuse every one.
   if (dailyTokenLimit < reservation)
     throw new BadRequestError(

@@ -58,6 +58,31 @@ it('only lets the sender unsend a person message and redacts quoted copies', asy
   ).toBe(400);
   expect((await request(`/conversations/${id}/messages/${message._id}/unsend`, 'alice', {})).status).toBe(200);
 });
+it('does not take a reaction on an assistant\'s answer, though a person\'s message still does', async () => {
+  const id = await direct();
+  const person = await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'Alice',
+    kind: 'person',
+    body: 'Hello',
+    clientId: 'person-message-1'
+  });
+  const answer = await appendMessage({
+    conversationId: id,
+    senderId: 'assistant',
+    senderName: 'Vivi',
+    kind: 'assistant',
+    body: 'Here is what I found.',
+    clientId: 'assistant-answer-1'
+  });
+  const react = (messageId: string, emoji: string | null) =>
+    request(`/conversations/${id}/messages/${messageId}/reaction`, 'bob', { emoji });
+  expect((await react(person.id, '👍')).status).toBe(200);
+  expect((await react(answer.id, '👍')).status).toBe(400);
+  expect((await react(answer.id, null)).status).toBe(400);
+  expect((await Message.findById(answer.id))?.reactions ?? []).toHaveLength(0);
+});
 it('removes attachment references, stops queued analysis and does not permit reactions on system messages', async () => {
   const id = await direct();
   const source = await appendMessage({

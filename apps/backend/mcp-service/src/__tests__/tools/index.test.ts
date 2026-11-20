@@ -59,8 +59,22 @@ describe('registerTools', () => {
 
   it('reports how many modules applied', () => {
     const { server } = makeServer();
-    // visualization, evaluation and paper tools declare vision:read too, so that scope brings four modules.
-    expect(registerTools(server, caller, ['vision:read', 'dataset:read'])).toBe(5);
+    // visualization, evaluation and paper tools declare vision:read too, and search needs it with dataset:read, so those
+    // two scopes bring six modules.
+    expect(registerTools(server, caller, ['vision:read', 'dataset:read'])).toBe(6);
+  });
+
+  it('offers the topic search only to a key that can read both projects and datasets', () => {
+    const names = (scopes: Parameters<typeof registerTools>[2]) => {
+      const seen: string[] = [];
+      const server = { registerTool: (name: string) => void seen.push(name) } as unknown as McpServer;
+      registerTools(server, caller, scopes);
+      return seen;
+    };
+    expect(names(['vision:read', 'dataset:read'])).toContain('search_visin');
+    expect(names(['vision:read'])).not.toContain('search_visin');
+    expect(names(['dataset:read'])).not.toContain('search_visin');
+    expect(names(['vision:read'])).toContain('list_papers');
   });
 
   it('grants analysis independently of vision, which is the point of the split', () => {
@@ -130,7 +144,7 @@ describe('measurement is not opt-in', () => {
       'analysis:write'
     ]);
 
-    expect(count).toBe(8);
+    expect(count).toBe(9);
     expect(seen.length).toBeGreaterThan(10);
   });
 });

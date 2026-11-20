@@ -81,7 +81,7 @@ it('hides an old failure once a later question was answered', async () => {
   ];
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
-  await screen.findByText('Ask about results, validation peaks or your next experiment.');
+  await screen.findByText('Ask about results, projects, datasets, papers or your next experiment.');
   expect(screen.queryByText('Provider unavailable')).toBeNull();
 });
 

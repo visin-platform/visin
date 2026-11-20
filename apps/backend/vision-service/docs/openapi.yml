@@ -5865,6 +5865,47 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Error' }
 
+  /paper-documents:
+    get:
+      tags: [Papers]
+      summary: Find papers, for an assistant
+      operationId: listPapersForAssistant
+      x-internal: true
+      description: |
+        Read-only, for an assistant acting for a person: the papers that person may read (public ones, their own and
+        their groups'), found by words in the title, abstract, authors, tags or venue, or by an arXiv id or DOI. Another
+        person's draft is never listed. A key limited to one project finds none, since a paper belongs to no project.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: search
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/PaperListQuery/properties/search }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/PaperListQuery/properties/limit }
+      responses:
+        '200':
+          description: The papers, as a list shows them
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [papers]
+                    properties:
+                      papers:
+                        type: array
+                        items: { $ref: '#/components/schemas/PaperCard' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        default: { $ref: '#/components/responses/Error' }
+
   /paper-documents/{id}:
     get:
       tags: [Papers]

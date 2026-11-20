@@ -1,5 +1,5 @@
 import '../helpers/mocks';
-import { fetchWithTimeout } from '@visin/backend-core';
+import { createApiKey, fetchWithTimeout } from '@visin/backend-core';
 import mongoose from 'mongoose';
 import { type Mock } from 'vitest';
 import { Assistant } from '../../models/Assistant';
@@ -118,6 +118,20 @@ describe('shared assistants', () => {
     });
     await worker.tick();
     expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ shared: true, model: 'test' });
+  });
+
+  it('gives a shared answer no key at all, so no tools, whoever asks and whatever they have selected', async () => {
+    const { assistant, conversationId } = await setup();
+    await consent(conversationId, 'alice');
+    await consent(conversationId, 'bob');
+    vi.mocked(createApiKey).mockClear();
+    expect((await ask(conversationId, assistant.id)).status).toBe(201);
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    // The thread is read by everyone in it, so one person's private data never reaches it through a tool.
+    expect(createApiKey).not.toHaveBeenCalled();
+    expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ shared: true, token: '', projectId: undefined });
   });
 
   it('denies outsiders and refuses unregistered or paused assistants', async () => {

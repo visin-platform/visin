@@ -43,7 +43,7 @@ export function usePageChatContext({
       if (!value) return;
       // What the person asked about is what their next question is about, until the page they are on says otherwise.
       const asked = analysisOf(value);
-      if (asked?.projectId || asked?.paperId) setPageContext(asked);
+      if (asked?.projectId || asked?.paperId || asked?.page) setPageContext(asked);
       // A visitor has no conversation to open it in: the guest panel uses the project, if there is one.
       rememberRequestedProject(value);
       delete window.__visinChatContext;
@@ -55,6 +55,9 @@ export function usePageChatContext({
     const waiting = window.__visinChatContext ?? (panel ? undefined : requestFromUrl());
     delete window.__visinChatContext;
     if (waiting) {
+      // The same as a request that arrives while loaded: on a phone the chat is not loaded when the page asks.
+      const asked = analysisOf(waiting);
+      if (asked?.projectId || asked?.paperId || asked?.page) setPageContext(asked);
       rememberRequestedProject(waiting);
       setRequest(waiting);
     }

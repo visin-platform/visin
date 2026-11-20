@@ -10,6 +10,8 @@ export type ScreenOutcome = { ok: true; path: string; summary: string } | { ok: 
 /** Mirrors vision-front's TRAINING_TABS; `screen.test.ts` fails when the two drift. */
 export const TRAINING_TABS = [
   'overview',
+  'samples',
+  'audit',
   'epochs',
   'evaluations',
   'visualizations',

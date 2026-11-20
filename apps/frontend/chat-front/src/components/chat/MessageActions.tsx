@@ -51,7 +51,8 @@ export interface MessageActionProps {
 }
 
 /**
- * Reply, React and More beside the bubble while a mouse is over the message; Copy, Save as finding and Unsend are in
+ * Reply, React and More beside the bubble while a mouse is over the message (React is for a person's message, not an
+ * assistant's answer); Copy, Save as finding and Unsend are in
  * More. A touch screen has no hover: a long press on the bubble opens the same menu, with the reactions and Reply
  * added. The icons stay in the page for a keyboard or a screen reader, and show when they have focus.
  */
@@ -76,6 +77,8 @@ export function MessageActions({
   const [busy, setBusy] = useState(false);
   if (message.unsentAt || message.kind === 'system') return null;
   const answer = message.kind === 'assistant';
+  // People react to each other's messages. An assistant's answer is not a message to react to: nobody is on the other end.
+  const canReact = Boolean(onReact) && !answer;
   const saved = Boolean(message.findingId);
   const text = message.body || message.attachments?.map((file) => file.name).join('\n') || '';
   const mine = (emoji: string) =>
@@ -157,7 +160,7 @@ export function MessageActions({
         }}
       >
         {icon(`Reply to ${message.senderName}`, 'Reply', <Reply fontSize="small" />, () => onReply(message))}
-        {onReact &&
+        {canReact &&
           icon('React to message', 'React', <AddReactionOutlined fontSize="small" />, setReactions, {
             'aria-haspopup': 'dialog',
             'aria-expanded': Boolean(reactions)
@@ -169,7 +172,7 @@ export function MessageActions({
       </Stack>
       {/* The whole list is for a long press. With a mouse, what already sits beside the bubble is left out of it. */}
       <Menu anchorEl={menu} open={Boolean(menu)} onClose={close()}>
-        {onReact && (
+        {canReact && (
           <Box
             role="group"
             aria-label="Quick reactions"
@@ -178,7 +181,7 @@ export function MessageActions({
             {reactionButtons(close())}
           </Box>
         )}
-        {onReact && <Divider sx={besideOnly} />}
+        {canReact && <Divider sx={besideOnly} />}
         <MenuItem onClick={close(() => onReply(message))} sx={besideOnly}>
           <Reply fontSize="small" sx={{ mr: 1 }} />
           Reply

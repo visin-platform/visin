@@ -5,6 +5,7 @@ import type { ChatRateLimits } from './rateLimits';
 export function createAssistantRoutes(limits: ChatRateLimits) {
   const router = Router();
   const { writeLimit } = limits;
+  router.get('/usage/me', controller.getMyAllowance);
   router.get('/assistants/default', controller.getDefaultAssistant);
   router.get('/assistants/catalog', controller.listPublicAssistants);
   router.get('/assistants', controller.listAssistants);

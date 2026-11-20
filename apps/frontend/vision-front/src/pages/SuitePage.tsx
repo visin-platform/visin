@@ -18,6 +18,7 @@ import {
   Typography
 } from '@mui/material';
 import { PageHeader, useCompactLayout } from '@visin/frontend-core';
+import AskAboutThisPage from '../components/analysis/AskAboutThisPage';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { MobileListRow } from '../components/common/MobileList';
@@ -247,7 +248,8 @@ const SuitePage: React.FC = () => {
         title={suite.data.name}
         subtitle={suite.data.description ?? `${suite.data.slug}@${suite.data.version}`}
         actions={
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <AskAboutThisPage title={suite.data.name} label="Ask Vivi about this suite" />
             <Chip size="small" label={suite.data.visibility === 'public' ? 'Public' : 'Private'} />
             {suite.data.archivedAt && <Chip size="small" color="warning" label="Archived" />}
           </Box>

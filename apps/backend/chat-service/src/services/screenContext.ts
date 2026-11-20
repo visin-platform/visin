@@ -5,7 +5,11 @@ export type PageContext =
   | { place: 'training'; trainingIds: [string]; tab: string; frame?: string }
   | { place: 'compare'; trainingIds: string[]; tab: string }
   | { place: 'visualizations'; trainingIds: string[] }
-  | { place: 'project'; projectId: string; tab: string };
+  | { place: 'project'; projectId: string; tab: string }
+  | { place: 'paper'; paperId: string }
+  | { place: 'dataset'; datasetId: string }
+  | { place: 'suite'; slug: string; version: number }
+  | { place: 'evaluation'; evaluationId: string };
 
 const isId = (value: string) => entityId.safeParse(value).success;
 /** A visualization's id as vision gives it. Only its shape is checked here; the frame tools check access to it. */
@@ -20,7 +24,13 @@ function runIds(value: string | null) {
   return unique.length >= 2 ? unique : undefined;
 }
 
-/** A browser path is a hint, never authority to widen the analyst's project-scoped credential. */
+/** A suite's slug as its address carries it; the suite is read by this and checked as the person, so only the shape is judged here. */
+const SUITE_SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+
+/**
+ * A browser path is a hint, never authority: whatever it names is read again as the person asking, so a path for
+ * something they may not read comes back unverified and is never named.
+ */
 export function pageContext(path?: string | null): PageContext | undefined {
   if (!path || path.length > 500 || !path.startsWith('/') || path.startsWith('//') || path.includes('#')) return;
   const [pathname, query = ''] = path.split('?');
@@ -53,5 +63,14 @@ export function pageContext(path?: string | null): PageContext | undefined {
     const tab = oneOf(params.get('tab'), PROJECT_TABS, 'overview');
     return tab ? { place: 'project', projectId: project[1], tab } : undefined;
   }
+  const paper = /^\/papers\/([^/]+)$/.exec(pathname);
+  if (paper && isId(paper[1])) return { place: 'paper', paperId: paper[1] };
+  const dataset = /^\/datasets\/([^/]+)$/.exec(pathname);
+  if (dataset && isId(dataset[1])) return { place: 'dataset', datasetId: dataset[1] };
+  const evaluation = /^\/evaluations\/([^/]+)$/.exec(pathname);
+  if (evaluation && isId(evaluation[1])) return { place: 'evaluation', evaluationId: evaluation[1] };
+  // A suite and its public leaderboard are the same thing to read: the suite's ranking.
+  const suite = /^\/(?:suites|leaderboards)\/([^/]+)\/(\d{1,6})(?:\/(?:compare|judges))?$/.exec(pathname);
+  if (suite && SUITE_SLUG.test(suite[1])) return { place: 'suite', slug: suite[1], version: Number(suite[2]) };
   return undefined;
 }

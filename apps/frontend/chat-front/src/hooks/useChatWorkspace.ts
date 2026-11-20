@@ -2,7 +2,8 @@ import { useChatAppearance } from '../appearance/useChatAppearance';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Message, PageContext } from '../types/chat';
-import { OPEN_EVENT, contextKey } from '../utils/chatContext';
+import { OPEN_EVENT, contextKey, placeOf, samePage } from '../utils/chatContext';
+import { useCurrentPath } from '../utils/screen';
 import { useChatActions } from './useChatActions';
 import { useChatConversations } from './useChatConversations';
 import { useChatNavigation } from './useChatNavigation';
@@ -51,6 +52,8 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
   // What the next question is about: the page the person is on, until they clear it. Each question carries it, so
   // the same chat serves every page and a question is answered about the page it was asked on.
   const aboutRef = useRef<PageContext | undefined>(undefined);
+  /** The person cleared the page beside the panel: the next question sends no page to read. */
+  const hidePageRef = useRef(false);
   const actions = useChatActions({
     navigation: currentNavigation,
     thread,
@@ -58,6 +61,7 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     refreshHidden: list.refreshHidden,
     perform,
     aboutRef,
+    hidePageRef,
     panel
   });
   const pageContext = usePageChatContext({
@@ -77,10 +81,18 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     window.addEventListener(OPEN_EVENT, reset);
     return () => window.removeEventListener(OPEN_EVENT, reset);
   }, []);
-  const aboutKey = contextKey(pageContext);
+  // Beside the panel, a page with nothing else to name (a dataset, a suite) is named by its address, and a page asked
+  // about counts only while it is the one shown: the panel always sends the page it can see.
+  const shownPath = useCurrentPath();
+  const place = panel ? placeOf(shownPath) : undefined;
+  const askedPage = pageContext?.page && !pageContext.projectId && !pageContext.paperId;
+  const asked =
+    (askedPage && panel && !samePage(pageContext.page!, shownPath)) || !contextKey(pageContext) ? place : pageContext;
+  const aboutKey = contextKey(asked);
   // Clearing it lasts until the page, or what was asked about, changes.
-  const about = aboutKey && aboutKey !== clearedAbout ? pageContext : undefined;
+  const about = aboutKey && aboutKey !== clearedAbout ? asked : undefined;
   aboutRef.current = about;
+  hidePageRef.current = Boolean(panel && asked?.page && !about);
   return {
     appearance,
     appearanceOpen,
@@ -98,6 +110,8 @@ export function useChatWorkspace({ panel }: { panel: boolean }) {
     c: currentNavigation.c,
     ...actions,
     pageContext,
+    /** Chat is the shell's side panel, beside a page it can see. */
+    panel,
     about,
     clearAbout: () => setClearedAbout(aboutKey),
     /** Opens the chat with the assistant, asking about this: what the next question is about. */

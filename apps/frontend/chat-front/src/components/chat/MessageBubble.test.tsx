@@ -112,9 +112,9 @@ it('says "source" for one, shows thinking with no reads, and folds nothing for a
   expect(screen.queryByRole('button', { name: /Thinking/ })).not.toBeInTheDocument();
 });
 
-it('shows reaction counts and lets you remove your own reaction from the chip', async () => {
+it('shows reaction counts on a person\'s message, and lets you remove your own reaction from the chip', async () => {
   const react = vi.fn().mockResolvedValue(undefined);
-  const source = answer({
+  const source = person({
     reactions: [
       { userId: 'alice', emoji: '👍' },
       { userId: 'bob', emoji: '👍' }
@@ -133,6 +133,14 @@ it('shows reaction counts and lets you remove your own reaction from the chip', 
   );
   fireEvent.click(screen.getByRole('button', { name: '👍: 2 reactions, including yours' }));
   expect(react).toHaveBeenCalledWith(source, null);
+});
+it('shows no reactions, and offers none, on an assistant\'s answer', () => {
+  const source = answer({ reactions: [{ userId: 'alice', emoji: '👍' }, { userId: 'bob', emoji: '🔥' }] });
+  render(
+    <MessageBubble message={source} userId="alice" canSave={false} onCopy={noop} onReply={noop} onSave={noop} onReact={vi.fn()} />
+  );
+  expect(screen.queryByLabelText('Message reaction counts')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'React to message' })).not.toBeInTheDocument();
 });
 it('never shows original text, quotes, attachment previews or actions for unsent messages', () => {
   const source = answer({

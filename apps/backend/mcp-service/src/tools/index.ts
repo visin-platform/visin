@@ -9,6 +9,7 @@ import { visionRead, visionWrite } from './vision';
 import { visualizationRead } from './visualization';
 import { analysisRead, analysisWrite } from './analysis';
 import { paperRead } from './paper';
+import { searchRead } from './search';
 
 export type { Caller, ToolModule } from './module';
 
@@ -26,6 +27,7 @@ export const MODULES: ToolModule[] = [
   visualizationRead,
   datasetRead,
   paperRead,
+  searchRead,
   analysisRead,
   analysisWrite
 ];

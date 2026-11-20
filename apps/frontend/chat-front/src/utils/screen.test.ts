@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { SCREEN_ANSWER_MS, TAB_ID, parseScreenCalls, screenContext, showOnScreen } from './screen';
+import { act, renderHook } from '@testing-library/react';
+import { SCREEN_ANSWER_MS, TAB_ID, parseScreenCalls, screenContext, showOnScreen, useCurrentPath } from './screen';
 
 afterEach(() => vi.useRealTimers());
 
@@ -13,6 +14,25 @@ it('reports the tab and page only from the side panel', () => {
   expect(screenContext(true)).toEqual({ tabId: TAB_ID, path: '/trainings/abc?tab=epochs', allowActions: true });
   window.history.replaceState({}, '', `/x?${'a'.repeat(600)}`);
   expect(screenContext(true)?.path).toHaveLength(500);
+});
+
+it('sends the page asked about from a chat that cannot see it, which may read it but never change it', () => {
+  expect(screenContext(false, '/datasets/d1')).toEqual({ tabId: TAB_ID, path: '/datasets/d1', allowActions: false });
+  // Beside the page, the page itself is what counts, wherever the question started.
+  window.history.replaceState({}, '', '/suites/road/2');
+  expect(screenContext(true, '/datasets/d1')).toMatchObject({ path: '/suites/road/2', allowActions: true });
+});
+
+it('follows the shell as it moves the page', () => {
+  window.history.replaceState({}, '', '/projects/p1');
+  const { result } = renderHook(() => useCurrentPath());
+  expect(result.current).toBe('/projects/p1');
+  act(() => {
+    window.__visinLocation = '/papers/x';
+    window.dispatchEvent(new CustomEvent('visin:location', { detail: '/papers/x' }));
+  });
+  expect(result.current).toBe('/papers/x');
+  delete window.__visinLocation;
 });
 
 it('asks the shell with an event and resolves with its answer for that call only', async () => {

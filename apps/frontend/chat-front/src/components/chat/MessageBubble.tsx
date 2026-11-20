@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { livePalette } from '@visin/frontend-core';
 import { Markdown } from '@visin/frontend-core';
 import type { Message } from '../../types/chat';
-import { evidenceLinks } from '../../utils/messages';
+import { sourceLabel, sourceLinks } from '../../utils/sources';
 import { MessageAttachments } from './MessageAttachments';
 import { formatChatTime, formatChatDateTime } from '../../utils/regionalTime';
 import { MessageActions, type MessageActionProps } from './MessageActions';
@@ -64,6 +64,7 @@ export function MessageBubble({
   const system = message.kind === 'system';
   const unsent = Boolean(message.unsentAt);
   const answer = message.kind === 'assistant';
+  const sources = answer ? sourceLinks(message) : [];
   const plain = system || unsent;
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const press = useLongPress(setMenu, !plain);
@@ -166,16 +167,19 @@ export function MessageBubble({
           ) : (
             message.body && <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{message.body}</Typography>
           )}
-          {!unsent && answer && evidenceLinks(message).length > 0 && (
-            <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
-              {evidenceLinks(message).map((id) => (
+          {!unsent && answer && sources.length > 0 && (
+            <Stack direction="row" aria-label="Sources" sx={{ gap: 0.5, flexWrap: 'wrap', mt: 1 }}>
+              {sources.map((source) => (
                 <Chip
-                  key={id}
+                  key={source.key}
                   component="a"
-                  href={`/trainings/${id}`}
+                  href={source.href}
                   clickable
                   size="small"
-                  label={labels?.find((label) => label.id === id)?.name || `Run ${id.slice(-6)}`}
+                  label={sourceLabel(
+                    source,
+                    source.kind === 'run' ? labels?.find((label) => source.href.endsWith(`/${label.id}`))?.name : undefined
+                  )}
                 />
               ))}
             </Stack>
@@ -195,7 +199,8 @@ export function MessageBubble({
           onMenu={setMenu}
         />
       </Box>
-      {!unsent && Boolean(message.reactions?.length) && (
+      {/* An assistant's answer shows none, including any it was given before it stopped taking them. */}
+      {!unsent && !answer && Boolean(message.reactions?.length) && (
         // Tucked over the bubble's lower edge, so the pills sit on the message they are for.
         <Stack
           direction="row"

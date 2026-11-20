@@ -1,4 +1,5 @@
 import '../helpers/mocks';
+import { createApiKey } from '@visin/backend-core';
 import mongoose from 'mongoose';
 import { publicPerson } from '../../services/access';
 import { Assistant } from '../../models/Assistant';
@@ -64,6 +65,10 @@ it('lets another user ask a public bot privately using their own authority and b
   await worker.tick();
   expect(await Message.countDocuments({ conversationId: id, kind: 'assistant', senderName: bot.name })).toBe(1);
   expect((await AssistantRun.findOne({ conversationId: id }))?.userId).toBe('bob');
+  // What the bot reads is what bob may read: the key is bob's, not the bot author's.
+  const keys = vi.mocked(createApiKey).mock.calls.map(([key]) => key);
+  expect(keys.length).toBeGreaterThan(0);
+  expect(keys.every((key) => key.userId === 'bob')).toBe(true);
   const shared = await create('direct', ['bob']);
   await request(`/conversations/${shared}/membership`, 'bob', { action: 'accept' });
   expect(

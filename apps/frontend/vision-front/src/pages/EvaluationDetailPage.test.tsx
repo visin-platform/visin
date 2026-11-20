@@ -5,7 +5,7 @@ const service = vi.hoisted(() => ({ get: vi.fn(), trash: vi.fn(), publish: vi.fn
 vi.mock('../services/evaluationService', () => ({ evaluationService: service }));
 const auth = vi.hoisted(() => ({ isAuthenticated: true }));
 const appConfig = vi.hoisted(() => ({ value: {} as Record<string, string> }));
-vi.mock('../config/ConfigProvider', () => ({ getGlobalConfig: () => appConfig.value }));
+vi.mock('../config/ConfigProvider', () => ({ getGlobalConfig: () => appConfig.value, useConfig: () => appConfig.value }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
 const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', async importOriginal => ({
@@ -273,6 +273,26 @@ describe('EvaluationDetailPage', () => {
     await screen.findByText('About this result');
     expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More actions for this evaluation' })).not.toBeInTheDocument();
+  });
+
+  it('offers Vivi about this evaluation to someone signed in, and not to someone who is not', async () => {
+    const seen: unknown[] = [];
+    const record = (event: Event) => seen.push((event as CustomEvent).detail);
+    window.addEventListener('visin:open-chat', record);
+    document.body.append(Object.assign(document.createElement('div'), { id: 'shell-root' }));
+    renderPage();
+    await screen.findByText('About this result');
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Vivi about this evaluation' }));
+    expect(seen).toEqual([{ kind: 'assistant', title: expect.any(String), page: expect.stringMatching(/^\//) }]);
+    window.removeEventListener('visin:open-chat', record);
+    document.getElementById('shell-root')?.remove();
+  });
+
+  it('offers no Vivi to someone who is not signed in', async () => {
+    auth.isAuthenticated = false;
+    renderPage();
+    await screen.findByText('About this result');
+    expect(screen.queryByRole('button', { name: 'Ask Vivi about this evaluation' })).not.toBeInTheDocument();
   });
 
   it('says it is not found, as for one that is private or gone', async () => {

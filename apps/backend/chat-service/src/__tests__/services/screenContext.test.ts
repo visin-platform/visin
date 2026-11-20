@@ -72,3 +72,26 @@ it('names the image open on a run\'s Visualizations tab, by a well-formed id, an
   expect(pageContext(`/trainings/${A}?tab=visualizations&frame=..%2Fother`)).not.toHaveProperty('frame');
   expect(pageContext(`/trainings/${A}?tab=visualizations&frame=x`)).not.toHaveProperty('frame');
 });
+
+it('recognizes a paper, a dataset and a suite or its leaderboard, by a well-formed address', () => {
+  expect(pageContext(`/papers/${A}`)).toEqual({ place: 'paper', paperId: A });
+  expect(pageContext(`/datasets/${B}`)).toEqual({ place: 'dataset', datasetId: B });
+  expect(pageContext('/suites/road-seg/2')).toEqual({ place: 'suite', slug: 'road-seg', version: 2 });
+  expect(pageContext('/leaderboards/road-seg/2')).toEqual({ place: 'suite', slug: 'road-seg', version: 2 });
+  expect(pageContext('/suites/road-seg/2/judges')).toEqual({ place: 'suite', slug: 'road-seg', version: 2 });
+  expect(pageContext(`/evaluations/${A}`)).toEqual({ place: 'evaluation', evaluationId: A });
+});
+it.each([
+  '/papers/new',
+  '/papers/not-an-id',
+  `/papers/${A}/edit`,
+  '/datasets/..%2Fsecrets',
+  '/suites/road seg/2',
+  '/suites/road-seg/latest',
+  '/suites/-bad/1',
+  '/leaderboards/road-seg/1/some-evaluation-id',
+  '/evaluations/not-an-id',
+  `/evaluations/${A}/compare/${A}`
+])('does not take %s for a page it can name', (path) => {
+  expect(pageContext(path)).toBeUndefined();
+});

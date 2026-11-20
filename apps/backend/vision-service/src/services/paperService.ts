@@ -5,7 +5,7 @@ import Suite from '../models/Suite';
 import Training from '../models/Training';
 import { lookupOwnerIdentities } from '../clients/ownerIdentityClient';
 import { requireUserCredential } from '../middleware/projectTokenContext';
-import type { CreatePaperBody, MyPapersQuery, PublicPapersQuery, UpdatePaperBody } from '../validation/paperSchemas';
+import type { CreatePaperBody, MyPapersQuery, PaperListQuery, PublicPapersQuery, UpdatePaperBody } from '../validation/paperSchemas';
 import { callerGroups, checkProjectAccess, projectPermission, resolveProject } from './projectAccessService';
 import { parseArxivId, parseDoi } from './paperIdentifiers';
 import { PaperCard, PaperView, resolveCited, splitBoard, publicName, toCards, toView } from './paperView';
@@ -53,6 +53,20 @@ export async function listPublicPapers({ search, user, project, sort, page, limi
     Paper.countDocuments(filter)
   ]);
   return { papers: await toCards(papers, undefined), pagination: pagination(page, limit, total) };
+}
+
+/**
+ * The papers a person may read: public ones, their own and their groups', for an assistant acting for them. The same
+ * ownership filter as everywhere else, so another person's draft is not in it. Not paged: the best few of a search.
+ */
+export async function listReadablePapers(userId: string | undefined, { search, limit }: PaperListQuery): Promise<PaperCard[]> {
+  const access = createOwnershipAccess(userId, callerGroups);
+  const papers = await Paper.find({
+    $and: [await access.filter('read'), { trashedAt: null }, search ? searchClause(search) : {}]
+  })
+    .sort({ updatedAt: -1, _id: -1 })
+    .limit(limit);
+  return toCards(papers, userId);
 }
 
 /** The caller's own papers, drafts included (a group's too, to its members), or what they have in the trash. */

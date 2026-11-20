@@ -1,4 +1,4 @@
-import { MAX_REQUEST_BYTES, MAX_OUTPUT_TOKENS } from './providers';
+import { MAX_REQUEST_BYTES, MAX_OUTPUT_TOKENS, PAPER_REQUEST_BYTES, TOOL_REQUEST_BYTES } from './providers';
 import { IMAGE_TOKENS_PER_ROUND } from './imageInput';
 import { MAX_SCREEN_CALLS } from './screen';
 
@@ -6,6 +6,8 @@ export const DEFAULT_TOOL_ROUNDS = 8;
 export const MIN_TOOL_ROUNDS = 2;
 export const MAX_TOOL_ROUNDS = 16;
 export const TOKENS_PER_ROUND = MAX_REQUEST_BYTES + MAX_OUTPUT_TOKENS;
+/** What a round of a private chat reserves: it carries the research tools, so its request ceiling is larger. */
+export const TOOL_TOKENS_PER_ROUND = TOOL_REQUEST_BYTES + MAX_OUTPUT_TOKENS;
 /** What one round may use: the request it sends and the answer it may write. */
 const perRound = (requestBytes: number) => requestBytes + MAX_OUTPUT_TOKENS;
 /** Rendered frames the analyst may look at in one answer: enough to compare two, few enough to stay affordable. */
@@ -25,6 +27,12 @@ export const reservationFor = (
   (toolRounds + (screen ? MAX_SCREEN_CALLS : 0)) *
   (perRound(requestBytes) + imageCount * IMAGE_TOKENS_PER_ROUND + (frames ? FRAME_IMAGES * FRAME_TOKENS_PER_ROUND : 0));
 export const RESERVATION = reservationFor(false);
+/**
+ * The request ceiling for a turn, which is also what it reserves against the day: a conversation about a paper reads
+ * whole pages, a private chat carries the research tools, and a shared one has neither. `undefined` is the default.
+ */
+export const requestBytesFor = (paper: boolean, tools: boolean): number | undefined =>
+  paper ? PAPER_REQUEST_BYTES : tools ? TOOL_REQUEST_BYTES : undefined;
 
 export interface BudgetPlan {
   /** Whether this turn may move the page; a turn that may reserves MAX_SCREEN_CALLS more rounds. */

@@ -19,7 +19,16 @@ import { forgetChatPanel, remoteChatPanel } from '../../remotes';
 import { RemoteBoundary } from '../RemoteBoundary';
 import { useScreenCalls, type ScreenCue } from './useScreenCalls';
 import { useNotificationNavigation } from './notifications';
-import { ChatDockContext, PANEL_WIDTH, clampWidth, useChatDock, type ChatRequest } from './chatDock';
+import {
+  ChatDockContext,
+  LOCATION_EVENT,
+  NAVIGATE_EVENT,
+  PANEL_WIDTH,
+  clampWidth,
+  isAppPath,
+  useChatDock,
+  type ChatRequest
+} from './chatDock';
 
 const OPEN_KEY = 'visin.chat.open';
 const WIDTH_KEY = 'visin.chat.width';
@@ -51,8 +60,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // The dock opens for someone with chat, or for a visitor who may ask Vivi: the same panel, the same shortcut.
   const reachable = available || guest;
   const compact = useCompactLayout();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
+
+  // The chat panel is another app with no router: it learns where the page is from here, and asks here to move it.
+  // A move made by the router keeps its history entries and scroll positions right, which writing history does not.
+  useEffect(() => {
+    const path = `${pathname}${search}`;
+    window.__visinLocation = path;
+    window.dispatchEvent(new CustomEvent(LOCATION_EVENT, { detail: path }));
+  }, [pathname, search]);
+  useEffect(() => {
+    const go = (event: Event) => {
+      const path = (event as CustomEvent<unknown>).detail;
+      if (isAppPath(path)) navigate(path);
+    };
+    window.addEventListener(NAVIGATE_EVENT, go);
+    return () => window.removeEventListener(NAVIGATE_EVENT, go);
+  }, [navigate]);
   const [open, setOpen] = useState(() => read(OPEN_KEY) === '1');
   const [conversationId, setConversationId] = useState<string>();
 

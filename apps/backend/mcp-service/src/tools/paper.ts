@@ -36,6 +36,56 @@ function registerPaperTools(server: McpServer, caller: Caller): void {
   const key = caller.token;
 
   server.registerTool(
+    'list_papers',
+    {
+      title: 'Find papers',
+      description:
+        'The papers on Visin the caller can read: public ones, their own and their groups\'. Use it to find a paper the ' +
+        'user names or describes ("the paper about LiDAR fusion", "papers on this project") instead of asking them to ' +
+        'paste it; then read it with get_paper, search_paper and read_paper_pages. With no search it lists the ' +
+        'most recently updated. A paper that is not listed may be private to someone else, so say "not among the ' +
+        'papers you can see", never that it does not exist.',
+      inputSchema: {
+        search: z
+          .string()
+          .max(200)
+          .optional()
+          .describe('Words in the title, abstract, authors, tags or venue; or an arXiv id or DOI'),
+        limit: z.number().int().min(1).max(25).optional().describe('How many to return (default 10)')
+      }
+    },
+    async ({ search, limit }) => {
+      try {
+        const { papers } = await vision.listPapers(key, search?.trim() || undefined, limit);
+        if (papers.length === 0)
+          return ok(
+            search
+              ? `No paper among those you can see matches “${search}”. Try other words from its title or topic, or list without a search.`
+              : 'No papers are visible to you yet.'
+          );
+        const lines = papers.map((paper) => {
+          const who = paper.authors.map((author) => author.name).join(', ');
+          const where = [paper.venue, paper.year].filter(Boolean).join(' ');
+          const ids = [paper.arxivId ? `arXiv:${paper.arxivId}` : '', paper.doi ? `DOI ${paper.doi}` : '']
+            .filter(Boolean)
+            .join(' · ');
+          return [
+            `- ${paper.title}${paper.visibility === 'private' ? ' (private: yours or your group\'s)' : ''}`,
+            [who, where, ids].filter(Boolean).join(' · '),
+            paper.abstract ? `  ${paper.abstract.replace(/\s+/g, ' ')}` : '',
+            `  [${paper.id}]  /papers/${paper.id}`
+          ]
+            .filter(Boolean)
+            .join('\n');
+        });
+        return ok([`${count(papers.length)} papers:`, ...lines].join('\n'));
+      } catch (error) {
+        return explain(error);
+      }
+    }
+  );
+
+  server.registerTool(
     'get_paper',
     {
       title: 'A research paper',

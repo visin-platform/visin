@@ -447,3 +447,29 @@ describe('for a visitor who may ask Vivi', () => {
     expect(useChatDockValue().available).toBe(false);
   });
 });
+
+describe('the page, for the chat panel, which has no router', () => {
+  it('says where the page is as it moves, and moves it when chat asks for a path of this app', async () => {
+    const seen: string[] = [];
+    const listener = (event: Event) => seen.push((event as CustomEvent<string>).detail);
+    window.addEventListener('visin:location', listener);
+    try {
+      mount('/projects?tab=runs');
+      expect(window.__visinLocation).toBe('/projects?tab=runs');
+      act(() => {
+        window.dispatchEvent(new CustomEvent('visin:navigate', { detail: '/datasets/d1' }));
+      });
+      expect(await screen.findByText('Results at /datasets/d1')).toBeInTheDocument();
+      expect(seen).toEqual(['/projects?tab=runs', '/datasets/d1']);
+      // Another site, a scheme, or a backslash trick is not a page of this app.
+      for (const detail of ['//example.com/x', 'https://example.com/', '/\\example.com', 42])
+        act(() => {
+          window.dispatchEvent(new CustomEvent('visin:navigate', { detail }));
+        });
+      expect(screen.getByText('Results at /datasets/d1')).toBeInTheDocument();
+    } finally {
+      window.removeEventListener('visin:location', listener);
+      delete window.__visinLocation;
+    }
+  });
+});

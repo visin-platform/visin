@@ -17,6 +17,7 @@ import {
   Typography
 } from '@mui/material';
 import { PageHeader, ShareButton, useCompactLayout, VerificationMark } from '@visin/frontend-core';
+import AskAboutThisPage from '../components/analysis/AskAboutThisPage';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { MobileListRow } from '../components/common/MobileList';
@@ -91,6 +92,7 @@ const PublicLeaderboardPage: React.FC = () => {
         subtitle={suite.description ?? `${suite.task} · ${suite.slug}@${suite.version}`}
         actions={
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AskAboutThisPage title={suite.name} label="Ask Vivi about this leaderboard" />
             <ShareButton
               url={`${visionApiOrigin().replace(/\/$/, '')}/api/public/share/leaderboards/${encodeURIComponent(suite.slug)}/${suite.version}`}
             />

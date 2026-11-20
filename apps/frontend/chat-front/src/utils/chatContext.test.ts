@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Conversation } from '../types/chat';
-import { aboutLabel, analysisOf, assistantChat, contextKey, requestFromUrl, sameAbout } from './chatContext';
+import { aboutLabel, analysisOf, assistantChat, contextKey, placeOf, requestFromUrl, sameAbout, samePage } from './chatContext';
 it('finds the one chat with an assistant, and keeps assistants apart', () => {
   const chats = [
     { _id: 'direct', kind: 'direct' },
@@ -47,6 +47,29 @@ it('carries the paper through a request to analyse it', () => {
   });
 });
 
+it('carries a page with nothing else to hand over, and only a path of this app', () => {
+  expect(analysisOf({ kind: 'assistant', page: '/datasets/d1', title: 'Road scenes' })).toMatchObject({
+    page: '/datasets/d1'
+  });
+  for (const page of ['//example.com/x', 'https://example.com/', '/\\example.com', 'datasets/d1'])
+    expect(analysisOf({ kind: 'assistant', page })).not.toHaveProperty('page');
+  expect(contextKey({ page: '/suites/road/2' })).toBe('page:/suites/road/2');
+  // A project or paper names the context; the page is only for what has neither.
+  expect(contextKey({ projectId: 'p1', page: '/datasets/d1' })).toBe('p1:');
+  expect(aboutLabel({ page: '/datasets/d1', title: 'Road scenes' })).toBe('Road scenes');
+  expect(aboutLabel({ page: '/datasets/d1' })).toBe('This page');
+});
+
+it('names a page with nothing else to hand over from its address, and nothing else', () => {
+  expect(placeOf('/datasets/d1?tab=images')).toEqual({ page: '/datasets/d1?tab=images', title: 'This dataset' });
+  expect(placeOf('/leaderboards/road-seg/2/judges')).toMatchObject({ title: 'Suite road-seg v2' });
+  expect(placeOf('/evaluations/e1')).toMatchObject({ title: 'This evaluation' });
+  for (const path of ['/datasets', '/projects/p1', '/suites/road/latest', '/evaluations/e1/compare/e2'])
+    expect(placeOf(path)).toBeUndefined();
+  expect(samePage('/datasets/d1?tab=a', '/datasets/d1')).toBe(true);
+  expect(samePage('/datasets/d1', '/datasets/d2')).toBe(false);
+});
+
 describe('opening chat from an address', () => {
   const at = (query: string) => window.history.replaceState(null, '', `/chat${query}`);
   afterEach(() => at(''));
@@ -54,6 +77,13 @@ describe('opening chat from an address', () => {
   it('opens a paper from /chat?paper=…', () => {
     at('?paper=paper1&title=CLFTv2');
     expect(requestFromUrl()).toEqual({ kind: 'assistant', paperId: 'paper1', title: 'CLFTv2' });
+  });
+
+  it('opens on a page from /chat?page=…, never on another site', () => {
+    at('?page=%2Fdatasets%2Fd1&title=Road%20scenes');
+    expect(requestFromUrl()).toEqual({ kind: 'assistant', page: '/datasets/d1', title: 'Road scenes' });
+    at('?page=%2F%2Fexample.com');
+    expect(requestFromUrl()).toBeUndefined();
   });
 
   it('still opens a project, and a project wins over a stray paper', () => {

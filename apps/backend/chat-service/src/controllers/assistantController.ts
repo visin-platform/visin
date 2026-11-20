@@ -1,6 +1,7 @@
 import { getAssistantProfile, saveAssistantProfile } from '../services/assistantProfiles';
 import type { Request, Response } from 'express';
 import * as service from '../services/assistantService';
+import { myAllowance } from '../services/allowance';
 import { paramId } from '../utils/request';
 
 export async function listAssistants(req: Request, res: Response): Promise<void> {
@@ -38,4 +39,8 @@ export async function saveProfile(req: Request, res: Response): Promise<void> {
 export async function getDefaultAssistant(req: Request, res: Response): Promise<void> {
   const assistant = await service.defaultAssistantFor(req.user!.id);
   res.json({ success: true, data: assistant ? { _id: assistant.id, name: assistant.name } : null });
+}
+
+export async function getMyAllowance(req: Request, res: Response): Promise<void> {
+  res.json({ success: true, data: await myAllowance(req.user!.id) });
 }

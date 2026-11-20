@@ -4,11 +4,13 @@ import { vi, type Mock } from 'vitest';
 import {
   analyze,
   projectNotesOf,
+  stepDetail,
   reservationFor,
   RESERVATION,
   MAX_THOUGHT_CHARS,
   MAX_THOUGHTS
 } from '../../services/analyst';
+import { TOOL_REQUEST_BYTES } from '../../services/providers';
 vi.mock('@modelcontextprotocol/sdk/client/index.js', async () => {
   const module = await (() => ({ Client: vi.fn() }))();
   return Object.assign({ default: module }, module);
@@ -157,6 +159,45 @@ it('says nothing about steps when nobody is watching, and a cached read is not a
   provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Fine.' }]));
   await expect(analyze(input())).resolves.toMatchObject({ text: 'Fine.' });
 });
+it('names the words a search used in its step, and nothing for a read that is not a search', async () => {
+  transport.listTools.mockResolvedValue({ tools: ['search_visin', 'get_training'].map((name) => ({ name, inputSchema: { type: 'object' } })) });
+  provider.mockResolvedValueOnce(
+    answer(
+      [
+        { type: 'tool_use', id: 's1', name: 'search_visin', input: { terms: ['autonomous vehicles', 'driving'] } },
+        { type: 'tool_use', id: 's2', name: 'get_training', input: { training: 'run1' } }
+      ],
+      'tool_use'
+    )
+  );
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Found.' }]));
+  const step = { start: vi.fn(async (_tool: string, _detail?: string) => undefined), end: vi.fn(async (_tool: string) => undefined) };
+  await analyze({ ...input(), step });
+  expect(step.start).toHaveBeenCalledWith('search_visin', 'autonomous vehicles, driving');
+  expect(step.start).toHaveBeenCalledWith('get_training', undefined);
+});
+describe('what a step says a search was for', () => {
+  it('joins the terms, and reads the search word of the list and paper tools', () => {
+    expect(stepDetail('search_visin', { terms: ['road', 'lidar'] })).toBe('road, lidar');
+    expect(stepDetail('list_projects', { search: 'driving' })).toBe('driving');
+    expect(stepDetail('list_datasets', { search: 'kitti' })).toBe('kitti');
+    expect(stepDetail('list_papers', { search: 'fusion' })).toBe('fusion');
+    expect(stepDetail('search_paper', { paper: 'p', query: 'mIoU' })).toBe('mIoU');
+  });
+  it('has nothing for another tool, or a search with no words, and keeps only text', () => {
+    expect(stepDetail('get_project', { project: 'p1', search: 'x' })).toBeUndefined();
+    expect(stepDetail('list_projects', {})).toBeUndefined();
+    expect(stepDetail('list_projects', { search: '   ' })).toBeUndefined();
+    expect(stepDetail('list_projects', { search: { evil: true } })).toBeUndefined();
+    expect(stepDetail('search_visin', { terms: [1, null, 'ok'] })).toBe('ok');
+  });
+  it('flattens whitespace and cuts a long search short', () => {
+    expect(stepDetail('list_projects', { search: 'a\n\n  b' })).toBe('a b');
+    const long = stepDetail('list_projects', { search: 'x'.repeat(200) })!;
+    expect(long).toHaveLength(80);
+    expect(long.endsWith('…')).toBe(true);
+  });
+});
 it('fails closed when initial project access is lost', async () => {
   call.mockResolvedValue({ isError: true, content: [] });
   await expect(analyze(input())).rejects.toThrow('Project is no longer accessible');
@@ -200,13 +241,116 @@ it('does not return a truncated final answer or provider secrets in an error', a
   provider.mockResolvedValue(new Response('sensitive provider diagnostics', { status: 429 }));
   await expect(analyze(input())).rejects.toThrow('Assistant provider unavailable (429)');
 });
-it('does not connect to experiment tools for general private chat', async () => {
+it('connects to the tools in a private chat with no project, so Vivi can look things up', async () => {
+  transport.listTools.mockResolvedValue({
+    tools: ['search_visin', 'list_papers', 'list_datasets', 'get_dataset', 'get_paper', 'record_finding'].map((name) => ({
+      name,
+      inputSchema: { type: 'object' }
+    }))
+  });
   provider.mockResolvedValue(answer([{ type: 'text', text: 'General explanation.' }]));
   const args = input();
   delete (args as { projectId?: string }).projectId;
   await analyze(args);
+  expect(transport.connect).toHaveBeenCalledTimes(1);
+  const body = JSON.parse(provider.mock.calls[0][1].body);
+  const names = (body.tools as { name: string }[]).map((t) => t.name);
+  // The read tools for finding things, papers included, and never a write tool.
+  expect(names).toEqual(expect.arrayContaining(['search_visin', 'list_papers', 'list_datasets', 'get_dataset', 'get_paper']));
+  expect(names).not.toContain('record_finding');
+  expect(JSON.stringify(body.system)).toContain('call search_visin');
+  expect(JSON.stringify(body.system)).toContain('never ask the person to paste');
+});
+it('never connects, and has no lookup rules, in a shared conversation', async () => {
+  provider.mockResolvedValue(answer([{ type: 'text', text: 'Fine.' }]));
+  await analyze({ ...input(), shared: true, projectId: undefined, token: '' });
   expect(transport.connect).not.toHaveBeenCalled();
-  expect(call).not.toHaveBeenCalled();
+  const body = JSON.parse(provider.mock.calls[0][1].body);
+  expect(body.tools).toBeUndefined();
+  expect(JSON.stringify(body.system)).not.toContain('search_visin');
+});
+it('refuses a tool that is not on the allowlist, even if the server offers it', async () => {
+  transport.listTools.mockResolvedValue({
+    tools: [{ name: 'update_project', inputSchema: { type: 'object' } }, { name: 'search_visin', inputSchema: { type: 'object' } }]
+  });
+  provider.mockResolvedValueOnce(
+    answer([{ type: 'tool_use', id: 't1', name: 'update_project', input: { project: 'p1' } }], 'tool_use')
+  );
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Done.' }]));
+  await expect(analyze(input())).rejects.toThrow('Tool unavailable');
+  expect(call).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'update_project' }), undefined, expect.anything());
+});
+it('keeps a long topic search whole, where an ordinary read is cut', async () => {
+  transport.listTools.mockResolvedValue({ tools: [{ name: 'search_visin', inputSchema: { type: 'object' } }] });
+  call.mockResolvedValue({ content: [{ type: 'text', text: 's'.repeat(7000) }] });
+  provider.mockResolvedValueOnce(
+    answer([{ type: 'tool_use', id: 't1', name: 'search_visin', input: { terms: ['road'] } }], 'tool_use')
+  );
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Found.' }]));
+  await analyze(input());
+  expect(JSON.stringify(JSON.parse(provider.mock.calls[1][1].body).messages)).not.toContain('TRUNCATED');
+});
+it('reads the page beside the chat even when no project is selected, as the asker', async () => {
+  const id = 'b'.repeat(24);
+  provider.mockResolvedValue(answer([{ type: 'text', text: 'It is doing well.' }]));
+  const args = { ...input(), screenContext: { tabId: 'tab-1111', path: `/trainings/${id}` } };
+  delete (args as { projectId?: string }).projectId;
+  await analyze(args);
+  expect(call).toHaveBeenCalledWith(
+    { name: 'get_training', arguments: { training: id, detail: 'identity' } },
+    undefined,
+    expect.anything()
+  );
+  expect(JSON.stringify(JSON.parse(provider.mock.calls[0][1].body).messages)).toContain(id);
+});
+it('names a paper, dataset or suite page only once the asker\'s own read of it succeeded', async () => {
+  const paper = 'c'.repeat(24);
+  const send = async (path: string, fail: boolean) => {
+    provider.mockClear();
+    call.mockImplementation(async () => (fail ? { isError: true, content: [{ type: 'text', text: 'not found' }] } : { content: [{ type: 'text', text: 'ok' }] }));
+    provider.mockResolvedValue(answer([{ type: 'text', text: 'Fine.' }]));
+    const args = { ...input(), screenContext: { tabId: 'tab-1111', path } };
+    delete (args as { projectId?: string }).projectId;
+    await analyze(args);
+    return JSON.stringify(JSON.parse(provider.mock.calls[0][1].body).messages);
+  };
+  expect(await send(`/papers/${paper}`, false)).toContain(paper);
+  // Someone else's private paper reads as not found, so its id never reaches the model.
+  expect(await send(`/papers/${paper}`, true)).not.toContain(paper);
+  expect(await send(`/datasets/${paper}`, false)).toContain(paper);
+  expect(await send(`/datasets/${paper}`, true)).not.toContain(paper);
+  expect(await send('/suites/road-seg/2', false)).toContain('road-seg');
+  expect(await send('/leaderboards/road-seg/2', true)).not.toContain('road-seg');
+  expect(await send(`/evaluations/${paper}`, false)).toContain(paper);
+  expect(call).toHaveBeenLastCalledWith(
+    { name: 'get_worst_conditions', arguments: { evaluation: paper } },
+    undefined,
+    expect.anything()
+  );
+  expect(await send(`/evaluations/${paper}`, true)).not.toContain(paper);
+});
+it('checks an open dataset quietly: no step and no source, unless the answer reads it too', async () => {
+  const dataset = 'd'.repeat(24);
+  call.mockImplementation(async () => ({ content: [{ type: 'text', text: 'Road scenes' }] }));
+  const started: string[] = [];
+  const step = { start: vi.fn(async (tool: string) => void started.push(tool)), end: vi.fn(async () => undefined) };
+  const args = { ...input(), step, screenContext: { tabId: 'tab-1111', path: `/datasets/${dataset}` } };
+  delete (args as { projectId?: string }).projectId;
+
+  provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Three projects use LiDAR.' }]));
+  const elsewhere = await analyze(args);
+  expect(elsewhere.evidence.map((entry) => entry.tool)).not.toContain('get_dataset');
+  expect(started).not.toContain('get_dataset');
+
+  provider
+    .mockResolvedValueOnce(
+      answer([{ type: 'tool_use', id: 'd1', name: 'get_dataset', input: { dataset } }], 'tool_use')
+    )
+    .mockResolvedValueOnce(answer([{ type: 'text', text: 'It has 1,200 images.' }]));
+  const about = await analyze(args);
+  // Read once for both: the page check's result is reused, and becomes a source once the answer draws on it.
+  expect(call.mock.calls.filter(([request]) => request.name === 'get_dataset')).toHaveLength(2);
+  expect(about.evidence.filter((entry) => entry.tool === 'get_dataset')).toHaveLength(1);
 });
 it('aborts without a provider request and rejects unbounded history', async () => {
   const controller = new AbortController();
@@ -376,7 +520,7 @@ describe('with OpenAI', () => {
   it("counts a reasoning model's tokens against the reservation, and bounds the request size", async () => {
     provider.mockResolvedValue(
       completion({ content: null, tool_calls: [toolCall('get_training', { training: 'run1' })] }, 'tool_calls', {
-        prompt_tokens: 100000,
+        prompt_tokens: 150000,
         completion_tokens: 70000
       })
     );
@@ -826,7 +970,7 @@ it('uses eight rounds by default and honors a configured smaller limit', async (
 
 it('continues a long multi-round analysis within the serialized request budget', async () => {
   transport.listTools.mockResolvedValue({
-    tools: [{ name: 'get_training', description: 'Schema help '.repeat(500), inputSchema: { type: 'object' } }]
+    tools: [{ name: 'get_training', description: 'Schema help '.repeat(1100), inputSchema: { type: 'object' } }]
   });
   call.mockResolvedValue({ content: [{ type: 'text', text: 'Measured data '.repeat(450) }] });
   let round = 0;
@@ -849,7 +993,9 @@ it('continues a long multi-round analysis within the serialized request budget',
   });
   expect(result.providerRequests).toBe(7);
   expect(result.text).toContain('Reviewed');
-  for (const request of provider.mock.calls) expect(Buffer.byteLength(request[1].body)).toBeLessThanOrEqual(34000);
+  // A private chat has the tools' definitions in every request, so its ceiling is the larger one it reserves for.
+  for (const request of provider.mock.calls)
+    expect(Buffer.byteLength(request[1].body)).toBeLessThanOrEqual(TOOL_REQUEST_BYTES);
   expect(provider.mock.calls.at(-1)![1].body).toContain('TRUNCATED FOR CONTEXT');
   expect(provider.mock.calls.at(-1)![1].body).toContain('Lets check trainings');
 });
@@ -994,6 +1140,16 @@ describe('a conversation about a paper', () => {
     expect(provider).not.toHaveBeenCalled();
   });
 
+  it('keeps a paper read outside a paper conversation to what an ordinary round holds', async () => {
+    call.mockImplementation(async () => ({ content: [{ type: 'text', text: 'p'.repeat(15000) }] }));
+    provider.mockResolvedValueOnce(
+      answer([{ type: 'tool_use', id: 'r1', name: 'read_paper_pages', input: { paper: 'x', from: 1 } }], 'tool_use')
+    );
+    provider.mockResolvedValueOnce(answer([{ type: 'text', text: 'Read.' }]));
+    await analyze(input());
+    expect(JSON.stringify(JSON.parse(provider.mock.calls[1][1].body).messages)).toContain('TRUNCATED');
+  });
+
   it('keeps a whole read of pages, where any other result is cut to a few thousand characters', async () => {
     const pages = 'p'.repeat(15000);
     call.mockImplementation(async (request) => ({
@@ -1027,11 +1183,12 @@ describe('a conversation about a paper', () => {
     expect(reservationFor(false, 4, 0, 80000)).toBeGreaterThan(reservationFor(false, 4));
   });
 
-  it('adds no paper rules and no paper tools to a project analysis or a shared chat', async () => {
+  it('adds no paper rules to a project analysis, and no tools at all to a shared chat; the paper tools are everywhere else', async () => {
     provider.mockImplementation(async () => answer([{ type: 'text', text: 'Fine.' }]));
     await analyze(input());
     expect(JSON.stringify(sent().system)).not.toContain('one research paper');
-    expect(sentTools()).toEqual(['get_training', 'get_screen_context']);
+    // The paper tools are offered in every private chat, so a paper can be found and read without being handed over.
+    expect(sentTools()).toEqual(['get_paper', 'get_training', 'read_paper_pages', 'search_paper', 'get_screen_context']);
     await analyze({ ...paperInput(), shared: true });
     expect(sentTools(1)).toBeUndefined();
   });

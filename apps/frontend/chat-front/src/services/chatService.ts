@@ -1,4 +1,5 @@
 import type {
+  Allowance,
   Capabilities,
   ChatContact,
   ChatGroup,
@@ -28,6 +29,8 @@ export const chatService = {
   remove: (id: string) => apiDelete(`/conversations/${id}`, {}),
   /** A new topic in a chat with an assistant: it forgets what was asked before. */
   newTopic: (id: string) => api<Message>(`/conversations/${id}/topic`, {}),
+  /** What is left of today's Vivi allowance. */
+  allowance: (signal?: AbortSignal) => read<Allowance>('/usage/me', signal),
   capabilities: (signal?: AbortSignal) => read<Capabilities>('/capabilities', signal),
   groups: (signal?: AbortSignal) => read<ChatGroup[]>('/groups', signal),
   projects: (signal?: AbortSignal) => read<ChatProject[]>('/projects', signal),

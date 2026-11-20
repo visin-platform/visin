@@ -20,6 +20,7 @@ import {
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { Chip } from '@mui/material';
 import { PageHeader, ResponsiveActions, type ResponsiveAction, VerificationMark } from '@visin/frontend-core';
+import AskAboutThisPage from '../components/analysis/AskAboutThisPage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
@@ -182,15 +183,18 @@ const EvaluationDetailPage: React.FC = () => {
         title={checkpointLabel(evaluation.checkpoint)}
         subtitle={suite ? `Scored on ${suite.slug}@${suite.version}` : 'Not scored on a suite'}
         actions={
-          actions.length > 0 ? (
-            // Everything but the trash stays a button on desktop: the destructive one is always behind ⋮.
-            <ResponsiveActions
-              actions={actions}
-              keepOnPhone={1}
-              keepOnDesktop={actions.length - 1}
-              menuLabel="More actions for this evaluation"
-            />
-          ) : undefined
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AskAboutThisPage title={checkpointLabel(evaluation.checkpoint)} label="Ask Vivi about this evaluation" />
+            {actions.length > 0 && (
+              // Everything but the trash stays a button on desktop: the destructive one is always behind ⋮.
+              <ResponsiveActions
+                actions={actions}
+                keepOnPhone={1}
+                keepOnDesktop={actions.length - 1}
+                menuLabel="More actions for this evaluation"
+              />
+            )}
+          </Box>
         }
       />
 

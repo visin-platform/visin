@@ -46,7 +46,7 @@ describe('analyst settings', () => {
       provider: 'anthropic',
       model: '',
       dailyTokenLimit: 800000,
-      tokenReservation: 440000,
+      tokenReservation: 550000,
       source: 'default',
       ready: false
     });
@@ -281,7 +281,7 @@ describe('the daily token limit', () => {
     expect(saved.status).toBe(200);
     expect(((await saved.json()) as { data: Record<string, unknown> }).data).toMatchObject({
       dailyTokenLimit: 2000000,
-      tokenReservation: 440000,
+      tokenReservation: 550000,
       source: 'admin'
     });
     // Saving only the switch leaves the limit alone.
@@ -291,15 +291,49 @@ describe('the daily token limit', () => {
   });
 
   it('is a whole number of tokens, at least what one question reserves, and not absurdly large', async () => {
-    const tooSmall = await save({ dailyTokenLimit: 439999 });
+    const tooSmall = await save({ dailyTokenLimit: 549999 });
     expect(tooSmall.status).toBe(400);
-    expect(((await tooSmall.json()) as { message: string }).message).toContain('at least 440,000 tokens');
-    expect((await save({ dailyTokenLimit: 440000 })).status).toBe(200);
+    expect(((await tooSmall.json()) as { message: string }).message).toContain('at least 550,000 tokens');
+    expect((await save({ dailyTokenLimit: 550000 })).status).toBe(200);
     expect((await save({ dailyTokenLimit: 1_000_000_001 })).status).toBe(400);
     expect((await save({ dailyTokenLimit: 1_000_000_000 })).status).toBe(200);
     for (const bad of [1.5, '800000', -5, 0, null, Number.NaN])
       expect((await save({ dailyTokenLimit: bad })).status).toBe(400);
     expect((await view()).dailyTokenLimit).toBe(1_000_000_000);
+  });
+
+  it('tells a question refused for room held by the asker\'s other running questions to try again, not to wait a day', async () => {
+    await enableAnalyst('test');
+    const day = new Date().toISOString().slice(0, 10);
+    // 100,000 spent, and 600,000 held by another question still running: it will give most of that back.
+    await Budget.create({ userId: 'alice', day, reserved: 700000 });
+    await AssistantRun.create({
+      conversationId: 'elsewhere',
+      messageId: 'other-question',
+      userId: 'alice',
+      email: 'alice@test.invalid',
+      name: 'Alice',
+      state: 'running',
+      leaseUntil: new Date(Date.now() + 60000),
+      reservation: { day, tokens: 600000 }
+    });
+    await Settings.updateOne({ _id: 'assistant' }, { $set: { dailyTokenLimit: 800000 } });
+    resetAssistantSettingsCache();
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Meanwhile', clientId: 'busy-question-1' });
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    const refused = await AssistantRun.findOne({ conversationId: id });
+    expect(refused?.state).toBe('failed');
+    expect(refused?.failureCode).toBe('busy');
+    expect(refused?.error).toContain('still running');
+    // Another day's hold is not this day's: the same reservation dated yesterday leaves a plain "used".
+    await AssistantRun.updateOne({ messageId: 'other-question' }, { $set: { 'reservation.day': '2000-01-01' } });
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Again', clientId: 'busy-question-2' });
+    await worker.tick();
+    const second = await AssistantRun.findOne({ conversationId: id }).sort({ createdAt: -1 });
+    expect(second?.failureCode).toBe('limit_reached');
   });
 
   it('is applied to the next question: a person who has used most of it is refused, until it is raised', async () => {
@@ -318,6 +352,7 @@ describe('the daily token limit', () => {
     const refused = await AssistantRun.findOne({ conversationId: id });
     expect(refused?.state).toBe('failed');
     expect(refused?.error).toContain('daily assistant token budget is used');
+    expect(refused?.failureCode).toBe('limit_reached');
     // Nothing was added to what they had used.
     expect((await Budget.findOne({ userId: 'alice', day }))?.reserved).toBe(300000);
 
@@ -358,6 +393,7 @@ describe('the daily token limit', () => {
     const run = await AssistantRun.findOne({ messageId: question.id });
     expect(run?.state).toBe('failed');
     expect(run?.error).toContain('key is configured');
+    expect(run?.failureCode).toBe('assistant_off');
     expect(await Budget.countDocuments()).toBe(0);
   });
 });
@@ -367,12 +403,12 @@ describe('the tool-round limit', () => {
     await makeAdmin();
     await enableAnalyst();
     const view = async () => (await request('/settings/assistant', ADMIN)).body.data;
-    expect(await view()).toMatchObject({ toolRounds: 8, tokenReservation: 440000 });
+    expect(await view()).toMatchObject({ toolRounds: 8, tokenReservation: 550000 });
     const save = (extra: object) => putSettings(ADMIN, { enabled: false, provider: 'anthropic', model: '', ...extra });
     for (const toolRounds of [1, 17, 2.5, '8', null]) expect((await save({ toolRounds })).status).toBe(400);
-    expect((await save({ toolRounds: 12, dailyTokenLimit: 599999 })).status).toBe(400);
-    expect((await save({ toolRounds: 12, dailyTokenLimit: 600000 })).status).toBe(200);
-    expect(await view()).toMatchObject({ toolRounds: 12, tokenReservation: 600000 });
+    expect((await save({ toolRounds: 12, dailyTokenLimit: 749999 })).status).toBe(400);
+    expect((await save({ toolRounds: 12, dailyTokenLimit: 750000 })).status).toBe(200);
+    expect(await view()).toMatchObject({ toolRounds: 12, tokenReservation: 750000 });
     expect((await save({})).status).toBe(200);
     expect((await Settings.findById('assistant'))?.toolRounds).toBe(12);
   });

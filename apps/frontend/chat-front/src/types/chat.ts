@@ -8,6 +8,11 @@ export interface PageContext {
   title?: string;
   /** For showing only; the conversation is named from the project itself. */
   projectName?: string;
+  /**
+   * A page with no project or paper to hand over (a dataset, a suite), as an app path. Sent as the page the question
+   * was asked on when the chat cannot see that page itself: on a phone, or on the chat page.
+   */
+  page?: string;
 }
 
 /** A deliberate request to open chat on something: an analysis, a project discussion, a person, a group. */
@@ -102,6 +107,8 @@ export interface Message {
 
 export interface RunStep {
   tool?: string;
+  /** What a search was for, in the model's words. */
+  detail?: string;
   thought?: string;
   startedAt: string;
   endedAt?: string;
@@ -119,6 +126,20 @@ export interface Run {
   state: string;
   activity: string;
   error?: string;
+  /** Why it failed, as a code a page can act on; `error` is the text. */
+  failureCode?:
+    | 'limit_reached'
+    | 'busy'
+    | 'assistant_off'
+    | 'access_changed'
+    | 'no_access'
+    | 'too_large'
+    | 'image'
+    | 'timeout'
+    | 'interrupted'
+    | 'provider_error'
+    | 'stopped'
+    | 'other';
   /**
    * What the analyst has thought and done so far, in order, while it works: a read (`tool`) or a note it wrote before
    * reading (`thought`). Only in the asker's own analyst thread.
@@ -196,3 +217,12 @@ export interface FindingInput {
 }
 
 export type MessageUpdate = Pick<Message, '_id' | 'revision' | 'unsentAt' | 'reactions'>;
+
+/** What is left of today's Vivi allowance, so a limit is never a surprise. */
+export interface Allowance {
+  requests: { used: number; limit: number; remaining: number };
+  tokens: { used: number; limit: number; remaining: number };
+  /** The smaller share of the two that is left: the one that runs out first. */
+  remainingShare: number;
+  resetsAt: string;
+}

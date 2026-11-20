@@ -64,6 +64,15 @@ it('offers no actions for an unsent message', () => {
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 
+it('offers no reaction on an assistant\'s answer, in the row beside it or in its menu', () => {
+  const answer: Message = { ...message, _id: 'a2', kind: 'assistant', senderName: 'Vivi', body: 'Peak at 42.' };
+  render(<MessageActions message={answer} userId="bob" onCopy={vi.fn()} onReply={vi.fn()} onReact={vi.fn()} />);
+  expect(screen.queryByRole('button', { name: 'React to message' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Message actions' }));
+  expect(screen.queryByRole('group', { name: 'Quick reactions' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^React / })).toBeNull();
+});
+
 it('treats an answer like any message beside it, and keeps copy and save in its menu', async () => {
   const answer: Message = { ...message, _id: 'a1', kind: 'assistant', senderName: 'Vivi', body: 'Peak at 42.' };
   const copy = vi.fn(),

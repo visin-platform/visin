@@ -24,6 +24,8 @@ import { PAGE, mergeMessages, applyMessageUpdates } from '../../utils/messages';
 import { AnalysisHint } from './AnalysisHint';
 import { continuesRun } from '../../utils/messageRuns';
 import { aboutLabel, sameAbout } from '../../utils/chatContext';
+import { failureNote } from '../../utils/failure';
+import { useAllowance } from '../../hooks/useAllowance';
 
 /** A message this young eases in as it arrives. */
 const FRESH_MS = 8000;
@@ -36,6 +38,36 @@ function messageDay(value: string) {
   yesterday.setDate(today.getDate() - 1);
   if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** A failed question: what happened, in words that say what to do, and Try again where asking again can help. */
+function FailedRun({
+  run,
+  resetsAt,
+  retry,
+  sending
+}: {
+  run: Parameters<typeof failureNote>[0];
+  resetsAt?: string;
+  retry?: () => void;
+  sending: boolean;
+}) {
+  const note = failureNote(run, resetsAt);
+  return (
+    <Alert
+      severity="warning"
+      action={
+        retry &&
+        note.retry && (
+          <Button color="inherit" size="small" startIcon={<Refresh />} disabled={sending} onClick={retry}>
+            Retry
+          </Button>
+        )
+      }
+    >
+      {note.text}
+    </Alert>
+  );
 }
 
 export function MessageList() {
@@ -82,6 +114,9 @@ export function MessageList() {
     if (manualCopy && messages.some((message) => message._id === manualCopy.messageId && message.unsentAt))
       setManualCopy(undefined);
   }, [messages, manualCopy]);
+  // Only a day-limit failure needs the reset time: asked for then, from the same quiet look-up the notice uses.
+  const limited = latestRun?.state === 'failed' && latestRun.failureCode === 'limit_reached';
+  const { data: allowance } = useAllowance(Boolean(c) && limited);
   if (!c) return null;
   const ownRun = (run: (typeof runs)[number]) => c.kind === 'assistant' || run.userId === user?.id;
   // The answer being written, shown until it is a message. Only in the asker's own analyst thread, which is all the
@@ -221,27 +256,16 @@ export function MessageList() {
         </Box>
       )}
       {latestRun?.state === 'failed' && !running && (
-        <Alert
-          severity="warning"
-          action={
-            failedQuestion &&
-            c.kind === 'assistant' &&
-            enabled &&
-            (latestRun.canRetry ?? ownRun(latestRun)) && (
-              <Button
-                color="inherit"
-                size="small"
-                startIcon={<Refresh />}
-                disabled={sending}
-                onClick={() => void post(failedQuestion.body, false, failedQuestion.replyTo, [], failedQuestion.context)}
-              >
-                Retry
-              </Button>
-            )
+        <FailedRun
+          run={latestRun}
+          resetsAt={allowance?.resetsAt}
+          retry={
+            failedQuestion && c.kind === 'assistant' && enabled && (latestRun.canRetry ?? ownRun(latestRun))
+              ? () => void post(failedQuestion.body, false, failedQuestion.replyTo, [], failedQuestion.context)
+              : undefined
           }
-        >
-          {latestRun.error || 'The analysis failed.'}
-        </Alert>
+          sending={sending}
+        />
       )}
       <Dialog
         open={manualCopy !== undefined}

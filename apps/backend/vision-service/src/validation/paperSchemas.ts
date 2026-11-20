@@ -119,6 +119,13 @@ export const publicPapersQuerySchema = z.object({
 });
 export type PublicPapersQuery = z.infer<typeof publicPapersQuerySchema>;
 
+/** An assistant's look-up of the papers a person can read: words to search for, and how many to bring back. */
+export const paperListQuerySchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  limit: z.coerce.number().int().positive().max(25).default(10)
+});
+export type PaperListQuery = z.infer<typeof paperListQuerySchema>;
+
 /** What the caller's own papers can be asked: their live ones, or the trash. */
 export const myPapersQuerySchema = z.object({
   scope: z.enum(['mine', 'trash']).default('mine')

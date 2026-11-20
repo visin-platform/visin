@@ -799,6 +799,29 @@ export const paperForAssistantSchema = z
   .loose();
 export type PaperForAssistant = z.infer<typeof paperForAssistantSchema>;
 
+/** The papers a person may read, as a list shows them: enough to choose one, then read it with its id. */
+export const paperListSchema = z
+  .object({
+    papers: z.array(
+      z
+        .object({
+          id: z.string(),
+          title: z.string(),
+          authors: z.array(z.object({ name: z.string() }).loose()).catch([]),
+          venue: z.string().optional(),
+          year: z.number().optional(),
+          arxivId: z.string().optional(),
+          doi: z.string().optional(),
+          abstract: z.string().optional(),
+          tags: z.array(z.string()).catch([]),
+          visibility: z.enum(['private', 'public']).catch('private')
+        })
+        .loose()
+    )
+  })
+  .loose();
+export type PaperList = z.infer<typeof paperListSchema>;
+
 export const paperSearchSchema = z
   .object({
     query: z.string(),

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { createRef, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +11,13 @@ const chat = vi.hoisted(() => ({
   cancel: vi.fn(async () => undefined),
   react: vi.fn(),
   unsend: vi.fn(),
-  messages: vi.fn(async () => [])
+  messages: vi.fn(async () => []),
+  allowance: vi.fn(async () => ({
+    requests: { used: 100, limit: 100, remaining: 0 },
+    tokens: { used: 0, limit: 800000, remaining: 800000 },
+    remainingShare: 0,
+    resetsAt: '2026-11-21T00:00:00Z'
+  }))
 }));
 vi.mock('../../services/chatService', () => ({ chatService: chat }));
 
@@ -80,7 +87,9 @@ function mount(
     ...extra
   };
   const wrap = (children: ReactNode) => (
-    <ChatWorkspaceContext.Provider value={value as never}>{children}</ChatWorkspaceContext.Provider>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <ChatWorkspaceContext.Provider value={value as never}>{children}</ChatWorkspaceContext.Provider>
+    </QueryClientProvider>
   );
   return render(wrap(<MessageList />));
 }
@@ -167,6 +176,35 @@ describe('the rest of the thread', () => {
     mount({ runs: [run({ state: 'failed', error: 'Provider unavailable' })], messages: [] });
     expect(screen.getByText('Provider unavailable')).toBeInTheDocument();
     expect(screen.getByText(/Ask about results/)).toBeInTheDocument();
+  });
+
+  it('says what to do about a used-up day, with the reset time, and offers no retry that would fail the same way', async () => {
+    const failed = message({ body: 'Why is it worse?' });
+    mount(
+      { runs: [run({ state: 'failed', failureCode: 'limit_reached', error: 'Your daily Vivi question allowance is used.' })], messages: [failed] },
+      { failedQuestion: failed }
+    );
+    expect(await screen.findByText(/You have used today’s Vivi allowance\. It resets at .+ \(your time\)\./)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('offers Retry after a failure asking again can help with', () => {
+    const failed = message({ body: 'Why is it worse?' });
+    const post = vi.fn();
+    mount(
+      { runs: [run({ state: 'failed', failureCode: 'timeout', error: 'timed out', canRetry: true })], messages: [failed] },
+      { failedQuestion: failed, post }
+    );
+    expect(screen.getByText(/took too long/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(post).toHaveBeenCalledWith('Why is it worse?', false, undefined, [], undefined);
+  });
+
+  it('asks a starter question in the thread that exists, and offers none after an answer', () => {
+    const post = vi.fn();
+    mount({ runs: [], messages: [] }, { post });
+    fireEvent.click(screen.getByRole('button', { name: 'Projects on Visin' }));
+    expect(post).toHaveBeenCalledWith('What projects are on Visin?', false);
   });
 
   it('draws nothing without a conversation', () => {

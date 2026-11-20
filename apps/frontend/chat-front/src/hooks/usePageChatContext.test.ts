@@ -75,3 +75,15 @@ it('makes what was asked to be opened on what the next question is about, until 
   });
   expect(result.current).toMatchObject({ projectId: 'p3' });
 });
+
+it('takes a request made before the chat loaded as what the next question is about, as a phone sends it', () => {
+  window.__visinChatContext = { kind: 'assistant', page: '/datasets/d1', title: 'Road scenes' };
+  const analyze = vi.fn(),
+    handle = vi.fn();
+  const { result } = renderHook(() =>
+    usePageChatContext({ panel: false, loaded: true, enabled: true, composing: false, analyze, handle })
+  );
+  expect(result.current).toMatchObject({ page: '/datasets/d1', title: 'Road scenes' });
+  expect(handle).toHaveBeenCalledWith(expect.objectContaining({ page: '/datasets/d1' }));
+  expect(window.__visinChatContext).toBeUndefined();
+});

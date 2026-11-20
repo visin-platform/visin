@@ -29,7 +29,7 @@ export async function visibleRuns(c: ChatConversation, userId: string) {
   if (['direct', 'room'].includes(c.kind) && !c.participants.some((p) => p.userId === userId && p.state === 'active'))
     return [];
   const runs = await AssistantRun.find({ conversationId: c._id.toString() })
-    .select('_id messageId userId assistantId assistantName state activity error')
+    .select('_id messageId userId assistantId assistantName state activity error failureCode')
     .sort({ createdAt: -1 })
     .limit(20)
     .lean();
@@ -54,6 +54,7 @@ export async function visibleRuns(c: ChatConversation, userId: string) {
       ...(run.error
         ? { error: run.userId === userId ? run.error : 'The assistant could not complete this reply.' }
         : {}),
+      ...(run.failureCode && run.userId === userId ? { failureCode: run.failureCode } : {}),
       canCancel: run.userId === userId && ['queued', 'screen_queued', 'running'].includes(run.state),
       canRetry: run.userId === userId && run.state === 'failed'
     }));

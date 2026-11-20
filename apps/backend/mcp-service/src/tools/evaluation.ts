@@ -300,25 +300,31 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         'Where a model falls down. With an evaluation id, its conditions from weakest to strongest on the suite\'s headline ' +
         'metric, in the suite\'s direction (so for a loss the weakest is the highest). Without one, each ranked model on a ' +
         'suite with the condition it is weakest in, the worst first — the answer to "which model collapses in the dark?". ' +
-        'A model can lead overall and still be the worst in one condition. ' +
+        'A model can lead overall and still be the worst in one condition. An evaluation id alone is enough: it names its suite. ' +
         CAVEAT,
       inputSchema: {
-        suite: z.string().describe('slug@version, such as road-test@1, or the slug alone for the newest version'),
+        suite: z.string().optional().describe('slug@version, such as road-test@1, or the slug alone for the newest version; optional with an evaluation'),
         evaluation: z.string().optional().describe('An evaluation id, shown in square brackets after each row of get_leaderboard, to look at one model\'s conditions'),
         limit: z.number().int().min(1).max(MAX_ROWS).optional().describe(`How many rows without an evaluation (default ${DEFAULT_ROWS})`)
       }
     },
     async ({ suite, evaluation, limit }) => {
-      const ref = parseSuite(suite);
-      if (!ref) return badSuite(suite);
+      if (!suite && !evaluation) return fail('Name a suite (slug@version), an evaluation id, or both.');
+      const ref = suite ? parseSuite(suite) : undefined;
+      if (suite && !ref) return badSuite(suite);
       try {
-        const details = await vision.getSuite(key, ref.slug, ref.version);
+        // An evaluation is read first when there is one: it says which suite it is on, and whether it can be read at all.
+        const record = evaluation ? await vision.getEvaluation(key, evaluation) : undefined;
+        const target = ref ?? (record?.suite ? { slug: record.suite.slug, version: record.suite.version } : undefined);
+        if (!target) {
+          return ok(`${modelName(record?.checkpoint)} was measured on no suite, so it has no suite conditions to rank. get_test_results shows what its run reported.`);
+        }
+        const details = await vision.getSuite(key, target.slug, target.version);
         const headline = details.protocol.metrics.find((item) => item.headline);
         if (!headline) return fail(`${details.slug}@${details.version} names no headline metric to rank conditions by.`);
         const worstFirst = (a: number, b: number) => (headline.direction === 'max' ? a - b : b - a);
 
-        if (evaluation) {
-          const record = await vision.getEvaluation(key, evaluation);
+        if (record) {
           if (record.suite && (record.suite.slug !== details.slug || record.suite.version !== details.version)) {
             return fail(`That evaluation is on ${record.suite.slug}@${record.suite.version}, not ${details.slug}@${details.version}; conditions are only comparable within one suite version.`);
           }

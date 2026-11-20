@@ -46,6 +46,8 @@ import {
   paperForAssistantSchema,
   paperSearchSchema,
   paperPagesSchema,
+  paperListSchema,
+  type PaperList,
   type PaperForAssistant,
   type PaperSearch,
   type PaperPages
@@ -78,6 +80,9 @@ const post = async <T>(
 ): Promise<T> => parseResponse(schema, path, await callService(base(), apiKey, 'POST', path, body));
 
 export const vision = {
+  listPapers: (apiKey: string, search?: string, limit?: number): Promise<PaperList> =>
+    get(paperListSchema, apiKey, '/paper-documents', { search, limit }),
+
   getPaper: (apiKey: string, id: string): Promise<PaperForAssistant> =>
     get(paperForAssistantSchema, apiKey, `/paper-documents/${encodeURIComponent(id)}`),
 

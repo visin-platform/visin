@@ -2,9 +2,26 @@ import {
   budgetPlans,
   FRAME_IMAGES,
   FRAME_TOKENS_PER_ROUND,
+  requestBytesFor,
   reservationFor,
   TOKENS_PER_ROUND
 } from '../../services/analysisLimits';
+import { MAX_REQUEST_BYTES, PAPER_REQUEST_BYTES, TOOL_REQUEST_BYTES } from '../../services/providers';
+
+it('gives each kind of turn the request ceiling it reserves for: pages, tools, or neither', () => {
+  expect(requestBytesFor(true, true)).toBe(PAPER_REQUEST_BYTES);
+  expect(requestBytesFor(true, false)).toBe(PAPER_REQUEST_BYTES);
+  expect(requestBytesFor(false, true)).toBe(TOOL_REQUEST_BYTES);
+  // A shared answer has no tools and keeps the default: undefined is what the reservation maths reads as that.
+  expect(requestBytesFor(false, false)).toBeUndefined();
+  expect(MAX_REQUEST_BYTES).toBeLessThan(TOOL_REQUEST_BYTES);
+  expect(TOOL_REQUEST_BYTES).toBeLessThan(PAPER_REQUEST_BYTES);
+});
+it('reserves more for a tool chat than a shared one, and still fits a default day for a few rounds', () => {
+  expect(reservationFor(false, 8, 0, TOOL_REQUEST_BYTES)).toBeGreaterThan(reservationFor(false, 8));
+  // The default daily limit (800,000) holds at least one whole question with the tools.
+  expect(reservationFor(false, 8, 0, TOOL_REQUEST_BYTES)).toBeLessThanOrEqual(800_000);
+});
 
 it('prefers page changes, then the full rounds without them, then fewer rounds', () => {
   expect(budgetPlans(10_000_000, 8, true)).toEqual([

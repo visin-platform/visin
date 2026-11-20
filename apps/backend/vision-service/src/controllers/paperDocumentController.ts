@@ -2,8 +2,8 @@ import type { Request, Response } from 'express';
 import { NotFoundError } from '@visin/backend-core';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import { documentView, indexPaper, openPaperPdf, readPaperPages, requestIndex, searchPaperText } from '../services/paperDocumentService';
-import { getPaper, readablePaper } from '../services/paperService';
-import type { PaperPagesQuery, PaperSearchQuery } from '../validation/paperSchemas';
+import { getPaper, listReadablePapers, readablePaper } from '../services/paperService';
+import type { PaperListQuery, PaperPagesQuery, PaperSearchQuery } from '../validation/paperSchemas';
 
 /** Where the paper's PDF stands: being read, ready to show and search, or why it could not be read. */
 export const getPaperDocument = async (req: Request, res: Response): Promise<void> => {
@@ -59,4 +59,14 @@ export const readPaper = async (req: Request, res: Response): Promise<void> => {
   const paper = await readablePaper(String(req.params.id), req.user?.id);
   const { from, to } = req.query as unknown as PaperPagesQuery;
   res.json({ success: true, data: await readPaperPages(paper, from, to ?? from) });
+};
+
+/** The papers the person can read, found by words: how an assistant finds a paper it was not handed. */
+export const listPapersForAssistant = async (req: Request, res: Response): Promise<void> => {
+  // Papers are not part of a project, so a key limited to one project finds none.
+  if (tokenProjectId()) {
+    res.json({ success: true, data: { papers: [] } });
+    return;
+  }
+  res.json({ success: true, data: { papers: await listReadablePapers(req.user?.id, req.query as unknown as PaperListQuery) } });
 };

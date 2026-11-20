@@ -39,6 +39,12 @@ export function ThinkingTrail({ entries, seconds }: { entries: TrailEntry[]; sec
             <Mark done={entry.done} />
             <Typography variant="caption" sx={{ color: entry.done ? 'text.secondary' : 'text.primary' }}>
               {toolLabel(entry.tool, entry.done ? 'done' : 'doing')}
+              {entry.detail && (
+                // What was searched for, in plain text: so "nothing found" shows what was tried.
+                <Box component="span" sx={{ color: 'text.secondary', ml: 0.75, fontStyle: 'italic' }}>
+                  “{entry.detail}”
+                </Box>
+              )}
               {!entry.done && (seconds?.(index) ?? 0) >= 2 && (
                 <Box component="span" sx={{ color: 'text.secondary', ml: 0.75 }}>
                   {seconds!(index)}s

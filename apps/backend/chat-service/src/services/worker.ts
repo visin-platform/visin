@@ -8,13 +8,15 @@ import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { analyze, type AnalysisSpend } from './analyst';
 import { IMAGE_ONLY_QUESTION, MAX_ANALYSIS_IMAGES, type ImageRef } from './imageInput';
-import { budgetPlans, FRAME_IMAGES, reservationFor } from './analysisLimits';
+import { budgetPlans, FRAME_IMAGES, requestBytesFor, reservationFor } from './analysisLimits';
 import { createDraftWriter } from './draft';
 import { resolveProviderKey } from './keys';
 import { appendMessage } from './messages';
-import { PAPER_REQUEST_BYTES, PROVIDERS, PROVIDER_REPLAY_VERSION, ProviderRequestError } from './providers';
+import { PROVIDERS, PROVIDER_REPLAY_VERSION, ProviderRequestError } from './providers';
 import { assistantSettings, modelFor } from './settings';
 import { runAllowed } from './sharedAssistants';
+import { BUSY_MESSAGE, INTERRUPTED_MESSAGE, failureCodeOf } from './failureCode';
+import { tokensHeld } from './allowance';
 import { expireScreenCalls, screenContextSchema } from './screen';
 import { steerScreen } from './screenSteering';
 import { priceSnapshot } from './usage';
@@ -132,7 +134,8 @@ export function startWorker() {
         {
           $set: {
             state: 'failed',
-            error: 'Analysis was interrupted. Send your question again to retry.',
+            error: INTERRUPTED_MESSAGE,
+            failureCode: 'interrupted',
             finishedAt: new Date()
           },
           $unset: { draft: 1 }
@@ -298,15 +301,16 @@ export function startWorker() {
       if (!admitted) throw new Error('Your daily Vivi question allowance is used. It resets at midnight UTC.');
       // The best plan the day's budget still holds: page changes need more room, and are given up before the question.
       let plan: ReturnType<typeof budgetPlans>[number] | undefined;
-      for (const candidate of budgetPlans(
+      const plans = budgetPlans(
         limit,
         toolRounds,
         screen?.allowActions === true,
         imageCount,
-        asked?.paperId ? PAPER_REQUEST_BYTES : undefined,
+        requestBytesFor(Boolean(asked?.paperId), c.kind === 'assistant'),
         // Frames belong to a project's runs, and share the provider's per-request image limit with uploads.
         Boolean(asked?.projectId) && imageCount + FRAME_IMAGES <= MAX_ANALYSIS_IMAGES
-      )) {
+      );
+      for (const candidate of plans) {
         const budget = await Budget.findOneAndUpdate(
           { userId: run.userId, day, reserved: { $lte: limit - candidate.reserve } },
           { $inc: { reserved: candidate.reserve } }
@@ -319,10 +323,19 @@ export function startWorker() {
       if (!plan) {
         // Nothing was sent, so the question does not count against the day's allowance.
         await Budget.updateOne({ userId: run.userId, day }, { $inc: { requests: -1 } });
+        // The person's other questions may be what holds the rest of the day: they give most of it back as they
+        // finish, so that is "try again soon", not "come back tomorrow".
+        const [budget, held] = await Promise.all([
+          Budget.findOne({ userId: run.userId, day }).lean(),
+          tokensHeld(run.userId, day, run.id)
+        ]);
+        const smallest = Math.min(...plans.map((candidate) => candidate.reserve));
+        if (held > 0 && (budget?.reserved ?? 0) - held + smallest <= limit) throw new Error(BUSY_MESSAGE);
         throw new Error('Your daily assistant token budget is used. It resets at midnight UTC.');
       }
       const reserve = plan.reserve;
-      const requestBytes = asked?.paperId ? PAPER_REQUEST_BYTES : undefined;
+      await AssistantRun.updateOne({ _id: run.id }, { $set: { reservation: { day, tokens: reserve } } });
+      const requestBytes = requestBytesFor(Boolean(asked?.paperId), c.kind === 'assistant');
       held = {
         day,
         reserve,
@@ -331,15 +344,17 @@ export function startWorker() {
       const steering = plan.screen;
       // Reserve the full worst-case turn budget. Failures retain their reservation because a
       // provider may have consumed tokens even if the connection did not return usage.
-      if (c.kind === 'assistant' && (asked?.projectId || asked?.paperId || steering))
+      // Every private turn has tools: Vivi answers questions about Visin by looking, as the person who asked. The key is
+      // theirs and read-only and lasts one turn, and it is not limited to the selected project: that is where the
+      // question starts, not the edge of what they may read. A shared thread has no key, so no tools.
+      if (c.kind === 'assistant')
         key = await createApiKey({
           userId: run.userId,
           userEmail: run.email,
           userName: run.name,
           name: 'Visin analyst',
-          scopes: ['vision:read', 'analysis:read'],
-          expiresAt: new Date(Date.now() + LEASE_MS),
-          ...(asked?.projectId ? { project: { id: asked.projectId, name: asked.projectName || c.title } } : {})
+          scopes: ['vision:read', 'dataset:read', 'analysis:read'],
+          expiresAt: new Date(Date.now() + LEASE_MS)
         });
       if (key) await AssistantRun.updateOne({ _id: run.id }, { $set: { keyId: key.summary.id } });
       const replies = await Message.find({
@@ -454,10 +469,10 @@ export function startWorker() {
         step:
           c.kind === 'assistant'
             ? {
-                start: async (tool) => {
+                start: async (tool, detail) => {
                   await AssistantRun.updateOne(
                     { _id: run.id, state: 'running' },
-                    { $push: { steps: { tool, startedAt: new Date() } } }
+                    { $push: { steps: { tool, ...(detail ? { detail } : {}), startedAt: new Date() } } }
                   );
                 },
                 end: async (tool) => {
@@ -541,6 +556,7 @@ export function startWorker() {
             state: 'failed',
             activity: 'Failed',
             error: error instanceof Error ? error.message : 'Analysis failed',
+            failureCode: failureCodeOf(error),
             ...(error instanceof ProviderRequestError ? { providerFailure: error.diagnostic } : {}),
             finishedAt: new Date()
           },

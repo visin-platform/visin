@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest';
 vi.mock('../../vision', async () => {
-  const module = await (() => ({ vision: { getPaper: vi.fn(), searchPaper: vi.fn(), readPaperPages: vi.fn() } }))();
+  const module = await (() => ({ vision: { getPaper: vi.fn(), searchPaper: vi.fn(), readPaperPages: vi.fn(), listPapers: vi.fn() } }))();
   return Object.assign({ default: module }, module);
 });
 
@@ -48,6 +48,36 @@ const paper = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('list_papers', () => {
+  it('lists what the person can read, with the id to read each paper and where it lives in the app', async () => {
+    mocked.listPapers.mockResolvedValue({
+      papers: [
+        { id: 'p1', title: 'LiDAR fusion', authors: [{ name: 'Ann Author' }], year: 2026, arxivId: '2601.00001', tags: [], visibility: 'public' },
+        { id: 'p2', title: 'My draft', authors: [], tags: [], visibility: 'private', abstract: 'Work\nin   progress' }
+      ]
+    });
+    const { text, isError } = await call('list_papers', { search: ' lidar ' });
+    expect(isError).toBe(false);
+    expect(mocked.listPapers).toHaveBeenCalledWith('k', 'lidar', undefined);
+    expect(text).toContain('2 papers:');
+    expect(text).toContain('- LiDAR fusion\nAnn Author · 2026 · arXiv:2601.00001\n  [p1]  /papers/p1');
+    expect(text).toContain("My draft (private: yours or your group's)");
+    expect(text).toContain('Work in progress');
+  });
+
+  it('says what was searched when nothing matches, without claiming the paper does not exist', async () => {
+    mocked.listPapers.mockResolvedValue({ papers: [] });
+    const { text } = await call('list_papers', { search: 'zebra' });
+    expect(text).toContain('No paper among those you can see matches “zebra”');
+    expect((await call('list_papers')).text).toContain('No papers are visible to you yet');
+  });
+
+  it('reports a failed look-up as an error the model can read', async () => {
+    mocked.listPapers.mockRejectedValue(new VisinError(503, 'vision-service is unavailable'));
+    expect((await call('list_papers', { search: 'x' })).isError).toBe(true);
+  });
+});
 
 describe('get_paper', () => {
   it('names the paper, says its text is searchable, and points each cited result at the tool that reads it', async () => {

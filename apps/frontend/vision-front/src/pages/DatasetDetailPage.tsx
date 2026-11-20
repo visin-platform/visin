@@ -1,6 +1,6 @@
 import { PageSkeleton } from '../components/common/PageSkeleton';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, CircularProgress, Container, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Container, Paper, Stack, Typography } from '@mui/material';
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -16,6 +16,7 @@ import DatasetContentsCard from '../components/dataset/DatasetContentsCard';
 import DatasetModels from '../components/dataset/DatasetModels';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
 import DatasetImageGrid from '../components/dataset/DatasetImageGrid';
+import AskAboutThisPage from '../components/analysis/AskAboutThisPage';
 import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
 import UseThisPanel from '../components/common/UseThisPanel';
 import BestRunCard from '../components/common/BestRunCard';
@@ -292,6 +293,10 @@ const DatasetDetailPage: React.FC = () => {
           { label: dataset.name, current: true }
         ]}
       />
+
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+        <AskAboutThisPage title={dataset.name} label="Ask Vivi about this dataset" />
+      </Box>
 
       <DatasetHeader
         dataset={dataset}

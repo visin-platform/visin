@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import { FAILURE_CODES } from '../services/failureCode';
 
 const runSchema = new Schema(
   {
@@ -42,14 +43,19 @@ const runSchema = new Schema(
     /** The notes the analyst wrote before each round of reading: its thinking, published with the answer. */
     thoughts: { type: [{ text: String, at: Date }], default: undefined },
     // What the analyst did, in order, as it did it: each read (the tool, when it started and ended) and each note it
-    // wrote before reading (`thought`). Shown while it works.
+    // wrote before reading (`thought`). Shown while it works. `detail` is what a search was for, in the model's words.
     steps: {
-      type: [new Schema({ tool: String, thought: String, startedAt: Date, endedAt: Date }, { _id: false })],
+      type: [new Schema({ tool: String, detail: String, thought: String, startedAt: Date, endedAt: Date }, { _id: false })],
       default: []
     },
     published: { type: Boolean, default: false },
     activity: { type: String, default: 'Waiting' },
     error: String,
+    // Why it failed, as a code the page can act on (see failureCode.ts). `error` stays the text.
+    failureCode: { type: String, enum: FAILURE_CODES },
+    // What this run holds against the asker's day while it runs, so a refusal can tell tokens spent from tokens held
+    // by questions still under way. Read only while the run is `running`.
+    reservation: { type: new Schema({ day: String, tokens: Number }, { _id: false }) },
     providerReplayVersion: { type: String, select: false },
     // Machine-only diagnostics; never save the provider body, prompt, headers or credentials.
     providerFailure: {

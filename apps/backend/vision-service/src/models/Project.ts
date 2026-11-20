@@ -123,7 +123,13 @@ ProjectSchema.index({ 'owner.kind': 1, 'owner.id': 1 });
 ProjectSchema.index({ createdBy: 1, createdAt: -1 });
 ProjectSchema.index({ trashedAt: 1 }, { sparse: true });
 
-// Index for searching
-ProjectSchema.index({ name: 'text', description: 'text' });
+// Index for searching. A readme is where a project says what it studies, which its name and description often leave out
+// ("Urban driving" for a question about autonomous vehicles), so it is searched too, but counted for least.
+// MongoDB keeps one text index per collection, so a database made before readmes were searched has to drop its
+// earlier name + description one first (a one-off script, as migrations are); a new database builds this one itself.
+ProjectSchema.index(
+  { name: 'text', description: 'text', readme: 'text' },
+  { name: 'project_search', weights: { name: 10, description: 5, readme: 1 } }
+);
 
 export default mongoose.model<IProject>('Project', ProjectSchema);

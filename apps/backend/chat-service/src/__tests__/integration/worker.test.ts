@@ -10,7 +10,7 @@ import { peer } from '../../services/access';
 import { analyze, type AnalysisSpend } from '../../services/analyst';
 import { reservationFor } from '../../services/analysisLimits';
 import { appendMessage } from '../../services/messages';
-import { ProviderRequestError, PROVIDER_REPLAY_VERSION } from '../../services/providers';
+import { ProviderRequestError, PROVIDER_REPLAY_VERSION, TOOL_REQUEST_BYTES } from '../../services/providers';
 import { startWorker } from '../../services/worker';
 import { listen, notify } from '../../services/wakeBus';
 import { enableAnalyst } from '../helpers/analystFixtures';
@@ -283,6 +283,50 @@ it('asks what objects are in an image-only post, and retains its images for the 
   expect(followup.history.at(-1).content).toBe('What color is it?');
 });
 
+it('gives a plain private question the asker\'s own read-only key, so Vivi can look things up', async () => {
+  await enableAnalyst();
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  vi.mocked(createApiKey).mockClear();
+  const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
+    body: 'Does Visin have projects about autonomous vehicles?',
+    clientId: 'plain-question-001'
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+
+  const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
+  // The asker's, never the bot's author or the conversation's creator; read-only; one turn.
+  expect(key).toMatchObject({ userId: 'alice', scopes: ['vision:read', 'dataset:read', 'analysis:read'] });
+  expect(key.scopes.some((scope) => scope.endsWith(':write'))).toBe(false);
+  expect(key).not.toHaveProperty('project');
+  expect(key.expiresAt!.getTime()).toBeLessThanOrEqual(Date.now() + 10 * 60_000);
+  expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ shared: false, token: expect.any(String) });
+});
+
+it('does not limit the key to the selected project: the project is where the question starts, not the edge of what may be read', async () => {
+  await enableAnalyst();
+  const projectId = '111111111111111111111111';
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  vi.mocked(peer).mockResolvedValueOnce({ _id: projectId, name: 'Road' });
+  vi.mocked(createApiKey).mockClear();
+  const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
+    body: 'Compare this with other road projects',
+    clientId: 'project-question-001',
+    context: { projectId }
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+
+  const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
+  expect(key).toMatchObject({ userId: 'alice' });
+  expect(key).not.toHaveProperty('project');
+  expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ projectId });
+});
+
 it('answers a question about a paper with the paper and an unscoped read-only key', async () => {
   await enableAnalyst();
   const paperId = '222222222222222222222222';
@@ -306,7 +350,7 @@ it('answers a question about a paper with the paper and an unscoped read-only ke
   expect(input).toMatchObject({ paperId, paperTitle: 'CLFTv2: fusion', projectId: undefined, trainingIds: [] });
   // Not limited to a project, since a paper belongs to none, and never able to write.
   const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
-  expect(key).toMatchObject({ scopes: ['vision:read', 'analysis:read'], userId: 'alice' });
+  expect(key).toMatchObject({ scopes: ['vision:read', 'dataset:read', 'analysis:read'], userId: 'alice' });
   expect(key).not.toHaveProperty('project');
 });
 
@@ -370,7 +414,8 @@ describe('a failed question and the day\'s budget', () => {
       spent.requests = 1;
       spent.inFlight = true;
     });
-    expect(reserved).toBe(6000 + reservationFor(false, 1));
+    // A private chat carries the research tools, so a round reserves the larger request it may send.
+    expect(reserved).toBe(6000 + reservationFor(false, 1, 0, TOOL_REQUEST_BYTES));
   });
 
   it('keeps only the used tokens when every request answered', async () => {

@@ -3306,6 +3306,21 @@
       }
     }
   },
+  "PaperListQuery": {
+    "type": "object",
+    "properties": {
+      "search": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "limit": {
+        "default": 10,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 25
+      }
+    }
+  },
   "PaperPagesQuery": {
     "type": "object",
     "properties": {

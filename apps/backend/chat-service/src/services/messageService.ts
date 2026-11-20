@@ -268,7 +268,8 @@ export async function react(req: Request, conversationId: string, messageId: unk
     {
       _id: message._id,
       unsentAt: null,
-      kind: { $ne: 'system' },
+      // A person's message takes reactions. An assistant's answer does not: there is no one to react to.
+      kind: { $nin: ['system', 'assistant'] },
       ...(emoji ? { $expr: { $lt: [{ $size: others }, 200] } } : {})
     },
     [

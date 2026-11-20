@@ -4,6 +4,9 @@ import { screen, waitFor, within } from '@testing-library/react';
 
 const service = vi.hoisted(() => ({ get: vi.fn(), leaderboard: vi.fn(), list: vi.fn() }));
 vi.mock('../services/evaluationService', () => ({ suiteService: service }));
+// The page offers Vivi to someone signed in; these tests are about the suite.
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ isAuthenticated: false }) }));
+vi.mock('../config/ConfigProvider', () => ({ useConfig: () => ({}) }));
 
 import SuitePage from './SuitePage';
 import SuitesPage from './SuitesPage';

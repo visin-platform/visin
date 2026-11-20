@@ -15,6 +15,7 @@ export function useChatActions({
   refreshHidden,
   perform,
   aboutRef,
+  hidePageRef,
   panel = false
 }: {
   navigation: ReturnType<typeof useChatNavigation>;
@@ -25,6 +26,8 @@ export function useChatActions({
   perform: (operation: () => Promise<void>) => Promise<void>;
   /** What the next question is about: the page the person is on, unless they cleared it. */
   aboutRef?: RefObject<PageContext | undefined>;
+  /** The person cleared the page beside the panel, which is then not sent. */
+  hidePageRef?: RefObject<boolean>;
   /** In the shell's side panel, where a page sits beside the chat. */
   panel?: boolean;
 }) {
@@ -39,7 +42,7 @@ export function useChatActions({
   const [justHidden, setJustHidden] = useState<Conversation>();
 
   const screenFor = () => {
-    const screen = screenContext(panel);
+    const screen = screenContext(panel, aboutRef?.current?.page, hidePageRef?.current);
     return screen ? { screen } : {};
   };
 
@@ -143,7 +146,8 @@ export function useChatActions({
           attachmentsKey,
           clientId: crypto.randomUUID(),
           conversation: c._id,
-          screen: c.kind === 'assistant' ? screenContext(panel) : undefined,
+          screen:
+            c.kind === 'assistant' ? screenContext(panel, aboutRef?.current?.page, hidePageRef?.current) : undefined,
           replyTo
         };
       setSending(true);

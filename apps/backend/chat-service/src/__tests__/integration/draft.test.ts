@@ -229,6 +229,32 @@ describe('the worker records what the analyst did', () => {
     ]);
   });
 
+  it('keeps the words a search used with its step, and only for a search', async () => {
+    await enableAnalyst('test');
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Anything on driving?', clientId: 'detail-question-1' });
+    (analyze as Mock).mockImplementationOnce(
+      async (input: { step?: { start: (tool: string, detail?: string) => Promise<void>; end: (tool: string) => Promise<void> } }) => {
+        await input.step?.start('search_visin', 'autonomous vehicles, driving');
+        await input.step?.end('search_visin');
+        await input.step?.start('get_project');
+        await input.step?.end('get_project');
+        return { text: 'Done.', evidence: [], inputTokens: 10, outputTokens: 5 };
+      }
+    );
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    const after = await AssistantRun.findOne({ conversationId: id }).lean();
+    expect(after?.steps.map((step) => [step.tool, step.detail])).toEqual([
+      ['search_visin', 'autonomous vehicles, driving'],
+      ['get_project', undefined]
+    ]);
+    // Seen by the asker while it works, with the rest of the run.
+    const runs = await request<{ steps: { tool: string; detail?: string }[] }[]>(`/conversations/${id}/runs`);
+    expect(runs.body.data[0].steps[0]).toMatchObject({ tool: 'search_visin', detail: 'autonomous vehicles, driving' });
+  });
+
   it('records a note the analyst wrote before reading as a thought, and publishes its thinking with the answer', async () => {
     await enableAnalyst('test');
     const id = await create('assistant', []);

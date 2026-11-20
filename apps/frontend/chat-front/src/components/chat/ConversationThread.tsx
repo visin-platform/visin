@@ -32,6 +32,9 @@ import { lastActiveLabel } from '../../utils/activity';
 import { MessageList } from './MessageList';
 import { stoppable } from '../../utils/runs';
 import { chatService } from '../../services/chatService';
+import { useAllowance } from '../../hooks/useAllowance';
+import { AllowanceNotice } from './AllowanceNotice';
+import { inAppPath, openBesideChat } from '../../utils/inAppLinks';
 
 export function ConversationThread({ panel }: { panel: boolean }) {
   const {
@@ -70,6 +73,7 @@ export function ConversationThread({ panel }: { panel: boolean }) {
     setSearching(false);
   }, [c?._id]);
   const menuItems = useConversationMenuItems(c, () => setSettingsAnchor(null), { topic: true });
+  const { data: allowance } = useAllowance(c?.kind === 'assistant' && enabled);
   if (!c) return null;
   return (
     <>
@@ -230,8 +234,20 @@ export function ConversationThread({ panel }: { panel: boolean }) {
         />
       )}
       {searching && <SearchConversationDialog conversationId={c._id} onClose={() => setSearching(false)} />}
-      <MessageList />
+      {/* A link to a Visin page in an answer opens it beside the chat, so the thread stays where it is. */}
+      <Box
+        sx={{ display: 'contents' }}
+        onClick={(event) => {
+          const path = panel ? inAppPath(event) : undefined;
+          if (!path) return;
+          event.preventDefault();
+          openBesideChat(path);
+        }}
+      >
+        <MessageList />
+      </Box>
       {c.kind === 'assistant' && !enabled && <AnalystSetupNotice canConfigure={canConfigure} />}
+      {c.kind === 'assistant' && enabled && <AllowanceNotice allowance={allowance} />}
       {c.kind === 'assistant' && <AskingAbout about={about} name={c.profile?.name} onClear={clearAbout} />}
       {replyTarget && <ReplyPreview message={replyTarget} onCancel={() => setReplyTarget(undefined)} />}
       <MediaComposer

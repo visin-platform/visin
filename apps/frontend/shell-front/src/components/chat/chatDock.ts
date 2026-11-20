@@ -11,6 +11,11 @@ export type ChatRequest =
       paperId?: string;
       trainingIds?: string[];
       title?: string;
+      /**
+       * The page a question is about, as an app path (`/datasets/…`), for a page with no project or paper to hand
+       * over. The chat checks what it names as the person asking, the same as the page beside the panel.
+       */
+      page?: string;
     }
   | { kind: 'direct'; handle?: string; userId?: string; name?: string }
   | { kind: 'group'; groupId: string; title?: string };
@@ -21,8 +26,19 @@ declare global {
     __visinGuestVivi?: boolean;
     /** The newest request, for a chat panel that has not loaded yet. */
     __visinChatContext?: ChatRequest;
+    /** Where the shell's page is, for the chat panel, which has no router of its own. */
+    __visinLocation?: string;
   }
 }
+
+/** Sent with the page's path whenever the shell's page changes, for the chat panel. */
+export const LOCATION_EVENT = 'visin:location';
+/** Sent by the chat panel to move the page beside it (a link in an answer), so the shell's router does the move. */
+export const NAVIGATE_EVENT = 'visin:navigate';
+
+/** A path of this app that may be opened on request: `/x`, never `//x` (another site) or anything with a scheme. */
+export const isAppPath = (value: unknown): value is string =>
+  typeof value === 'string' && value.length <= 500 && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\');
 
 export interface ChatDock {
   /** Chat is configured and someone is signed in. */
