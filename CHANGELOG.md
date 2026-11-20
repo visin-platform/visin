@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.22.0](https://github.com/visin-platform/visin/compare/v2.21.0...v2.22.0) (2026-11-20)
+
+### Features
+
+* add a paper by uploading its PDF, without a DOI or arXiv link ([1b670c1](https://github.com/visin-platform/visin/commit/1b670c1ef4661f6d040c84145603a38348f8bfd5))
+
 ## [2.21.0](https://github.com/visin-platform/visin/compare/v2.20.0...v2.21.0) (2026-11-20)
 
 ### Features
