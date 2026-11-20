@@ -36,6 +36,15 @@ it('runs a question with fewer rounds under a limit saved before the rounds grew
   // 300k was enough for one question at 4 rounds; 8 rounds now reserve 320k.
   expect(budgetPlans(300_000, 8, true)).toEqual([{ screen: false, toolRounds: 7, reserve: 7 * TOKENS_PER_ROUND }]);
 });
+it('fits the last plan to what is left of the day, not to the whole day', () => {
+  const full = reservationFor(false, 8, 0, TOOL_REQUEST_BYTES);
+  // Half the default day spent: the full question no longer fits, six rounds do.
+  const plans = budgetPlans(800_000, 8, false, 0, TOOL_REQUEST_BYTES, false, 300_000);
+  expect(plans.at(-1)).toEqual({ screen: false, toolRounds: 6, reserve: reservationFor(false, 6, 0, TOOL_REQUEST_BYTES) });
+  expect(plans.at(-1)!.reserve).toBeLessThan(full);
+  // Less than the fewest rounds left is no plan that fits: only the ones the atomic reservation will refuse.
+  expect(budgetPlans(800_000, 8, false, 0, TOOL_REQUEST_BYTES, false, 50_000).every((plan) => plan.reserve > 50_000)).toBe(true);
+});
 it('has no plan for a limit below the fewest rounds', () => {
   expect(budgetPlans(TOKENS_PER_ROUND, 8, true)).toEqual([]);
 });

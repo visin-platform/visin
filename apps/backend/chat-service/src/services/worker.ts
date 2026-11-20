@@ -308,7 +308,9 @@ export function startWorker() {
         imageCount,
         requestBytesFor(Boolean(asked?.paperId), c.kind === 'assistant'),
         // Frames belong to a project's runs, and share the provider's per-request image limit with uploads.
-        Boolean(asked?.projectId) && imageCount + FRAME_IMAGES <= MAX_ANALYSIS_IMAGES
+        Boolean(asked?.projectId) && imageCount + FRAME_IMAGES <= MAX_ANALYSIS_IMAGES,
+        // What the day still holds, as admission found it: a question runs on fewer rounds rather than not at all.
+        limit - Math.max(0, admitted.reserved ?? 0)
       );
       for (const candidate of plans) {
         const budget = await Budget.findOneAndUpdate(

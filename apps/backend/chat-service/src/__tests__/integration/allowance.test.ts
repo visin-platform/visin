@@ -48,6 +48,14 @@ describe('what is left of today', () => {
     expect(over.body.data.remainingShare).toBe(0);
   });
 
+  it('calls the day used once what is left cannot run even the shortest question, as the worker would', async () => {
+    await enableAnalyst();
+    await Budget.create({ userId: 'frank', day: day(), requests: 3, reserved: 750_000 });
+    const { body } = await allowance('frank');
+    expect(body.data.tokens.remaining).toBe(body.data.tokens.limit - 750_000);
+    expect(body.data.remainingShare).toBe(0);
+  });
+
   it('counts what a running question holds as not yet spent', async () => {
     await enableAnalyst();
     await Budget.create({ userId: 'erin', day: day(), requests: 1, reserved: 600_000 });

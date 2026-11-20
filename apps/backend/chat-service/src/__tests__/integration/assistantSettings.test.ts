@@ -305,8 +305,9 @@ describe('the daily token limit', () => {
   it('tells a question refused for room held by the asker\'s other running questions to try again, not to wait a day', async () => {
     await enableAnalyst('test');
     const day = new Date().toISOString().slice(0, 10);
-    // 100,000 spent, and 600,000 held by another question still running: it will give most of that back.
-    await Budget.create({ userId: 'alice', day, reserved: 700000 });
+    // 150,000 spent, and 600,000 held by another question still running: it will give most of that back. The 50,000
+    // left is less than the fewest rounds a question runs on.
+    await Budget.create({ userId: 'alice', day, reserved: 750000 });
     await AssistantRun.create({
       conversationId: 'elsewhere',
       messageId: 'other-question',
@@ -339,7 +340,8 @@ describe('the daily token limit', () => {
   it('is applied to the next question: a person who has used most of it is refused, until it is raised', async () => {
     await enableAnalyst('test');
     const day = new Date().toISOString().slice(0, 10);
-    await Budget.create({ userId: 'alice', day, reserved: 300000 });
+    // 50,000 left: less than the fewest rounds a question runs on.
+    await Budget.create({ userId: 'alice', day, reserved: 350000 });
     await Settings.updateOne({ _id: 'assistant' }, { $set: { dailyTokenLimit: 400000 } });
     resetAssistantSettingsCache();
     const id = await create('assistant', []);
@@ -354,7 +356,7 @@ describe('the daily token limit', () => {
     expect(refused?.error).toContain('daily assistant token budget is used');
     expect(refused?.failureCode).toBe('limit_reached');
     // Nothing was added to what they had used.
-    expect((await Budget.findOne({ userId: 'alice', day }))?.reserved).toBe(300000);
+    expect((await Budget.findOne({ userId: 'alice', day }))?.reserved).toBe(350000);
 
     // Raised by an administrator (the analyst stays on).
     await Settings.updateOne({ _id: 'assistant' }, { $set: { dailyTokenLimit: 800000 } });
@@ -362,6 +364,26 @@ describe('the daily token limit', () => {
     await request(`/conversations/${id}/messages`, 'alice', { body: 'Second', clientId: 'limit-question-2' });
     await worker.tick();
     expect((analyze as Mock).mock.calls.length).toBe(before + 1);
+  });
+
+  it('answers on fewer rounds when less is left than a full question reserves, rather than calling the day used', async () => {
+    await enableAnalyst('test');
+    const day = new Date().toISOString().slice(0, 10);
+    // 500,000 of 800,000 spent: a full private question reserves 400,000, but 300,000 still holds six rounds.
+    await Budget.create({ userId: 'alice', day, reserved: 500000 });
+    await Settings.updateOne({ _id: 'assistant' }, { $set: { dailyTokenLimit: 800000 } });
+    resetAssistantSettingsCache();
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Still room?', clientId: 'half-day-1' });
+    const before = (analyze as Mock).mock.calls.length;
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    expect((analyze as Mock).mock.calls.length).toBe(before + 1);
+    const run = await AssistantRun.findOne({ conversationId: id });
+    expect(run?.failureCode).toBeUndefined();
+    expect(run?.reservation?.tokens).toBeLessThanOrEqual(300000);
+    expect(run?.reservation?.tokens).toBeGreaterThan(0);
   });
 
   it('refuses a question before charging anything when there is no model or key to answer it', async () => {

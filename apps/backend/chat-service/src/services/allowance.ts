@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { AssistantRun } from '../models/AssistantRun';
 import { Budget } from '../models/Budget';
+import { SMALLEST_PRIVATE_QUESTION } from './analysisLimits';
 import { assertViviUser } from './adminPolicy';
 import { assistantSettings } from './settings';
 
@@ -46,11 +47,14 @@ export async function myAllowance(userId: string) {
   const tokensUsed = Math.max(0, (budget?.reserved ?? 0) - held);
   const requestsLeft = Math.max(0, requestLimit - requestsUsed);
   const tokensLeft = Math.max(0, tokenLimit - tokensUsed);
+  // Less than the fewest rounds a question can run on is no question at all: the worker refuses it as "used", so the
+  // page says the same rather than "a little left".
+  const tokensUsable = tokensLeft >= Math.min(SMALLEST_PRIVATE_QUESTION, tokenLimit) ? tokensLeft : 0;
   return {
     requests: { used: requestsUsed, limit: requestLimit, remaining: requestsLeft },
     tokens: { used: tokensUsed, limit: tokenLimit, remaining: tokensLeft },
     // The smaller share of the two that is left: the one that will run out first.
-    remainingShare: Math.min(requestLimit > 0 ? requestsLeft / requestLimit : 0, tokenLimit > 0 ? tokensLeft / tokenLimit : 0),
+    remainingShare: Math.min(requestLimit > 0 ? requestsLeft / requestLimit : 0, tokenLimit > 0 ? tokensUsable / tokenLimit : 0),
     resetsAt: nextMidnightUtc()
   };
 }
