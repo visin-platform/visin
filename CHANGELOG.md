@@ -1,5 +1,16 @@
 # Visin Changelog
 
+## [2.21.0](https://github.com/visin-platform/visin/compare/v2.20.0...v2.21.0) (2026-11-20)
+
+### Features
+
+* edit the last question, copy tables, and let guest Vivi look things up ([b8bcc43](https://github.com/visin-platform/visin/commit/b8bcc433857db267d760571834962ca703616896))
+* Vivi finds anything on Visin as the person asking ([7bbff60](https://github.com/visin-platform/visin/commit/7bbff60747687e82eb3e0f4da44411e78be4ebb9))
+
+### Chores
+
+* **release:** @visin/frontend-core 1.27.0 ([3b774a6](https://github.com/visin-platform/visin/commit/3b774a6b8f31537f25d917b788523bdd836cdbbf))
+
 ## [2.20.0](https://github.com/visin-platform/visin/compare/v2.19.0...v2.20.0) (2026-11-18)
 
 ### Features
