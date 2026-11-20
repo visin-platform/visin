@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.22.1](https://github.com/visin-platform/visin/compare/v2.22.0...v2.22.1) (2026-11-20)
+
+### Bug Fixes
+
+* **chat:** run Vivi on fewer rounds when the day's allowance is part spent ([38db8d4](https://github.com/visin-platform/visin/commit/38db8d41f8b2181a14b8a0216cc96687c594fcae))
+
 ## [2.22.0](https://github.com/visin-platform/visin/compare/v2.21.0...v2.22.0) (2026-11-20)
 
 ### Features
