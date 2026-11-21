@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.22.3](https://github.com/visin-platform/visin/compare/v2.22.2...v2.22.3) (2026-11-21)
+
+### Bug Fixes
+
+* **chat:** grow Vivi's thinking in place instead of redrawing it every step ([ecc7313](https://github.com/visin-platform/visin/commit/ecc7313efee726870cdf889a56ca25d97da362d8))
+
 ## [2.22.2](https://github.com/visin-platform/visin/compare/v2.22.1...v2.22.2) (2026-11-21)
 
 ### Bug Fixes
