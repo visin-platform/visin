@@ -1,5 +1,11 @@
 # Visin Changelog
 
+## [2.22.2](https://github.com/visin-platform/visin/compare/v2.22.1...v2.22.2) (2026-11-21)
+
+### Bug Fixes
+
+* **chat:** stop Vivi failing once a long answer has to be cut to fit ([5b6509a](https://github.com/visin-platform/visin/commit/5b6509abd9d4737cb310920d48f2a5c2e3d756fe))
+
 ## [2.22.1](https://github.com/visin-platform/visin/compare/v2.22.0...v2.22.1) (2026-11-20)
 
 ### Bug Fixes
