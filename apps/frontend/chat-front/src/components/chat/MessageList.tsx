@@ -16,7 +16,6 @@ import {
 import { useChatWorkspaceContext } from '../../hooks/useChatWorkspaceContext';
 import { chatService } from '../../services/chatService';
 import { MessageBubble } from './MessageBubble';
-import { AnalysisSteps } from './AnalysisSteps';
 import { StreamingMessage } from './StreamingMessage';
 import { visibleDrafts } from '../../utils/drafts';
 
@@ -132,6 +131,19 @@ export function MessageList() {
   // The answer being written, shown until it is a message. Only in the asker's own analyst thread, which is all the
   // server sends drafts for.
   const writing = c.kind === 'assistant' ? visibleDrafts(drafts, everything) : [];
+  // One bubble per answer being worked on, from the question until the answer is a message: a working run, or a
+  // draft whose run is over but whose message has not arrived. Keyed by run, so it stays put as the analyst switches
+  // between writing a note and reading, and only ever grows.
+  const order = (runId: string) => {
+    const index = runs.findIndex((run) => run._id === runId);
+    return index < 0 ? runs.length : index;
+  };
+  const live = [
+    ...(running ? runs.filter((run) => ['queued', 'running'].includes(run.state)).map((run) => run._id) : []),
+    ...writing.map((draft) => draft.runId)
+  ]
+    .filter((runId, index, all) => all.indexOf(runId) === index)
+    .sort((a, b) => order(a) - order(b));
   // Only the latest question can be reworded, and only a text one, which is also the last thing the person said.
   const editable =
     c.kind === 'assistant' && enabled && !sending
@@ -254,25 +266,19 @@ export function MessageList() {
           />
         </Fragment>
       ))}
-      {writing.map((draft) => (
-        <StreamingMessage
-          key={draft.runId}
-          text={draft.text}
-          name={runs.find((run) => run._id === draft.runId)?.assistantName || c.profile?.name || 'Visin analyst'}
-          profile={c.profile}
-          steps={runs.find((run) => run._id === draft.runId)?.steps}
-          onGrow={followEnd}
-        />
-      ))}
-      {running && writing.length === 0 && (
-        <Box>
-          {runs
-            .filter((run) => ['queued', 'running'].includes(run.state))
-            .map((run) => (
-              <AnalysisSteps key={run._id} run={run} assistantName={run.assistantName} />
-            ))}
-        </Box>
-      )}
+      {live.map((runId) => {
+        const run = runs.find((row) => row._id === runId);
+        return (
+          <StreamingMessage
+            key={runId}
+            text={writing.find((draft) => draft.runId === runId)?.text ?? ''}
+            name={run?.assistantName || (c.kind === 'assistant' && c.profile?.name) || 'Visin analyst'}
+            profile={c.kind === 'assistant' ? c.profile : undefined}
+            run={run}
+            onGrow={followEnd}
+          />
+        );
+      })}
       {latestRun?.state === 'failed' && !running && (
         <FailedRun
           run={latestRun}

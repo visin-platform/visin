@@ -115,14 +115,13 @@ describe('while the analyst works', () => {
     });
     expect(screen.getByText('Found the project')).toBeInTheDocument();
     expect(screen.getByText('Reading the training curve')).toBeInTheDocument();
-    expect(screen.queryByTestId('streaming-message')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'The analyst is working' })).toBeInTheDocument();
   });
 
-  it('gives way to the answer as it is written', () => {
+  it('writes the answer in the same bubble, one per run', () => {
     mount({ drafts: [{ runId: 'r1', messageId: 'q1', text: 'Validation peaked at epoch 42' }] });
-    expect(screen.getByTestId('streaming-message')).toBeInTheDocument();
+    expect(screen.getAllByTestId('streaming-message')).toHaveLength(1);
     expect(screen.getByText('Validation peaked at epoch 42')).toBeInTheDocument();
-    expect(screen.queryByRole('status', { name: 'The analyst is working' })).not.toBeInTheDocument();
   });
 
   it('names the assistant that is writing', () => {
@@ -227,7 +226,7 @@ describe('after an answer', () => {
     expect(screen.queryByRole('button', { name: /Summarize this run/ })).not.toBeInTheDocument();
   });
 
-  it('folds the thinking above an answer while it is still being written', async () => {
+  it('keeps the thinking open above an answer while it is still being written, and lets it be folded', async () => {
     mount({
       messages: [message({ body: 'Does it overfit?' })],
       runs: [
@@ -242,10 +241,11 @@ describe('after an answer', () => {
       drafts: [{ runId: 'r1', messageId: 'm1', text: 'It peaked at' }]
     });
     const fold = screen.getByRole('button', { name: /Thinking · 1 source/ });
-    expect(screen.queryByText('I will compare the best and last epochs.')).not.toBeInTheDocument();
-    await userEvent.click(fold);
     expect(screen.getByText('I will compare the best and last epochs.')).toBeInTheDocument();
     expect(screen.getByText('Read the training curve')).toBeInTheDocument();
+    expect(screen.getByText('It peaked at')).toBeInTheDocument();
+    await userEvent.click(fold);
+    await waitFor(() => expect(screen.queryByText('I will compare the best and last epochs.')).not.toBeInTheDocument());
   });
 });
 

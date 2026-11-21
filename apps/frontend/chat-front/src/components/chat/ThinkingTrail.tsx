@@ -60,10 +60,21 @@ export function ThinkingTrail({ entries, seconds }: { entries: TrailEntry[]; sec
 
 /**
  * An answer's thinking, folded above it: one quiet line that opens to the whole trail. Closed by default, so a right
- * answer reads cleanly and a doubtful one can be traced.
+ * answer reads cleanly and a doubtful one can be traced; open (`defaultOpen`) while the analyst is still working, so the
+ * trail grows in view.
  */
-export function ThinkingFold({ entries, footer }: { entries: TrailEntry[]; footer?: ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function ThinkingFold({
+  entries,
+  footer,
+  defaultOpen = false,
+  seconds
+}: {
+  entries: TrailEntry[];
+  footer?: ReactNode;
+  defaultOpen?: boolean;
+  seconds?: (index: number) => number;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   if (entries.length === 0) return null;
   const summary = trailSummary(entries);
   return (
@@ -86,7 +97,7 @@ export function ThinkingFold({ entries, footer }: { entries: TrailEntry[]; foote
       </ButtonBase>
       <Collapse in={open} unmountOnExit>
         <Box sx={{ mt: 0.75 }}>
-          <ThinkingTrail entries={entries} />
+          <ThinkingTrail entries={entries} seconds={seconds} />
           {footer}
         </Box>
       </Collapse>

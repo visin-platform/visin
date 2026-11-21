@@ -142,14 +142,17 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
   await page.waitForTimeout(600);
   await page.screenshot({ path: info.outputPath('1-steps.png') });
 
-  // 2. Writing: the answer fills in, and the list gives way to it.
+  // 2. Writing: the answer fills in under the list, in the same bubble; nothing above it is drawn again.
   const draft = (text: string) => page.evaluate((t) => (window as unknown as { emit: (type: string, data: unknown) => void }).emit('draft', { runId: '444444444444444444444444', messageId: '222222222222222222222222', text: t }), text);
   await draft('Validation peaked at epoch 42');
   await expect(page.getByTestId('streaming-message')).toBeVisible();
   await expect(page.getByTestId('streaming-message')).toContainText('Validation peaked at epoch 42');
-  await expect(page.getByText('Found the project')).toHaveCount(0);
-  // The thinking folds above the answer being written.
-  await expect(page.getByTestId('streaming-message').getByRole('button', { name: /Thinking · 2 sources/ })).toBeVisible();
+  await expect(page.getByTestId('streaming-message').getByText('Found the project')).toBeVisible();
+  // The thinking stays open above the answer being written, and can be folded.
+  await expect(page.getByTestId('streaming-message').getByRole('button', { name: /Thinking · 2 sources/ })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
   await draft(answer.body);
   await expect(page.getByTestId('streaming-message')).toContainText('Best checkpoint is earlier', { timeout: 5000 });
   // The end of the answer is in view, not hidden under the composer, however long it grows.

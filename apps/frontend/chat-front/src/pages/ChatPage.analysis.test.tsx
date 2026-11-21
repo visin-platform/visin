@@ -1,5 +1,5 @@
 import { state } from '../test/chatFixtures';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../services/apiClient';
 import '../utils/chatContext';
@@ -228,7 +228,8 @@ it('shows another participant’s shared progress without offering cancellation'
   ];
   render(<Chat />);
   fireEvent.click(await screen.findByText('Research discussion'));
-  expect(await screen.findByText('Reviewer · Preparing shared answer')).toBeInTheDocument();
+  expect(await screen.findByText('Preparing shared answer')).toBeInTheDocument();
+  expect(within(screen.getByTestId('streaming-message')).getByText('Reviewer')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Stop the analyst' })).toBeNull();
 });
 
