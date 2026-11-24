@@ -1,5 +1,15 @@
 # Visin Changelog
 
+## [2.23.0](https://github.com/visin-platform/visin/compare/v2.22.3...v2.23.0) (2026-11-24)
+
+### Features
+
+* add assistant service ([49428ed](https://github.com/visin-platform/visin/commit/49428ed011cbb68d6324c868ee59c68ebe7b62cc))
+
+### Chores
+
+* **release:** @visin/backend-core 1.23.0 ([b72c4ea](https://github.com/visin-platform/visin/commit/b72c4eac20f84c035118db65316f359992bd7e6b))
+
 ## [2.22.3](https://github.com/visin-platform/visin/compare/v2.22.2...v2.22.3) (2026-11-21)
 
 ### Bug Fixes
