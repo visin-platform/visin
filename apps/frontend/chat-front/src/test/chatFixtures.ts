@@ -40,6 +40,9 @@ vi.mock('../services/apiClient', () => ({
   })
 }));
 
+// What the assistants answer comes from the same stand-in as chat's: these suites do not tell the two services apart.
+vi.mock('../services/assistantApiClient', async () => ({ assistantApi: (await import('../services/apiClient')).api }));
+
 export const dm = (): Conversation => ({
   _id: 'c1',
   title: 'Research discussion',

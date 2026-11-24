@@ -13,9 +13,12 @@ import type {
 } from '../types/chat';
 
 import { api, apiDelete, apiSend } from './apiClient';
+import { assistantApi } from './assistantApiClient';
 import type { ScreenCall } from '../utils/screen';
 
 const read = <T>(path: string, signal?: AbortSignal) => (signal ? api<T>(path, undefined, signal) : api<T>(path));
+const readAssistant = <T>(path: string, signal?: AbortSignal) =>
+  signal ? assistantApi<T>(path, undefined, signal) : assistantApi<T>(path);
 
 /** The browser-session API shared by the full page and federated panel. */
 export const chatService = {
@@ -30,7 +33,7 @@ export const chatService = {
   /** A new topic in a chat with an assistant: it forgets what was asked before. */
   newTopic: (id: string) => api<Message>(`/conversations/${id}/topic`, {}),
   /** What is left of today's Vivi allowance. */
-  allowance: (signal?: AbortSignal) => read<Allowance>('/usage/me', signal),
+  allowance: (signal?: AbortSignal) => readAssistant<Allowance>('/usage/me', signal),
   capabilities: (signal?: AbortSignal) => read<Capabilities>('/capabilities', signal),
   groups: (signal?: AbortSignal) => read<ChatGroup[]>('/groups', signal),
   projects: (signal?: AbortSignal) => read<ChatProject[]>('/projects', signal),
@@ -58,14 +61,14 @@ export const chatService = {
   membership: (id: string, action: string) => api<void>(`/conversations/${id}/membership`, { action }),
   invite: (id: string, handle: string) => api<void>(`/conversations/${id}/participants`, { handle }),
   removeParticipant: (id: string, userId: string) => api<void>(`/conversations/${id}/remove-participant`, { userId }),
-  cancel: (id: string) => api<void>(`/conversations/${id}/cancel`, {}),
+  cancel: (id: string) => assistantApi<void>(`/conversations/${id}/cancel`, {}),
   screenCalls: (id: string, tab: string, signal?: AbortSignal) =>
-    read<ScreenCall[]>(`/conversations/${id}/screen-calls?tab=${encodeURIComponent(tab)}`, signal),
+    readAssistant<ScreenCall[]>(`/conversations/${id}/screen-calls?tab=${encodeURIComponent(tab)}`, signal),
   screenResult: (id: string, result: { ok: boolean; summary: string }) =>
-    api<void>(`/screen-calls/${id}/result`, result),
+    assistantApi<void>(`/screen-calls/${id}/result`, result),
   attachmentTicket: (id: string, input: { name: string; mime: string; size: number }, signal?: AbortSignal) =>
     api<{ fileId: string; uploadUrl: string }>(`/conversations/${id}/attachments`, input, signal),
   attachmentUrls: (id: string, fileIds: string[]) =>
     api<{ urls: Record<string, string>; expiresMs: number }>(`/conversations/${id}/attachment-urls`, { fileIds }),
-  saveFinding: (id: string, input: FindingInput) => api<void>(`/conversations/${id}/findings`, input)
+  saveFinding: (id: string, input: FindingInput) => assistantApi<void>(`/conversations/${id}/findings`, input)
 };

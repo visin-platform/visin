@@ -1,23 +1,19 @@
-import { defaultAssistantFor } from './assistantService';
-import { usableAssistant } from './assistantAvailability';
+import * as assistants from './assistantClient';
+import { verifyAbout } from './analysisContext';
 import { flushMembershipEvents } from './membershipAudit';
-import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
+import { BadRequestError, ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import { type Request } from 'express';
-import { Assistant } from '../models/Assistant';
 import { Conversation } from '../models/Conversation';
 import { ConversationHidden } from '../models/ConversationHidden';
-import { verifyAbout } from './analysisContext';
 import { Message } from '../models/Message';
+import { redactQuotes } from './quotes';
 import { authorize, historyFilter } from './access';
-import { AssistantRun } from '../models/AssistantRun';
 import { id } from '../validation/commonSchemas';
 import { attachmentSummary } from './attachments';
 import { verifyAttachments } from './attachments';
 import { appendMessage } from './messages';
 import { notifyNewMessage } from './pushNotify';
-import { assistantStatus } from './settings';
 import { notify } from './wakeBus';
-import { requireSharedBot, sharedEnabled } from './sharedAssistants';
 import { actorName } from '../utils/request';
 import {
   messageCursorSchema,
@@ -110,31 +106,31 @@ export async function sendMessage(req: Request, conversationId: string, body: un
     throw new BadRequestError('Reply to a message everyone in this room can see');
   if (input.assistantId && c.kind === 'assistant')
     throw new BadRequestError('This private thread already has its assistant');
+  // A question to an assistant: whether Vivi may take it, which assistant, and the hidden request to save it with.
   // A quote never invokes a bot in a conversation between people.
   const invocation = input.assistantId;
-  const sharedBot = invocation ? await requireSharedBot(c, invocation) : null;
-  if (sharedBot && !sharedEnabled(c))
-    throw new ForbiddenError('Shared assistants require agreement or administrator enablement');
-  if ((c.kind === 'assistant' || sharedBot) && !(await assistantStatus()).ready)
-    throw new BadRequestError('The assistant is not configured. Human messaging is available.');
-  // Older generic analysis threads adopt the effective default on their next question.
-  // The conditional write pins it once, so a later preference change cannot silently replace this thread's bot.
-  if (c.kind === 'assistant' && !c.assistantId) {
-    const preferred = await defaultAssistantFor(req.user!.id);
-    if (preferred) {
-      const bound = await Conversation.findOneAndUpdate(
-        { _id: c.id, assistantId: null, deletedAt: null },
-        { $set: { assistantId: preferred.id } },
-        { returnDocument: 'after' }
-      ).select('assistantId');
-      c.assistantId = (bound ?? (await Conversation.findById(c.id).select('assistantId')))?.assistantId;
-    }
-  }
-  const selectedAssistant = c.assistantId
-    ? await Assistant.findOne({ _id: c.assistantId, ...usableAssistant(req.user!.id) })
-    : null;
-  if (c.assistantId && !selectedAssistant) throw new BadRequestError('This assistant is paused or removed');
   const { assistantId: _invocation, screen, attachments: refs, context: asked, ...messageInput } = input;
+  const questionTo = async (assistantId: string | null | undefined) =>
+    assistants.prepare({
+      person: { id: req.user!.id, email: req.user!.email || '', name: actorName(req) },
+      conversationId: c.id,
+      assistantId,
+      invocation,
+      membershipVersion: c.membershipVersion,
+      screen
+    });
+  let question = c.kind === 'assistant' || invocation ? await questionTo(c.assistantId) : undefined;
+  // The conditional write pins a default once, so a later preference change cannot silently replace this thread's bot.
+  if (question?.bindAssistantId && c.kind === 'assistant') {
+    const bound = await Conversation.findOneAndUpdate(
+      { _id: c.id, assistantId: null, deletedAt: null },
+      { $set: { assistantId: question.bindAssistantId } },
+      { returnDocument: 'after' }
+    ).select('assistantId');
+    c.assistantId = (bound ?? (await Conversation.findById(c.id).select('assistantId')))?.assistantId;
+    // Someone bound another assistant first: this question belongs to that one.
+    if (c.assistantId !== question.bindAssistantId) question = await questionTo(c.assistantId);
+  }
   // What the question is about is checked as the asker, now: a project or paper they cannot read refuses the send.
   const about = asked && (asked.projectId || asked.paperId) ? await verifyAbout(req, asked) : undefined;
   if (about && c.kind !== 'assistant') throw new BadRequestError('Only a question to an assistant is about something');
@@ -159,21 +155,7 @@ export async function sendMessage(req: Request, conversationId: string, body: un
           }
         }
       : {}),
-    ...(c.kind === 'assistant' || sharedBot
-      ? {
-          assistantRequest: {
-            userId: req.user!.id,
-            email: req.user!.email || '',
-            name: actorName(req),
-            assistantId: sharedBot?.assistantId || selectedAssistant?.id,
-            assistantName: sharedBot?.name || selectedAssistant?.name,
-            personality: sharedBot?.personality || selectedAssistant?.personality,
-            membershipVersion: c.membershipVersion,
-            // Only a private thread has a page to move; a shared conversation never gets the screen tool.
-            ...(c.kind === 'assistant' && screen ? { screen } : {})
-          }
-        }
-      : {})
+    ...(question ? { assistantRequest: question.request } : {})
   });
   // Writing in a chat that was put away brings it back.
   await ConversationHidden.deleteOne({ userId: req.user!.id, conversationId: c.id });
@@ -221,26 +203,6 @@ export async function markRead(req: Request, conversationId: string, seqValue: u
     { $max: { 'participants.$.readSeq': seq } }
   );
   return;
-}
-
-/** Redact quoted snapshots at read time too, including replies racing an unsend. */
-export async function redactQuotes(
-  rows: { conversationId: string; quote?: { messageId: string; body: string; unsent?: boolean | null } | null }[]
-) {
-  const ids = [...new Set(rows.flatMap((row) => (row.quote ? [row.quote.messageId] : [])))];
-  if (!ids.length) return;
-  const removed = new Set(
-    (
-      await Message.find({ conversationId: rows[0].conversationId, _id: { $in: ids }, unsentAt: { $ne: null } })
-        .select('_id')
-        .lean()
-    ).map((row) => String(row._id))
-  );
-  for (const row of rows)
-    if (row.quote && removed.has(row.quote.messageId)) {
-      row.quote.body = 'Message unsent';
-      row.quote.unsent = true;
-    }
 }
 
 async function visibleMessage(req: Request, conversationId: string, messageId: unknown) {
@@ -314,17 +276,14 @@ async function retireMessage(
       $inc: { revision: 1 }
     }
   );
-  await AssistantRun.updateMany(
-    {
-      conversationId: conversation.id,
+  // Best effort: people's messages must not depend on the assistant service. The message is already marked cancelled
+  // and unsent, which the worker checks before it starts a run and before it publishes an answer, so a call that does
+  // not get through only lets an answer already being written finish unseen.
+  await assistants.cancelMessageRuns({ conversationId: conversation.id, messageId: message.id }).catch((error) =>
+    logger.warn('Could not withdraw the runs of an unsent message', {
       messageId: message.id,
-      state: { $in: ['queued', 'screen_queued', 'running', 'completed'] },
-      published: { $ne: true }
-    },
-    {
-      $set: { state: 'cancelled', finishedAt: new Date(), activity: 'Question unsent' },
-      $unset: { draft: 1, result: 1 }
-    }
+      error: error instanceof Error ? error.message : 'unknown'
+    })
   );
   await Message.updateMany(
     { conversationId: conversation.id, 'quote.messageId': message.id, 'quote.unsent': { $ne: true } },

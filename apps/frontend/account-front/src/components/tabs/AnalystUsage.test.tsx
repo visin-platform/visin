@@ -15,7 +15,7 @@ const service = vi.hoisted(() => ({
   backfillPrices: vi.fn()
 }));
 vi.mock('../../services/analystService', () => ({ analystService: service }));
-vi.mock('../../config/ConfigProvider', () => ({ getGlobalConfig: () => ({ CHAT_SERVICE_URL: 'https://chat.test' }) }));
+vi.mock('../../config/ConfigProvider', () => ({ getGlobalConfig: () => ({ ASSISTANT_SERVICE_URL: 'https://assistants.test' }) }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 
 const sonnet: AnalystPrice = {

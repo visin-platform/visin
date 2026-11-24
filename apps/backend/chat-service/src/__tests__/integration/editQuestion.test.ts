@@ -1,12 +1,9 @@
 import '../helpers/mocks';
-import { type Mock } from 'vitest';
-import { AssistantRun } from '../../models/AssistantRun';
+import { vi } from 'vitest';
+import { BadRequestError } from '@visin/backend-core';
 import { Message } from '../../models/Message';
-import { Settings } from '../../models/Settings';
-import { resetAssistantSettingsCache } from '../../services/settings';
-import { analyze } from '../../services/analyst';
-import { startWorker } from '../../services/worker';
-import { enableAnalyst } from '../helpers/analystFixtures';
+import * as assistants from '../../services/assistantClient';
+import { appendMessage } from '../../services/messages';
 import { create, request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
@@ -19,22 +16,24 @@ type View = {
   kind: string;
   replyTo?: string;
 };
-const answers = (text: string) => ({ text, evidence: [], inputTokens: 100, outputTokens: 20 });
 
 /** A chat with Vivi where one question has been asked and answered. */
 async function answered() {
-  await enableAnalyst('test');
   const id = await create('assistant', []);
   const asked = await request<View>(`/conversations/${id}/messages`, 'alice', {
     body: 'Which run is best?',
     clientId: 'first-question-1'
   });
-  (analyze as Mock).mockResolvedValueOnce(answers('Run A is best.'));
-  const worker = startWorker();
-  worker();
-  await worker.tick();
-  await worker.tick();
-  return { id, worker, question: asked.body.data };
+  await appendMessage({
+    conversationId: id,
+    senderId: 'assistant:bot-1',
+    senderName: 'Bot',
+    kind: 'assistant',
+    body: 'Run A is best.',
+    clientId: `assistant:${asked.body.data._id}`,
+    replyTo: asked.body.data._id
+  });
+  return { id, question: asked.body.data };
 }
 const rows = async (id: string, user = 'alice') =>
   (await request<View[]>(`/conversations/${id}/messages`, user)).body.data;
@@ -42,8 +41,8 @@ const edit = (id: string, messageId: string, body: Record<string, unknown>, user
   request<View>(`/conversations/${id}/messages/${messageId}/edit`, user, body);
 
 describe('editing the last question', () => {
-  it('asks again with the new words, retires the old question and its answer, and answers the new one', async () => {
-    const { id, worker, question } = await answered();
+  it('asks again with the new words, and retires the old question and its answer', async () => {
+    const { id, question } = await answered();
     expect((await rows(id)).filter((row) => row.kind === 'assistant')).toHaveLength(1);
 
     const edited = await edit(id, question._id, {
@@ -61,24 +60,13 @@ describe('editing the last question', () => {
     expect(oldAnswer).toMatchObject({ body: '', supersededAt: expect.any(String) });
     expect(JSON.stringify(all)).not.toContain('Run A is best');
     expect(JSON.stringify(all)).not.toContain('Which run is best?');
-    // The run it had stays in the history, finished.
-    expect((await AssistantRun.findOne({ messageId: question._id }))?.state).toBe('completed');
-
-    // The assistant answers the edited question, and is told nothing of the old pair.
-    (analyze as Mock).mockResolvedValueOnce(answers('Run B at night.'));
-    await worker.tick();
-    await worker.tick();
-    const sent = JSON.stringify((analyze as Mock).mock.calls.at(-1)?.[0].history);
-    expect(sent).toContain('Which run is best on night scenes?');
-    expect(sent).not.toContain('Which run is best?"');
-    expect(sent).not.toContain('Run A is best');
-    expect(
-      (await rows(id)).filter((row) => row.kind === 'assistant' && !row.supersededAt).map((row) => row.body)
-    ).toEqual(['Run B at night.']);
+    // Whatever was made of the old question is the assistant service's to withdraw, and it is asked to.
+    expect(assistants.cancelMessageRuns).toHaveBeenCalledWith({ conversationId: id, messageId: question._id });
+    // Nothing of the old pair is left standing as an answer.
+    expect((await rows(id)).filter((row) => row.kind === 'assistant' && !row.supersededAt)).toEqual([]);
   });
 
   it('cancels a question that is still being answered, and a repeated edit changes nothing more', async () => {
-    await enableAnalyst('test');
     const id = await create('assistant', []);
     const asked = (
       await request<View>(`/conversations/${id}/messages`, 'alice', {
@@ -89,7 +77,7 @@ describe('editing the last question', () => {
     const body = { body: 'Second wording', clientId: 'edited-pending-1' };
     const first = await edit(id, asked._id, body);
     expect(first.status).toBe(201);
-    expect(await AssistantRun.countDocuments({ messageId: asked._id, state: { $ne: 'cancelled' } })).toBe(0);
+    expect(assistants.cancelMessageRuns).toHaveBeenCalledWith({ conversationId: id, messageId: asked._id });
     // The same request again (a network retry) returns the same question and retires nothing a second time.
     const again = await edit(id, asked._id, body);
     expect(again.status).toBe(200);
@@ -166,12 +154,9 @@ describe('editing the last question', () => {
         clientId: 'later-edit-source'
       })
     ).body.data;
-    await Settings.updateOne({ _id: 'assistant' }, { $set: { enabled: false } });
-    resetAssistantSettingsCache();
+    vi.mocked(assistants.prepare).mockRejectedValueOnce(new BadRequestError('The assistant is not configured. Human messaging is available.'));
     expect((await edit(id, later._id, { body: 'Reworded later', clientId: 'refused-edit-1' })).status).toBe(400);
     expect((await Message.findById(later._id).select('+editClaim'))?.editClaim).toBeUndefined();
-    await Settings.updateOne({ _id: 'assistant' }, { $set: { enabled: true } });
-    resetAssistantSettingsCache();
     expect((await edit(id, later._id, { body: 'Reworded later', clientId: 'accepted-edit-1' })).status).toBe(201);
   });
 

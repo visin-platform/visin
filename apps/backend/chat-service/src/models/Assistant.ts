@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import type { ReadOnlyModel } from './ReadOnlyModel';
 
 /** Reusable private assistant. Ownership never grants additional research access. */
 const assistantSchema = new Schema(
@@ -21,6 +22,8 @@ const assistantSchema = new Schema(
   },
   { timestamps: true }
 );
-assistantSchema.index({ defaultForUserIds: 1 }, { sparse: true });
-assistantSchema.index({ platformDefault: 1 }, { unique: true, partialFilterExpression: { platformDefault: true } });
-export const Assistant = model('ChatAssistant', assistantSchema);
+assistantSchema.set('autoIndex', false);
+assistantSchema.set('autoCreate', false);
+const model_ = model('ChatAssistantView', assistantSchema, 'chatassistants');
+/** The assistants people can talk to. Reading only: what chat changes there it asks Vivi to (see assistantClient). */
+export const Assistant: ReadOnlyModel<typeof model_> = model_;

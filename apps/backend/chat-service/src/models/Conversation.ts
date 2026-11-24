@@ -67,8 +67,6 @@ const conversationSchema = new Schema(
     messageVersion: { type: Number, default: 0 },
     lastMessageSeq: { type: Number, default: 0 },
     membershipVersion: { type: Number, default: 1 },
-    workerUntil: Date,
-    workerRunId: String,
     deletedAt: { type: Date, default: null }
   },
   { timestamps: true, optimisticConcurrency: true }

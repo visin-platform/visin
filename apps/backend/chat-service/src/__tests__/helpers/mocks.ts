@@ -1,39 +1,19 @@
 import type { NextFunction, Request, Response } from 'express';
 import { vi } from 'vitest';
 
-vi.mock('../../services/analyst', async () => {
-  const module = await (() => ({
-    RESERVATION: 160000,
-    reservationFor: (screen: boolean) => (screen ? 280000 : 160000),
-    analyze: vi.fn(async function () {
-      return {
-        text: 'Validation peaked at epoch 42.',
-        evidence: [],
-        inputTokens: 100,
-        outputTokens: 20
-      };
-    })
-  }))();
-  return Object.assign({ default: module }, module);
-});
-
 vi.mock('@visin/backend-core', async () => {
+  // One client for everyone who asks, so a test sets the groups once.
+  const sharedGroupClient = {
+    getMyGroups: vi.fn(async () => []),
+    checkMembership: vi.fn(async () => ({ member: false, role: null }))
+  };
   const module = await (async () => ({
     ...(await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')),
     fetchWithTimeout: vi.fn(
       (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
     ),
     createGroupServiceClient: vi.fn(function () {
-      return {
-        getMyGroups: vi.fn(async () => []),
-        checkMembership: vi.fn(async () => ({ member: false, role: null }))
-      };
-    }),
-    createApiKey: vi.fn(async function () {
-      return { token: 'ephemeral', summary: { id: 'key1' } };
-    }),
-    deleteApiKey: vi.fn(async function () {
-      return true;
+      return sharedGroupClient;
     }),
     authenticateToken: async (req: Request, _res: Response, next: NextFunction) => {
       const id = req.headers['x-test-user'];
@@ -61,13 +41,34 @@ vi.mock('../../services/access', async () => {
   return Object.assign({ default: module }, module);
 });
 
-// These HTTP/worker suites use synthetic names (alice/bob) as authenticated IDs.
-// Keep policy enforcement real while replacing only the account identity lookup.
-vi.mock('../../services/adminPolicy', async () => {
-  const actual = await vi.importActual<typeof import('../../services/adminPolicy')>('../../services/adminPolicy');
-  return { ...actual, assertViviUser: async (id: string) => {
-    const policy = await actual.effectivePolicy(id);
-    if (!policy.enabled) throw new Error('Vivi access is disabled');
-    return policy;
-  } };
-});
+// The assistants are another service. These suites test chat with an assistant service that takes every question
+// (to the assistant the thread is bound to, if it is, called Bot) and that nothing is running for: what the real one
+// decides is its own tests'. The contract between the two is in each service's tests of its half of it.
+vi.mock('../../services/assistantClient', () => ({
+  prepare: vi.fn(
+    async (input: {
+      person: { id: string; email: string; name: string };
+      assistantId?: string | null;
+      membershipVersion: number;
+      screen?: Record<string, unknown>;
+    }) => ({
+      request: {
+        userId: input.person.id,
+        email: input.person.email,
+        name: input.person.name,
+        // With none named there is none: a private chat without an assistant answers as Vivi herself.
+        ...(input.assistantId ? { assistantId: input.assistantId, assistantName: 'Bot' } : {}),
+        membershipVersion: input.membershipVersion,
+        ...(input.screen ? { screen: input.screen } : {})
+      }
+    })
+  ),
+  resolve: vi.fn(async (input: { assistantId?: string }) => (input.assistantId ? { id: input.assistantId, name: 'Bot' } : null)),
+  cancelRuns: vi.fn(async () => undefined),
+  cancelMessageRuns: vi.fn(async () => undefined),
+  capabilities: vi.fn(async () => ({
+    assistant: false,
+    assistantModel: { provider: '', model: '', ready: false },
+    canConfigure: false
+  }))
+}));

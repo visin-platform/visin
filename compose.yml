@@ -64,7 +64,7 @@ services:
       SERVICE_NAME: admin-service
       GROUP_SERVICE_URL: http://group-service:5006
       AUTH_SERVICE_URL: http://auth-service:5001
-      CHAT_SERVICE_URL: http://chat-service:5012
+      ASSISTANT_SERVICE_URL: http://assistant-service:5018
 
   admin-front:
     build: ./apps/frontend/admin-front
@@ -276,6 +276,39 @@ services:
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       PORT: 5012
       SERVICE_NAME: chat-service
+      AUTH_SERVICE_URL: http://auth-service:5001
+      GROUP_SERVICE_URL: http://group-service:5006
+      VISION_SERVICE_URL: http://vision-service:4010
+      # The assistants are their own service. Chat starts, and people talk to each other, without it.
+      ASSISTANT_INTERNAL_URL: http://assistant-service:5018
+      # Seals the push signing keys kept in the database.
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      # Calls and notifications need nothing set, and chat works without either. Notifications sign themselves
+      # with keys the service makes on first start. Calls connect on one local network as they are; a STUN server
+      # widens that to most home and mobile networks, and a relay (TURN) to all of them. The STUN default below is
+      # Cloudflare's free public server, which sees the callers' addresses: `STUN_URLS=` (set but empty) turns it off.
+      # Replicas wake each other through Redis so streams poll less; chat works without it.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CALLS_ENABLED: ${CALLS_ENABLED:-true}
+      STUN_URLS: ${STUN_URLS-stun:stun.cloudflare.com:3478}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      CLOUDFLARE_TURN_KEY_ID: ${CLOUDFLARE_TURN_KEY_ID:-}
+      CLOUDFLARE_TURN_API_TOKEN: ${CLOUDFLARE_TURN_API_TOKEN:-}
+
+  # Vivi: the assistants, their settings and queue, and the guest bot. It reads chat's collections and asks chat, over
+  # chat's internal API, to change them; chat asks it, over its internal API, about questions to an assistant.
+  assistant-service:
+    build: ./apps/backend/assistant-service
+    image: ${REGISTRY:-visin}/assistant-service:${TAG:-local}
+    <<: *common
+    ports: ['${COMPOSE_BIND:-0.0.0.0}:5018:5018']
+    depends_on: *needs-mongo
+    environment:
+      <<: [*app-env, *file-creds]
+      FILE_SERVICE_INTERNAL_URL: http://file-service:5002
+      PORT: 5018
+      SERVICE_NAME: assistant-service
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       GUEST_NETWORK_SECRET: ${GUEST_NETWORK_SECRET:-}
@@ -284,19 +317,38 @@ services:
       GROUP_SERVICE_URL: http://group-service:5006
       VISION_SERVICE_URL: http://vision-service:4010
       MCP_INTERNAL_URL: http://mcp-service:5009/mcp
+      CHAT_INTERNAL_URL: http://chat-service:5012
       API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
-      # Calls and notifications need nothing set, and chat works without either. Notifications sign themselves
-      # with keys the service makes on first start. Calls connect on one local network as they are; a STUN server
-      # widens that to most home and mobile networks, and a relay (TURN) to all of them. The STUN default below is
-      # Cloudflare's free public server, which sees the callers' addresses: `STUN_URLS=` (set but empty) turns it off.
-      # Replicas wake each other through Redis so streams and the worker poll less; chat works without it.
+      # With Redis, a worker finds a new question at once; without it, at its next look (a second).
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      CALLS_ENABLED: ${CALLS_ENABLED:-true}
-      STUN_URLS: ${STUN_URLS-stun:stun.cloudflare.com:3478}
-      TURN_URLS: ${TURN_URLS:-}
-      TURN_SECRET: ${TURN_SECRET:-}
-      CLOUDFLARE_TURN_KEY_ID: ${CLOUDFLARE_TURN_KEY_ID:-}
-      CLOUDFLARE_TURN_API_TOKEN: ${CLOUDFLARE_TURN_API_TOKEN:-}
+
+  # The same image as assistant-service, running only Vivi's worker (its own program, dist/index.worker.js): it claims
+  # questions from MongoDB, answers them and publishes the answers through chat's internal API. It shares nothing with
+  # the API but the database (and Redis wake signals, optional), so redeploying assistant-service never interrupts an
+  # answer, and this one is given time to finish its answers when it is stopped. It serves only /health and /metrics,
+  # so it publishes no port.
+  assistant-worker:
+    build: ./apps/backend/assistant-service
+    image: ${REGISTRY:-visin}/assistant-service:${TAG:-local}
+    <<: *common
+    command: ['node', 'dist/index.worker.js']
+    # Longer than a turn can last (260s) plus the drain's own margin: a stop lets running answers finish.
+    stop_grace_period: 285s
+    depends_on: *needs-mongo
+    environment:
+      <<: [*app-env, *file-creds]
+      FILE_SERVICE_INTERNAL_URL: http://file-service:5002
+      PORT: 5018
+      SERVICE_NAME: assistant-worker
+      # Stated, because NODE_ENV here may be development, whose default drain is 5s: a stop lets answers finish.
+      WORKER_DRAIN_MS: ${WORKER_DRAIN_MS:-265000}
+      AUTH_SERVICE_URL: http://auth-service:5001
+      GROUP_SERVICE_URL: http://group-service:5006
+      VISION_SERVICE_URL: http://vision-service:4010
+      MCP_INTERNAL_URL: http://mcp-service:5009/mcp
+      CHAT_INTERNAL_URL: http://chat-service:5012
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
 
   # Optional relay for calls between networks that cannot reach each other directly (the same job as
   # Cloudflare's hosted relay, which needs no server of yours). Not started by default:
@@ -336,6 +388,7 @@ services:
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
+      ASSISTANT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5018
       # Where an administrator's "Set up" link goes: Admin's Vivi setup, or Account when Admin is not set.
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
       ADMIN_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3016
@@ -382,7 +435,7 @@ services:
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
       # Account's Analyst section, for administrators, reads and writes the analyst's settings here.
-      CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
+      ASSISTANT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5018
 
   label-front:
     build: ./apps/frontend/label-front
@@ -429,8 +482,9 @@ services:
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
       CHAT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3014
-      # Asked only whether to offer Account's Analyst section.
       CHAT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5012
+      # Asked whether to offer Account's Analyst section and the guest bot, and where a person edits their bots.
+      ASSISTANT_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5018
       # Read by the home and Explore pages; unset, the parts they feed are left out.
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       DATASET_API_URL: ${PUBLIC_HOST:-http://localhost}:5010

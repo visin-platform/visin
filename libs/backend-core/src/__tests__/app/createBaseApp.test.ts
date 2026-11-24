@@ -267,6 +267,18 @@ describe('createBaseApp rate limiting', () => {
     });
   });
 
+  it('gives internal routes under a service prefix the internal bucket too', async () => {
+    await withServer({}, async baseUrl => {
+      const prefixed = await hammer(baseUrl, '/api/chat/internal/assistant/messages', 5, {
+        'x-internal-token': 'synthetic-internal-token'
+      });
+      expect(prefixed.every(status => status !== 429)).toBe(true);
+      // A segment, not a substring: a public path that merely contains the word is still public.
+      const lookalike = await hammer(baseUrl, '/api/internals', 5, { 'x-internal-token': 'synthetic-internal-token' });
+      expect(lookalike.at(-1)).toBe(429);
+    });
+  });
+
   it('counts an /internal request without a valid credential against the public bucket', async () => {
     await withServer({}, async baseUrl => {
       const guesses = await hammer(baseUrl, '/internal/files/a.bin', 5, { 'x-internal-token': 'wrong-guess' });

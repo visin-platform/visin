@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 730" width="800" height="730" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" role="img" aria-labelledby="title desc">
   <title id="title">Visin: platform administration</title>
-  <desc id="desc">Admin-front is a separate app for platform administrators, reached from the account menu in the shell. Every request goes to admin-service, which checks the administrator role on the primary database, audits writes without request bodies and forwards only allow-listed operations, with the caller's own credential, to auth-service, group-service and chat-service. Each of those checks the administrator again. System monitoring stays in Grafana, which Admin only links to.</desc>
+  <desc id="desc">Admin-front is a separate app for platform administrators, reached from the account menu in the shell. Every request goes to admin-service, which checks the administrator role on the primary database, audits writes without request bodies and forwards only allow-listed operations, with the caller's own credential, to auth-service, group-service and assistant-service. Each of those checks the administrator again. System monitoring stays in Grafana, which Admin only links to.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
@@ -57,9 +57,9 @@
     <text x="297" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Memberships and revisions</text>
     <text x="297" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Last-owner protection</text>
   </g>
-  <g><!-- service: Chat service -->
+  <g><!-- service: Assistant service -->
     <rect x="550" y="400" width="230" height="95" rx="10" fill="#2563eb"/>
-    <text x="562" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Chat service</text>
+    <text x="562" y="424" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Assistant service</text>
     <text x="562" y="442" font-size="12" fill="#dbeafe" text-anchor="start">Vivi setup, policies, runs</text>
     <text x="562" y="457" font-size="12" fill="#dbeafe" text-anchor="start">Usage and guest budget</text>
   </g>
@@ -73,6 +73,6 @@
     <text x="32" y="584" font-size="12" fill="#475569" text-anchor="start">Admin only shows a link to it when GRAFANA_URL is set</text>
   </g>
 <text x="20" y="660" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">The gateway is not the authority</text>
-    <text x="20" y="678" font-size="12" fill="#475569" text-anchor="start">Auth, group and chat each check the administrator again, so no service trusts admin-service.</text>
+    <text x="20" y="678" font-size="12" fill="#475569" text-anchor="start">Auth, group and assistants each check the administrator again, so no service trusts admin-service.</text>
     <text x="20" y="693" font-size="12" fill="#475569" text-anchor="start">An uncertain write (the call failed in transit) is recorded as such and is checked before it is repeated.</text>
 </svg>

@@ -1,29 +1,20 @@
 import './mocks';
-import { initializeAssistantProfileIndexes } from '../../services/assistantProfiles';
 import { createServer, type Server } from 'http';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { type Mock } from 'vitest';
+import { vi, type Mock } from 'vitest';
+import * as assistants from '../../services/assistantClient';
 import { createApp } from '../../app';
-import { Assistant } from '../../models/Assistant';
-import { AssistantRun } from '../../models/AssistantRun';
 import { Block } from '../../models/Block';
-import { Budget } from '../../models/Budget';
 import { Call } from '../../models/Call';
 import { CallSignal } from '../../models/CallSignal';
 import { Conversation } from '../../models/Conversation';
-import { ConversationAssistant } from '../../models/ConversationAssistant';
 import { DeploymentSecret } from '../../models/DeploymentSecret';
 import { Message } from '../../models/Message';
-import { Pricing } from '../../models/Pricing';
-import { ProviderKey } from '../../models/ProviderKey';
 import { PushPreference } from '../../models/PushPreference';
 import { PushSubscription } from '../../models/PushSubscription';
-import { ScreenCall } from '../../models/ScreenCall';
-import { Settings } from '../../models/Settings';
 import { groups } from '../../services/access';
 import { resetPushConfig } from '../../services/pushService';
-import { resetAssistantSettingsCache } from '../../services/settings';
 
 export let base: string;
 let mongo: MongoMemoryServer, server: Server, currentApp: ReturnType<typeof createApp>;
@@ -54,30 +45,12 @@ export function setupChatTests() {
     process.env.VISION_SERVICE_URL = 'http://vision.invalid';
     process.env.GROUP_SERVICE_URL = 'http://groups.invalid';
     process.env.INTERNAL_SERVICE_TOKEN = 'test';
-    // What the analyst needs from the server, besides the key and model a test sets when it enables it.
+    // What chat seals its push signing keys with.
     process.env.API_KEY_ENCRYPTION_SECRET = 'chat-test-encryption-secret';
-    process.env.MCP_INTERNAL_URL = 'http://mcp.invalid/mcp';
     mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
-    await initializeAssistantProfileIndexes();
     await Promise.all(
-      [
-        Conversation,
-        Message,
-        Assistant,
-        AssistantRun,
-        ConversationAssistant,
-        Budget,
-        Block,
-        Settings,
-        ProviderKey,
-        Pricing,
-        ScreenCall,
-        PushSubscription,
-        DeploymentSecret,
-        Call,
-        CallSignal
-      ].map((model) => model.init())
+      [Conversation, Message, Block, PushSubscription, DeploymentSecret, Call, CallSignal].map((model) => model.init())
     );
     currentApp = createApp();
     server = createServer((req, res) => currentApp(req, res));
@@ -91,19 +64,15 @@ export function setupChatTests() {
   });
   beforeEach(async () => {
     process.env.API_KEY_ENCRYPTION_SECRET = 'chat-test-encryption-secret';
-    process.env.MCP_INTERNAL_URL = 'http://mcp.invalid/mcp';
+    // What chat asked of the assistants is a test's to look at, so it starts from nothing.
+    for (const fn of Object.values(assistants)) if (vi.isMockFunction(fn)) fn.mockClear();
     currentApp = createApp();
-    await ConversationAssistant.deleteMany({});
-    await Assistant.deleteMany({});
     await Conversation.deleteMany({});
     await Message.deleteMany({});
-    await AssistantRun.deleteMany({});
-    await Budget.deleteMany({});
     await Block.deleteMany({});
-    await Settings.deleteMany({});
-    await ProviderKey.deleteMany({});
-    await Pricing.deleteMany({});
-    await ScreenCall.deleteMany({});
+    // The assistant service's collections, which chat only reads.
+    for (const collection of ['chatassistants', 'chatassistantruns', 'chatscreencalls'])
+      await mongoose.connection.collection(collection).deleteMany({});
     await PushSubscription.deleteMany({});
     await PushPreference.deleteMany({});
     await DeploymentSecret.deleteMany({});
@@ -111,7 +80,6 @@ export function setupChatTests() {
     await CallSignal.deleteMany({});
     resetPushConfig();
     await mongoose.connection.collection('users').deleteMany({});
-    resetAssistantSettingsCache();
     (groups.getMyGroups as Mock).mockResolvedValue([]);
     (groups.checkMembership as Mock).mockResolvedValue({ member: false, role: null });
   });

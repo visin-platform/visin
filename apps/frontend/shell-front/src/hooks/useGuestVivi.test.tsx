@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 const config = vi.hoisted(() => ({
-  CHAT_SERVICE_URL: 'https://chat-api.test/' as string | undefined,
+  ASSISTANT_SERVICE_URL: 'https://assistant-api.test/' as string | undefined,
   CHAT_FRONT_URL: 'https://chat.test' as string | undefined
 }));
 const auth = vi.hoisted(() => ({ isAuthenticated: false, isLoading: false }));
@@ -24,7 +24,7 @@ const answer = (body: unknown, status = 200) => {
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  config.CHAT_SERVICE_URL = 'https://chat-api.test/';
+  config.ASSISTANT_SERVICE_URL = 'https://assistant-api.test/';
   config.CHAT_FRONT_URL = 'https://chat.test';
   auth.isAuthenticated = false;
   auth.isLoading = false;
@@ -35,7 +35,7 @@ describe('useGuestVivi', () => {
     const fetchMock = answer({ success: true, data: { enabled: true, siteKey: 'k', sessionDailyLimit: 3 } });
     const { result } = renderHook(() => useGuestVivi(), { wrapper });
     await waitFor(() => expect(result.current).toBe(true));
-    expect(fetchMock.mock.calls[0][0]).toBe('https://chat-api.test/api/chat/guest/capabilities');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://assistant-api.test/api/assistant/guest/capabilities');
   });
 
   it('offers nothing when it is off, or the chat service fails', async () => {

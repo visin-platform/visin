@@ -2,10 +2,9 @@ import { ConflictError } from '@visin/backend-core';
 import type { Attachment } from './attachments';
 import { flushMembershipEvents } from './membershipAudit';
 import { Conversation } from '../models/Conversation';
-import type { ScreenContext } from './screen';
+import { type VerifiedAbout } from './analysisContext';
 import { Message } from '../models/Message';
 import { notify } from './wakeBus';
-import type { VerifiedAbout } from './analysisContext';
 
 export async function appendMessage(input: {
   expectedMembershipVersion?: number;
@@ -26,7 +25,8 @@ export async function appendMessage(input: {
     assistantId?: string;
     assistantName?: string;
     personality?: string;
-    screen?: ScreenContext;
+    /** What the person's page says, as Vivi checked it: chat only carries it to the worker. */
+    screen?: Record<string, unknown>;
   };
   /** What a person's question to the analyst is about, already checked. */
   context?: VerifiedAbout;

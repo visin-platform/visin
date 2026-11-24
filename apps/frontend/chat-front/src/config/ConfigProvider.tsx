@@ -3,6 +3,8 @@ export interface AppConfig {
   AUTH_SERVICE_URL?: string;
   AUTH_FRONT_URL?: string;
   CHAT_SERVICE_URL?: string;
+  /** The assistants: their settings, profiles, allowance and findings, and the guest bot. */
+  ASSISTANT_SERVICE_URL?: string;
   /** Where the analyst's settings are, for an administrator's link from a chat page that is not inside the shell. */
   ACCOUNT_FRONT_URL?: string;
   /** Platform administration, where the analyst is set up now. Unset, the link falls back to Account's Analyst section. */
@@ -13,6 +15,7 @@ export const { ConfigProvider, useConfig, getGlobalConfig } = createConfigProvid
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL || 'http://localhost:5001',
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL || 'http://localhost:3004',
     CHAT_SERVICE_URL: import.meta.env.VITE_CHAT_SERVICE_URL || 'http://localhost:5012',
+    ASSISTANT_SERVICE_URL: import.meta.env.VITE_ASSISTANT_SERVICE_URL || 'http://localhost:5018',
     ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007',
     ADMIN_FRONT_URL: import.meta.env.VITE_ADMIN_FRONT_URL || 'http://localhost:3016'
   }),

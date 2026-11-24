@@ -2,7 +2,7 @@
 
 The platform administrator gateway listens on port 5016. It authenticates the
 existing Visin SSO session and reads the current platform-admin role on every
-request. Auth-service owns account changes; group-service owns membership changes; chat-service owns Vivi configuration,
+request. Auth-service owns account changes; group-service owns membership changes; assistant-service owns Vivi configuration,
 policies, runs and usage. No API keys or internal-service tokens grant admin access.
 
 Copy `.env.example` for local development. Add the Admin frontend origin to

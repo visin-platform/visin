@@ -13,7 +13,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       GROUP_SERVICE_URL: http://group-service:5006
       AUTH_SERVICE_URL: http://auth-service:5001
-      CHAT_SERVICE_URL: http://chat-service:5012
+      ASSISTANT_SERVICE_URL: http://assistant-service:5018
     networks: [visinnet]
 networks:
   visinnet:

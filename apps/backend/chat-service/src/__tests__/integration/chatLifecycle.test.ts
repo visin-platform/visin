@@ -1,13 +1,9 @@
 import '../helpers/mocks';
-import { vi, type Mock } from 'vitest';
 import { Conversation } from '../../models/Conversation';
+import * as assistants from '../../services/assistantClient';
 import { ConversationHidden } from '../../models/ConversationHidden';
 import { Message } from '../../models/Message';
-import { peer } from '../../services/access';
-import { analyze } from '../../services/analyst';
 import { appendMessage } from '../../services/messages';
-import { startWorker } from '../../services/worker';
-import { enableAnalyst } from '../helpers/analystFixtures';
 import { create, request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
@@ -54,7 +50,6 @@ describe('hiding', () => {
   });
 
   it('is not undone by the assistant answering, but asking the assistant again opens the chat', async () => {
-    await enableAnalyst('test');
     const id = await vivi();
     await request(`/conversations/${id}/hide`, 'alice', {});
     await appendMessage({
@@ -73,7 +68,6 @@ describe('hiding', () => {
 
 describe('deleting', () => {
   it('soft-deletes the chat with the assistant: unreachable, still stored, and the next one is empty', async () => {
-    await enableAnalyst('test');
     const id = await vivi();
     await ask(id, 'Hello', 'before-delete-001');
     expect((await request(`/conversations/${id}`, 'alice', undefined, 'DELETE')).status).toBe(200);
@@ -88,14 +82,20 @@ describe('deleting', () => {
     expect(stored?.bindingKey).toBeUndefined();
     expect(stored?.deletedBindingKey).toBe('assistant:default:alice');
     expect(await Message.countDocuments({ conversationId: id })).toBe(1);
-    // A question still waiting for its answer is cancelled with it, so no worker picks it up.
-    const waiting = await Message.findOne({ conversationId: id }).select('+assistantRequest +assistantCancelled');
-    expect(waiting?.assistantCancelled).toBe(true);
-    expect(waiting?.assistantRequest).toBeUndefined();
+    // A question still waiting for its answer is cancelled with it, so no worker picks it up: the assistant service is
+    // asked to cancel this person's open questions in the chat, and takes their requests back from chat in turn.
+    expect(assistants.cancelRuns).toHaveBeenCalledWith({ conversationId: id, userId: 'alice' });
 
     const next = await vivi();
     expect(next).not.toBe(id);
     expect((await request(`/conversations/${next}/messages`)).body.data).toEqual([]);
+  });
+
+  it('deletes the chat while the assistant service cannot be reached', async () => {
+    const id = await vivi();
+    vi.mocked(assistants.cancelRuns).mockRejectedValueOnce(new Error('assistant-service is away'));
+    expect((await request(`/conversations/${id}`, 'alice', undefined, 'DELETE')).status).toBe(200);
+    expect((await Conversation.findById(id))?.deletedAt).toBeTruthy();
   });
 
   it('is only for your own chat with an assistant', async () => {
@@ -120,54 +120,5 @@ describe('deleting', () => {
     expect((await request(`/conversations/${old.id}/messages`)).status).toBe(404);
     // A new one is not held back by it.
     expect(await vivi()).not.toBe(old.id);
-  });
-});
-
-describe('what a question is about', () => {
-  it('goes to the analyst with the question it belongs to, not with the chat', async () => {
-    await enableAnalyst('test');
-    const id = await vivi();
-    const project = '111111111111111111111111';
-    vi.mocked(peer).mockResolvedValueOnce({ _id: project, name: 'IseAuto', owner: { kind: 'user', id: 'alice' } });
-    await ask(id, 'How is IseAuto?', 'about-first-0001', 'alice', { context: { projectId: project } });
-    const worker = startWorker();
-    worker();
-    await worker.tick();
-    expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ projectId: project });
-
-    // The next question is a general one, from another page: the project does not follow it.
-    await ask(id, 'What is IoU?', 'about-second-001');
-    await worker.tick();
-    const general = (analyze as Mock).mock.calls.at(-1)![0];
-    expect(general.projectId).toBeUndefined();
-    expect(general.paperId).toBeUndefined();
-    // The earlier question keeps the project it was about, so its answer is not taken for this one's.
-    const first = JSON.parse(general.history[0].content);
-    expect(first).toMatchObject({ question: 'How is IseAuto?', about: { project: 'IseAuto' } });
-    expect(general.history.at(-1).content).toBe('What is IoU?');
-  });
-
-  it('forgets the questions before a new topic, and keeps them in the chat', async () => {
-    await enableAnalyst('test');
-    const id = await vivi();
-    await ask(id, 'Before the topic', 'topic-before-0001');
-    const worker = startWorker();
-    worker();
-    await worker.tick();
-    const marker = await request(`/conversations/${id}/topic`, 'alice', {});
-    expect(marker.status).toBe(201);
-    expect(marker.body.data).toMatchObject({ kind: 'system', body: expect.stringContaining('New topic') });
-    // Again straight away is the same topic, not a second line.
-    const again = await request(`/conversations/${id}/topic`, 'alice', {});
-    expect(again.body.data._id).toBe(marker.body.data._id);
-    expect(await Message.countDocuments({ conversationId: id, kind: 'system' })).toBe(1);
-    await ask(id, 'After the topic', 'topic-after-00001');
-    await worker.tick();
-    const input = (analyze as Mock).mock.calls.at(-1)![0];
-    expect(input.history.map((turn: { content: string }) => turn.content)).toEqual(['After the topic']);
-    const messages = (await request<{ body: string }[]>(`/conversations/${id}/messages`)).body.data;
-    expect(messages.map((m) => m.body)).toContain('Before the topic');
-    // Only a chat with an assistant has topics.
-    expect((await request(`/conversations/${await create('direct', ['bob'])}/topic`, 'alice', {})).status).toBe(400);
   });
 });

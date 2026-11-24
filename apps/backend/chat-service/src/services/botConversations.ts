@@ -3,7 +3,9 @@ import { Assistant } from '../models/Assistant';
 import { Conversation } from '../models/Conversation';
 import { assistantBinding } from './liveConversation';
 
-/** Repair old bot DMs after access has been checked. Historical messages are never replayed. */
+/**
+ * Repair old bot DMs after access has been checked. Historical messages are never replayed.
+ */
 export async function repairBotDirect(conversation: ReturnType<typeof Conversation.hydrate>, actor: string) {
   if (conversation.kind !== 'direct' || conversation.createdBy !== actor || conversation.participants.length !== 2)
     return conversation;

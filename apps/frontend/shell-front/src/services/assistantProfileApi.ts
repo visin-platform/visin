@@ -7,20 +7,20 @@ export interface ManagedAssistant {
   personality: string;
   paused: boolean;
 }
-function serviceUrl(service: 'CHAT_SERVICE_URL' | 'AUTH_SERVICE_URL', path: string) {
+function serviceUrl(service: 'ASSISTANT_SERVICE_URL' | 'AUTH_SERVICE_URL', path: string) {
   const base = getGlobalConfig()[service];
   if (!base) throw new Error('Assistant profile editing is not configured');
   return `${base.replace(/\/$/, '')}${path}`;
 }
-const chat = createApiClient({ baseUrl: () => serviceUrl('CHAT_SERVICE_URL', '/api/chat') });
+const assistants = createApiClient({ baseUrl: () => serviceUrl('ASSISTANT_SERVICE_URL', '/api/assistant') });
 const auth = createApiClient({ baseUrl: () => serviceUrl('AUTH_SERVICE_URL', '/auth') });
 export const assistantProfileApi = {
   async list() {
-    return (await chat.get<{ data: ManagedAssistant[] }>('/assistants')).data;
+    return (await assistants.get<{ data: ManagedAssistant[] }>('/assistants')).data;
   },
   async rename(assistant: ManagedAssistant, name: string) {
     return (
-      await chat.post<{ data: ManagedAssistant }>(`/assistants/${assistant._id}`, {
+      await assistants.post<{ data: ManagedAssistant }>(`/assistants/${assistant._id}`, {
         name,
         personality: assistant.personality,
         paused: assistant.paused
@@ -29,7 +29,7 @@ export const assistantProfileApi = {
   },
   async saveProfile(assistantId: string, input: { handle: string; bio: string; public: boolean }) {
     return (
-      await chat.post<{ data: { handle: string; bio: string; public: boolean } }>(
+      await assistants.post<{ data: { handle: string; bio: string; public: boolean } }>(
         `/assistants/${assistantId}/profile`,
         input
       )

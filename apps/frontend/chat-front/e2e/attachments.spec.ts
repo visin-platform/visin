@@ -46,7 +46,7 @@ for (const kind of ['direct', 'assistant', 'group'] as const) {
       uploaded.push(route.request().url());
       await route.fulfill({ status: 200, json: { complete: true } });
     });
-    await page.route(/^http:\/\/localhost:(5001|5012)\//, async (route) => {
+    await page.route(/^http:\/\/localhost:(5001|5012|5018)\//, async (route) => {
       const req = route.request();
       const path = new URL(req.url()).pathname;
       const headers = {

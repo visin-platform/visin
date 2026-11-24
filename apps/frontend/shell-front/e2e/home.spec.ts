@@ -15,7 +15,7 @@ test('home shows real activity trends and opens the analyst on the latest run on
     status: 'completed',
     updatedAt: now
   };
-  await page.route(/^http:\/\/localhost:(4010|5001|5006|5010|5003|5008|5012)\//, async (route) => {
+  await page.route(/^http:\/\/localhost:(4010|5001|5006|5010|5003|5008|5012|5018)\//, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
     const headers = {

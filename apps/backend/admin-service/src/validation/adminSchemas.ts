@@ -10,7 +10,7 @@ export const membershipParamsSchema = z.object({ groupId: objectId, userId: obje
 export const runParamsSchema = z.object({ id: objectId });
 /** No id is the global policy. */
 export const policyParamsSchema = z.object({ id: objectId.optional() });
-/** The providers chat-service keeps a key for; it still checks the name itself. */
+/** The providers assistant-service keeps a key for; it still checks the name itself. */
 export const providerKeyParamsSchema = z.object({ provider: z.enum(['anthropic', 'openai']) });
 
 export const auditQuerySchema = z.object({

@@ -109,7 +109,7 @@ test('the analyst’s answer arrives step by step, then as it is written, then a
   let messages: unknown[] = [question];
   let runs: unknown[] = [run()];
 
-  await page.route(/^http:\/\/localhost:(5001|5012)\//, async (route) => {
+  await page.route(/^http:\/\/localhost:(5001|5012|5018)\//, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
     const headers = {

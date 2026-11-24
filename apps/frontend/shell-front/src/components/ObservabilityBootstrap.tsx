@@ -31,6 +31,7 @@ export function ObservabilityBootstrap({ children }: { children: ReactNode }) {
             label: config.LABEL_SERVICE_URL,
             group: config.GROUP_SERVICE_URL,
             chat: config.CHAT_SERVICE_URL,
+            assistant: config.ASSISTANT_SERVICE_URL,
             admin: config.ADMIN_SERVICE_URL
           }
         });

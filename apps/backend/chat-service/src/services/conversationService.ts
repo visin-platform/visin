@@ -1,14 +1,13 @@
 import { repairBotDirect } from './botConversations';
-import { usableAssistant } from './assistantAvailability';
-import { BadRequestError, ForbiddenError, NotFoundError, createOwnerIdentityLookup } from '@visin/backend-core';
-import { type Request } from 'express';
 import { Assistant } from '../models/Assistant';
+import * as assistants from './assistantClient';
+import { BadRequestError, ForbiddenError, NotFoundError, createOwnerIdentityLookup, logger } from '@visin/backend-core';
+import { type Request } from 'express';
 import { Message } from '../models/Message';
 import { Block } from '../models/Block';
 import { Conversation } from '../models/Conversation';
 import { ConversationHidden } from '../models/ConversationHidden';
 import { appendMessage } from './messages';
-import { cancelRuns } from './runService';
 import { notify } from './wakeBus';
 import {
   accessCache,
@@ -26,7 +25,6 @@ import {
 import { attachmentSummary } from './attachments';
 import { actorName } from '../utils/request';
 import { id } from '../validation/commonSchemas';
-import { defaultAssistantFor } from './assistantService';
 import { createSchema } from '../validation/conversationSchemas';
 import { parsed } from '../validation/parse';
 import { listQuerySchema } from '../validation/conversationSchemas';
@@ -80,10 +78,10 @@ export async function listConversations(req: Request, query: unknown = {}) {
   );
   const visible = checked.filter((c) => c !== undefined);
   if (!visible.length) return [];
-  const assistants = await Assistant.find({ _id: { $in: visible.map((c) => c.assistantId).filter(Boolean) } }).select(
+  const bots = await Assistant.find({ _id: { $in: visible.map((c) => c.assistantId).filter(Boolean) } }).select(
     'profileUserId'
   );
-  const botUsers = new Map(assistants.map((bot) => [bot.id, bot.profileUserId]));
+  const botUsers = new Map(bots.map((bot) => [bot.id, bot.profileUserId]));
   const profileId = (c: (typeof visible)[number]) =>
     c.kind === 'direct'
       ? c.participants.find((person) => person.userId !== actor)?.userId
@@ -151,12 +149,12 @@ export async function createConversation(req: Request, body: unknown) {
   }
   // A private analysis with no assistant named starts with the one this person made their default, if they did.
   if (input.kind === 'assistant' && !input.assistantId) {
-    const preferred = await defaultAssistantFor(actor);
+    const preferred = await assistants.resolve({ userId: actor });
     if (preferred) input.assistantId = preferred.id;
   }
   if (input.assistantId) {
     if (input.kind !== 'assistant') throw new BadRequestError('Assistants are only available in private analysis');
-    const bot = await Assistant.findOne({ _id: input.assistantId, ...usableAssistant(actor) }).select('name');
+    const bot = await assistants.resolve({ userId: actor, assistantId: input.assistantId });
     if (!bot) throw new NotFoundError('Assistant is unavailable');
     // The one chat with an assistant is named for it, as a conversation with a person is.
     input.title = bot.name.slice(0, 120);
@@ -366,8 +364,14 @@ export async function deleteConversation(req: Request, conversationId: string) {
   const c = await authorize(req, conversationId);
   if (c.kind !== 'assistant' || c.createdBy !== actor)
     throw new ForbiddenError('Only your own chat with an assistant can be deleted. Hide it instead.');
-  // An answer being written stops with it: the worker gives up on a run that is no longer running.
-  await cancelRuns(req, c.id);
+  // An answer being written stops with it. Best effort: the worker also stops any run, and publishes no answer, for a
+  // chat that is deleted, so a person can put their chat away while the assistant service is down.
+  await assistants.cancelRuns({ conversationId: c.id, userId: actor }).catch((error: unknown) =>
+    logger.warn('Could not cancel the runs of a deleted chat', {
+      conversationId: c.id,
+      error: error instanceof Error ? error.message : 'unknown'
+    })
+  );
   const deleted = await Conversation.updateOne(
     { _id: c.id, deletedAt: null },
     {

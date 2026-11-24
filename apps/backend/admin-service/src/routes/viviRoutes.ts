@@ -3,7 +3,7 @@ import { validateRequest } from '@visin/backend-core';
 import { forwardTo } from '../controllers/forwardController';
 import { policyParamsSchema, providerKeyParamsSchema, runParamsSchema } from '../validation/adminSchemas';
 
-/** Vivi setup, provider keys and prices, access policies and runs: owned by chat-service. */
+/** Vivi setup, provider keys and prices, access policies and runs: owned by assistant-service. */
 const router = Router();
 const vivi = forwardTo('vivi');
 const policy = validateRequest({ params: policyParamsSchema });

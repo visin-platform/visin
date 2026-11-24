@@ -13,7 +13,7 @@ test('visitors see public evidence, accurate counts and a working path into the 
       )
     })
   );
-  await page.route(/^http:\/\/localhost:(4010|5001|5006|5008|5010|5012)\//, async (route) => {
+  await page.route(/^http:\/\/localhost:(4010|5001|5006|5008|5010|5012|5018)\//, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
     const headers = {

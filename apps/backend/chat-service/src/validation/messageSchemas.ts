@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { screenContextSchema } from '../services/screen';
 import { attachmentRefSchema, MAX_ATTACHMENTS } from './attachmentSchemas';
 import { id } from './commonSchemas';
 
@@ -21,7 +20,8 @@ export const sendSchema = z
     replyTo: id.optional(),
     assistantId: id.optional(),
     // Where the asker's chat panel is, so the analyst can change the page beside it. Never stored on the message.
-    screen: screenContextSchema.optional(),
+    // Vivi checks its shape when it takes the question: chat only carries it.
+    screen: z.record(z.string(), z.unknown()).optional(),
     // What the question is about, for a private chat with an assistant. Left out for a general question.
     context: askedAboutSchema.optional()
   })
@@ -30,15 +30,6 @@ export const sendSchema = z
     message: 'A message needs text or a file',
     path: ['body']
   });
-
-export const saveFindingSchema = z
-  .object({
-    messageId: id,
-    title: z.string().trim().min(1).max(200),
-    body: z.string().min(1).max(20000),
-    recommendations: z.string().max(5000).optional()
-  })
-  .strict();
 
 export const MAX_SEARCH_TERM = 100;
 export const searchQuerySchema = z

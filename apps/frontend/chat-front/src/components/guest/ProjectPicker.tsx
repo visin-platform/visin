@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Autocomplete, TextField } from '@mui/material';
-import { api } from '../../services/apiClient';
+import { assistantApi as api } from '../../services/assistantApiClient';
 import { projectIdentifier } from './projectIdentifier';
 
 export interface PublicProject {

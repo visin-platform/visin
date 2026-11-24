@@ -3,7 +3,7 @@
   "info": {
     "title": "Visin Chat API",
     "version": "1.0.0",
-    "description": "Internal authenticated conversations and private training-analysis UI API. Chat membership never grants project access.",
+    "description": "Authenticated conversations between people, and the private threads in which they ask the assistants (a separate service: assistant-service). Chat membership never grants project access.",
     "license": {
       "name": "AGPL-3.0-only",
       "url": "https://www.gnu.org/licenses/agpl-3.0.html"
@@ -25,7 +25,7 @@
   "tags": [
     {
       "name": "Chat",
-      "description": "Conversations, invitations, messages and private analyst jobs"
+      "description": "Conversations, invitations, messages and calls; and what the assistant service asks of chat"
     }
   ],
   "paths": {
@@ -61,540 +61,6 @@
           }
         },
         "description": "What the signed-in user may do: whether the analyst is ready, and whether they may change its settings (canConfigure, for platform administrators)."
-      }
-    },
-    "/settings/assistant": {
-      "get": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "getAssistantSettings",
-        "summary": "Read the analyst settings",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          },
-          "502": {
-            "description": "The assistant provider could not be reached"
-          }
-        },
-        "description": "Whether the analyst is on, its provider (Anthropic or OpenAI), model and daily token limit per person, where those came from (an administrator, or the defaults until one saves: on, with whichever provider has a key, and no model), the tokens one question reserves of that limit (`tokenReservation`), the server settings still missing that only its operator can add, by name only, and the providers the page offers with whether each has a key (and its last characters). Keys themselves are never returned."
-      },
-      "put": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "updateAssistantSettings",
-        "summary": "Turn the analyst on or off and choose its provider and model",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "502": {
-            "description": "The assistant provider could not be reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "description": "Applies to the whole deployment, to the next question; turning it off also stops questions already being answered. A model is only accepted from the chosen provider's own list, which needs a key for that provider (saved here, or set in the server environment); switching off is always accepted. `dailyTokenLimit`, when given, must be at least what one question reserves.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "enabled",
-                  "provider",
-                  "model"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Whether the analyst answers questions."
-                  },
-                  "provider": {
-                    "type": "string",
-                    "enum": [
-                      "anthropic",
-                      "openai"
-                    ]
-                  },
-                  "model": {
-                    "type": "string",
-                    "maxLength": 120,
-                    "description": "The provider's model id, one it lists. May be empty only while turning the analyst off."
-                  },
-                  "dailyTokenLimit": {
-                    "type": "integer",
-                    "minimum": 200000,
-                    "maximum": 1000000000,
-                    "description": "Tokens per person per day. Must cover one question at the chosen toolRounds, including the screen allowance. Left out, it stays as it is."
-                  },
-                  "toolRounds": {
-                    "type": "integer",
-                    "minimum": 2,
-                    "maximum": 16,
-                    "description": "Rounds per answer; defaults to 8, omitted preserves the saved value."
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/settings/assistant/models": {
-      "get": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "listAssistantModels",
-        "summary": "List the models a provider offers",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          },
-          "502": {
-            "description": "The assistant provider could not be reached"
-          }
-        },
-        "description": "The chat models available to the server's key for that provider (the one in use when none is named), newest first. The newest model of each plain kind is marked with its `tier` (`best`, `balanced`, `fast`), and `recommended` names the one to start with, so a model can be chosen without knowing model names. `reachable` is false when they could not be listed, for instance because there is no key yet. Callers asking at the same moment share one request to the provider.",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "anthropic",
-                "openai"
-              ]
-            }
-          }
-        ]
-      }
-    },
-    "/settings/assistant/usage": {
-      "get": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "getAssistantUsage",
-        "summary": "Read what the analyst has used, and what that costs",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          },
-          "502": {
-            "description": "The assistant provider could not be reached"
-          }
-        },
-        "description": "Administrators only. Answered questions in the last `days` UTC days (1 to 365, default 30; today counts as a day): their tokens in total and by day, model and person, and what they cost. Each question is costed at the price that was kept with it when it was answered, so a price changed later affects only later questions; `byModel[].pricesInPeriod` says when the questions of a model were asked at more than one price. A question asked before its model had a price has none and shows tokens only (`unpricedQuestions`, `unpricedTokens`) until an administrator prices it afterwards (POST /settings/assistant/prices/backfill), after which it is counted in `backfilledQuestions`. Where the prices in the period are in more than one currency `currency` is `MIXED` and there is no cost total. Only completed answers count, because only they report their tokens; `failedQuestions` says how many others did not finish. Cost is an estimate from token counts and those prices, not an invoice. `byModel[].price` is the price a question asked now would be costed at, and `prices` is every price entered, so the editor can send them back. Input token totals include ordinary, cache-read and cache-write tokens exactly once. Optional cacheReadPerMillion and cacheWritePerMillion rates are saved with each run; a missing applicable rate leaves that question unpriced. performance reports cacheReadTokens, cacheWriteTokens, providerRequests, toolCalls and total durationMs for completed questions. performance.measuredQuestions counts timed answers, so legacy records are excluded from average latency.",
-        "parameters": [
-          {
-            "name": "days",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 365,
-              "default": 30
-            }
-          }
-        ]
-      }
-    },
-    "/settings/assistant/prices": {
-      "put": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "updateAssistantPrices",
-        "summary": "Set what each model costs",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "description": "Administrators only. Replaces the whole price table: a price is removed by leaving it out. Prices are per million input and output tokens, in one currency for the deployment, and apply to questions answered from then on: a question keeps the price it was asked at. Providers return no price with an answer and change prices, so none is built in.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "currency",
-                  "entries"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "currency": {
-                    "type": "string",
-                    "pattern": "^[A-Za-z]{3}$",
-                    "description": "A three-letter currency code, such as USD. Stored upper-cased."
-                  },
-                  "entries": {
-                    "type": "array",
-                    "maxItems": 200,
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "provider",
-                        "model",
-                        "inputPerMillion",
-                        "outputPerMillion"
-                      ],
-                      "additionalProperties": false,
-                      "properties": {
-                        "provider": {
-                          "type": "string",
-                          "enum": [
-                            "anthropic",
-                            "openai"
-                          ]
-                        },
-                        "model": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 120
-                        },
-                        "inputPerMillion": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000
-                        },
-                        "outputPerMillion": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000
-                        },
-                        "source": {
-                          "type": "string",
-                          "enum": [
-                            "manual",
-                            "fetched"
-                          ],
-                          "default": "manual",
-                          "description": "Typed by an administrator, which a refresh never overwrites, or fetched from the price list. Sent back as received so a fetched price stays marked until it is edited."
-                        },
-                        "fetchedAt": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "format": "date-time",
-                          "default": null,
-                          "description": "When a fetched price was fetched."
-                        },
-                        "cacheReadPerMillion": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000,
-                          "description": "Optional model-specific cache price per million tokens. A cached question without the applicable rate remains unpriced."
-                        },
-                        "cacheWritePerMillion": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000,
-                          "description": "Optional model-specific cache price per million tokens. A cached question without the applicable rate remains unpriced."
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/settings/assistant/prices/refresh": {
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "refreshAssistantPrices",
-        "summary": "Fetch current prices from the price list",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "description": "Administrators only. Fetches LiteLLM's public price list and sets a fetched price for every model that has answered a question and every model already in the table as fetched. A price typed by an administrator is never overwritten. The list is in USD, so this is refused when the deployment's currency is another. Nothing changes unless the list was read in full: a failed fetch returns 502 and the prices stay as they were. The response is the price table plus a `refresh` summary: `updated`, `notFound` (no usable price in the list), `keptManual`, and `fetchedAt`."
-      }
-    },
-    "/settings/assistant/prices/backfill": {
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "backfillAssistantPrices",
-        "summary": "Price earlier questions that have no price",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "description": "Administrators only. Prices answered questions that were asked before their model had a price, at the price in the table now, and marks each as backfilled. It is an estimate (the price then may have been different) and is never done on its own. Questions that already have a price are left exactly as they are, so repeating it changes nothing. Returns how many questions were priced, by model. Also fills missing applicable cache rates for previously priced questions in the same currency, retaining their original input/output prices and any existing cache prices. Such additions are marked as backfilled estimates."
-      }
-    },
-    "/settings/assistant/keys/{provider}": {
-      "put": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "saveAssistantKey",
-        "summary": "Save the deployment key for a provider",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          },
-          "502": {
-            "description": "The assistant provider could not be reached"
-          }
-        },
-        "description": "Administrators only. The key is checked with the provider before it is kept, then stored encrypted with API_KEY_ENCRYPTION_SECRET (which must be set). It replaces any key saved before and is never returned: the settings only say where a key came from and show a saved key's last four characters. A saved key is used instead of one set in the server environment.",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "anthropic",
-                "openai"
-              ]
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "key"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "key": {
-                    "type": "string",
-                    "minLength": 8,
-                    "maxLength": 500,
-                    "pattern": "^\\S+$",
-                    "description": "The provider's API key. Never returned by any route."
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "removeAssistantKey",
-        "summary": "Remove the saved key for a provider",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Only a platform administrator may use this"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          },
-          "502": {
-            "description": "The assistant provider could not be reached"
-          }
-        },
-        "description": "Administrators only. The provider falls back to the key in the server environment, if there is one.",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "anthropic",
-                "openai"
-              ]
-            }
-          }
-        ]
       }
     },
     "/groups": {
@@ -1361,131 +827,6 @@
         ]
       }
     },
-    "/conversations/{id}/cancel": {
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "cancelChatAnalysis",
-        "summary": "Cancel pending and running private analysis",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Action not permitted"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-fA-F0-9]{24}$"
-            }
-          }
-        ]
-      }
-    },
-    "/conversations/{id}/findings": {
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "saveChatFinding",
-        "summary": "Save a reviewed assistant conclusion idempotently",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Action not permitted"
-          },
-          "404": {
-            "description": "Conversation or resource unavailable"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "502": {
-            "description": "vision-service could not save the finding"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-fA-F0-9]{24}$"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "messageId",
-                  "title",
-                  "body"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "messageId": {
-                    "type": "string",
-                    "pattern": "^[a-fA-F0-9]{24}$"
-                  },
-                  "title": {
-                    "type": "string",
-                    "maxLength": 200
-                  },
-                  "body": {
-                    "type": "string",
-                    "maxLength": 20000
-                  },
-                  "recommendations": {
-                    "type": "string",
-                    "maxLength": 5000
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/conversations/{id}/events": {
       "get": {
         "tags": [
@@ -1618,104 +959,6 @@
           },
           "503": {
             "description": "Project access cannot be verified"
-          }
-        }
-      }
-    },
-    "/screen-calls/{id}/result": {
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "answerChatScreenCall",
-        "summary": "Report what the page did for a screen call, once, while it is pending",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScreenResult"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input or service not configured"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Action not permitted"
-          },
-          "404": {
-            "description": "Screen call not found, already answered or expired"
-          },
-          "429": {
-            "description": "Rate limit reached"
-          },
-          "503": {
-            "description": "An authorization dependency is unavailable"
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-fA-F0-9]{24}$"
-            }
-          }
-        ]
-      }
-    },
-    "/conversations/{id}/screen-calls": {
-      "get": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "listChatScreenCalls",
-        "summary": "Poll pending page calls for the asking tab when streaming is unavailable",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-fA-F0-9]{24}$"
-            }
-          },
-          {
-            "name": "tab",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_-]{8,64}$"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Pending calls for this conversation, user and tab; no calls for shared conversations"
-          },
-          "400": {
-            "description": "Invalid tab identifier"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "404": {
-            "description": "Conversation unavailable"
           }
         }
       }
@@ -2765,49 +2008,6 @@
         }
       }
     },
-    "/usage/me": {
-      "get": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "chatMyAllowance",
-        "summary": "What is left of today's Vivi allowance",
-        "description": "Questions and reservable tokens used and left today (a UTC day), and when they reset. Tokens held by a question still running are not counted as used. Reads the budget the worker charges and changes nothing.",
-        "responses": {
-          "200": {
-            "description": "requests, tokens, remainingShare (the smaller share left) and resetsAt"
-          },
-          "401": {
-            "description": "Sign-in required"
-          },
-          "403": {
-            "description": "Vivi is turned off for this account"
-          },
-          "4XX": {
-            "description": "Request rejected"
-          }
-        }
-      }
-    },
-    "/assistants/default": {
-      "get": {
-        "tags": [
-          "Chat"
-        ],
-        "x-internal": true,
-        "operationId": "chatDefaultAssistant",
-        "summary": "Resolve the current user default assistant or the published platform fallback",
-        "responses": {
-          "200": {
-            "description": "Effective assistant ID and name, or null; no private instructions"
-          },
-          "401": {
-            "description": "Sign-in required"
-          }
-        }
-      }
-    },
     "/push/preferences": {
       "get": {
         "tags": [
@@ -3128,6 +2328,538 @@
           }
         ]
       }
+    },
+    "/internal/assistant/messages": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "assistantAppendMessage",
+        "summary": "Publish an assistant's answer, or a line saying what changed (assistant-service only, by internal token)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "conversationId",
+                  "senderId",
+                  "senderName",
+                  "kind",
+                  "body",
+                  "clientId"
+                ],
+                "properties": {
+                  "expectedMembershipVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "conversationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "senderId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "senderName": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "assistant",
+                      "system"
+                    ]
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 20000
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "replyTo": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "thoughts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing or wrong internal token"
+          },
+          "404": {
+            "description": "Conversation or message unavailable"
+          },
+          "409": {
+            "description": "The conversation changed meanwhile"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/internal/assistant/messages/cancel-requests": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "assistantCancelRequests",
+        "summary": "Take questions back before they are answered: by message, by sender in a conversation, or by assistant (assistant-service only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "messageId"
+                    ],
+                    "properties": {
+                      "messageId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "conversationId",
+                      "senderId",
+                      "messageIds"
+                    ],
+                    "properties": {
+                      "conversationId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "senderId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "messageIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "assistantId"
+                    ],
+                    "properties": {
+                      "assistantId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing or wrong internal token"
+          },
+          "404": {
+            "description": "Conversation or message unavailable"
+          },
+          "409": {
+            "description": "The conversation changed meanwhile"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/internal/assistant/messages/{id}/ack": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "assistantAckRequest",
+        "summary": "A question has become a run, so its hidden request is done with (assistant-service only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing or wrong internal token"
+          },
+          "404": {
+            "description": "Conversation or message unavailable"
+          },
+          "409": {
+            "description": "The conversation changed meanwhile"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/internal/assistant/messages/{id}/finding": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "assistantSetFinding",
+        "summary": "Record that an answer was saved as a finding (assistant-service only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "findingId"
+                ],
+                "properties": {
+                  "findingId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing or wrong internal token"
+          },
+          "404": {
+            "description": "Conversation or message unavailable"
+          },
+          "409": {
+            "description": "The conversation changed meanwhile"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/internal/assistant/conversations/{id}/context": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "assistantSetContext",
+        "summary": "Keep the runs an assistant chose with a person's own chat (assistant-service only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "userId",
+                  "trainingIds",
+                  "trainingLabels"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "trainingIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "maxItems": 20
+                  },
+                  "trainingLabels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "maxItems": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updated": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing or wrong internal token"
+          },
+          "404": {
+            "description": "Conversation or message unavailable"
+          },
+          "409": {
+            "description": "The conversation changed meanwhile"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
+    },
+    "/internal/assistant/conversations/{id}/shared-assistants": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "x-internal": true,
+        "operationId": "assistantSaveShared",
+        "summary": "Save a change to a conversation's shared assistants as a new membership version, if it is still at the version the change was made on (assistant-service only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedVersion",
+                  "botIds",
+                  "policy"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "botIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "maxItems": 5
+                  },
+                  "policy": {
+                    "type": "object"
+                  },
+                  "announce": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "senderId",
+                      "senderName",
+                      "body"
+                    ],
+                    "description": "The line telling the members what changed, written by chat with the change (idempotent by the new membership version).",
+                    "properties": {
+                      "senderId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "senderName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "body": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "saved": {
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Missing or wrong internal token"
+          },
+          "404": {
+            "description": "Conversation or message unavailable"
+          },
+          "409": {
+            "description": "The conversation changed meanwhile"
+          },
+          "4XX": {
+            "description": "Request rejected"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3324,23 +3056,6 @@
           }
         },
         "description": "A message needs nonempty body text or at least one attachment. In assistant threads, image attachments are sent to the configured model for visual analysis; image-only messages ask it to describe what it sees. Other attachment types are supplied as metadata only."
-      },
-      "ScreenResult": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "ok"
-        ],
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "summary": {
-            "type": "string",
-            "maxLength": 200,
-            "description": "What the page did, or why it could not."
-          }
-        }
       },
       "PushConfig": {
         "type": "object",
@@ -3704,12 +3419,12 @@
               "null"
             ],
             "enum": [
-              "\u2764\ufe0f",
-              "\ud83d\ude02",
-              "\ud83d\udc4d",
-              "\ud83d\ude2e",
-              "\ud83d\ude22",
-              "\ud83d\udd25",
+              "❤️",
+              "😂",
+              "👍",
+              "😮",
+              "😢",
+              "🔥",
               null
             ],
             "description": "Set your reaction or null to remove it. One reaction per person per message."

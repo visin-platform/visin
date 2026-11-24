@@ -12,6 +12,9 @@ vi.mock('../../services/apiClient', () => ({
     return [];
   })
 }));
+
+// What the assistants answer comes from the same stand-in as chat's: these suites do not tell the two services apart.
+vi.mock('../../services/assistantApiClient', async () => ({ assistantApi: (await import('../../services/apiClient')).api }));
 const mount = (props: Partial<React.ComponentProps<typeof NewChat>> = {}) => {
   const on = { onBack: vi.fn(), onAnalysis: vi.fn(), onPerson: vi.fn(), onGroup: vi.fn(), onRoom: vi.fn() };
   render(<NewChat assistant groups={[{ groupId: 'g1', name: 'Road lab' }]} busy={false} {...on} {...props} />);

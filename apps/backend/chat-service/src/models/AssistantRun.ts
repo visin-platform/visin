@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import { FAILURE_CODES } from '../services/failureCode';
+import type { ReadOnlyModel } from './ReadOnlyModel';
 
 const runSchema = new Schema(
   {
@@ -52,7 +52,7 @@ const runSchema = new Schema(
     activity: { type: String, default: 'Waiting' },
     error: String,
     // Why it failed, as a code the page can act on (see failureCode.ts). `error` stays the text.
-    failureCode: { type: String, enum: FAILURE_CODES },
+    failureCode: String,
     // What this run holds against the asker's day while it runs, so a refusal can tell tokens spent from tokens held
     // by questions still under way. Read only while the run is `running`.
     reservation: { type: new Schema({ day: String, tokens: Number }, { _id: false }) },
@@ -96,11 +96,11 @@ const runSchema = new Schema(
   },
   { timestamps: true }
 );
-runSchema.index({ state: 1, createdAt: 1 });
 // Every open event stream reads a conversation's runs every two seconds.
-runSchema.index({ conversationId: 1, userId: 1, createdAt: -1 });
 // The publishing outbox, polled every second: completed runs only grow, unpublished ones stay few.
-runSchema.index({ createdAt: 1 }, { partialFilterExpression: { state: 'completed', published: false } });
 // The usage report reads answered questions by when they finished.
-runSchema.index({ finishedAt: -1 }, { partialFilterExpression: { state: 'completed' } });
-export const AssistantRun = model('ChatAssistantRun', runSchema);
+runSchema.set('autoIndex', false);
+runSchema.set('autoCreate', false);
+const model_ = model('ChatAssistantRunView', runSchema, 'chatassistantruns');
+/** The questions put to assistants, and where each one is. Reading only: what chat changes there it asks Vivi to (see assistantClient). */
+export const AssistantRun: ReadOnlyModel<typeof model_> = model_;

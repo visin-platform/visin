@@ -68,6 +68,9 @@ jobs:
             chat-service:
               - *backend-shared
               - 'apps/backend/chat-service/**'
+            assistant-service:
+              - *backend-shared
+              - 'apps/backend/assistant-service/**'
             group-service:
               - *backend-shared
               - 'apps/backend/group-service/**'

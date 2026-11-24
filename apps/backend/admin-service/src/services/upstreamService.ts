@@ -9,9 +9,9 @@ export const UPSTREAMS = {
   auth: { serviceName: 'auth-service', urlEnv: 'AUTH_SERVICE_URL', path: (p: string) => `/auth/admin/control${p}` },
   group: { serviceName: 'group-service', urlEnv: 'GROUP_SERVICE_URL', path: (p: string) => `/api/groups/admin${p}` },
   vivi: {
-    serviceName: 'chat-service',
-    urlEnv: 'CHAT_SERVICE_URL',
-    path: (p: string) => `/api/chat${p.replace(/^\/vivi(?=\/)/, '')}`
+    serviceName: 'assistant-service',
+    urlEnv: 'ASSISTANT_SERVICE_URL',
+    path: (p: string) => `/api/assistant${p.replace(/^\/vivi(?=\/)/, '')}`
   }
 } as const;
 export type UpstreamName = keyof typeof UPSTREAMS;

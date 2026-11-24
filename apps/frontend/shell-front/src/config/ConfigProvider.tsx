@@ -20,8 +20,10 @@ export interface AppConfig {
   LABEL_SERVICE_URL?: string;
   /** Invitations waiting for the viewer; unset, the home page leaves them out. */
   GROUP_SERVICE_URL?: string;
-  /** chat-service; asked only whether to offer Account's Analyst section. Unset, the section is never offered. */
+  /** chat-service: the unread count on the chat button, and request telemetry. Unset, no unread count is shown. */
   CHAT_SERVICE_URL?: string;
+  /** The assistants: whether to offer Account's Analyst section and the guest bot, and the editing of a person's bots. */
+  ASSISTANT_SERVICE_URL?: string;
   /**
    * The landing site, where Docs and About live. Unset, a visitor's top bar leaves
    * those links out rather than pointing somewhere else.
@@ -51,6 +53,7 @@ function createDevConfig(): AppConfig {
     LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL || 'http://localhost:5008',
     GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL || 'http://localhost:5006',
     CHAT_SERVICE_URL: import.meta.env.VITE_CHAT_SERVICE_URL || 'http://localhost:5012',
+    ASSISTANT_SERVICE_URL: import.meta.env.VITE_ASSISTANT_SERVICE_URL || 'http://localhost:5018',
     LANDING_FRONT_URL: import.meta.env.VITE_LANDING_FRONT_URL || 'http://localhost:3000',
     ADMIN_FRONT_URL: import.meta.env.VITE_ADMIN_FRONT_URL || 'http://localhost:3016',
     ADMIN_SERVICE_URL: import.meta.env.VITE_ADMIN_SERVICE_URL || 'http://localhost:5016'

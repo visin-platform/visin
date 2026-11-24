@@ -769,9 +769,9 @@ files['context.svg'] = doc(
 // ---------------------------------------------------------------- research chat
 files['chat.svg'] = doc(
   800,
-  730,
+  750,
   'Visin: research chat',
-  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations, durable analyst jobs and call state in MongoDB, checks group membership and project access, and runs read-only MCP tools for private assistant replies. Findings are reviewed and saved through Vision, which in turn tells chat-service (with the internal token) when a run finishes or fails, so its owner can be notified. Optionally it sends Web Push notifications through the browsers\' push services and gives calls a STUN or TURN relay; the people on a call connect to each other directly.',
+  'Chat-front runs as a full page or shell side panel. Chat-service stores human conversations, messages and call state in MongoDB and checks group membership and project access. The assistants are their own service: assistant-service holds Vivi\'s settings, the queue of questions in MongoDB and the guest bot, and its worker (the same image, started as its own program) claims the questions, runs read-only MCP tools for private assistant replies and publishes the answers. The two ask each other over internal APIs, by the shared internal token: chat asks whether a message may be put to an assistant, and the assistant service asks chat to publish an answer or change a question; they share only the database, so redeploying either never interrupts an answer being written. Findings are reviewed and saved through Vision, which in turn tells chat-service (with the internal token) when a run finishes or fails, so its owner can be notified. Optionally chat sends Web Push notifications through the browsers\' push services and gives calls a STUN or TURN relay; the people on a call connect to each other directly.',
   [
     node.web({
       x: 20,
@@ -799,22 +799,26 @@ files['chat.svg'] = doc(
     node.service({
       x: 20,
       y: 190,
-      w: 360,
+      w: 230,
       h: 110,
-      title: 'Chat service',
-      lines: [
-        'Session auth, invitation / history boundaries',
-        'REST + SSE replay; durable analyst worker',
-        'Short-lived, project-limited credentials'
-      ]
+      title: 'Chat service (API)',
+      lines: ['Session auth, history boundaries', 'REST + SSE replay', 'Calls and Web Push']
     }),
     node.data({
-      x: 420,
+      x: 285,
       y: 190,
-      w: 360,
+      w: 230,
       h: 110,
       title: 'MongoDB',
-      lines: ['Conversations, messages, analyst jobs', 'Token reservations and blocks']
+      lines: ['Conversations, messages', 'Analyst + guest jobs (the queue)']
+    }),
+    node.service({
+      x: 550,
+      y: 190,
+      w: 230,
+      h: 110,
+      title: 'Assistant service',
+      lines: ['Settings, guest intake, the queue', 'Its worker claims and answers', 'Short-lived, project-limited keys']
     }),
     edge(
       [
@@ -823,9 +827,28 @@ files['chat.svg'] = doc(
       ],
       { label: 'HTTPS + session cookie', at: [180, 155] }
     ),
+    edge(
+      [
+        [120, 190],
+        [120, 170],
+        [680, 170],
+        [680, 190]
+      ],
+      { label: 'internal APIs, both ways', at: [400, 158] }
+    ),
     edge([
-      [380, 245],
-      [420, 245]
+      [650, 190],
+      [650, 180],
+      [150, 180],
+      [150, 190]
+    ]),
+    edge([
+      [250, 245],
+      [285, 245]
+    ]),
+    edge([
+      [550, 245],
+      [515, 245]
     ]),
     node.service({
       x: 20,
@@ -849,19 +872,23 @@ files['chat.svg'] = doc(
       w: 230,
       h: 95,
       title: 'Assistant provider',
-      lines: ['Private analyst requests only', 'Explicit opt-in deployment setting']
+      lines: ['Analyst and guest requests only', 'Explicit opt-in deployment setting']
     }),
     edge([
-      [120, 300],
-      [120, 400]
+      [100, 300],
+      [100, 400]
     ]),
     edge([
-      [260, 300],
-      [400, 400]
+      [200, 300],
+      [320, 400]
     ]),
     edge([
-      [350, 300],
-      [665, 400]
+      [610, 300],
+      [440, 400]
+    ]),
+    edge([
+      [690, 300],
+      [690, 400]
     ]),
     node.external({
       x: 20,
@@ -890,7 +917,8 @@ files['chat.svg'] = doc(
       title: 'Conversation access does not grant project access',
       lines: [
         'Human messaging works without a provider. Shared AI remains disabled pending audience-aware access checks.',
-        'Durable sequence IDs replay messages; polling revalidates access and falls back when SSE is unavailable.'
+        'Durable sequence IDs replay messages; polling revalidates access and falls back when SSE is unavailable.',
+        'The assistant service is one image with two programs; its worker is stopped by letting its running answers finish.'
       ],
       color: C.ink,
       sub: C.body
@@ -903,7 +931,7 @@ files['admin.svg'] = doc(
   800,
   730,
   'Visin: platform administration',
-  'Admin-front is a separate app for platform administrators, reached from the account menu in the shell. Every request goes to admin-service, which checks the administrator role on the primary database, audits writes without request bodies and forwards only allow-listed operations, with the caller\'s own credential, to auth-service, group-service and chat-service. Each of those checks the administrator again. System monitoring stays in Grafana, which Admin only links to.',
+  'Admin-front is a separate app for platform administrators, reached from the account menu in the shell. Every request goes to admin-service, which checks the administrator role on the primary database, audits writes without request bodies and forwards only allow-listed operations, with the caller\'s own credential, to auth-service, group-service and assistant-service. Each of those checks the administrator again. System monitoring stays in Grafana, which Admin only links to.',
   [
     node.web({
       x: 20,
@@ -980,7 +1008,7 @@ files['admin.svg'] = doc(
       y: 400,
       w: 230,
       h: 95,
-      title: 'Chat service',
+      title: 'Assistant service',
       lines: ['Vivi setup, policies, runs', 'Usage and guest budget']
     }),
     edge([
@@ -1012,7 +1040,7 @@ files['admin.svg'] = doc(
       w: 760,
       title: 'The gateway is not the authority',
       lines: [
-        'Auth, group and chat each check the administrator again, so no service trusts admin-service.',
+        'Auth, group and assistants each check the administrator again, so no service trusts admin-service.',
         'An uncertain write (the call failed in transit) is recorded as such and is checked before it is repeated.'
       ],
       color: C.ink,

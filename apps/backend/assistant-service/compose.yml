@@ -1,0 +1,71 @@
+services:
+  assistant-service:
+    build: .
+    image: ${REGISTRY:-ghcr.io/visin-platform}/assistant-service:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
+    ports: ['5018:5018']
+    environment:
+      NODE_ENV: production
+      PORT: 5018
+      SERVICE_NAME: assistant-service
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      GUEST_NETWORK_SECRET: ${GUEST_NETWORK_SECRET:-}
+      GUEST_TRUSTED_PROXY: ${GUEST_TRUSTED_PROXY:-}
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      # Seals the provider keys an administrator saves.
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      GROUP_SERVICE_URL: ${GROUP_SERVICE_URL}
+      VISION_SERVICE_URL: ${VISION_SERVICE_URL}
+      MCP_INTERNAL_URL: ${MCP_INTERNAL_URL:-}
+      # Chat is its own service: this one reads its collections and asks it, here, to change them.
+      CHAT_INTERNAL_URL: ${CHAT_INTERNAL_URL:-http://chat-service:5012}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      # Pictures an assistant is shown are read from file-service.
+      FILE_SERVICE_INTERNAL_URL: ${FILE_SERVICE_INTERNAL_URL:-}
+      FILE_SERVICE_URL: ${FILE_SERVICE_URL:-http://file-service:5002}
+      FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:?Set the same FILE_SERVICE_API_KEY as file-service}
+      # Optional. With Redis, a worker finds a new question at once instead of at its next look (a second).
+      REDIS_URL: ${REDIS_URL:-}
+    networks: [visinnet]
+
+  # The same image, running Vivi's worker (its own program, dist/index.worker.js) and nothing else: it claims questions
+  # from MongoDB, answers them and publishes the answers (through chat's internal API), and shares nothing with the API
+  # but the database. A stop lets running answers finish (up to WORKER_DRAIN_MS, default 265s), so the grace period is
+  # longer than that, and redeploying assistant-service never interrupts an answer. It serves only /health and
+  # /metrics. It answers visitors' questions too.
+  assistant-worker:
+    build: .
+    image: ${REGISTRY:-ghcr.io/visin-platform}/assistant-service:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    command: ['node', 'dist/index.worker.js']
+    stop_grace_period: 285s
+    environment:
+      NODE_ENV: production
+      PORT: 5018
+      SERVICE_NAME: assistant-worker
+      WORKER_DRAIN_MS: ${WORKER_DRAIN_MS:-}
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      GROUP_SERVICE_URL: ${GROUP_SERVICE_URL}
+      VISION_SERVICE_URL: ${VISION_SERVICE_URL}
+      MCP_INTERNAL_URL: ${MCP_INTERNAL_URL:-}
+      CHAT_INTERNAL_URL: ${CHAT_INTERNAL_URL:-http://chat-service:5012}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      FILE_SERVICE_INTERNAL_URL: ${FILE_SERVICE_INTERNAL_URL:-}
+      FILE_SERVICE_URL: ${FILE_SERVICE_URL:-http://file-service:5002}
+      FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:?Set the same FILE_SERVICE_API_KEY as file-service}
+      REDIS_URL: ${REDIS_URL:-}
+    networks: [visinnet]
+networks:
+  visinnet:
+    external: true

@@ -11,8 +11,8 @@ export const analystKeys = {
   usage: ['analyst', 'usage'] as const
 };
 
-/** Whether chat is set up here at all: without its address there is nothing to ask. */
-export const useChatConfigured = (): boolean => Boolean(getGlobalConfig().CHAT_SERVICE_URL);
+/** Whether the assistants are set up here at all: without their address there is nothing to ask. */
+export const useChatConfigured = (): boolean => Boolean(getGlobalConfig().ASSISTANT_SERVICE_URL);
 
 export const useAnalystCapabilities = () => {
   const { user } = useAuth();
@@ -21,7 +21,7 @@ export const useAnalystCapabilities = () => {
     queryKey: [...analystKeys.capabilities, user?.id],
     queryFn: analystService.capabilities,
     enabled: configured && !!user?.id,
-    // Whether someone is an administrator rarely changes in a session; a down chat service must not hold up Account.
+    // Whether someone is an administrator rarely changes in a session; a down assistant service must not hold up Account.
     staleTime: 5 * 60_000,
     retry: false
   });

@@ -1,7 +1,7 @@
 import '../helpers/mocks';
 import { Message } from '../../models/Message';
 import { Conversation } from '../../models/Conversation';
-import { AssistantRun } from '../../models/AssistantRun';
+import * as assistants from '../../services/assistantClient';
 import { appendMessage } from '../../services/messages';
 import { create, request, setupChatTests } from '../helpers/testServer';
 setupChatTests();
@@ -58,6 +58,16 @@ it('only lets the sender unsend a person message and redacts quoted copies', asy
   ).toBe(400);
   expect((await request(`/conversations/${id}/messages/${message._id}/unsend`, 'alice', {})).status).toBe(200);
 });
+it('unsends a message, and redacts its quotes, while the assistant service cannot be reached', async () => {
+  const id = await direct();
+  const message = await send(id);
+  await request(`/conversations/${id}/messages`, 'bob', { body: 'A reply', clientId: 'reply-while-away', replyTo: message._id });
+  vi.mocked(assistants.cancelMessageRuns).mockRejectedValueOnce(new Error('assistant-service is away'));
+  const removed = await request(`/conversations/${id}/messages/${message._id}/unsend`, 'alice', {});
+  expect(removed.status).toBe(200);
+  const reply = await Message.findOne({ conversationId: id, clientId: 'reply-while-away' });
+  expect(reply?.quote).toMatchObject({ body: 'Message unsent', unsent: true });
+});
 it('does not take a reaction on an assistant\'s answer, though a person\'s message still does', async () => {
   const id = await direct();
   const person = await appendMessage({
@@ -101,17 +111,10 @@ it('removes attachment references, stops queued analysis and does not permit rea
   });
   expect(reply.status).toBe(201);
   expect(reply.body.data).toMatchObject({ quote: { body: 'Sent a photo' } });
-  const job = await AssistantRun.create({
-    conversationId: id,
-    messageId: source.id,
-    userId: 'alice',
-    email: 'alice@test.invalid',
-    name: 'Alice',
-    state: 'queued'
-  });
   await request(`/conversations/${id}/messages/${source.id}/unsend`, 'alice', {});
   expect((await Message.findById(source.id))?.attachments).toBeUndefined();
-  expect((await AssistantRun.findById(job.id))?.state).toBe('cancelled');
+  // The run, if there is one, is the assistant service's to withdraw.
+  expect(assistants.cancelMessageRuns).toHaveBeenCalledWith({ conversationId: id, messageId: source.id });
   const system = await appendMessage({
     conversationId: id,
     senderId: 'system',

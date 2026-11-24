@@ -16,7 +16,7 @@ const service = vi.hoisted(() => ({
   savePrices: vi.fn()
 }));
 vi.mock('../../services/analystService', () => ({ analystService: service }));
-const config = vi.hoisted(() => ({ CHAT_SERVICE_URL: 'https://chat.test' as string | undefined }));
+const config = vi.hoisted(() => ({ ASSISTANT_SERVICE_URL: 'https://assistants.test' as string | undefined }));
 vi.mock('../../config/ConfigProvider', () => ({ getGlobalConfig: () => config }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 
@@ -97,7 +97,7 @@ const pick = async (label: string, option: RegExp | string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  config.CHAT_SERVICE_URL = 'https://chat.test';
+  config.ASSISTANT_SERVICE_URL = 'https://assistants.test';
   service.capabilities.mockResolvedValue({ assistant: false, canConfigure: true });
   service.settings.mockResolvedValue(settings());
   service.models.mockImplementation(async (provider: 'anthropic' | 'openai') => lists[provider]);
@@ -113,7 +113,7 @@ describe('who sees it', () => {
   });
 
   it('says so when chat is not set up, without asking anyone anything', async () => {
-    config.CHAT_SERVICE_URL = undefined;
+    config.ASSISTANT_SERVICE_URL = undefined;
     renderTab();
     expect(await screen.findByText('Chat is not set up for this deployment.')).toBeInTheDocument();
     expect(service.capabilities).not.toHaveBeenCalled();

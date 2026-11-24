@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../services/apiClient';
+import { assistantApi as api } from '../../services/assistantApiClient';
 
 export interface GuestCapabilities {
   assistant?: { name: string; picture?: string; handle?: string };

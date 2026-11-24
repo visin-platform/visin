@@ -131,7 +131,8 @@ including any failures.
 - **Always `fetchWithTimeout`, never bare `fetch`:** a stalled peer otherwise hangs the caller for minutes.
   - Use `TRANSFER_FETCH_TIMEOUT_MS` for calls that move file bytes.
   - An expired deadline becomes a 504 `GatewayTimeoutError`.
-- **Required env vars:** each service asserts them at the top of `index.ts` with `assertRequiredEnv`. A new one goes
+- **Required env vars:** each service asserts them at the top of `index.ts` with `assertRequiredEnv` (in `bootstrap.ts`
+  for a service with several entry points, which all import it). A new one goes
   in that list, the service's `compose.yml` and `.env.example`. Under `NODE_ENV=production` it also refuses the
   `dev-only-…` and `<change-me>` placeholders.
 - **Public URLs (OAuth issuer, MCP resource, front/API URLs) come from config only.** Never fall back to a real
@@ -201,6 +202,24 @@ including any failures.
     that calls it without awaiting would turn a throw into an unhandled rejection.
 - **Startup:** `index.ts` starts listening with backend-core's `serve`, which drains requests on SIGTERM. Pass
   `onShutdown` for anything else that must finish first, like a queue worker.
+  - assistant-service (Vivi) is one image with two programs: `index.js` (the API, the internal API chat calls, and
+    the guest intake) and `index.worker.js` (the worker), plus `index.all.js` for both in one process (`npm run dev`).
+    Which one a process is, is code (`bootstrap.ts`), not an environment setting. Vivi's turns, signed-in and guest,
+    run only in the worker, which drains on SIGTERM (`WORKER_DRAIN_MS`) and needs a `stop_grace_period` longer than
+    that; compose runs `assistant-service` and `assistant-worker` (`command: node dist/index.worker.js`). A
+    deployment needs at least one worker.
+  - chat-service and assistant-service are separate services that share MongoDB and nothing else (Redis wake
+    signals are optional). Each **reads** the other's collections through its own read-only models (typed without write
+    methods) and **asks** the other, over its internal API, to change them: chat's
+    `/api/chat/internal/assistant/*` (append a message, take a question back, record a finding, set a page selection,
+    save shared assistants) and assistant-service's `/api/assistant/internal/*` (prepare a question, resolve an
+    assistant, cancel runs, capabilities). One module on each side makes those calls (`chat-service`
+    `services/assistantClient.ts`, assistant-service `services/chatClient.ts`). Each service's tests use a fake of the
+    other (assistant-service `__tests__/helpers/fakeChat.ts`, chat-service's mocked client); a change to the contract
+    changes both. The assistants' public paths are `/api/assistant/*`.
+  - Chat works without assistant-service: a call to it on a person's path (unsend, edit) is best effort, and what it
+    would have done the worker also checks for itself. The worker publishes each answer on its own, so one that chat
+    refuses (a 4xx) is let go and chat being away delays answers without stopping visitors' turns.
 - **Request ids:** `requestLogger` gives each request an `X-Request-Id`, which is on every log line and forwarded by
   `fetchWithTimeout`. Log through `logger` and call peers through `fetchWithTimeout`, and the id follows.
 - **Metrics and traces:** `createBaseApp` serves `GET /metrics` (Prometheus) and makes a span per request, with the

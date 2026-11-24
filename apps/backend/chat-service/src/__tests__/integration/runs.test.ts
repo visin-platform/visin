@@ -1,5 +1,5 @@
 import '../helpers/mocks';
-import { AssistantRun } from '../../models/AssistantRun';
+import { assistantRuns as AssistantRun } from '../helpers/assistantData';
 import { appendMessage } from '../../services/messages';
 import { base, create, request, setupChatTests } from '../helpers/testServer';
 
@@ -43,10 +43,6 @@ it('shows shared progress while keeping results, credentials and configuration p
     expect(reader.body.data[0]).not.toHaveProperty(field);
   const owner = await request<Record<string, unknown>[]>(`/conversations/${id}/runs`, 'alice');
   expect(owner.body.data[0].canCancel).toBe(true);
-  await request(`/conversations/${id}/cancel`, 'bob', {});
-  expect((await AssistantRun.findById(run.id))?.state).toBe('running');
-  await request(`/conversations/${id}/cancel`, 'alice', {});
-  expect((await AssistantRun.findById(run.id))?.state).toBe('cancelled');
 });
 
 it('does not reveal requester errors or retry authority to other readers', async () => {
@@ -111,4 +107,57 @@ it('sends the same redacted shared progress over SSE', async () => {
   } finally {
     controller.abort();
   }
+});
+
+it('shows a run that waits on the page as queued, and one the asker can cancel', async () => {
+  const id = await create('assistant', []);
+  const trigger = await question(id, 'screen-queued-001');
+  await AssistantRun.create({
+    conversationId: id,
+    messageId: trigger.id,
+    userId: 'alice',
+    email: 'alice@example.test',
+    name: 'Alice',
+    state: 'screen_queued',
+    screen: { tabId: 'tab-aaaa1111', path: '/projects', allowActions: true }
+  });
+  const runs = (await request<Record<string, unknown>[]>(`/conversations/${id}/runs`)).body.data;
+  expect(runs[0]).toMatchObject({ state: 'queued', canCancel: true });
+  // The page's context is the worker's business, and too large for every poll.
+  expect(runs[0]).not.toHaveProperty('screen');
+});
+
+it('never shows how a provider failed or which replay handler ran', async () => {
+  const id = await create('assistant', []);
+  const trigger = await question(id, 'failed-provider-001');
+  await AssistantRun.create({
+    conversationId: id,
+    messageId: trigger.id,
+    userId: 'alice',
+    email: 'alice@example.test',
+    name: 'Alice',
+    state: 'failed',
+    providerFailure: { status: 400, type: 'invalid_request_error', reason: 'empty_text', requestId: 'req_test' },
+    providerReplayVersion: 'replay-1'
+  });
+  const shown = JSON.stringify((await request(`/conversations/${id}/runs`)).body.data);
+  expect(shown).not.toContain('providerFailure');
+  expect(shown).not.toContain('providerReplayVersion');
+  expect(shown).not.toContain('req_test');
+});
+
+it("shows steps an assistant took to the asker, with the words a search used", async () => {
+  const id = await create('assistant', []);
+  const trigger = await question(id, 'steps-001');
+  await AssistantRun.create({
+    conversationId: id,
+    messageId: trigger.id,
+    userId: 'alice',
+    email: 'alice@example.test',
+    name: 'Alice',
+    state: 'running',
+    steps: [{ tool: 'search_visin', detail: 'autonomous vehicles', startedAt: new Date() }]
+  });
+  const runs = await request<{ steps: { tool: string; detail?: string }[] }[]>(`/conversations/${id}/runs`);
+  expect(runs.body.data[0].steps[0]).toMatchObject({ tool: 'search_visin', detail: 'autonomous vehicles' });
 });

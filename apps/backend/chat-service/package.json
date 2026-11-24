@@ -19,7 +19,6 @@
     "typecheck": "tsc --noEmit && tsc --project src/__tests__/tsconfig.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.2",
     "@visin/backend-core": "1.22.0",
     "express": "^5.3.0",
     "ioredis": "6.0.0",

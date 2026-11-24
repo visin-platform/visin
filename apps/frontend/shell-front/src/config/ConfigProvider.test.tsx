@@ -37,6 +37,7 @@ describe('shell ConfigProvider', () => {
       'VITE_ACCOUNT_FRONT_URL',
       'VITE_CHAT_FRONT_URL',
       'VITE_CHAT_SERVICE_URL',
+      'VITE_ASSISTANT_SERVICE_URL',
       'VITE_ADMIN_FRONT_URL',
       'VITE_ADMIN_SERVICE_URL',
     ]) {
@@ -51,6 +52,7 @@ describe('shell ConfigProvider', () => {
       ACCOUNT_FRONT_URL: 'http://localhost:3007',
       CHAT_FRONT_URL: 'http://localhost:3014',
       CHAT_SERVICE_URL: 'http://localhost:5012',
+      ASSISTANT_SERVICE_URL: 'http://localhost:5018',
       VISION_API_URL: 'http://localhost:4010',
       LABEL_SERVICE_URL: 'http://localhost:5008',
       GROUP_SERVICE_URL: 'http://localhost:5006',

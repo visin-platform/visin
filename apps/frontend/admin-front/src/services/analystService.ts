@@ -14,8 +14,8 @@ import {
 } from '../types/analyst';
 
 /**
- * The analyst's settings live on chat-service, a separate origin from auth-service. The session rides the shared
- * `access_token` cookie, and chat-service checks the administrator role itself on every call: what is hidden
+ * The analyst's settings live on assistant-service, which Admin reaches through admin-service. The session rides the shared
+ * `access_token` cookie, and assistant-service checks the administrator role itself on every call: what is hidden
  * from anyone else here is a courtesy, not the protection.
  */
 const chatApi = createApiClient({

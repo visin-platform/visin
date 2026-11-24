@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import type { ReadOnlyModel } from './ReadOnlyModel';
 
 /**
  * One request from the analyst to move the page beside the asker's chat panel. A run is queued and
@@ -19,8 +20,9 @@ const screenCallSchema = new Schema(
   { timestamps: true }
 );
 // The open stream of one tab looks for its pending calls.
-screenCallSchema.index({ userId: 1, tabId: 1, state: 1 });
-screenCallSchema.index({ state: 1, createdAt: 1 });
 // Old calls are history nobody reads.
-screenCallSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
-export const ScreenCall = model('ChatScreenCall', screenCallSchema);
+screenCallSchema.set('autoIndex', false);
+screenCallSchema.set('autoCreate', false);
+const model_ = model('ChatScreenCallView', screenCallSchema, 'chatscreencalls');
+/** What an assistant asks a person's open page to do. Reading only: what chat changes there it asks Vivi to (see assistantClient). */
+export const ScreenCall: ReadOnlyModel<typeof model_> = model_;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 declare global {
   interface Window {
-    /** Whether a visitor may ask Vivi: the shell's answer, set once it has asked chat-service. */
+    /** Whether a visitor may ask Vivi: the shell's answer, set once it has asked assistant-service. */
     __visinGuestVivi?: boolean;
   }
 }

@@ -17,7 +17,7 @@ test('human chat works without a provider and stays usable on mobile', async ({ 
       { userId: 'bob', name: 'Bob', state: 'active', role: 'member', readSeq: 0 }
     ]
   };
-  await page.route(/^http:\/\/localhost:(5001|5012)\//, async (route) => {
+  await page.route(/^http:\/\/localhost:(5001|5012|5018)\//, async (route) => {
     const req = route.request(),
       url = new URL(req.url());
     const headers = {
@@ -236,7 +236,7 @@ test('the shell loads the real chat panel and expands the selected conversation'
     seq: 0,
     participants: [{ userId: 'alice', name: 'Alice', state: 'active', role: 'owner', readSeq: 0 }]
   };
-  await page.route(/^http:\/\/localhost:(5001|5012)\//, async (route) => {
+  await page.route(/^http:\/\/localhost:(5001|5012|5018)\//, async (route) => {
     const req = route.request(),
       url = new URL(req.url());
     const headers = {
@@ -336,7 +336,7 @@ test('direct chats keep assistant mentions as text on desktop and mobile', async
   };
   const messages: Record<string, unknown>[] = [];
   let invocation: unknown;
-  await page.route(/^http:\/\/localhost:(5001|5012)\//, async (route) => {
+  await page.route(/^http:\/\/localhost:(5001|5012|5018)\//, async (route) => {
     const req = route.request(),
       url = new URL(req.url());
     const headers = {
@@ -403,7 +403,7 @@ for (const transport of ['polling', 'stream'])
     let answer: { ok: boolean; summary: string } | undefined;
     let message: Record<string, unknown> | undefined;
     let polls = 0;
-    await page.route(/^http:\/\/localhost:(5001|5012)\//, async (route) => {
+    await page.route(/^http:\/\/localhost:(5001|5012|5018)\//, async (route) => {
       const req = route.request(),
         url = new URL(req.url());
       const headers = {

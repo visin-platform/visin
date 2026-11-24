@@ -29,6 +29,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  */
 const SPECS = {
   chat: { path: 'apps/backend/chat-service/docs/openapi.json', publish: false },
+  assistant: { path: 'apps/backend/assistant-service/docs/openapi.json', publish: false },
   vision: {
     path: 'apps/backend/vision-service/docs/openapi.yml',
     publish: true,

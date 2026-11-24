@@ -1,11 +1,9 @@
 import { Router } from 'express';
 import * as controller from '../controllers/runController';
-import type { ChatRateLimits } from './rateLimits';
 
-export function createRunRoutes(limits: ChatRateLimits) {
+/** Where a conversation's runs stand, for a page that polls. Vivi keeps the runs; chat decides who sees what of them. */
+export function createRunRoutes() {
   const router = Router();
-  const { writeLimit } = limits;
   router.get('/conversations/:id/runs', controller.listRuns);
-  router.post('/conversations/:id/cancel', writeLimit, controller.cancelRuns);
   return router;
 }

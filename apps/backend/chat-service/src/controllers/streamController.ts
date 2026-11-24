@@ -1,14 +1,13 @@
-import { redactQuotes } from '../services/messageService';
+import { redactQuotes } from '../services/quotes';
 import { flushMembershipEvents } from '../services/membershipAudit';
 import { authenticateToken, BadRequestError } from '@visin/backend-core';
 import { type RequestHandler } from 'express';
 import { z } from 'zod';
 import { AssistantRun } from '../models/AssistantRun';
+import { pendingScreenCalls, visibleRuns } from '../services/runViews';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 import { authorize, historyFilter } from '../services/access';
-import { visibleRuns } from '../services/runService';
-import { pendingScreenCalls } from '../services/screen';
 import { listen, pollDelay } from '../services/wakeBus';
 import { paramId } from '../utils/request';
 import { streamCursorSchema } from '../validation/messageSchemas';

@@ -10,26 +10,24 @@ services:
       NODE_ENV: production
       PORT: 5012
       SERVICE_NAME: chat-service
-      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
-      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
-      GUEST_NETWORK_SECRET: ${GUEST_NETWORK_SECRET:-}
-      GUEST_TRUSTED_PROXY: ${GUEST_TRUSTED_PROXY:-}
       MONGODB_URI: ${MONGODB_URI}
       JWT_SECRET: ${JWT_SECRET}
+      # Seals the push signing keys kept in the database.
       API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
       GROUP_SERVICE_URL: ${GROUP_SERVICE_URL}
       VISION_SERVICE_URL: ${VISION_SERVICE_URL}
-      MCP_INTERNAL_URL: ${MCP_INTERNAL_URL:-}
+      # The assistants are their own service. Chat starts, and people talk to each other, without it.
+      ASSISTANT_INTERNAL_URL: ${ASSISTANT_INTERNAL_URL:-http://assistant-service:5018}
       CORS_ORIGIN: ${CORS_ORIGIN}
       # File sharing is enabled by default and uses the existing file-service credential.
       FILE_SERVICE_INTERNAL_URL: ${FILE_SERVICE_INTERNAL_URL:-}
       FILE_SERVICE_URL: ${FILE_SERVICE_URL:-http://file-service:5002}
       FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:?Set the same FILE_SERVICE_API_KEY as file-service}
       # Optional, and chat works without any of them. See .env.example.
-      # Optional. With Redis, replicas tell each other about new messages and questions, so streams and the worker poll
-      # less often. Without it (or while it is down) they poll at the usual rate; nothing breaks.
+      # Optional. With Redis, replicas tell each other about new messages, so streams poll less often. Without it (or
+      # while it is down) they poll at the usual rate; nothing breaks.
       REDIS_URL: ${REDIS_URL:-}
       CALLS_ENABLED: ${CALLS_ENABLED:-true}
       STUN_URLS: ${STUN_URLS:-}

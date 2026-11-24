@@ -1,4 +1,7 @@
 import '../helpers/mocks';
+import { vi } from 'vitest';
+import { BadRequestError } from '@visin/backend-core';
+import * as assistants from '../../services/assistantClient';
 import { Conversation } from '../../models/Conversation';
 import { Message } from '../../models/Message';
 import { appendMessage } from '../../services/messages';
@@ -16,8 +19,9 @@ it('deduplicates message retries and never overwrites their original body', asyn
   expect(await Message.countDocuments()).toBe(1);
 });
 
-it('rejects assistant sends when disabled, while human messaging still works', async () => {
+it('rejects assistant sends the assistant service refuses, while human messaging still works', async () => {
   const id = await create('assistant', []);
+  vi.mocked(assistants.prepare).mockRejectedValueOnce(new BadRequestError('The assistant is not configured. Human messaging is available.'));
   expect(
     (await request(`/conversations/${id}/messages`, 'alice', { body: 'Hello', clientId: 'assistant-002' })).status
   ).toBe(400);

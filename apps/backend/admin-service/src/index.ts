@@ -1,6 +1,6 @@
 import { assertRequiredEnv, connectDb, serve, logger } from '@visin/backend-core';
 import { createApp } from './app';
-assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'AUTH_SERVICE_URL', 'CHAT_SERVICE_URL', 'GROUP_SERVICE_URL']);
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'AUTH_SERVICE_URL', 'ASSISTANT_SERVICE_URL', 'GROUP_SERVICE_URL']);
 void connectDb({ serviceName: 'admin-service' })
   .then(() => {
     serve(createApp(), { port: process.env.PORT || 5016, serviceName: 'admin-service' });

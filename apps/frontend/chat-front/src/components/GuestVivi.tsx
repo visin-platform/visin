@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Box, Chip, CircularProgress, IconButton, Stack, TextField, Typography } from '@mui/material';
 import { Send } from '@mui/icons-material';
 import { ApiError, Markdown } from '@visin/frontend-core';
-import { api } from '../services/apiClient';
+import { assistantApi as api } from '../services/assistantApiClient';
 import { ViviBubble, VisitorBubble } from './guest/GuestBubble';
 import { useGuestHistory } from './guest/history';
 import { GuestHeader } from './guest/GuestHeader';

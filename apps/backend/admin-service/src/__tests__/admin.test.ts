@@ -34,7 +34,7 @@ describe('administrator gateway', () => {
       }).listen(0, '127.0.0.1', () => resolve(s));
     });
     process.env.AUTH_SERVICE_URL = `http://127.0.0.1:${(upstream.address() as { port: number }).port}`;
-    process.env.CHAT_SERVICE_URL = process.env.AUTH_SERVICE_URL;
+    process.env.ASSISTANT_SERVICE_URL = process.env.AUTH_SERVICE_URL;
     process.env.GROUP_SERVICE_URL = process.env.AUTH_SERVICE_URL;
     const app = createApp();
     server = await new Promise<Server>((resolve) => {
@@ -109,7 +109,7 @@ describe('administrator gateway', () => {
     expect(paths).toEqual([
       '/auth/admin/control/users?page=2&q=ann',
       '/auth/admin/control/users/lookup?ids=111111111111111111111111',
-      '/api/chat/admin/policies',
+      '/api/assistant/admin/policies',
       '/api/groups/admin/groups/111111111111111111111111'
     ]);
   });
@@ -168,12 +168,12 @@ describe('administrator gateway', () => {
     expect(result.data.entries.some((r: { status: string }) => r.status === 'rejected')).toBe(true);
   });
   it('marks an interrupted upstream write as uncertain', async () => {
-    const previous = process.env.CHAT_SERVICE_URL;
-    process.env.CHAT_SERVICE_URL = 'http://127.0.0.1:1';
+    const previous = process.env.ASSISTANT_SERVICE_URL;
+    process.env.ASSISTANT_SERVICE_URL = 'http://127.0.0.1:1';
     try {
       expect((await request('/vivi/settings/assistant', 'PUT', {})).status).toBe(502);
     } finally {
-      process.env.CHAT_SERVICE_URL = previous;
+      process.env.ASSISTANT_SERVICE_URL = previous;
     }
     const result = await (await request('/audit')).json();
     expect(result.data.entries.some((r: { status: string }) => r.status === 'uncertain')).toBe(true);

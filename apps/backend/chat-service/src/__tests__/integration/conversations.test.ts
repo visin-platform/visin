@@ -3,7 +3,6 @@ import { vi, type Mock } from 'vitest';
 import { Conversation } from '../../models/Conversation';
 import { Message } from '../../models/Message';
 import { groups, historyFilter, peer, publicPerson } from '../../services/access';
-import { enableAnalyst } from '../helpers/analystFixtures';
 import { create, request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
@@ -103,7 +102,6 @@ it('does not take what a question is about when the chat is opened', async () =>
 });
 
 it('checks what a question is about as the asker, and keeps it with the question', async () => {
-  await enableAnalyst('test');
   const { NotFoundError } = await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core');
   const chat = String((await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' })).body.data._id);
   vi.mocked(peer).mockResolvedValueOnce({ _id: '111111111111111111111111', name: 'IseAuto', owner: { kind: 'user', id: 'alice' } });

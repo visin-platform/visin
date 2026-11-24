@@ -2,8 +2,7 @@ import '../helpers/mocks';
 import { vi } from 'vitest';
 import { Conversation } from '../../models/Conversation';
 import { Message } from '../../models/Message';
-import { flushMembershipEvents } from '../../services/membershipAudit';
-import { startWorker } from '../../services/worker';
+import { flushMembershipEvents, recoverMembershipEvents } from '../../services/membershipAudit';
 import { create, request, setupChatTests } from '../helpers/testServer';
 setupChatTests();
 
@@ -44,10 +43,8 @@ it('recovers a committed membership event after message persistence fails, even 
   expect(c?.participants.find((p) => p.userId === 'bob')?.state).toBe('active');
   expect(c?.membershipEvents).toHaveLength(1);
   expect(await Message.countDocuments({ conversationId: id })).toBe(0);
-  const worker = startWorker();
-  worker();
-  await worker.tick();
-  await worker.tick();
+  // Chat's own recovery, with nothing of Vivi running: assistants being off or absent changes nothing here.
+  await recoverMembershipEvents();
   await flushMembershipEvents(id);
   expect(await Message.countDocuments({ conversationId: id, kind: 'system' })).toBe(1);
   expect((await request(`/conversations/${id}/membership`, 'bob', { action: 'accept' })).status).toBe(200);

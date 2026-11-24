@@ -9,6 +9,9 @@ import { KEPT_FOR_MS } from './guest/history';
 import { projectIdentifier } from './guest/projectIdentifier';
 
 vi.mock('../services/apiClient', () => ({ api: vi.fn() }));
+
+// What the assistants answer comes from the same stand-in as chat's: these suites do not tell the two services apart.
+vi.mock('../services/assistantApiClient', async () => ({ assistantApi: (await import('../services/apiClient')).api }));
 const mock = api as unknown as Mock;
 let verify: (token: string) => void;
 let expire: () => void;

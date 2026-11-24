@@ -1,21 +1,14 @@
 import { type Request } from 'express';
-import { groups, peer, publicPerson, sharedContacts, type Project } from './access';
+import { groups, peer, type Project, publicPerson, sharedContacts } from './access';
 import { attachmentsEnabled } from './attachments';
-import { assistantStatus, isPlatformAdmin } from './settings';
+import { capabilities as assistantCapabilities } from './assistantClient';
 
 export async function getCapabilities(userId: string) {
-  const [status, canConfigure] = await Promise.all([
-    assistantStatus(),
-    // Only decides whether the settings are offered; the settings routes check it again.
-    isPlatformAdmin(userId).catch(() => false)
-  ]);
   return {
-    assistant: status.ready,
+    ...(await assistantCapabilities(userId)),
     sharedAssistant: true,
     // Whether files can be sent: this server has somewhere to keep them.
-    attachments: attachmentsEnabled(),
-    assistantModel: { provider: status.settings.provider, model: status.settings.model, ready: status.ready },
-    canConfigure
+    attachments: attachmentsEnabled()
   };
 }
 

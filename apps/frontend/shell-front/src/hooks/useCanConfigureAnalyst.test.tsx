@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-const config = vi.hoisted(() => ({ CHAT_SERVICE_URL: 'https://chat-api.test/' as string | undefined }));
+const config = vi.hoisted(() => ({ ASSISTANT_SERVICE_URL: 'https://assistant-api.test/' as string | undefined }));
 const auth = vi.hoisted(() => ({ user: { id: 'u1' } as { id: string } | null, isAuthenticated: true }));
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
@@ -21,7 +21,7 @@ const answer = (body: unknown, status = 200) => {
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  config.CHAT_SERVICE_URL = 'https://chat-api.test/';
+  config.ASSISTANT_SERVICE_URL = 'https://assistant-api.test/';
   auth.user = { id: 'u1' };
   auth.isAuthenticated = true;
 });
@@ -31,7 +31,7 @@ describe('useCanConfigureAnalyst', () => {
     const fetchMock = answer({ success: true, data: { assistant: true, canConfigure: true } });
     const { result } = renderHook(() => useCanConfigureAnalyst(), { wrapper });
     await waitFor(() => expect(result.current).toBe(true));
-    expect(fetchMock.mock.calls[0][0]).toBe('https://chat-api.test/api/chat/capabilities');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://assistant-api.test/api/assistant/capabilities');
     expect(fetchMock.mock.calls[0][1].credentials).toBe('include');
   });
 
@@ -50,9 +50,9 @@ describe('useCanConfigureAnalyst', () => {
 
   it('asks nobody where chat is not set up or nobody is signed in', () => {
     const fetchMock = answer({ success: true, data: { canConfigure: true } });
-    config.CHAT_SERVICE_URL = undefined;
+    config.ASSISTANT_SERVICE_URL = undefined;
     expect(renderHook(() => useCanConfigureAnalyst(), { wrapper }).result.current).toBe(false);
-    config.CHAT_SERVICE_URL = 'https://chat-api.test';
+    config.ASSISTANT_SERVICE_URL = 'https://assistant-api.test';
     auth.isAuthenticated = false;
     expect(renderHook(() => useCanConfigureAnalyst(), { wrapper }).result.current).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();

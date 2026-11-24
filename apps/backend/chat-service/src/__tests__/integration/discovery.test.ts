@@ -1,7 +1,8 @@
 import '../helpers/mocks';
 import { fetchWithTimeout } from '@visin/backend-core';
 import { vi, type Mock } from 'vitest';
-import { groups } from '../../services/access';
+import { groups, peer, publicPerson } from '../../services/access';
+import * as assistants from '../../services/assistantClient';
 import { request, setupChatTests } from '../helpers/testServer';
 
 setupChatTests();
@@ -35,4 +36,31 @@ it('discovers only shared-group roster contacts and revalidates them when starti
   (fetchWithTimeout as Mock).mockImplementation(
     (await vi.importActual<typeof import('@visin/backend-core')>('@visin/backend-core')).fetchWithTimeout
   );
+});
+
+it('lists the groups and projects a person can start a conversation about, and a public profile', async () => {
+  (groups.getMyGroups as Mock).mockResolvedValue([{ groupId: 'group1', role: 'admin', name: 'Lab' }]);
+  expect((await request('/groups')).body.data).toEqual([{ groupId: 'group1', role: 'admin', name: 'Lab' }]);
+  vi.mocked(peer).mockResolvedValueOnce({ projects: [{ _id: 'p1', name: 'IseAuto' }] } as never);
+  expect((await request('/projects')).body.data).toEqual([{ _id: 'p1', name: 'IseAuto' }]);
+  vi.mocked(peer).mockResolvedValueOnce({} as never);
+  expect((await request('/projects')).body.data).toEqual([]);
+  vi.mocked(publicPerson).mockResolvedValueOnce({ id: 'u1', name: 'Alice', handle: 'alice' });
+  expect((await request('/people/alice')).body.data).toEqual({ id: 'u1', name: 'Alice', handle: 'alice' });
+});
+
+it("tells a page what chat can do, and adds what the assistants can", async () => {
+  expect((await request('/capabilities')).body.data).toMatchObject({
+    assistant: false,
+    assistantModel: { ready: false },
+    canConfigure: false,
+    sharedAssistant: true,
+    attachments: expect.any(Boolean)
+  });
+  vi.mocked(assistants.capabilities).mockResolvedValueOnce({
+    assistant: true,
+    assistantModel: { provider: 'anthropic', model: 'm', ready: true },
+    canConfigure: true
+  });
+  expect((await request('/capabilities')).body.data).toMatchObject({ assistant: true, canConfigure: true, sharedAssistant: true });
 });

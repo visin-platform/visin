@@ -1,3 +1,4 @@
+import { logger } from '@visin/backend-core';
 import { Conversation } from '../models/Conversation';
 import { Message } from '../models/Message';
 
@@ -36,4 +37,16 @@ export async function recoverMembershipEvents() {
     .select('_id')
     .limit(100);
   for (const c of pending) await flushMembershipEvents(c.id);
+}
+
+const RECOVERY_MS = 5_000;
+/** Finishes membership events a crash left in a conversation, now and then: chat's own, so it runs with chat. */
+export function startMembershipRecovery(): () => void {
+  const timer = setInterval(() => {
+    recoverMembershipEvents().catch((error: Error) =>
+      logger.warn('Membership event recovery failed', { error: error.message })
+    );
+  }, RECOVERY_MS);
+  timer.unref();
+  return () => clearInterval(timer);
 }

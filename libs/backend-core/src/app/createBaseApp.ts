@@ -9,6 +9,9 @@ import { tracingMiddleware } from '../tracing';
 import { ForbiddenError } from '../errors/HttpError';
 import { sharedSecretMatches } from '../auth/sharedSecret';
 
+/** A path with an `internal` segment: where the services' service-to-service routes live. */
+const INTERNAL_PATH = /(^|\/)internal(\/|$)/;
+
 export interface CreateBaseAppOptions {
   /** Allowed CORS origins. Defaults to process.env.CORS_ORIGIN (comma-separated). */
   corsOrigins?: string[];
@@ -78,8 +81,11 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
   // `/internal/` 20,000 guesses a minute at the credential gating it.
   const internalLimit = Number(process.env.INTERNAL_RATE_LIMIT_PER_MINUTE || 20_000);
   const publicLimit = Number(process.env.RATE_LIMIT_PER_MINUTE || 500);
+  // `internal` anywhere in the path, as a whole segment: services mount their internal routes under their own prefix
+  // (`/api/chat/internal/…`, `/api/internal/…`) as well as at the root (file-service's `/internal/…`). A path
+  // alone still gets nothing; the credential is what moves a request to this bucket.
   const isInternal = (req: Request): boolean =>
-    (req.path === '/internal' || req.path.startsWith('/internal/')) &&
+    INTERNAL_PATH.test(req.path) &&
     (sharedSecretMatches(req.headers['x-internal-token'], process.env.INTERNAL_SERVICE_TOKEN) ||
       sharedSecretMatches(req.headers['x-internal-api-key'], process.env.FILE_SERVICE_API_KEY));
 

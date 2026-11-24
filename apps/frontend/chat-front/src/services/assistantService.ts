@@ -6,7 +6,7 @@ import type {
   SharedAssistantChange,
   SharedAssistantSettings
 } from '../types/assistant';
-import { api } from './apiClient';
+import { assistantApi as api } from './assistantApiClient';
 export const assistantService = {
   default: (signal?: AbortSignal) =>
     api<{ _id: string; name: string } | null>('/assistants/default', undefined, signal),

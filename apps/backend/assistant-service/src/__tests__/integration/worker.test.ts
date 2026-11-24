@@ -1,0 +1,484 @@
+import '../helpers/mocks';
+import { IMAGE_ONLY_QUESTION } from '../../services/imageInput';
+import { describe, expect, it, vi, type Mock } from 'vitest';
+import { createApiKey, fetchWithTimeout } from '@visin/backend-core';
+import { AssistantLock } from '../../models/AssistantLock';
+import { AssistantRun } from '../../models/AssistantRun';
+import { Budget } from '../../models/Budget';
+import { Conversation } from '../helpers/fakeChat';
+import { Message } from '../helpers/fakeChat';
+import { peer } from '../../services/access';
+import { analyze, type AnalysisSpend } from '../../services/analyst';
+import { reservationFor } from '../../services/analysisLimits';
+import { appendMessage } from '../helpers/fakeChat';
+import { ProviderRequestError, PROVIDER_REPLAY_VERSION, TOOL_REQUEST_BYTES } from '../../services/providers';
+import { startWorker } from '../../services/worker';
+// The worker listens on its own service's bus; in production Redis carries a signal from one to the other.
+import { notify as wakeWorker } from '../../services/wakeBus';
+import { enableAnalyst } from '../helpers/analystFixtures';
+import { base, create, request, setupAssistantTests } from '../helpers/testServer';
+
+setupAssistantTests();
+
+/** The private chat with the assistant that this person has. */
+async function createFor(user: string) {
+  const result = await request('/conversations', user, { kind: 'assistant', title: 'Research', handles: [] });
+  expect(result.status).toBe(201);
+  return String(result.body.data._id);
+}
+
+it('recovers the message outbox and publishes one completed answer across worker ticks', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  await request(`/conversations/${id}/messages`, 'alice', {
+    body: 'Analyze validation',
+    clientId: 'durable-question-1'
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect(analyze).toHaveBeenCalled();
+  expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('completed');
+  await worker.tick();
+  await worker.tick();
+  expect(await Message.countDocuments({ conversationId: id, kind: 'assistant' })).toBe(1);
+  expect((await Budget.findOne({ userId: 'alice' }))?.reserved).toBe(120);
+});
+
+it('marks expired work as interrupted instead of repeating a potentially billed call', async () => {
+  const id = await create('assistant', []);
+  await AssistantRun.create({
+    conversationId: id,
+    messageId: 'old',
+    userId: 'alice',
+    email: 'alice@test.invalid',
+    name: 'Alice',
+    state: 'running',
+    leaseUntil: new Date(0)
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect((await AssistantRun.findOne({ messageId: 'old' }))?.state).toBe('failed');
+});
+
+it('orders follow-up context by logical turns even when a reply was published later', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  const first = await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'Alice',
+    kind: 'person',
+    body: 'First question',
+    clientId: 'order-question-1'
+  });
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'Follow up', clientId: 'order-question-2' });
+  await appendMessage({
+    conversationId: id,
+    senderId: 'analyst',
+    senderName: 'Analyst',
+    kind: 'assistant',
+    body: 'First answer',
+    clientId: 'order-answer-1',
+    replyTo: first.id
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  const call = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(call.history.map((m: { content: string }) => m.content)).toEqual([
+    'First question',
+    'First answer',
+    'Follow up'
+  ]);
+});
+
+it('does not generate when a cancelled question races with outbox recovery', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  const sent = await request(`/conversations/${id}/messages`, 'alice', {
+    body: 'Cancelled question',
+    clientId: 'cancelled-race-001'
+  });
+  await Message.updateOne(
+    { _id: String(sent.body.data._id) },
+    { $set: { assistantCancelled: true }, $unset: { assistantRequest: 1 } }
+  );
+  await AssistantRun.create({
+    conversationId: id,
+    messageId: String(sent.body.data._id),
+    userId: 'alice',
+    email: 'alice@test.invalid',
+    name: 'Alice',
+    membershipVersion: 1,
+    state: 'queued'
+  });
+  const before = (analyze as Mock).mock.calls.length;
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect((analyze as Mock).mock.calls.length).toBe(before);
+  expect((await AssistantRun.findOne({ messageId: String(sent.body.data._id) }))?.state).toBe('cancelled');
+  expect(await Budget.countDocuments()).toBe(0);
+});
+
+it('answers other conversations while one conversation is locked by another worker', async () => {
+  await enableAnalyst('test');
+  const busy = await create('assistant', []);
+  const free = await createFor('bob');
+  await request(`/conversations/${busy}/messages`, 'alice', { body: 'First', clientId: 'locked-question' });
+  await request(`/conversations/${free}/messages`, 'bob', { body: 'Second', clientId: 'free-question-1' });
+  await AssistantLock.create({ _id: busy, until: new Date(Date.now() + 60000), runId: 'elsewhere' });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect((await AssistantRun.findOne({ conversationId: busy }))?.state).toBe('queued');
+  expect((await AssistantRun.findOne({ conversationId: free }))?.state).toBe('completed');
+});
+
+it('runs queued analyses of different conversations side by side', async () => {
+  await enableAnalyst('test');
+  const first = await create('assistant', []);
+  const second = await createFor('bob');
+  await request(`/conversations/${first}/messages`, 'alice', { body: 'One', clientId: 'parallel-one-1' });
+  await request(`/conversations/${second}/messages`, 'bob', { body: 'Two', clientId: 'parallel-two-1' });
+  let running = 0,
+    peak = 0;
+  (analyze as Mock).mockImplementation(async function () {
+    peak = Math.max(peak, ++running);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    running--;
+    return { text: 'Done', evidence: [], inputTokens: 1, outputTokens: 1 };
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect(peak).toBe(2);
+  expect(await AssistantRun.countDocuments({ state: 'completed' })).toBe(2);
+});
+
+it('cancels only the questions still waiting for an answer', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  const answered = await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'alice',
+    kind: 'person',
+    body: 'Answered earlier',
+    clientId: 'answered-0001'
+  });
+  const pending = await request(`/conversations/${id}/messages`, 'alice', {
+    body: 'Pending',
+    clientId: 'pending-0001'
+  });
+  await request(`/conversations/${id}/cancel`, 'alice', {});
+  const flags = await Message.find({ conversationId: id }).select('+assistantCancelled');
+  expect(flags.find((m) => m.id === answered.id)?.assistantCancelled).toBe(false);
+  expect(flags.find((m) => m.id === pending.body.data._id)?.assistantCancelled).toBe(true);
+});
+
+it('includes an authorized quoted conclusion as reference context for the current question', async () => {
+  await enableAnalyst();
+  const id = await create('assistant', []);
+  const source = await appendMessage({
+    conversationId: id,
+    senderId: 'assistant:analyst',
+    senderName: 'Analyst',
+    kind: 'assistant',
+    body: 'A previous measured conclusion',
+    clientId: 'quoted-conclusion-001'
+  });
+  const sent = await request(`/conversations/${id}/messages`, 'alice', {
+    body: 'Explain this conclusion',
+    clientId: 'explain-quote-001',
+    replyTo: source.id
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  const input = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(JSON.parse(input.history.at(-1).content)).toMatchObject({
+    question: 'Explain this conclusion',
+    quote: { body: 'A previous measured conclusion', senderName: 'Analyst' }
+  });
+});
+
+it('includes authorized image references and marks their content as available', async () => {
+  await enableAnalyst();
+  const id = await create('assistant', []);
+  await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'Alice',
+    kind: 'person',
+    body: 'What is in this file?',
+    clientId: 'attachment-context-1',
+    attachments: [{ fileId: `chat/${id}/test.png`, name: 'test.png', mime: 'image/png', size: 123, kind: 'image' }],
+    assistantRequest: {
+      userId: 'alice',
+      email: 'alice@test.invalid',
+      name: 'Alice',
+      membershipVersion: (await Conversation.findById(id))!.membershipVersion
+    }
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect(analyze).toHaveBeenCalled();
+  const input = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(JSON.parse(input.history.at(-1).content)).toMatchObject({
+    question: 'What is in this file?',
+    attachments: [{ name: 'test.png', contentAvailable: true }]
+  });
+  expect(input.history.at(-1).content).not.toContain('fileId');
+  expect(input.history.at(-1).imageRefs).toEqual([expect.objectContaining({ fileId: `chat/${id}/test.png` })]);
+});
+
+it('asks what objects are in an image-only post, and retains its images for the next follow-up', async () => {
+  await enableAnalyst();
+  const id = await create('assistant', []);
+  const membershipVersion = (await Conversation.findById(id))!.membershipVersion;
+  await appendMessage({
+    conversationId: id,
+    senderId: 'alice',
+    senderName: 'Alice',
+    kind: 'person',
+    body: '',
+    clientId: 'image-only-1',
+    attachments: [{ fileId: `chat/${id}/photo.png`, name: 'photo.png', mime: 'image/png', size: 123, kind: 'image' }],
+    assistantRequest: { userId: 'alice', email: 'alice@test.invalid', name: 'Alice', membershipVersion }
+  });
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  expect(analyze).toHaveBeenCalled();
+  const first = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(JSON.parse(first.history.at(-1).content).question).toBe(IMAGE_ONLY_QUESTION);
+  expect(first.history.at(-1).imageRefs).toHaveLength(1);
+  await worker.tick();
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'What color is it?', clientId: 'image-follow-up-1' });
+  await worker.tick();
+  const followup = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(followup.history.flatMap((turn: { imageRefs?: unknown[] }) => turn.imageRefs ?? [])).toHaveLength(1);
+  expect(followup.history.at(-1).content).toBe('What color is it?');
+});
+
+it('gives a plain private question the asker\'s own read-only key, so Vivi can look things up', async () => {
+  await enableAnalyst();
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  vi.mocked(createApiKey).mockClear();
+  const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
+    body: 'Does Visin have projects about autonomous vehicles?',
+    clientId: 'plain-question-001'
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+
+  const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
+  // The asker's, never the bot's author or the conversation's creator; read-only; one turn.
+  expect(key).toMatchObject({ userId: 'alice', scopes: ['vision:read', 'dataset:read', 'analysis:read'] });
+  expect(key.scopes.some((scope) => scope.endsWith(':write'))).toBe(false);
+  expect(key).not.toHaveProperty('project');
+  expect(key.expiresAt!.getTime()).toBeLessThanOrEqual(Date.now() + 10 * 60_000);
+  expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ shared: false, token: expect.any(String) });
+});
+
+it('does not limit the key to the selected project: the project is where the question starts, not the edge of what may be read', async () => {
+  await enableAnalyst();
+  const projectId = '111111111111111111111111';
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  vi.mocked(peer).mockResolvedValueOnce({ _id: projectId, name: 'Road' });
+  vi.mocked(createApiKey).mockClear();
+  const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
+    body: 'Compare this with other road projects',
+    clientId: 'project-question-001',
+    context: { projectId }
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+
+  const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
+  expect(key).toMatchObject({ userId: 'alice' });
+  expect(key).not.toHaveProperty('project');
+  expect((analyze as Mock).mock.calls.at(-1)![0]).toMatchObject({ projectId });
+});
+
+it('answers a question about a paper with the paper and an unscoped read-only key', async () => {
+  await enableAnalyst();
+  const paperId = '222222222222222222222222';
+  const created = await request('/conversations', 'alice', { kind: 'assistant', title: 'Vivi' });
+  expect(created.status).toBe(201);
+  (fetchWithTimeout as Mock).mockResolvedValue(new Response(JSON.stringify({ success: true, data: { id: paperId } })));
+  vi.mocked(createApiKey).mockClear();
+
+  const sent = await request(`/conversations/${created.body.data._id}/messages`, 'alice', {
+    body: 'Summarize this paper',
+    clientId: 'paper-question-001',
+    context: { paperId, paperTitle: 'CLFTv2: fusion', trainingIds: [], trainingLabels: [] }
+  });
+  expect(sent.status).toBe(201);
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+
+  const input = (analyze as Mock).mock.calls.at(-1)![0];
+  expect(input).toMatchObject({ paperId, paperTitle: 'CLFTv2: fusion', projectId: undefined, trainingIds: [] });
+  // Not limited to a project, since a paper belongs to none, and never able to write.
+  const key = vi.mocked(createApiKey).mock.calls.at(-1)![0];
+  expect(key).toMatchObject({ scopes: ['vision:read', 'dataset:read', 'analysis:read'], userId: 'alice' });
+  expect(key).not.toHaveProperty('project');
+});
+
+it('records safe provider diagnostics privately and identifies the running replay handler', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'Summarize', clientId: 'diagnostic-reply' });
+  vi.mocked(analyze).mockRejectedValueOnce(
+    new ProviderRequestError('Provider format rejected (400). Reference: req_test.', {
+      status: 400,
+      type: 'invalid_request_error',
+      reason: 'empty_text',
+      requestId: 'req_test'
+    })
+  );
+  const worker = startWorker();
+  worker();
+  await worker.tick();
+  const run = await AssistantRun.findOne({ conversationId: id })
+    .select('+providerFailure +providerReplayVersion')
+    .lean();
+  expect(run?.state).toBe('failed');
+  expect(run?.providerFailure).toEqual({
+    status: 400,
+    type: 'invalid_request_error',
+    reason: 'empty_text',
+    requestId: 'req_test'
+  });
+  expect(run?.providerReplayVersion).toBe(PROVIDER_REPLAY_VERSION);
+  const health = await fetch(`${base}/health`);
+  expect(health.headers.get('x-visin-assistant-replay')).toBe(PROVIDER_REPLAY_VERSION);
+});
+
+describe('a failed question and the day\'s budget', () => {
+  const failWith = async (clientId: string, spend?: (input: { spent: AnalysisSpend }) => void) => {
+    await enableAnalyst('test');
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Compare the runs', clientId });
+    vi.mocked(analyze).mockImplementationOnce(async (input) => {
+      spend?.(input as unknown as { spent: AnalysisSpend });
+      throw new Error('Project is no longer accessible');
+    });
+    const worker = startWorker();
+    worker();
+    await worker.tick();
+    expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('failed');
+    return (await Budget.findOne({ userId: 'alice' }))?.reserved;
+  };
+
+  it('gives back the whole reservation when nothing was sent to the provider', async () => {
+    expect(await failWith('refund-none')).toBe(0);
+  });
+
+  it('keeps what completed requests used, and one round for a request that never answered', async () => {
+    const reserved = await failWith('refund-partial', ({ spent }) => {
+      spent.inputTokens = 5000;
+      spent.outputTokens = 1000;
+      spent.requests = 1;
+      spent.inFlight = true;
+    });
+    // A private chat carries the research tools, so a round reserves the larger request it may send.
+    expect(reserved).toBe(6000 + reservationFor(false, 1, 0, TOOL_REQUEST_BYTES));
+  });
+
+  it('keeps only the used tokens when every request answered', async () => {
+    const reserved = await failWith('refund-used', ({ spent }) => {
+      spent.inputTokens = 7000;
+      spent.outputTokens = 500;
+      spent.requests = 1;
+    });
+    expect(reserved).toBe(7500);
+  });
+});
+
+it('looks for work as soon as it is told a question is waiting, not at its next scheduled look', async () => {
+  await enableAnalyst('test');
+  const id = await create('assistant', []);
+  await request(`/conversations/${id}/messages`, 'alice', { body: 'Wake me', clientId: 'wake-question-1' });
+  const before = (analyze as Mock).mock.calls.length;
+  const worker = startWorker();
+  try {
+    // The first scheduled look is a second away; only the signal can bring a run in sooner.
+    wakeWorker('worker');
+    await vi.waitFor(() => expect((analyze as Mock).mock.calls.length).toBe(before + 1), { timeout: 700 });
+  } finally {
+    worker();
+  }
+});
+
+describe('stopping a worker (drain)', () => {
+  /** A question whose turn stays out until `release()`, and notes whether it was told to stop. */
+  const slowTurn = async (clientId: string) => {
+    await enableAnalyst('test');
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Take your time', clientId });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const turn = { aborted: false, release };
+    vi.mocked(analyze).mockImplementationOnce(async (input) => {
+      const { signal } = input as unknown as { signal: AbortSignal };
+      signal.addEventListener('abort', () => (turn.aborted = true));
+      await Promise.race([
+        gate,
+        new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('Analysis cancelled'))))
+      ]);
+      return { text: 'Late but whole.', evidence: [], inputTokens: 100, outputTokens: 20 } as unknown as Awaited<
+        ReturnType<typeof analyze>
+      >;
+    });
+    return { id, turn };
+  };
+
+  it('lets a running turn finish and publishes its answer before it returns', async () => {
+    const { id, turn } = await slowTurn('drain-finish');
+    const worker = startWorker();
+    const ticking = worker.tick();
+    await vi.waitFor(async () => expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('running'));
+    const draining = worker.drain(5000);
+    setTimeout(turn.release, 100);
+    await draining;
+    await ticking;
+    expect(turn.aborted).toBe(false);
+    expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('completed');
+    expect(await Message.countDocuments({ conversationId: id, kind: 'assistant' })).toBe(1);
+  });
+
+  it('claims nothing new once it is draining', async () => {
+    await enableAnalyst('test');
+    const id = await create('assistant', []);
+    await request(`/conversations/${id}/messages`, 'alice', { body: 'Too late', clientId: 'drain-nothing-new' });
+    const worker = startWorker();
+    await worker.drain(100);
+    await worker.tick();
+    expect((await AssistantRun.findOne({ conversationId: id }))?.state).not.toBe('running');
+    expect(await AssistantRun.countDocuments({ conversationId: id, state: { $in: ['running', 'completed'] } })).toBe(0);
+  });
+
+  it('aborts a turn that outlasts the deadline, and the turn fails visibly instead of staying "running"', async () => {
+    const { id, turn } = await slowTurn('drain-abort');
+    const worker = startWorker();
+    const ticking = worker.tick();
+    await vi.waitFor(async () => expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('running'));
+    await worker.drain(50);
+    await ticking;
+    expect(turn.aborted).toBe(true);
+    expect((await AssistantRun.findOne({ conversationId: id }))?.state).toBe('failed');
+    expect(await AssistantLock.findById(id)).toBeNull();
+  });
+});
